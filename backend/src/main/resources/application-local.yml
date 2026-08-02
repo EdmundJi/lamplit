@@ -1,0 +1,13 @@
+spring:
+  config:
+    activate:
+      on-profile: local
+
+logging:
+  level:
+    com.betterself.growth: DEBUG
+
+management:
+  endpoint:
+    health:
+      show-details: when-authorized

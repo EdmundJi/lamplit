@@ -1,0 +1,161 @@
+CREATE TABLE password_reset_token (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    user_id BIGINT UNSIGNED NOT NULL,
+    token_hash BINARY(32) NOT NULL,
+    requested_at DATETIME(3) NOT NULL,
+    expires_at DATETIME(3) NOT NULL,
+    consumed_at DATETIME(3) NULL,
+    revoked_at DATETIME(3) NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_password_reset_hash (token_hash),
+    KEY idx_password_reset_user_time (user_id, requested_at),
+    CONSTRAINT fk_password_reset_user FOREIGN KEY (user_id) REFERENCES sys_user (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE suggestion_set (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    public_id CHAR(26) NOT NULL,
+    user_id BIGINT UNSIGNED NOT NULL,
+    ai_session_id BIGINT UNSIGNED NULL,
+    goal_id BIGINT UNSIGNED NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+    model_name VARCHAR(80) NULL,
+    prompt_version_id BIGINT UNSIGNED NULL,
+    provider_request_id VARCHAR(120) NULL,
+    created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    expires_at DATETIME(3) NOT NULL,
+    adopted_at DATETIME(3) NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_suggestion_set_public_id (public_id),
+    KEY idx_suggestion_set_user_status (user_id, status, created_at),
+    CONSTRAINT fk_suggestion_set_user FOREIGN KEY (user_id) REFERENCES sys_user (id),
+    CONSTRAINT fk_suggestion_set_session FOREIGN KEY (ai_session_id) REFERENCES ai_session (id),
+    CONSTRAINT fk_suggestion_set_goal FOREIGN KEY (goal_id) REFERENCES growth_goal (id),
+    CONSTRAINT fk_suggestion_set_prompt FOREIGN KEY (prompt_version_id) REFERENCES ai_prompt_version (id),
+    CONSTRAINT chk_suggestion_set_status CHECK (status IN ('PENDING', 'CONFIRMED', 'ADOPTED', 'EXPIRED', 'REJECTED'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE suggestion_item (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    public_id CHAR(26) NOT NULL,
+    suggestion_set_id BIGINT UNSIGNED NOT NULL,
+    position TINYINT UNSIGNED NOT NULL,
+    title VARCHAR(160) NOT NULL,
+    description VARCHAR(1000) NULL,
+    estimated_minutes SMALLINT UNSIGNED NOT NULL,
+    difficulty TINYINT UNSIGNED NOT NULL,
+    dimension_weights JSON NOT NULL,
+    proposed_local_time TIME NULL,
+    edited_payload JSON NULL,
+    adopted_task_id BIGINT UNSIGNED NULL,
+    created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_suggestion_item_public_id (public_id),
+    UNIQUE KEY uk_suggestion_item_position (suggestion_set_id, position),
+    CONSTRAINT fk_suggestion_item_set FOREIGN KEY (suggestion_set_id) REFERENCES suggestion_set (id),
+    CONSTRAINT fk_suggestion_item_task FOREIGN KEY (adopted_task_id) REFERENCES user_task (id),
+    CONSTRAINT chk_suggestion_item_position CHECK (position BETWEEN 1 AND 5),
+    CONSTRAINT chk_suggestion_item_minutes CHECK (estimated_minutes BETWEEN 5 AND 60),
+    CONSTRAINT chk_suggestion_item_difficulty CHECK (difficulty BETWEEN 1 AND 3)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE knowledge_source (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    public_id CHAR(26) NOT NULL,
+    title VARCHAR(200) NOT NULL,
+    source_url VARCHAR(1000) NULL,
+    scene VARCHAR(32) NOT NULL,
+    content TEXT NOT NULL,
+    checksum_sha256 CHAR(64) NOT NULL,
+    version INT UNSIGNED NOT NULL,
+    review_status VARCHAR(20) NOT NULL DEFAULT 'DRAFT',
+    reviewer_user_id BIGINT UNSIGNED NULL,
+    published_at DATETIME(3) NULL,
+    created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_knowledge_source_public_id (public_id),
+    UNIQUE KEY uk_knowledge_source_checksum_version (checksum_sha256, version),
+    CONSTRAINT fk_knowledge_source_reviewer FOREIGN KEY (reviewer_user_id) REFERENCES sys_user (id),
+    CONSTRAINT chk_knowledge_review CHECK (review_status IN ('DRAFT', 'IN_REVIEW', 'PUBLISHED', 'RETIRED'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE attachment (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    public_id CHAR(26) NOT NULL,
+    user_id BIGINT UNSIGNED NOT NULL,
+    task_event_id BIGINT UNSIGNED NULL,
+    object_key VARCHAR(512) NOT NULL,
+    original_filename VARCHAR(255) NOT NULL,
+    content_type VARCHAR(120) NOT NULL,
+    extension VARCHAR(20) NOT NULL,
+    size_bytes BIGINT UNSIGNED NOT NULL,
+    checksum_sha256 CHAR(64) NULL,
+    scan_status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+    uploaded_at DATETIME(3) NULL,
+    scanned_at DATETIME(3) NULL,
+    deleted_at DATETIME(3) NULL,
+    created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_attachment_public_id (public_id),
+    UNIQUE KEY uk_attachment_object_key (object_key),
+    KEY idx_attachment_user (user_id, created_at),
+    CONSTRAINT fk_attachment_user FOREIGN KEY (user_id) REFERENCES sys_user (id),
+    CONSTRAINT fk_attachment_event FOREIGN KEY (task_event_id) REFERENCES task_event (id),
+    CONSTRAINT chk_attachment_scan CHECK (scan_status IN ('PENDING', 'CLEAN', 'INFECTED', 'FAILED', 'DELETED'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE outbox_event (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    public_id CHAR(26) NOT NULL,
+    aggregate_type VARCHAR(80) NOT NULL,
+    aggregate_public_id CHAR(26) NOT NULL,
+    event_type VARCHAR(100) NOT NULL,
+    payload JSON NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+    attempts SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+    available_at DATETIME(3) NOT NULL,
+    published_at DATETIME(3) NULL,
+    last_error_code VARCHAR(80) NULL,
+    created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_outbox_event_public_id (public_id),
+    KEY idx_outbox_dispatch (status, available_at),
+    CONSTRAINT chk_outbox_status CHECK (status IN ('PENDING', 'PROCESSING', 'PUBLISHED', 'FAILED'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE product_event (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    public_id CHAR(26) NOT NULL,
+    analytics_user_id CHAR(64) NOT NULL,
+    event_name VARCHAR(100) NOT NULL,
+    properties JSON NOT NULL,
+    occurred_at DATETIME(3) NOT NULL,
+    expires_at DATETIME(3) NOT NULL,
+    created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_product_event_public_id (public_id),
+    KEY idx_product_event_name_time (event_name, occurred_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE notification_delivery (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    public_id CHAR(26) NOT NULL,
+    user_id BIGINT UNSIGNED NOT NULL,
+    channel VARCHAR(20) NOT NULL,
+    notification_type VARCHAR(60) NOT NULL,
+    deduplication_key VARCHAR(160) NOT NULL,
+    payload JSON NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+    attempts SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+    scheduled_at DATETIME(3) NOT NULL,
+    delivered_at DATETIME(3) NULL,
+    last_error_code VARCHAR(80) NULL,
+    created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_notification_delivery_public_id (public_id),
+    UNIQUE KEY uk_notification_delivery_dedup (user_id, deduplication_key),
+    KEY idx_notification_dispatch (status, scheduled_at),
+    CONSTRAINT fk_notification_delivery_user FOREIGN KEY (user_id) REFERENCES sys_user (id),
+    CONSTRAINT chk_notification_delivery_channel CHECK (channel IN ('IN_APP', 'EMAIL', 'WEB_PUSH')),
+    CONSTRAINT chk_notification_delivery_status CHECK (status IN ('PENDING', 'PROCESSING', 'DELIVERED', 'FAILED', 'CANCELLED'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
