@@ -4,6 +4,7 @@ import { ClipboardCheck, History, Loader2, Plus, Send, ShieldCheck, SlidersHoriz
 import { api } from '../../shared/api/client'
 import { postSse } from '../../shared/api/sse'
 import MarkdownDocument from '../../shared/ui/MarkdownDocument.vue'
+import { pickThinkingMessage } from './ai-thinking'
 
 type ChatMessage = { role: 'USER' | 'ASSISTANT'; text: string }
 type SessionSummary = {
@@ -41,12 +42,30 @@ const history = ref<SessionSummary[]>([])
 const loadingHistory = ref(false)
 const loadingSession = ref(false)
 const busy = ref(false)
+const thinking = ref(false)
+const thinkingMessage = ref('')
 const error = ref('')
 const crisis = ref<{ message: string } | null>(null)
 let controller: AbortController | undefined
 let openSessionRequest = 0
+let thinkingTimer: ReturnType<typeof setInterval> | undefined
 
 const sceneNames: Record<string, string> = Object.fromEntries(sceneOptions.map(option => [option.value, option.label]))
+
+function stopThinking() {
+  thinking.value = false
+  clearInterval(thinkingTimer)
+  thinkingTimer = undefined
+}
+
+function startThinking() {
+  stopThinking()
+  thinkingMessage.value = pickThinkingMessage()
+  thinking.value = true
+  thinkingTimer = setInterval(() => {
+    thinkingMessage.value = pickThinkingMessage(thinkingMessage.value)
+  }, 2400)
+}
 
 async function ensureSession() {
   if (!session.value) session.value = (await api.post<{ publicId: string }>('/ai/sessions', { scene: scene.value })).publicId
@@ -65,6 +84,7 @@ async function loadHistory() {
 
 async function openSession(item: SessionSummary) {
   controller?.abort()
+  stopThinking()
   const requestId = ++openSessionRequest
   loadingSession.value = true
   error.value = ''
@@ -102,6 +122,7 @@ async function send() {
   busy.value = true
   error.value = ''
   controller = new AbortController()
+  startThinking()
   try {
     await ensureSession()
     messages.value.push({ role: 'USER', text })
@@ -109,24 +130,34 @@ async function send() {
     let assistant = ''
     await postSse(`/ai/sessions/${session.value}/messages:stream`, { message: text }, event => {
       if (event.name === 'delta') {
-        assistant += (event.data as { text?: string }).text ?? ''
+        const delta = (event.data as { text?: string }).text ?? ''
+        if (delta) stopThinking()
+        assistant += delta
         const last = messages.value.at(-1)
         if (last?.role === 'ASSISTANT') last.text = assistant
         else messages.value.push({ role: 'ASSISTANT', text: assistant })
       }
-      if (event.name === 'safety') crisis.value = event.data as { message: string }
-      if (event.name === 'error') error.value = 'AI 暂时不可用，请稍后再试。'
+      if (event.name === 'safety') {
+        stopThinking()
+        crisis.value = event.data as { message: string }
+      }
+      if (event.name === 'error') {
+        stopThinking()
+        error.value = 'AI 暂时不可用，请稍后再试。'
+      }
     }, controller.signal)
     await loadHistory()
   } catch {
     error.value = 'AI 暂时不可用，请稍后再试。'
   } finally {
+    stopThinking()
     busy.value = false
   }
 }
 
 function reset() {
   controller?.abort()
+  stopThinking()
   openSessionRequest++
   loadingSession.value = false
   session.value = ''
@@ -136,7 +167,10 @@ function reset() {
 }
 
 onMounted(loadHistory)
-onBeforeUnmount(() => controller?.abort())
+onBeforeUnmount(() => {
+  controller?.abort()
+  stopThinking()
+})
 </script>
 
 <template>
@@ -178,7 +212,18 @@ onBeforeUnmount(() => controller?.abort())
               </div>
               <p v-else class="message-body user-text">{{ m.text }}</p>
             </div>
-            <div v-if="!messages.length && !loadingSession" class="empty">
+            <div v-if="thinking" class="message assistant thinking-message" role="status" aria-live="polite" aria-label="AI 正在思考">
+              <span>AI</span>
+              <div class="message-body thinking-body" aria-hidden="true">
+                <span class="thinking-dots">
+                  <i></i><i></i><i></i>
+                </span>
+                <Transition name="thinking-copy" mode="out-in">
+                  <p :key="thinkingMessage">{{ thinkingMessage }}</p>
+                </Transition>
+              </div>
+            </div>
+            <div v-if="!messages.length && !loadingSession && !thinking" class="empty">
               <h2>从一个具体问题开始</h2>
               <p>例如：把本周目标拆成两项 25 分钟以内的行动，并说明为什么这么安排。</p>
             </div>
@@ -283,6 +328,16 @@ onBeforeUnmount(() => controller?.abort())
 .history-empty { margin: 0; color: var(--muted); font-size: 13px; }
 .session-loading { display: inline-flex; align-items: center; gap: 8px; margin-top: 12px; color: var(--muted); font-size: 13px; }
 .message.assistant .message-body { min-width: 0; }
+.thinking-message { min-height: 66px; }
+.message.assistant .thinking-body { min-height: 54px; display: flex; align-items: center; gap: 12px; padding-block: 11px; color: var(--muted); }
+.thinking-body p { min-width: 0; margin: 0; line-height: 1.5; overflow-wrap: anywhere; }
+.thinking-dots { width: 42px; height: 28px; flex: none; display: flex; align-items: center; justify-content: center; gap: 5px; border: 1px solid color-mix(in srgb, var(--primary) 18%, var(--border)); border-radius: 999px; background: color-mix(in srgb, var(--primary-soft) 42%, var(--surface)); }
+.thinking-dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--primary); }
+.thinking-dots i:nth-child(2) { background: var(--amber); }
+.thinking-dots i:nth-child(3) { background: var(--accent); }
+.thinking-copy-enter-active, .thinking-copy-leave-active { transition: opacity var(--motion-fast) ease, transform var(--motion-fast) ease; }
+.thinking-copy-enter-from { opacity: 0; transform: translateY(3px); }
+.thinking-copy-leave-to { opacity: 0; transform: translateY(-3px); }
 .suggestion-panel h2 { margin: 0; font-size: 18px; }
 .check-list { display: grid; gap: 12px; }
 .check-list article { display: grid; grid-template-columns: 22px 1fr; gap: 10px; padding-bottom: 12px; border-bottom: 1px solid var(--surface-muted); }
@@ -298,6 +353,9 @@ onBeforeUnmount(() => controller?.abort())
   .message, .suggestion-panel, .scene-tabs { animation: message-enter var(--motion-medium) ease-out both; }
   .history-panel { animation: message-enter var(--motion-medium) ease-out both; }
   .message.assistant > span { animation: assistant-breathe 2.8s ease-in-out infinite; }
+  .thinking-dots i { animation: thinking-dot 1.15s ease-in-out infinite; }
+  .thinking-dots i:nth-child(2) { animation-delay: 140ms; }
+  .thinking-dots i:nth-child(3) { animation-delay: 280ms; }
   .composer textarea:focus { box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary) 10%, transparent); }
   .check-list article { transition: transform var(--motion-fast) ease; }
   .check-list article:hover { transform: translateX(3px); }
@@ -322,6 +380,7 @@ onBeforeUnmount(() => controller?.abort())
 }
 @keyframes message-enter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes assistant-breathe { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--primary) 0%, transparent); } 50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--primary) 14%, transparent); } }
+@keyframes thinking-dot { 0%, 60%, 100% { opacity: .42; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-3px); } }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (max-width: 900px) {
   .ai-workspace { grid-template-columns: 1fr; }

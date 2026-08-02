@@ -1,6 +1,7 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import AiView from './AiView.vue'
+import { AI_THINKING_MESSAGES } from './ai-thinking'
 
 const api = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn() }))
 const postSse = vi.hoisted(() => vi.fn())
@@ -57,5 +58,30 @@ describe('AI safety UI', () => {
     await wrapper.get('form').trigger('submit')
     await flushPromises()
     expect(postSse).toHaveBeenCalledWith('/ai/sessions/old-session/messages:stream', { message: '继续' }, expect.any(Function), expect.any(AbortSignal))
+  })
+
+  it('shows a thinking transition until the first response text arrives', async () => {
+    let emit: ((event: { name: string; data: unknown }) => void) | undefined
+    let finish: (() => void) | undefined
+    postSse.mockImplementation((_path, _body, onEvent) => new Promise<void>(resolve => {
+      emit = onEvent
+      finish = resolve
+    }))
+    const wrapper = mount(AiView, { global: { stubs: { RouterLink: true } } })
+
+    await wrapper.get('textarea').setValue('帮我想一想')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+
+    expect(wrapper.get('.thinking-message').attributes('aria-label')).toBe('AI 正在思考')
+    expect(AI_THINKING_MESSAGES).toContain(wrapper.get('.thinking-body p').text() as typeof AI_THINKING_MESSAGES[number])
+
+    emit?.({ name: 'delta', data: { text: '先从第一步开始。' } })
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('.thinking-message').exists()).toBe(false)
+    expect(wrapper.text()).toContain('先从第一步开始。')
+
+    finish?.()
+    await flushPromises()
   })
 })
