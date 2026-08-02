@@ -386,7 +386,7 @@ public class TaskExecutionService {
             @Override
             public void afterCommit() {
                 try {
-                    redis.delete("insights:overview:" + userId);
+                    redis.delete("insights:overview:v2:" + userId);
                 } catch (RuntimeException ignored) {
                     // Redis is an optional acceleration layer; MySQL remains authoritative.
                 }

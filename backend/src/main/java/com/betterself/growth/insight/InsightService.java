@@ -10,14 +10,19 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.sql.Date;
 import java.time.Clock;
+import java.time.DayOfWeek;
 import java.time.Duration;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
+import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.List;
 
 @Service
 public class InsightService {
+
+    private static final String OVERVIEW_CACHE_PREFIX = "insights:overview:v2:";
 
     private final JdbcTemplate jdbc;
     private final StringRedisTemplate redis;
@@ -32,7 +37,7 @@ public class InsightService {
     }
 
     public Overview overview(long userId) {
-        String key = "insights:overview:" + userId;
+        String key = OVERVIEW_CACHE_PREFIX + userId;
         try {
             String cached = redis.opsForValue().get(key);
             if (cached != null) {
@@ -51,8 +56,9 @@ public class InsightService {
     }
 
     public List<TrendPoint> trends(long userId, LocalDate from, LocalDate to) {
-        Date start = Date.valueOf(from == null ? LocalDate.now(clock).minusDays(27) : from);
-        Date end = Date.valueOf(to == null ? LocalDate.now(clock) : to);
+        LocalDate today = currentLocalDate(userId);
+        Date start = Date.valueOf(from == null ? today.minusDays(27) : from);
+        Date end = Date.valueOf(to == null ? today : to);
         return jdbc.query(
             """
                 select s.local_date, coalesce(sum(e.experience_delta), 0) experience,
@@ -71,8 +77,9 @@ public class InsightService {
     }
 
     public List<CalendarDay> calendar(long userId, LocalDate from, LocalDate to) {
-        Date start = Date.valueOf(from == null ? LocalDate.now(clock).withDayOfMonth(1) : from);
-        Date end = Date.valueOf(to == null ? LocalDate.now(clock) : to);
+        LocalDate today = currentLocalDate(userId);
+        Date start = Date.valueOf(from == null ? today.withDayOfMonth(1) : from);
+        Date end = Date.valueOf(to == null ? today : to);
         return jdbc.query(
             """
                 select s.local_date, count(*) planned,
@@ -88,9 +95,10 @@ public class InsightService {
     }
 
     private Overview buildOverview(long userId) {
+        WeekRange week = currentWeek(clock, userZone(userId));
         Integer planned = jdbc.queryForObject(
             "select count(*) from task_schedule where user_id = ? and local_date between ? and ?",
-            Integer.class, userId, Date.valueOf(LocalDate.now(clock).minusDays(6)), Date.valueOf(LocalDate.now(clock))
+            Integer.class, userId, Date.valueOf(week.start()), Date.valueOf(week.end())
         );
         Integer effective = jdbc.queryForObject(
             """
@@ -99,7 +107,7 @@ public class InsightService {
                   and e.event_type in ('COMPLETED','PARTIAL')
                   and not exists (select 1 from task_event r where r.reverses_event_id = e.id)
                 """,
-            Integer.class, userId, Date.valueOf(LocalDate.now(clock).minusDays(6)), Date.valueOf(LocalDate.now(clock))
+            Integer.class, userId, Date.valueOf(week.start()), Date.valueOf(week.end())
         );
         Integer experience = jdbc.queryForObject(
             "select coalesce(sum(experience), 0) from user_dimension where user_id = ?",
@@ -142,6 +150,25 @@ public class InsightService {
         );
     }
 
+    private LocalDate currentLocalDate(long userId) {
+        return clock.instant().atZone(userZone(userId)).toLocalDate();
+    }
+
+    private ZoneId userZone(long userId) {
+        String timezone = jdbc.queryForObject(
+            "select timezone from sys_user where id = ?",
+            String.class,
+            userId
+        );
+        return ZoneId.of(timezone);
+    }
+
+    static WeekRange currentWeek(Clock clock, ZoneId zone) {
+        LocalDate today = clock.instant().atZone(zone).toLocalDate();
+        LocalDate monday = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+        return new WeekRange(monday, today);
+    }
+
     public record Overview(
         int plannedActions,
         int effectiveActions,
@@ -156,5 +183,8 @@ public class InsightService {
     }
 
     public record CalendarDay(LocalDate date, int plannedActions, int effectiveActions) {
+    }
+
+    record WeekRange(LocalDate start, LocalDate end) {
     }
 }
