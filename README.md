@@ -1,24 +1,24 @@
-# Growth Platform
+# 成长平台
 
-`更好的自己` is a Vue single-page application backed by a Spring Boot modular monolith. MySQL is the authoritative data store, Redis provides disposable acceleration, and MinIO supplies local S3-compatible object storage.
+`更好的自己` 是一个基于 Vue 的单页应用，后端为 Spring Boot 模块化单体。MySQL 是权威数据存储，Redis 提供可丢弃的加速，MinIO 提供本地 S3 兼容对象存储。
 
-## Prerequisites
+## 环境要求
 
 - Java 21
-- Docker with Docker Compose
-- Node.js 20.19 or newer
+- Docker（含 Docker Compose）
+- Node.js 20.19 或更新
 - pnpm 11
 
-## Local Setup
+## 本地启动
 
-Create an ignored local environment file from `.env.example` and replace the example values before using shared or production-like environments.
+从 `.env.example` 创建被忽略的本地环境文件，并在使用共享或类生产环境前替换示例值。
 
 ```bash
 cp .env.example .env.local
 docker compose --env-file .env.local -f deploy/compose.yaml up -d
 ```
 
-Run the backend with the local profile:
+以本地 profile 运行后端：
 
 ```bash
 cd backend
@@ -28,7 +28,7 @@ set +a
 ./mvnw spring-boot:run -Dspring-boot.run.profiles=local
 ```
 
-Run the frontend:
+运行前端：
 
 ```bash
 cd frontend
@@ -36,9 +36,9 @@ pnpm install
 pnpm dev
 ```
 
-## First Administrator
+## 首位管理员
 
-The app does not expose public administrator registration. To create the first admin, set these environment variables before starting the backend when no active `ADMIN` exists:
+应用不开放公开的管理员注册入口。要在不存在活跃 `ADMIN` 时创建首位管理员，请在启动后端前设置以下环境变量：
 
 ```bash
 ADMIN_BOOTSTRAP_EMAIL=admin@example.com
@@ -48,9 +48,9 @@ ADMIN_BOOTSTRAP_TIMEZONE=Asia/Shanghai
 ADMIN_BOOTSTRAP_MFA_SECRET=
 ```
 
-If `ADMIN_BOOTSTRAP_MFA_SECRET` is empty, the backend generates a TOTP secret and prints it once in the server logs. Add that secret to an authenticator app, sign in, complete MFA, then remove the bootstrap variables.
+如果 `ADMIN_BOOTSTRAP_MFA_SECRET` 为空，后端会生成一个 TOTP 密钥并在服务器日志中打印一次。将该密钥添加到身份验证器应用，登录并完成 MFA，然后移除引导变量。
 
-## Verification
+## 验证
 
 ```bash
 cd backend && ./mvnw test
@@ -58,12 +58,12 @@ cd frontend && pnpm lint && pnpm test --run && pnpm build
 docker compose --env-file .env.local -f deploy/compose.yaml config
 ```
 
-Run the complete local data-flow gate after the backend and frontend are available:
+在后端与前端就绪后，运行完整的本地数据流闸门：
 
 ```bash
 ./scripts/verify-global-flow.sh
 ```
 
-The gate verifies authentication cookies and CSRF, consent persistence, goal/plan/task materialization, task state transitions and reversal, AI SSE and fixed crisis replacement, idempotent suggestion adoption, ZIP export, ownership isolation, deletion cooling-off/cancellation, database invariants, Redis health, and sensitive-log scanning. Set `QWEN_PROVIDER=qwen` and provide `QWEN_API_KEY` only through the process environment for a real provider smoke; never commit the key.
+该闸门验证：认证 Cookie 与 CSRF、同意持久化、目标/周计划/任务物化、任务状态转换与撤销、AI SSE 与固定危机替代、建议幂等采纳、ZIP 导出、归属隔离、删除冷静期/取消、数据库不变量、Redis 健康与敏感日志扫描。要进行真实供应商冒烟，仅在进程环境中设置 `QWEN_PROVIDER=qwen` 并提供 `QWEN_API_KEY`；绝不提交该密钥。
 
-The backend health endpoint is available at `http://localhost:8080/actuator/health`. Nginx is configured to expose the same endpoint and proxy `/api/v1` when used as the SPA edge server.
+后端健康检查地址为 `http://localhost:8080/actuator/health`。Nginx 用作 SPA 边缘服务器时，已配置暴露同一地址并代理 `/api/v1`。
