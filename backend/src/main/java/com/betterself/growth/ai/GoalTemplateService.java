@@ -114,23 +114,22 @@ public class GoalTemplateService {
             """.formatted(conversation);
     }
 
-    private GoalTemplateView parse(String sessionPublicId, QwenProvider.StructuredResult result) {
+    GoalTemplateView parse(String sessionPublicId, QwenProvider.StructuredResult result) {
         try {
             JsonNode root = objectMapper.readTree(result.json());
             String title = text(root, "title", 160);
             String description = text(root, "description", 1000);
-            String dimensionCode = root.path("dimensionCode").asText();
-            int durationDays = root.path("durationDays").asInt();
+            String dimensionCode = normalizeDimension(root.path("dimensionCode").asText());
+            int durationDays = clamp(root.path("durationDays").asInt(28), 14, 84);
             String weeklyFocus = text(root, "weeklyFocus", 300);
-            if (!DIMENSIONS.contains(dimensionCode) || durationDays < 14 || durationDays > 84) throw invalidOutput();
+            if (dimensionCode == null) throw invalidOutput();
             JsonNode tasksNode = root.path("starterTasks");
             if (!tasksNode.isArray() || tasksNode.isEmpty() || tasksNode.size() > 3) throw invalidOutput();
             List<StarterTaskView> tasks = new ArrayList<>();
             for (JsonNode task : tasksNode) {
                 String taskTitle = text(task, "title", 160);
-                int minutes = task.path("estimatedMinutes").asInt();
-                int difficulty = task.path("difficulty").asInt();
-                if (minutes < 5 || minutes > 60 || difficulty < 1 || difficulty > 3) throw invalidOutput();
+                int minutes = clamp(task.path("estimatedMinutes").asInt(15), 5, 60);
+                int difficulty = clamp(task.path("difficulty").asInt(2), 1, 3);
                 tasks.add(new StarterTaskView(taskTitle, minutes, difficulty));
             }
             return new GoalTemplateView(
@@ -144,10 +143,36 @@ public class GoalTemplateService {
         }
     }
 
+    private int clamp(int value, int min, int max) {
+        return Math.max(min, Math.min(max, value));
+    }
+
     private String text(JsonNode node, String field, int maxLength) {
         String value = node.path(field).asText().trim();
-        if (value.isEmpty() || value.length() > maxLength) throw invalidOutput();
-        return value;
+        if (value.isEmpty()) throw invalidOutput();
+        return value.length() > maxLength ? value.substring(0, maxLength).trim() : value;
+    }
+
+    /**
+     * 模型偶发返回变体维度码（大小写、中文名、英文别名等），这里统一归一到系统五个维度。
+     */
+    static String normalizeDimension(String raw) {
+        if (raw == null) return null;
+        String value = raw.trim().toUpperCase().replace("-", "_").replace(" ", "_");
+        switch (value) {
+            case "KNOWLEDGE", "智力", "ZHILI", "XUEXI", "STUDY", "LEARNING", "ACADEMIC":
+                return "KNOWLEDGE";
+            case "HEALTH", "体力", "TILI", "JIANKANG", "FITNESS", "BODY":
+                return "HEALTH";
+            case "CAREER", "职场", "职业", "执行力", "ZHICHANG", "WORK", "PROFESSIONAL":
+                return "CAREER";
+            case "RELATIONSHIP", "社交", "关系", "社交力", "SHEJIAO", "RELATION", "SOCIAL":
+                return "RELATIONSHIP";
+            case "WELLBEING", "情绪", "心境", "心境力", "EMOTIONAL", "EMOTION", "MINDSET", "WELL-BEING", "WELL_BEING":
+                return "WELLBEING";
+            default:
+                return null;
+        }
     }
 
     private ApiException invalidOutput() {

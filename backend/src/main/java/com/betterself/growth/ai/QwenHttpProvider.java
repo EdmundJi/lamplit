@@ -53,13 +53,13 @@ public class QwenHttpProvider implements QwenProvider {
             Map.of("role", "system", "content", "Return only JSON matching this schema: " + prompt.schemaJson()),
             Map.of("role", "user", "content", prompt.instruction())
         ), true);
-        String content = root.path("choices").path(0).path("message").path("content").asText();
+        String content = stripCodeFence(root.path("choices").path(0).path("message").path("content").asText());
         if (!validJson(content)) {
             root = call(List.of(
                 Map.of("role", "system", "content", "Repair the following value into JSON only. Schema: " + prompt.schemaJson()),
                 Map.of("role", "user", "content", content)
             ), true);
-            content = root.path("choices").path(0).path("message").path("content").asText();
+            content = stripCodeFence(root.path("choices").path(0).path("message").path("content").asText());
             if (!validJson(content)) {
                 throw unavailable("AI_INVALID_JSON");
             }
@@ -70,6 +70,18 @@ public class QwenHttpProvider implements QwenProvider {
             root.path("usage").path("prompt_tokens").asInt(), root.path("usage").path("completion_tokens").asInt(),
             Duration.ofNanos(System.nanoTime() - started).toMillis()
         );
+    }
+
+    private String stripCodeFence(String value) {
+        String trimmed = value.trim();
+        if (trimmed.startsWith("```")) {
+            int firstNewline = trimmed.indexOf('\n');
+            int lastFence = trimmed.lastIndexOf("```");
+            if (firstNewline > 0 && lastFence > firstNewline) {
+                return trimmed.substring(firstNewline + 1, lastFence).trim();
+            }
+        }
+        return trimmed;
     }
 
     private boolean validJson(String value) {
@@ -118,6 +130,7 @@ public class QwenHttpProvider implements QwenProvider {
             body.put("model", model);
             body.put("messages", messages);
             body.put("temperature", 0.2);
+            body.put("max_tokens", 2000);
             if (jsonMode) {
                 body.put("response_format", Map.of("type", "json_object"));
             }
