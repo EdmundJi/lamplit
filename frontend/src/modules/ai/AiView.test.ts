@@ -5,14 +5,17 @@ import { AI_THINKING_MESSAGES } from './ai-thinking'
 
 const api = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn() }))
 const postSse = vi.hoisted(() => vi.fn())
+const router = vi.hoisted(() => ({ push: vi.fn() }))
 vi.mock('../../shared/api/client', () => ({ api }))
 vi.mock('../../shared/api/sse', () => ({ postSse }))
+vi.mock('vue-router', () => ({ useRouter: () => router }))
 
 describe('AI safety UI', () => {
   beforeEach(() => {
     api.get.mockReset().mockResolvedValue([])
     api.post.mockReset().mockResolvedValue({ publicId: 'session-1' })
     postSse.mockReset()
+    router.push.mockReset()
   })
 
   it('replaces the normal composer with the reviewed crisis response', async () => {
@@ -83,5 +86,28 @@ describe('AI safety UI', () => {
 
     finish?.()
     await flushPromises()
+  })
+
+  it('generates an editable JSON goal draft from the active conversation', async () => {
+    api.post.mockImplementation((path: string) => {
+      if (path === '/ai/sessions') return Promise.resolve({ publicId: 'session-1' })
+      if (path === '/ai/goal-template') return Promise.resolve({
+        sourceSessionPublicId: 'session-1', title: '四周学习计划', description: '每周完成三次复习',
+        dimensionCode: 'KNOWLEDGE', durationDays: 28, weeklyFocus: '先稳定频率',
+        starterTasks: [{ title: '复习一节', estimatedMinutes: 25, difficulty: 2 }],
+      })
+      return Promise.resolve({})
+    })
+    postSse.mockImplementation(async (_path, _body, emit) => emit({ name: 'delta', data: { text: '可以从每周三次开始。' } }))
+    const wrapper = mount(AiView, { global: { stubs: { RouterLink: true } } })
+    await wrapper.get('textarea#ai-message').setValue('我想稳定复习')
+    await wrapper.get('form.composer').trigger('submit')
+    await flushPromises()
+    await wrapper.get('.generate-goal').trigger('click')
+    await flushPromises()
+
+    expect(api.post).toHaveBeenCalledWith('/ai/goal-template', { sessionPublicId: 'session-1' })
+    expect((wrapper.get('.goal-draft-form input').element as HTMLInputElement).value).toBe('四周学习计划')
+    expect(wrapper.get('.json-preview pre').text()).toContain('"dimensionCode": "KNOWLEDGE"')
   })
 })

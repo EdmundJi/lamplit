@@ -81,6 +81,24 @@ class AiFlowIT {
             .andExpect(status().isNotFound())
             .andExpect(jsonPath("$.data.code").value("AI_SESSION_NOT_FOUND"));
 
+        mvc.perform(post("/api/v1/ai/goal-template")
+                .cookie(owner.access(), owner.csrf())
+                .header("X-CSRF-Token", owner.csrf().getValue())
+                .contentType("application/json")
+                .content("{\"sessionPublicId\":\"" + sessionId + "\"}"))
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.data.title").value("四周建立稳定学习节奏"))
+            .andExpect(jsonPath("$.data.dimensionCode").value("KNOWLEDGE"))
+            .andExpect(jsonPath("$.data.durationDays").value(28))
+            .andExpect(jsonPath("$.data.starterTasks.length()").value(2));
+
+        mvc.perform(post("/api/v1/ai/goal-template")
+                .cookie(other.access(), other.csrf())
+                .header("X-CSRF-Token", other.csrf().getValue())
+                .contentType("application/json")
+                .content("{\"sessionPublicId\":\"" + sessionId + "\"}"))
+            .andExpect(status().isNotFound());
+
         String crisisSession = createAiSession(owner, "EMOTIONAL_SUPPORT");
         MvcResult crisis = mvc.perform(post("/api/v1/ai/sessions/{id}/messages:stream", crisisSession)
                 .cookie(owner.access(), owner.csrf())

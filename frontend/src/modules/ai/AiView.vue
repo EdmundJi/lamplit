@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue'
-import { ClipboardCheck, History, Loader2, Plus, Send, ShieldCheck, SlidersHorizontal, Timer } from 'lucide-vue-next'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { ArrowRight, ClipboardCheck, FileJson2, History, Loader2, Plus, Send, ShieldCheck, SlidersHorizontal, Sparkles, Timer } from 'lucide-vue-next'
 import { api } from '../../shared/api/client'
 import { postSse } from '../../shared/api/sse'
 import MarkdownDocument from '../../shared/ui/MarkdownDocument.vue'
 import { pickThinkingMessage } from './ai-thinking'
+import { saveGoalDraft, type GoalDraft } from './goal-draft'
 
 type ChatMessage = { role: 'USER' | 'ASSISTANT'; text: string }
 type SessionSummary = {
@@ -35,6 +37,7 @@ const suggestionChecks = [
 ]
 
 const scene = ref('STUDY')
+const router = useRouter()
 const session = ref('')
 const message = ref('')
 const messages = ref<ChatMessage[]>([])
@@ -46,11 +49,29 @@ const thinking = ref(false)
 const thinkingMessage = ref('')
 const error = ref('')
 const crisis = ref<{ message: string } | null>(null)
+const goalDraft = ref<GoalDraft | null>(null)
+const generatingGoal = ref(false)
+const goalDraftError = ref('')
 let controller: AbortController | undefined
 let openSessionRequest = 0
 let thinkingTimer: ReturnType<typeof setInterval> | undefined
 
 const sceneNames: Record<string, string> = Object.fromEntries(sceneOptions.map(option => [option.value, option.label]))
+const dimensionOptions = [
+  { code: 'KNOWLEDGE', name: '智力' },
+  { code: 'HEALTH', name: '体力' },
+  { code: 'CAREER', name: '执行力' },
+  { code: 'RELATIONSHIP', name: '社交力' },
+  { code: 'WELLBEING', name: '心境力' },
+]
+const goalDraftJson = computed(() => goalDraft.value ? JSON.stringify({
+  title: goalDraft.value.title,
+  description: goalDraft.value.description,
+  dimensionCode: goalDraft.value.dimensionCode,
+  durationDays: goalDraft.value.durationDays,
+  weeklyFocus: goalDraft.value.weeklyFocus,
+  starterTasks: goalDraft.value.starterTasks,
+}, null, 2) : '')
 
 function stopThinking() {
   thinking.value = false
@@ -155,6 +176,25 @@ async function send() {
   }
 }
 
+async function generateGoalTemplate() {
+  if (!session.value || !messages.value.length || generatingGoal.value) return
+  generatingGoal.value = true
+  goalDraftError.value = ''
+  try {
+    goalDraft.value = await api.post<GoalDraft>('/ai/goal-template', { sessionPublicId: session.value })
+  } catch {
+    goalDraftError.value = '目标草案暂时无法生成，请继续聊几句后重试。'
+  } finally {
+    generatingGoal.value = false
+  }
+}
+
+async function fillGoalForm() {
+  if (!goalDraft.value) return
+  saveGoalDraft(goalDraft.value)
+  await router.push('/goals?source=ai')
+}
+
 function reset() {
   controller?.abort()
   stopThinking()
@@ -163,6 +203,8 @@ function reset() {
   session.value = ''
   messages.value = []
   crisis.value = null
+  goalDraft.value = null
+  goalDraftError.value = ''
   error.value = ''
 }
 
@@ -244,6 +286,39 @@ onBeforeUnmount(() => {
         </div>
 
         <aside class="ai-side">
+          <section class="goal-draft-panel" aria-labelledby="goal-draft-title">
+            <div class="panel-title">
+              <div><p class="eyebrow">任务推荐</p><h2 id="goal-draft-title">目标草案</h2></div>
+              <FileJson2 :size="19" />
+            </div>
+            <button v-if="!goalDraft" class="primary generate-goal" type="button" :disabled="!session || !messages.length || generatingGoal" @click="generateGoalTemplate">
+              <Loader2 v-if="generatingGoal" :size="17" class="spinning" />
+              <Sparkles v-else :size="17" />
+              {{ generatingGoal ? '正在生成' : '根据对话生成' }}
+            </button>
+            <p v-if="goalDraftError" class="draft-error" role="alert">{{ goalDraftError }}</p>
+            <form v-if="goalDraft" class="goal-draft-form" @submit.prevent="fillGoalForm">
+              <label class="field"><span>目标名称</span><input v-model="goalDraft.title" maxlength="160" required /></label>
+              <label class="field"><span>完成标准</span><textarea v-model="goalDraft.description" maxlength="1000" required></textarea></label>
+              <div class="draft-split">
+                <label class="field"><span>成长属性</span><select v-model="goalDraft.dimensionCode"><option v-for="item in dimensionOptions" :key="item.code" :value="item.code">{{ item.name }}</option></select></label>
+                <label class="field"><span>持续天数</span><input v-model.number="goalDraft.durationDays" type="number" min="14" max="84" required /></label>
+              </div>
+              <label class="field"><span>每周重点</span><textarea v-model="goalDraft.weeklyFocus" maxlength="300" required></textarea></label>
+              <div class="starter-tasks">
+                <strong>起步任务</strong>
+                <div v-for="(task, index) in goalDraft.starterTasks" :key="index" class="starter-task">
+                  <input v-model="task.title" :aria-label="`起步任务 ${index + 1} 名称`" maxlength="160" required />
+                  <input v-model.number="task.estimatedMinutes" :aria-label="`起步任务 ${index + 1} 分钟`" type="number" min="5" max="60" required />
+                  <select v-model.number="task.difficulty" :aria-label="`起步任务 ${index + 1} 难度`"><option :value="1">难度 1</option><option :value="2">难度 2</option><option :value="3">难度 3</option></select>
+                </div>
+              </div>
+              <details class="json-preview"><summary>查看 JSON</summary><pre>{{ goalDraftJson }}</pre></details>
+              <div class="draft-actions"><button class="secondary" type="button" :disabled="generatingGoal" @click="generateGoalTemplate">重新生成</button><button class="primary" type="submit">一键填入<ArrowRight :size="16" /></button></div>
+            </form>
+            <p v-else-if="!messages.length" class="draft-empty">完成一段对话后即可生成。</p>
+          </section>
+
           <section class="history-panel" aria-labelledby="history-title">
             <div class="panel-title">
               <div>
@@ -314,7 +389,7 @@ onBeforeUnmount(() => {
 .composer { display: grid; grid-template-columns: 1fr 44px; gap: 10px; padding-top: 16px; }
 .composer textarea { min-height: 84px; resize: vertical; border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; background: var(--surface); color: var(--ink); }
 .ai-side { display: grid; gap: 14px; }
-.history-panel, .suggestion-panel { display: grid; gap: 14px; padding: 16px; border: 1px solid var(--border); border-radius: calc(var(--radius) + 4px); background: color-mix(in srgb, var(--surface) 90%, transparent); box-shadow: var(--shadow-soft); }
+.history-panel, .suggestion-panel, .goal-draft-panel { display: grid; gap: 14px; padding: 16px; border: 1px solid var(--border); border-radius: calc(var(--radius) + 4px); background: color-mix(in srgb, var(--surface) 90%, transparent); box-shadow: var(--shadow-soft); }
 .panel-title { display: flex; align-items: start; justify-content: space-between; gap: 12px; }
 .panel-title h2 { margin: 0; font-size: 18px; }
 .spinning { animation: spin .8s linear infinite; }
@@ -326,6 +401,23 @@ onBeforeUnmount(() => {
 .history-meta small { color: var(--muted); font-size: 12px; }
 .history-preview { color: var(--muted); font-size: 13px; line-height: 1.45; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .history-empty { margin: 0; color: var(--muted); font-size: 13px; }
+.goal-draft-panel .panel-title > svg { color: var(--primary); }
+.generate-goal { width: 100%; }
+.draft-empty, .draft-error { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.draft-error { color: var(--danger); }
+.goal-draft-form { display: grid; gap: 11px; }
+.goal-draft-form .field { gap: 5px; }
+.goal-draft-form .field span { font-size: 12px; }
+.goal-draft-form .field textarea { min-height: 74px; }
+.draft-split { display: grid; grid-template-columns: minmax(0, 1fr) 92px; gap: 8px; }
+.starter-tasks { display: grid; gap: 7px; }
+.starter-tasks > strong { font-size: 12px; }
+.starter-task { display: grid; grid-template-columns: minmax(0, 1fr) 62px 82px; gap: 6px; }
+.starter-task input, .starter-task select { min-width: 0; min-height: 36px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--ink); padding: 7px; font-size: 11px; }
+.json-preview { border-top: 1px solid var(--border); padding-top: 9px; }
+.json-preview summary { color: var(--primary); cursor: pointer; font-size: 12px; font-weight: 700; }
+.json-preview pre { max-height: 220px; overflow: auto; margin: 9px 0 0; padding: 10px; border-radius: var(--radius); background: var(--surface-muted); color: var(--ink); font: 11px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+.draft-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .session-loading { display: inline-flex; align-items: center; gap: 8px; margin-top: 12px; color: var(--muted); font-size: 13px; }
 .message.assistant .message-body { min-width: 0; }
 .thinking-message { min-height: 66px; }
@@ -350,7 +442,7 @@ onBeforeUnmount(() => {
 .button { display: inline-flex; align-items: center; text-decoration: none; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; }
 @media (prefers-reduced-motion: no-preference) {
-  .message, .suggestion-panel, .scene-tabs { animation: message-enter var(--motion-medium) ease-out both; }
+  .message, .suggestion-panel, .goal-draft-panel, .scene-tabs { animation: message-enter var(--motion-medium) ease-out both; }
   .history-panel { animation: message-enter var(--motion-medium) ease-out both; }
   .message.assistant > span { animation: assistant-breathe 2.8s ease-in-out infinite; }
   .thinking-dots i { animation: thinking-dot 1.15s ease-in-out infinite; }
@@ -391,5 +483,7 @@ onBeforeUnmount(() => {
 @media (max-width: 560px) {
   .scene-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .history-item { min-height: 62px; }
+  .starter-task { grid-template-columns: 1fr 62px; }
+  .starter-task select { grid-column: 1 / -1; }
 }
 </style>

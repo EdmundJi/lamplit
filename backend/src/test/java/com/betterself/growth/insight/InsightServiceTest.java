@@ -40,6 +40,16 @@ class InsightServiceTest {
         assertThat(losAngelesWeek.end()).isEqualTo(LocalDate.of(2026, 8, 2));
     }
 
+    @Test
+    void convertsExperienceIntoBoundedAttributeLevelsAndRadarScores() {
+        assertThat(InsightService.attributeLevel(0)).isEqualTo(1);
+        assertThat(InsightService.attributeLevel(100)).isEqualTo(2);
+        assertThat(InsightService.attributeLevel(1_000_000)).isEqualTo(20);
+        assertThat(InsightService.attributeScore(0)).isZero();
+        assertThat(InsightService.attributeScore(100)).isBetween(1, 99);
+        assertThat(InsightService.attributeScore(1_000_000)).isEqualTo(100);
+    }
+
     private WeeklyMetricsCalculator.MetricEvent event(String type, boolean reversed) {
         return new WeeklyMetricsCalculator.MetricEvent(type, reversed);
     }

@@ -1,6 +1,8 @@
 package com.betterself.growth.identity;
 
 import com.betterself.growth.auth.AuthService;
+import com.betterself.growth.insight.InsightService;
+import com.betterself.growth.partner.PartnerService;
 import com.betterself.growth.shared.api.ApiException;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.http.HttpStatus;
@@ -11,6 +13,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.Period;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Set;
 
@@ -19,16 +24,63 @@ public class IdentityService {
 
     private final JdbcTemplate jdbc;
     private final AuthService authService;
+    private final InsightService insights;
+    private final PartnerService partners;
     private final Clock clock;
 
-    public IdentityService(JdbcTemplate jdbc, AuthService authService, Clock clock) {
+    public IdentityService(
+        JdbcTemplate jdbc,
+        AuthService authService,
+        InsightService insights,
+        PartnerService partners,
+        Clock clock
+    ) {
         this.jdbc = jdbc;
         this.authService = authService;
+        this.insights = insights;
+        this.partners = partners;
         this.clock = clock;
     }
 
     public AuthService.UserView me(long userId) {
         return authService.findUser(userId);
+    }
+
+    @Transactional
+    public ProfileView profile(long userId) {
+        UserProfileRow user = jdbc.queryForObject(
+            """
+                select public_id, email, display_name, birth_date, timezone, created_at
+                from sys_user where id = ?
+                """,
+            (rs, row) -> new UserProfileRow(
+                rs.getString("public_id"),
+                rs.getString("email"),
+                rs.getString("display_name"),
+                rs.getDate("birth_date").toLocalDate(),
+                rs.getString("timezone"),
+                rs.getTimestamp("created_at").toInstant()
+            ),
+            userId
+        );
+        InsightService.AttributesOverview attributes = insights.attributes(userId);
+        PartnerService.PartnerProfile partner = partners.profile(userId);
+        Integer effectiveActions = jdbc.queryForObject(
+            """
+                select count(*) from task_event e
+                where e.user_id = ? and e.event_type in ('COMPLETED','PARTIAL')
+                  and not exists (select 1 from task_event r where r.reverses_event_id = e.id)
+                """,
+            Integer.class,
+            userId
+        );
+        LocalDate today = clock.instant().atZone(ZoneId.of(user.timezone())).toLocalDate();
+        int age = Period.between(user.birthDate(), today).getYears();
+        return new ProfileView(
+            user.publicId(), user.email(), user.displayName(), user.birthDate(), age, user.timezone(), user.createdAt(),
+            attributes.overallLevel(), attributes.totalExperience(), effectiveActions == null ? 0 : effectiveActions,
+            partner.wallet(), partner.selectedPet(), partner.pets().size()
+        );
     }
 
     @Transactional
@@ -164,6 +216,33 @@ public class IdentityService {
         String timezone,
         int aiRetentionDays,
         boolean aiMemoryEnabled
+    ) {
+    }
+
+    public record ProfileView(
+        String publicId,
+        String email,
+        String displayName,
+        LocalDate birthDate,
+        int age,
+        String timezone,
+        Instant createdAt,
+        int overallLevel,
+        int totalExperience,
+        int effectiveActions,
+        PartnerService.WalletView wallet,
+        PartnerService.PetView selectedPet,
+        int petCount
+    ) {
+    }
+
+    private record UserProfileRow(
+        String publicId,
+        String email,
+        String displayName,
+        LocalDate birthDate,
+        String timezone,
+        Instant createdAt
     ) {
     }
 }

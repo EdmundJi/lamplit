@@ -14,6 +14,7 @@ test('authenticated users receive an AI SSE response', async ({ page }, testInfo
   await expect(page).toHaveURL(/\/onboarding$/)
 
   await page.goto('/ai')
+  await page.getByRole('button', { name: '关闭欢迎介绍' }).click().catch(() => {})
   await page.getByLabel('输入消息').fill('请帮我把今天的学习拆成一个小步骤')
   await page.getByRole('button', { name: '发送' }).click()
   await expect(page.locator('.message.assistant p')).not.toHaveText('', { timeout: 30_000 })

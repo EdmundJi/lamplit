@@ -10,8 +10,12 @@ const routes = [
     { path: 'today', component: () => import('../modules/today/TodayView.vue') },
     { path: 'goals', component: () => import('../modules/goals/GoalsView.vue') },
     { path: 'partners', component: () => import('../modules/partners/PartnersView.vue') },
+    { path: 'friends', component: () => import('../modules/friends/FriendsView.vue') },
+    { path: 'friends/:publicId', component: () => import('../modules/friends/FriendDetailView.vue'), props: true },
+    { path: 'attributes', component: () => import('../modules/attributes/AttributesView.vue') },
     { path: 'insights', component: () => import('../modules/insights/InsightsView.vue') },
     { path: 'ai', component: () => import('../modules/ai/AiView.vue') },
+    { path: 'profile', component: () => import('../modules/profile/ProfileView.vue') },
     { path: 'settings', component: () => import('../modules/settings/SettingsView.vue') },
   ] },
   { path: '/admin', component: () => import('./AdminLayout.vue'), meta: { admin: true }, children: [

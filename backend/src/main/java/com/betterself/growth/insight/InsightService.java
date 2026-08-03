@@ -17,12 +17,24 @@ import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 
 @Service
 public class InsightService {
 
     private static final String OVERVIEW_CACHE_PREFIX = "insights:overview:v2:";
+    private static final Map<String, String> ATTRIBUTE_NAMES = Map.of(
+        "KNOWLEDGE", "智力",
+        "HEALTH", "体力",
+        "CAREER", "执行力",
+        "RELATIONSHIP", "社交力",
+        "WELLBEING", "心境力"
+    );
+    private static final List<String> ATTRIBUTE_ORDER = List.of(
+        "KNOWLEDGE", "HEALTH", "CAREER", "RELATIONSHIP", "WELLBEING"
+    );
 
     private final JdbcTemplate jdbc;
     private final StringRedisTemplate redis;
@@ -53,6 +65,55 @@ public class InsightService {
             // Cache failures never block insights.
         }
         return overview;
+    }
+
+    public AttributesOverview attributes(long userId) {
+        List<AttributeView> attributes = jdbc.query(
+            """
+                select d.code, d.name, d.description, ud.experience
+                from user_dimension ud
+                join growth_dimension d on d.id = ud.dimension_id
+                where ud.user_id = ? and ud.active = 1 and d.is_system = 1 and d.archived_at is null
+                """,
+            (rs, row) -> attribute(
+                rs.getString("code"),
+                rs.getString("name"),
+                rs.getString("description"),
+                rs.getInt("experience")
+            ),
+            userId
+        ).stream().sorted(Comparator.comparingInt(value -> ATTRIBUTE_ORDER.indexOf(value.code()))).toList();
+        int totalExperience = attributes.stream().mapToInt(AttributeView::experience).sum();
+        return new AttributesOverview(totalExperience, attributeLevel(totalExperience), attributes);
+    }
+
+    private AttributeView attribute(String code, String dimensionName, String description, int experience) {
+        int level = attributeLevel(experience);
+        int currentThreshold = level <= 1 ? 0 : (level - 1) * (level - 1) * 100;
+        Integer nextThreshold = level >= 20 ? null : level * level * 100;
+        int toNext = nextThreshold == null ? 0 : Math.max(0, nextThreshold - experience);
+        return new AttributeView(
+            code,
+            ATTRIBUTE_NAMES.getOrDefault(code, dimensionName),
+            dimensionName,
+            description,
+            experience,
+            level,
+            attributeScore(experience),
+            currentThreshold,
+            nextThreshold,
+            toNext
+        );
+    }
+
+    static int attributeLevel(int experience) {
+        return Math.max(1, Math.min(20, (int) Math.floor(Math.sqrt(Math.max(0, experience)) / 10) + 1));
+    }
+
+    static int attributeScore(int experience) {
+        if (experience <= 0) return 0;
+        double score = 100 * Math.log1p(experience) / Math.log1p(5_000);
+        return Math.max(0, Math.min(100, (int) Math.round(score)));
     }
 
     public List<TrendPoint> trends(long userId, LocalDate from, LocalDate to) {
@@ -176,6 +237,23 @@ public class InsightService {
         int totalExperience,
         int recoveryCount,
         int personalBestDailyActions
+    ) {
+    }
+
+    public record AttributesOverview(int totalExperience, int overallLevel, List<AttributeView> attributes) {
+    }
+
+    public record AttributeView(
+        String code,
+        String name,
+        String dimensionName,
+        String description,
+        int experience,
+        int level,
+        int radarScore,
+        int currentLevelExperience,
+        Integer nextLevelExperience,
+        int experienceToNextLevel
     ) {
     }
 

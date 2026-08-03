@@ -56,14 +56,14 @@ test('Rive partner renders and direct interaction updates affection', async ({ p
   await expect(page.getByText('正在唤醒伙伴…')).toHaveCount(0)
   await expect(page.locator('.dialogue-bar blockquote')).not.toBeEmpty()
   await expect(page.getByText('首次互动 +2')).toBeVisible()
-  await expect(page.getByText('2 / 10 好感度')).toBeVisible()
+  await expect(page.locator('.affection-panel strong')).toHaveText('2 / 10')
   await page.unroute('**/api/v1/partners/profile')
 
   await page.getByRole('button', { name: '关闭对话' }).click()
   await page.getByRole('button', { name: '和小橘互动' }).click()
   await expect(page.locator('.dialogue-bar blockquote')).not.toBeEmpty()
   await expect(page.getByText('今日奖励已领取')).toBeVisible()
-  await expect(page.getByText('2 / 10 好感度')).toBeVisible()
+  await expect(page.locator('.affection-panel strong')).toHaveText('2 / 10')
 
   const species = [
     { code: 'DOG', label: '狗', name: '小柯' },
@@ -77,7 +77,7 @@ test('Rive partner renders and direct interaction updates affection', async ({ p
 
   for (const animal of species) {
     await page.getByRole('button', { name: '新伙伴' }).click()
-    await page.getByRole('button', { name: animal.label, exact: true }).click()
+    await page.locator('.species-grid').getByRole('button', { name: new RegExp(`${animal.label}$`) }).click()
     await page.getByLabel('名字').fill(animal.name)
     await page.getByRole('button', { name: '创建伙伴' }).click()
 

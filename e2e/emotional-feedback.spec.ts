@@ -23,6 +23,7 @@ test('goal creation and completion provide supportive feedback', async ({ page }
   await expect(page).toHaveURL(/\/onboarding$/)
 
   await page.goto('/goals')
+  await page.getByRole('button', { name: '关闭欢迎介绍' }).click().catch(() => {})
   await page.getByRole('button', { name: '目标', exact: true }).click()
   await expect(page.locator('.support-line')).not.toHaveText('')
   await page.getByLabel('目标名称').fill('完成一本学习笔记')

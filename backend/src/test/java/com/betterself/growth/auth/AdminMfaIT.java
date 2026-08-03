@@ -1,12 +1,15 @@
 package com.betterself.growth.auth;
 
 import dev.samstevens.totp.code.DefaultCodeGenerator;
-import dev.samstevens.totp.time.SystemTimeProvider;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Primary;
+import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -16,6 +19,9 @@ import org.testcontainers.containers.MySQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.Base64;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -28,7 +34,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 @Tag("security")
+@Import(AdminMfaIT.FixedClockConfiguration.class)
 class AdminMfaIT {
+
+    private static final Instant TEST_NOW = Instant.parse("2026-08-03T08:00:00Z");
 
     @Container
     static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.4");
@@ -48,6 +57,7 @@ class AdminMfaIT {
     @Autowired JdbcTemplate jdbc;
     @Autowired PasswordEncoder passwordEncoder;
     @Autowired MfaSecretCipher mfaSecretCipher;
+    @Autowired Clock clock;
 
     @Test
     void issuesNoSessionUntilEncryptedTotpSecretIsVerified() throws Exception {
@@ -76,7 +86,13 @@ class AdminMfaIT {
             .andExpect(cookie().doesNotExist("access_token"))
             .andExpect(cookie().doesNotExist("refresh_token"));
 
-        long timeWindow = new SystemTimeProvider().getTime() / 30;
+        String hardcodedMfaBody = """
+            {"email":"admin@example.test","password":"Correct-Horse-Battery-2026!","code":"123456"}
+            """;
+        mvc.perform(post("/api/v1/auth/mfa/verify").contentType("application/json").content(hardcodedMfaBody))
+            .andExpect(status().isUnauthorized());
+
+        long timeWindow = clock.instant().getEpochSecond() / 30;
         String code = new DefaultCodeGenerator().generate(secret, timeWindow);
         String mfaBody = """
             {"email":"admin@example.test","password":"Correct-Horse-Battery-2026!","code":"%s"}
@@ -90,5 +106,15 @@ class AdminMfaIT {
             "select mfa_verified_at is not null from sys_user where email_normalized = 'admin@example.test'",
             Boolean.class
         )).isTrue();
+    }
+
+    @TestConfiguration
+    static class FixedClockConfiguration {
+
+        @Bean
+        @Primary
+        Clock fixedClock() {
+            return Clock.fixed(TEST_NOW, ZoneOffset.UTC);
+        }
     }
 }

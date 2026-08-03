@@ -3,8 +3,9 @@ package com.betterself.growth.auth;
 import dev.samstevens.totp.code.DefaultCodeGenerator;
 import dev.samstevens.totp.code.DefaultCodeVerifier;
 import dev.samstevens.totp.secret.DefaultSecretGenerator;
-import dev.samstevens.totp.time.SystemTimeProvider;
 import org.springframework.stereotype.Service;
+
+import java.time.Clock;
 
 @Service
 public class MfaService {
@@ -12,8 +13,8 @@ public class MfaService {
     private final DefaultSecretGenerator secretGenerator = new DefaultSecretGenerator();
     private final DefaultCodeVerifier verifier;
 
-    public MfaService() {
-        verifier = new DefaultCodeVerifier(new DefaultCodeGenerator(), new SystemTimeProvider());
+    public MfaService(Clock clock) {
+        verifier = new DefaultCodeVerifier(new DefaultCodeGenerator(), () -> clock.instant().getEpochSecond());
         verifier.setAllowedTimePeriodDiscrepancy(1);
     }
 

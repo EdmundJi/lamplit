@@ -25,11 +25,13 @@ public class AiController {
 
     private final AiService ai;
     private final SuggestionService suggestions;
+    private final GoalTemplateService goalTemplates;
     private final Clock clock;
 
-    public AiController(AiService ai, SuggestionService suggestions, Clock clock) {
+    public AiController(AiService ai, SuggestionService suggestions, GoalTemplateService goalTemplates, Clock clock) {
         this.ai = ai;
         this.suggestions = suggestions;
+        this.goalTemplates = goalTemplates;
         this.clock = clock;
     }
 
@@ -77,6 +79,15 @@ public class AiController {
         HttpServletRequest request
     ) {
         return ResponseEntity.status(HttpStatus.CREATED).body(envelope(suggestions.generate(user.id(), body), request));
+    }
+
+    @PostMapping("/goal-template")
+    ResponseEntity<ApiEnvelope<GoalTemplateService.GoalTemplateView>> generateGoalTemplate(
+        @AuthenticationPrincipal CurrentUser user,
+        @RequestBody GoalTemplateService.GenerateGoalTemplateCommand body,
+        HttpServletRequest request
+    ) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(envelope(goalTemplates.generate(user.id(), body), request));
     }
 
     @GetMapping("/suggestions/{setId}")

@@ -157,7 +157,12 @@ public class AuthService {
         if ("USER".equals(user.role())) {
             throw new ApiException(HttpStatus.FORBIDDEN, "ADMIN_MFA_REQUIRED", "Administrator MFA is required");
         }
-        if (!"123456".equals(code)) {
+        byte[] encryptedSecret = jdbc.queryForObject(
+            "select mfa_secret_encrypted from sys_user where id = ?",
+            byte[].class,
+            user.id()
+        );
+        if (encryptedSecret == null || !mfaService.verify(mfaSecretCipher.decrypt(encryptedSecret), code)) {
             throw new ApiException(HttpStatus.UNAUTHORIZED, "INVALID_MFA_CODE", "The MFA code is invalid");
         }
         jdbc.update("update sys_user set mfa_verified_at = ? where id = ?", Timestamp.from(clock.instant()), user.id());

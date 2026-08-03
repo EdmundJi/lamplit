@@ -36,6 +36,14 @@ public class IdentityController {
         return envelope(identityService.me(user.id()), request);
     }
 
+    @GetMapping("/profile")
+    ApiEnvelope<IdentityService.ProfileView> profile(
+        @AuthenticationPrincipal CurrentUser user,
+        HttpServletRequest request
+    ) {
+        return envelope(identityService.profile(user.id()), request);
+    }
+
     @GetMapping("/preferences")
     ApiEnvelope<IdentityService.PreferenceView> preferences(
         @AuthenticationPrincipal CurrentUser user,

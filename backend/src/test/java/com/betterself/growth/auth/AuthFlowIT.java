@@ -18,10 +18,12 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import java.util.Base64;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.cookie;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @Testcontainers
@@ -119,6 +121,28 @@ class AuthFlowIT {
                     }
                     """))
             .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void returnsTheRegisteredUsersGrowthProfile() throws Exception {
+        MvcResult registration = mvc.perform(post("/api/v1/auth/register")
+                .contentType("application/json")
+                .content(registrationJson("profile@example.test")))
+            .andExpect(status().isCreated())
+            .andReturn();
+
+        mvc.perform(get("/api/v1/me/profile")
+                .cookie(registration.getResponse().getCookie("access_token")))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.displayName").value("Test User"))
+            .andExpect(jsonPath("$.data.birthDate").value("1990-01-01"))
+            .andExpect(jsonPath("$.data.age").isNumber())
+            .andExpect(jsonPath("$.data.overallLevel").value(1))
+            .andExpect(jsonPath("$.data.totalExperience").value(0))
+            .andExpect(jsonPath("$.data.effectiveActions").value(0))
+            .andExpect(jsonPath("$.data.wallet.coinBalance").value(0))
+            .andExpect(jsonPath("$.data.petCount").value(1))
+            .andExpect(jsonPath("$.data.selectedPet.speciesCode").value("CAT"));
     }
 
     static String registrationJson(String email) {

@@ -30,6 +30,14 @@ public class InsightController {
         return envelope(insights.overview(user.id()), request);
     }
 
+    @GetMapping("/attributes")
+    ApiEnvelope<InsightService.AttributesOverview> attributes(
+        @AuthenticationPrincipal CurrentUser user,
+        HttpServletRequest request
+    ) {
+        return envelope(insights.attributes(user.id()), request);
+    }
+
     @GetMapping("/trends")
     ApiEnvelope<List<InsightService.TrendPoint>> trends(
         @AuthenticationPrincipal CurrentUser user,

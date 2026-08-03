@@ -1,19 +1,23 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { RouterLink, RouterView } from 'vue-router'
-import { Target, CalendarCheck2, ChartNoAxesColumnIncreasing, Heart, Sparkles, Settings, PawPrint } from 'lucide-vue-next'
+import { Activity, Target, CalendarCheck2, ChartNoAxesColumnIncreasing, Heart, Sparkles, Settings, PawPrint, UserRound, Users } from 'lucide-vue-next'
 import { useAuthStore } from '../modules/auth/auth.store'
 import DesktopPet from '../modules/partners/DesktopPet.vue'
 import WelcomeGuide from '../shared/ui/WelcomeGuide.vue'
 
 const nav = [
-  { to: '/today', label: '今日', icon: CalendarCheck2 },
-  { to: '/goals', label: '目标', icon: Target },
-  { to: '/partners', label: '伙伴', icon: PawPrint },
-  { to: '/insights', label: '洞察', icon: ChartNoAxesColumnIncreasing },
-  { to: '/ai', label: 'AI 助手', icon: Sparkles },
-  { to: '/settings', label: '设置', icon: Settings },
+  { to: '/today', label: '今日', icon: CalendarCheck2, mobile: true },
+  { to: '/goals', label: '目标', icon: Target, mobile: true },
+  { to: '/partners', label: '伙伴', icon: PawPrint, mobile: false },
+  { to: '/friends', label: '好友', icon: Users, mobile: false },
+  { to: '/attributes', label: '属性', icon: Activity, mobile: true },
+  { to: '/insights', label: '洞察', icon: ChartNoAxesColumnIncreasing, mobile: false },
+  { to: '/ai', label: 'AI 助手', icon: Sparkles, mobile: true },
+  { to: '/profile', label: '个人', icon: UserRound, mobile: true },
+  { to: '/settings', label: '设置', icon: Settings, mobile: false },
 ]
+const mobileNav = nav.filter(item => item.mobile)
 
 const auth = useAuthStore()
 const isDesktopCompanion = Boolean(window.betterSelfDesktop?.isDesktopApp)
@@ -58,8 +62,14 @@ onBeforeUnmount(() => {
       <nav aria-label="主导航"><RouterLink v-for="item in nav" :key="item.to" :to="item.to"><component :is="item.icon" :size="19"/><span>{{ item.label }}</span></RouterLink></nav>
       <p class="sidebar-note"><Heart :size="16" fill="currentColor" /><span>今天完成一点，也很好。</span></p>
     </aside>
-    <main class="workspace"><RouterView /></main>
-    <nav class="mobile-nav" aria-label="主导航"><RouterLink v-for="item in nav" :key="item.to" :to="item.to"><component :is="item.icon" :size="20"/><span>{{ item.label }}</span></RouterLink></nav>
+    <main class="workspace">
+      <RouterView v-slot="{ Component, route }">
+        <Transition name="route-view" mode="out-in">
+          <component :is="Component" :key="route.path" />
+        </Transition>
+      </RouterView>
+    </main>
+    <nav class="mobile-nav" aria-label="主导航"><RouterLink v-for="item in mobileNav" :key="item.to" :to="item.to"><component :is="item.icon" :size="20"/><span>{{ item.label }}</span></RouterLink></nav>
     <DesktopPet v-if="!isDesktopCompanion" />
     <WelcomeGuide v-if="showWelcome" @dismiss="dismissWelcome" />
   </div>
@@ -79,7 +89,7 @@ nav a.router-link-active { background: color-mix(in srgb, var(--primary-soft) 76
 .sidebar-note svg { margin-top: 2px; color: var(--primary); }
 .workspace { min-width: 0; }
 .mobile-nav { display: none; }
-@media (max-width:760px) { .shell { padding-left: 0; } .sidebar { display:none; } .mobile-nav { position: fixed; display:grid; grid-template-columns:repeat(6,1fr); inset:auto 0 0; z-index:20; background: color-mix(in srgb, var(--surface) 96%, transparent); backdrop-filter: blur(16px); border-top:1px solid var(--border); box-shadow:0 -10px 26px color-mix(in srgb, var(--ink) 8%, transparent); padding:6px 4px calc(6px + env(safe-area-inset-bottom)); } .mobile-nav a { min-width:0; min-height:54px; justify-content:center; flex-direction:column; gap:3px; padding:2px; font-size:10px; } }
-@media (prefers-reduced-motion: no-preference) { .brand-mark { transition: transform var(--motion-medium) ease; } .brand:hover .brand-mark { transform: rotate(-8deg) scale(1.04); } nav a.router-link-active svg { animation: nav-pop var(--motion-medium) ease-out; } }
+@media (max-width:760px) { .shell { padding-left: 0; } .sidebar { display:none; } .mobile-nav { position: fixed; display:grid; grid-template-columns:repeat(5,1fr); inset:auto 0 0; z-index:20; background: color-mix(in srgb, var(--surface) 96%, transparent); backdrop-filter: blur(16px); border-top:1px solid var(--border); box-shadow:0 -10px 26px color-mix(in srgb, var(--ink) 8%, transparent); padding:6px 4px calc(6px + env(safe-area-inset-bottom)); } .mobile-nav a { min-width:0; min-height:54px; justify-content:center; flex-direction:column; gap:3px; padding:2px; font-size:10px; } }
+@media (prefers-reduced-motion: no-preference) { .brand-mark { transition: transform var(--motion-medium) ease; } .brand:hover .brand-mark { transform: rotate(-8deg) scale(1.04); } nav a.router-link-active svg { animation: nav-pop var(--motion-medium) ease-out; } .route-view-enter-active, .route-view-leave-active { transition: opacity var(--motion-medium) ease, transform var(--motion-medium) ease; } .route-view-enter-from { opacity: 0; transform: translateY(8px); } .route-view-leave-to { opacity: 0; transform: translateY(-4px); } }
 @keyframes nav-pop { 0% { transform: scale(.88); } 70% { transform: scale(1.08); } 100% { transform: scale(1); } }
 </style>

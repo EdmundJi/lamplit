@@ -12,6 +12,24 @@ public class MockQwenProvider implements QwenProvider {
 
     @Override
     public StructuredResult generateStructured(StructuredPrompt prompt) {
+        if ("GOAL_TEMPLATE".equals(prompt.scene())) {
+            return new StructuredResult(
+                """
+                    {
+                      "title":"四周建立稳定学习节奏",
+                      "description":"每周完成三次可复盘的学习行动，并在第四周整理一份总结。",
+                      "dimensionCode":"KNOWLEDGE",
+                      "durationDays":28,
+                      "weeklyFocus":"先稳定频率，再逐步增加难度。",
+                      "starterTasks":[
+                        {"title":"完成一次专注练习","estimatedMinutes":25,"difficulty":2},
+                        {"title":"记录本次学习收获","estimatedMinutes":10,"difficulty":1}
+                      ]
+                    }
+                    """,
+                "qwen-mock", "mock-goal-template", 36, 92, 6
+            );
+        }
         return new StructuredResult(
             """
                 {"items":[
