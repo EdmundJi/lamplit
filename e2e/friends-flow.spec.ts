@@ -34,7 +34,7 @@ test('friend request by email, accept, and friend detail page (desktop then mobi
     const match = document.cookie.split(';').map(v => v.trim()).find(v => v.startsWith('csrf_token='))
     return match ? decodeURIComponent(match.slice('csrf_token='.length)) : ''
   })
-  const petResponse = await bobPage.request.post('http://127.0.0.1:5173/api/v1/partners/pets', {
+  const petResponse = await bobPage.request.post('/api/v1/partners/pets', {
     headers: { 'X-CSRF-Token': bobCsrf },
     data: { speciesCode: 'SNAKE', name: '小绿', breed: '翠青蛇', furColor: '绿色' },
   })

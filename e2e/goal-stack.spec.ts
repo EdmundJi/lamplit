@@ -17,10 +17,10 @@ test('goal stack carousel switches with arrows without overflow', async ({ page 
     const match = document.cookie.split(';').map(v => v.trim()).find(v => v.startsWith('csrf_token='))
     return match ? decodeURIComponent(match.slice('csrf_token='.length)) : ''
   })
-  const dimensions = await page.request.get('http://127.0.0.1:5173/api/v1/dimensions')
+  const dimensions = await page.request.get('/api/v1/dimensions')
   const dim = (await dimensions.json()).data[0].publicId
   for (const index of [1, 2, 3]) {
-    const response = await page.request.post('http://127.0.0.1:5173/api/v1/goals', {
+    const response = await page.request.post('/api/v1/goals', {
       headers: { 'X-CSRF-Token': csrf },
       data: {
         dimensionPublicId: dim,
