@@ -1,16 +1,16 @@
-# Growth Platform Implementation Plan
+# 成长平台实施计划
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **给智能体执行者：** 必备子技能：使用 superpowers:subagent-driven-development（推荐）或 superpowers:executing-plans 逐任务实施本计划。步骤使用复选框（`- [ ]`）语法跟踪进度。
 
-**Goal:** Build and verify the complete documented MVP for the 「成为更好的自己」 growth platform, including the user journey, Qwen safety pipeline, privacy lifecycle, administration, and full data-flow self-test.
+**目标：** 构建并验证文档中「成为更好的自己」成长平台的完整 MVP，包括用户旅程、Qwen 安全管线、隐私生命周期、后台管理，以及全数据流自检。
 
-**Architecture:** Use a Vue 3 mobile-first SPA against a Spring Boot 3 modular monolith. MySQL is authoritative, Redis is disposable acceleration, MinIO provides S3-compatible files, and Qwen is isolated behind a provider plus two-stage safety checks. Implement vertical slices so each business flow reaches UI, API, persistence, and tests before the next slice starts.
+**架构：** 使用 Vue 3 移动优先 SPA 对接 Spring Boot 3 模块化单体。MySQL 为权威数据源，Redis 仅作可丢弃的加速层，MinIO 提供 S3 兼容文件存储，Qwen 隔离在供应商适配层与两阶段安全检查之后。按垂直切片推进，确保每个业务流在进入下一个切片前都完成 UI、API、持久化与测试。
 
-**Tech Stack:** Java 21, Spring Boot 3, Maven, MySQL 8, Redis 7, Flyway, MinIO, Vue 3, TypeScript, Vite, Pinia, Vue Router, ECharts, Vitest, Testing Library, Playwright, Docker Compose, Nginx.
+**技术栈：** Java 21、Spring Boot 3、Maven、MySQL 8、Redis 7、Flyway、MinIO、Vue 3、TypeScript、Vite、Pinia、Vue Router、ECharts、Vitest、Testing Library、Playwright、Docker Compose、Nginx。
 
 ---
 
-## File Structure
+## 文件结构
 
 ```text
 .
@@ -24,16 +24,16 @@
 │   └── src/
 │       ├── main/java/com/betterself/growth/
 │       │   ├── GrowthApplication.java
-│       │   ├── shared/       # API envelopes, request IDs, time, ULID, storage, outbox
-│       │   ├── auth/         # Cookie sessions, CSRF, password reset, TOTP MFA
-│       │   ├── identity/     # Profile, consent, preferences, notifications
-│       │   ├── goal/         # Dimensions, goals, plans, tasks and schedules
-│       │   ├── execution/    # Task event state machine, idempotency and experience
-│       │   ├── insight/      # Metrics, trends, recovery and weekly review
-│       │   ├── ai/           # Qwen provider, sessions, messages, suggestions and SSE
-│       │   ├── safety/       # Risk classification, scene rules and crisis response
-│       │   ├── privacy/      # Export, retention, deletion and attachments
-│       │   └── admin/        # Versioned content, audit and dashboards
+│       │   ├── shared/       # API 信封、请求 ID、时间、ULID、存储、outbox
+│       │   ├── auth/         # Cookie 会话、CSRF、密码重置、TOTP MFA
+│       │   ├── identity/     # 个人资料、同意、偏好、通知
+│       │   ├── goal/         # 维度、目标、周计划、任务与日程
+│       │   ├── execution/    # 任务事件状态机、幂等与经验
+│       │   ├── insight/      # 指标、趋势、恢复与周复盘
+│       │   ├── ai/           # Qwen 供应商、会话、消息、建议与 SSE
+│       │   ├── safety/       # 风险分级、场景规则与危机响应
+│       │   ├── privacy/      # 导出、留存、删除与附件
+│       │   └── admin/        # 版本化内容、审计与看板
 │       ├── main/resources/
 │       │   ├── application.yml
 │       │   ├── application-local.yml
@@ -44,9 +44,9 @@
 │   ├── vite.config.ts
 │   ├── playwright.config.ts
 │   └── src/
-│       ├── app/              # Bootstrap, router, layouts and guards
-│       ├── modules/          # auth, onboarding, today, goals, insights, ai, settings, admin
-│       └── shared/           # API, SSE, UI, validation and telemetry
+│       ├── app/              # 启动引导、路由、布局与守卫
+│       ├── modules/          # auth、onboarding、today、goals、insights、ai、settings、admin
+│       └── shared/           # API、SSE、UI、校验与遥测
 ├── deploy/
 │   ├── compose.yaml
 │   └── nginx/default.conf
@@ -61,28 +61,28 @@
     └── verify-global-flow.sh
 ```
 
-## Task 1: Repository, Runtime, and Infrastructure Foundation
+## 任务 1：仓库、运行时与基础设施基座
 
-**Files:**
-- Create: `.gitignore`
-- Create: `.env.example`
-- Create: `README.md`
-- Create: `deploy/compose.yaml`
-- Create: `deploy/nginx/default.conf`
-- Create: `backend/pom.xml`
-- Create: `backend/src/main/java/com/betterself/growth/GrowthApplication.java`
-- Create: `backend/src/main/resources/application.yml`
-- Create: `backend/src/main/resources/application-local.yml`
-- Create: `backend/src/test/java/com/betterself/growth/GrowthApplicationTest.java`
-- Create: `frontend/package.json`
-- Create: `frontend/tsconfig.json`
-- Create: `frontend/vite.config.ts`
-- Create: `frontend/index.html`
-- Create: `frontend/src/main.ts`
-- Create: `frontend/src/App.vue`
-- Test: `frontend/src/App.test.ts`
+**文件：**
+- 新建：`.gitignore`
+- 新建：`.env.example`
+- 新建：`README.md`
+- 新建：`deploy/compose.yaml`
+- 新建：`deploy/nginx/default.conf`
+- 新建：`backend/pom.xml`
+- 新建：`backend/src/main/java/com/betterself/growth/GrowthApplication.java`
+- 新建：`backend/src/main/resources/application.yml`
+- 新建：`backend/src/main/resources/application-local.yml`
+- 新建：`backend/src/test/java/com/betterself/growth/GrowthApplicationTest.java`
+- 新建：`frontend/package.json`
+- 新建：`frontend/tsconfig.json`
+- 新建：`frontend/vite.config.ts`
+- 新建：`frontend/index.html`
+- 新建：`frontend/src/main.ts`
+- 新建：`frontend/src/App.vue`
+- 测试：`frontend/src/App.test.ts`
 
-- [ ] **Step 1: Write the failing backend and frontend boot tests**
+- [ ] **步骤 1：编写失败的后端与前端启动测试**
 
 ```java
 package com.betterself.growth;
@@ -109,19 +109,19 @@ describe('App', () => {
 })
 ```
 
-- [ ] **Step 2: Run the tests and verify the missing projects fail**
+- [ ] **步骤 2：运行测试并确认缺失的项目会失败**
 
-Run: `cd backend && mvn test -Dtest=GrowthApplicationTest`  
-Expected: FAIL because `pom.xml` and `GrowthApplication` do not exist.
+运行：`cd backend && mvn test -Dtest=GrowthApplicationTest`  
+预期：失败，因为 `pom.xml` 与 `GrowthApplication` 尚不存在。
 
-Run: `cd frontend && pnpm test --run src/App.test.ts`  
-Expected: FAIL because the frontend package and app do not exist.
+运行：`cd frontend && pnpm test --run src/App.test.ts`  
+预期：失败，因为前端包与应用尚不存在。
 
-- [ ] **Step 3: Create minimal bootable projects and local infrastructure**
+- [ ] **步骤 3：创建最小可启动项目与本地基础设施**
 
-Use Spring Boot `3.5.x`, Java 21, and dependencies for Web, Security, Validation, Data JPA, Redis, Actuator, Flyway MySQL, Jackson, JWT, Argon2, TOTP, AWS S3, springdoc, Testcontainers, and REST Assured. Use Vue `3.5.x`, TypeScript, Vite, Pinia, Vue Router, ECharts, Zod, lucide-vue-next, Vitest, Testing Library, axe-core, and Playwright.
+使用 Spring Boot `3.5.x`、Java 21，依赖 Web、Security、Validation、Data JPA、Redis、Actuator、Flyway MySQL、Jackson、JWT、Argon2、TOTP、AWS S3、springdoc、Testcontainers 与 REST Assured。使用 Vue `3.5.x`、TypeScript、Vite、Pinia、Vue Router、ECharts、Zod、lucide-vue-next、Vitest、Testing Library、axe-core 与 Playwright。
 
-The application entry point must be complete and minimal:
+应用入口必须完整且最小：
 
 ```java
 package com.betterself.growth;
@@ -139,43 +139,43 @@ public class GrowthApplication {
 }
 ```
 
-`deploy/compose.yaml` must define healthy `mysql:8.4`, `redis:7.4-alpine`, and `minio/minio` services with project-scoped named volumes. `.env.example` must contain variable names and harmless examples only. `.gitignore` must include `.env.local`, `.superpowers/`, `frontend/node_modules/`, `frontend/dist/`, `backend/target/`, Playwright artifacts, and IDE files.
+`deploy/compose.yaml` 必须定义健康的 `mysql:8.4`、`redis:7.4-alpine` 与 `minio/minio` 服务，并使用项目级命名卷。`.env.example` 只允许包含变量名与无害示例值。`.gitignore` 必须包含 `.env.local`、`.superpowers/`、`frontend/node_modules/`、`frontend/dist/`、`backend/target/`、Playwright 产物与 IDE 文件。
 
-- [ ] **Step 4: Verify the foundation**
+- [ ] **步骤 4：验证基座**
 
-Run: `cd backend && ./mvnw test -Dtest=GrowthApplicationTest`  
-Expected: PASS.
+运行：`cd backend && ./mvnw test -Dtest=GrowthApplicationTest`  
+预期：通过。
 
-Run: `cd frontend && pnpm install && pnpm test --run`  
-Expected: PASS.
+运行：`cd frontend && pnpm install && pnpm test --run`  
+预期：通过。
 
-Run: `docker compose --env-file .env.local -f deploy/compose.yaml config`  
-Expected: valid Compose configuration with no unresolved required variable.
+运行：`docker compose --env-file .env.local -f deploy/compose.yaml config`  
+预期：Compose 配置有效，且没有未解析的必填变量。
 
-- [ ] **Step 5: Commit the foundation**
+- [ ] **步骤 5：提交基座**
 
 ```bash
 git add .gitignore .env.example README.md deploy backend frontend
 git commit -m "chore: scaffold growth platform"
 ```
 
-## Task 2: Shared API Contract and Versioned Database
+## 任务 2：共享 API 契约与版本化数据库
 
-**Files:**
-- Create: `backend/src/main/java/com/betterself/growth/shared/api/ApiEnvelope.java`
-- Create: `backend/src/main/java/com/betterself/growth/shared/api/ApiError.java`
-- Create: `backend/src/main/java/com/betterself/growth/shared/api/GlobalExceptionHandler.java`
-- Create: `backend/src/main/java/com/betterself/growth/shared/web/RequestIdFilter.java`
-- Create: `backend/src/main/java/com/betterself/growth/shared/time/AppClockConfig.java`
-- Create: `backend/src/main/java/com/betterself/growth/shared/id/PublicIdGenerator.java`
-- Create: `backend/src/main/resources/db/migration/V1__baseline.sql`
-- Create: `backend/src/main/resources/db/migration/V2__support_tables.sql`
-- Create: `backend/src/main/resources/db/migration/V3__seed_system_dimensions_and_templates.sql`
-- Create: `backend/src/main/resources/db/migration/V4__seed_prompt_and_safety_versions.sql`
-- Test: `backend/src/test/java/com/betterself/growth/shared/DatabaseMigrationIT.java`
-- Test: `backend/src/test/java/com/betterself/growth/shared/ApiEnvelopeTest.java`
+**文件：**
+- 新建：`backend/src/main/java/com/betterself/growth/shared/api/ApiEnvelope.java`
+- 新建：`backend/src/main/java/com/betterself/growth/shared/api/ApiError.java`
+- 新建：`backend/src/main/java/com/betterself/growth/shared/api/GlobalExceptionHandler.java`
+- 新建：`backend/src/main/java/com/betterself/growth/shared/web/RequestIdFilter.java`
+- 新建：`backend/src/main/java/com/betterself/growth/shared/time/AppClockConfig.java`
+- 新建：`backend/src/main/java/com/betterself/growth/shared/id/PublicIdGenerator.java`
+- 新建：`backend/src/main/resources/db/migration/V1__baseline.sql`
+- 新建：`backend/src/main/resources/db/migration/V2__support_tables.sql`
+- 新建：`backend/src/main/resources/db/migration/V3__seed_system_dimensions_and_templates.sql`
+- 新建：`backend/src/main/resources/db/migration/V4__seed_prompt_and_safety_versions.sql`
+- 测试：`backend/src/test/java/com/betterself/growth/shared/DatabaseMigrationIT.java`
+- 测试：`backend/src/test/java/com/betterself/growth/shared/ApiEnvelopeTest.java`
 
-- [ ] **Step 1: Write migration and envelope tests**
+- [ ] **步骤 1：编写迁移与信封测试**
 
 ```java
 @Testcontainers
@@ -205,16 +205,16 @@ class DatabaseMigrationIT {
 }
 ```
 
-- [ ] **Step 2: Verify RED**
+- [ ] **步骤 2：验证 RED（测试先失败）**
 
-Run: `cd backend && ./mvnw test -Dtest=DatabaseMigrationIT,ApiEnvelopeTest`  
-Expected: FAIL because the migrations and shared response types do not exist.
+运行：`cd backend && ./mvnw test -Dtest=DatabaseMigrationIT,ApiEnvelopeTest`  
+预期：失败，因为迁移与共享响应类型尚不存在。
 
-- [ ] **Step 3: Implement schema and API primitives**
+- [ ] **步骤 3：实现数据库 schema 与 API 原语**
 
-`V1` must create the documented identity, goal, task, AI, privacy, and audit tables. `V2` must add `password_reset_token`, `suggestion_set`, `suggestion_item`, `knowledge_source`, `attachment`, `outbox_event`, `product_event`, and `notification_delivery` with foreign keys, unique keys, status checks, and UTC `DATETIME(3)` timestamps. `V3` seeds five system dimensions and at least five reviewed low-risk templates per scene. `V4` seeds one published prompt version per scene and a versioned L3 response policy.
+`V1` 必须创建文档定义的身份、目标、任务、AI、隐私与审计表。`V2` 必须新增 `password_reset_token`、`suggestion_set`、`suggestion_item`、`knowledge_source`、`attachment`、`outbox_event`、`product_event` 与 `notification_delivery`，包含外键、唯一键、状态 CHECK 约束与 UTC `DATETIME(3)` 时间戳。`V3` 种子化五个系统维度与每个场景至少五条已评审的低风险模板。`V4` 种子化每个场景一个已发布提示词版本，以及版本化的 L3 响应策略。
 
-Use one response shape everywhere:
+所有接口统一使用一种响应结构：
 
 ```java
 public record ApiEnvelope<T>(T data, String requestId, Instant timestamp) {
@@ -224,41 +224,41 @@ public record ApiEnvelope<T>(T data, String requestId, Instant timestamp) {
 }
 ```
 
-`RequestIdFilter` accepts a valid incoming `X-Request-ID` or creates a ULID, adds it to MDC and the response header, and always clears MDC in `finally`.
+`RequestIdFilter` 接受合法的传入 `X-Request-ID` 或自行生成 ULID，将其写入 MDC 与响应头，并在 `finally` 中始终清理 MDC。
 
-- [ ] **Step 4: Verify GREEN and migration repeatability**
+- [ ] **步骤 4：验证 GREEN（测试通过）与迁移可重复性**
 
-Run: `cd backend && ./mvnw test -Dtest=DatabaseMigrationIT,ApiEnvelopeTest`  
-Expected: PASS and Flyway reports schema version 4.
+运行：`cd backend && ./mvnw test -Dtest=DatabaseMigrationIT,ApiEnvelopeTest`  
+预期：通过，且 Flyway 报告 schema 版本为 4。
 
-Run: `cd backend && ./mvnw flyway:info -Dflyway.url=jdbc:mysql://127.0.0.1:3306/growth -Dflyway.user=growth_app -Dflyway.password="$MYSQL_PASSWORD"`  
-Expected: all four migrations show `Success` or `Pending`, never `Failed`.
+运行：`cd backend && ./mvnw flyway:info -Dflyway.url=jdbc:mysql://127.0.0.1:3306/growth -Dflyway.user=growth_app -Dflyway.password="$MYSQL_PASSWORD"`  
+预期：四个迁移全部显示 `Success` 或 `Pending`，绝无 `Failed`。
 
-- [ ] **Step 5: Commit shared infrastructure**
+- [ ] **步骤 5：提交共享基础设施**
 
 ```bash
 git add backend/src/main/java/com/betterself/growth/shared backend/src/main/resources/db backend/src/test/java/com/betterself/growth/shared
 git commit -m "feat: add shared API and database baseline"
 ```
 
-## Task 3: Authentication, Consent, and Preferences Slice
+## 任务 3：认证、同意与偏好切片
 
-**Files:**
-- Create: `backend/src/main/java/com/betterself/growth/auth/AuthController.java`
-- Create: `backend/src/main/java/com/betterself/growth/auth/AuthService.java`
-- Create: `backend/src/main/java/com/betterself/growth/auth/SessionService.java`
-- Create: `backend/src/main/java/com/betterself/growth/auth/CookieFactory.java`
-- Create: `backend/src/main/java/com/betterself/growth/auth/CsrfDoubleSubmitFilter.java`
-- Create: `backend/src/main/java/com/betterself/growth/auth/SecurityConfig.java`
-- Create: `backend/src/main/java/com/betterself/growth/auth/MfaService.java`
-- Create: `backend/src/main/java/com/betterself/growth/auth/AgePolicy.java`
-- Create: `backend/src/main/java/com/betterself/growth/identity/IdentityController.java`
-- Create: `backend/src/main/java/com/betterself/growth/identity/IdentityService.java`
-- Test: `backend/src/test/java/com/betterself/growth/auth/AgePolicyTest.java`
-- Test: `backend/src/test/java/com/betterself/growth/auth/AuthFlowIT.java`
-- Test: `backend/src/test/java/com/betterself/growth/auth/RefreshReplayIT.java`
+**文件：**
+- 新建：`backend/src/main/java/com/betterself/growth/auth/AuthController.java`
+- 新建：`backend/src/main/java/com/betterself/growth/auth/AuthService.java`
+- 新建：`backend/src/main/java/com/betterself/growth/auth/SessionService.java`
+- 新建：`backend/src/main/java/com/betterself/growth/auth/CookieFactory.java`
+- 新建：`backend/src/main/java/com/betterself/growth/auth/CsrfDoubleSubmitFilter.java`
+- 新建：`backend/src/main/java/com/betterself/growth/auth/SecurityConfig.java`
+- 新建：`backend/src/main/java/com/betterself/growth/auth/MfaService.java`
+- 新建：`backend/src/main/java/com/betterself/growth/auth/AgePolicy.java`
+- 新建：`backend/src/main/java/com/betterself/growth/identity/IdentityController.java`
+- 新建：`backend/src/main/java/com/betterself/growth/identity/IdentityService.java`
+- 测试：`backend/src/test/java/com/betterself/growth/auth/AgePolicyTest.java`
+- 测试：`backend/src/test/java/com/betterself/growth/auth/AuthFlowIT.java`
+- 测试：`backend/src/test/java/com/betterself/growth/auth/RefreshReplayIT.java`
 
-- [ ] **Step 1: Write the failing age, Cookie, CSRF, and replay tests**
+- [ ] **步骤 1：编写失败的年龄、Cookie、CSRF 与重放测试**
 
 ```java
 @Test
@@ -274,18 +274,18 @@ void acceptsUserOnEighteenthBirthday() {
 }
 ```
 
-`AuthFlowIT` must register an adult with three current consent versions, assert `access_token`, `refresh_token`, and `csrf_token` cookies, assert token fields are absent from JSON, reject a write without `X-CSRF-Token`, and accept it with the cookie value. `RefreshReplayIT` must use an old refresh token twice and assert the whole token family is revoked.
+`AuthFlowIT` 必须注册一个带三个当前版本同意的成年人，断言 `access_token`、`refresh_token` 与 `csrf_token` Cookie，断言 JSON 中不出现令牌字段，拒绝不带 `X-CSRF-Token` 的写请求，并接受带 Cookie 值的写请求。`RefreshReplayIT` 必须对旧刷新令牌使用两次，并断言整个令牌族被吊销。
 
-- [ ] **Step 2: Verify RED**
+- [ ] **步骤 2：验证 RED**
 
-Run: `cd backend && ./mvnw test -Dtest=AgePolicyTest,AuthFlowIT,RefreshReplayIT`  
-Expected: FAIL because the auth and identity slice is absent.
+运行：`cd backend && ./mvnw test -Dtest=AgePolicyTest,AuthFlowIT,RefreshReplayIT`  
+预期：失败，因为认证与身份切片缺失。
 
-- [ ] **Step 3: Implement the auth and identity contracts**
+- [ ] **步骤 3：实现认证与身份契约**
 
-Use Argon2id for passwords, a 30-minute signed access JWT, a 7-day opaque refresh token, and SHA-256 only for refresh/reset token hashing. Register `CsrfDoubleSubmitFilter` after authentication and require a header/cookie constant-time match for POST, PUT, PATCH, and DELETE.
+密码使用 Argon2id，签发 30 分钟有效期的有符号访问 JWT，7 天有效的不透明刷新令牌；刷新/重置令牌的哈希仅使用 SHA-256。在认证之后注册 `CsrfDoubleSubmitFilter`，并要求对 POST、PUT、PATCH 与 DELETE 进行 header/cookie 常量时间匹配。
 
-The public service contract must be:
+对外服务契约必须为：
 
 ```java
 public interface SessionService {
@@ -296,38 +296,38 @@ public interface SessionService {
 }
 ```
 
-Registration must write `sys_user`, three `consent_record` rows, `user_preference`, and five `user_dimension` rows in one transaction. Implement `/auth/register`, `/auth/login`, `/auth/refresh`, `/auth/logout`, `/auth/logout-all`, password forgot/reset/update, `/me`, `/me/preferences`, `/me/consents`, and AI memory preference endpoints. Admin login remains `MFA_PENDING` until a valid TOTP is submitted.
+注册必须在同一事务内写入 `sys_user`、三行 `consent_record`、`user_preference` 与五行 `user_dimension`。实现 `/auth/register`、`/auth/login`、`/auth/refresh`、`/auth/logout`、`/auth/logout-all`、忘记/重置/修改密码、`/me`、`/me/preferences`、`/me/consents` 与 AI 记忆偏好接口。管理员登录在提交有效 TOTP 之前保持 `MFA_PENDING` 状态。
 
-- [ ] **Step 4: Verify GREEN**
+- [ ] **步骤 4：验证 GREEN**
 
-Run: `cd backend && ./mvnw test -Dtest=AgePolicyTest,AuthFlowIT,RefreshReplayIT`  
-Expected: PASS with no raw token in JSON or logs.
+运行：`cd backend && ./mvnw test -Dtest=AgePolicyTest,AuthFlowIT,RefreshReplayIT`  
+预期：通过，且 JSON 或日志中不出现原始令牌。
 
-Run: `cd backend && ./mvnw verify -Dgroups=security`  
-Expected: Cookie flags, CSRF, ownership principal, and refresh replay tests pass.
+运行：`cd backend && ./mvnw verify -Dgroups=security`  
+预期：Cookie 标志、CSRF、归属主体与刷新重放测试全部通过。
 
-- [ ] **Step 5: Commit auth and identity**
+- [ ] **步骤 5：提交认证与身份**
 
 ```bash
 git add backend/src/main/java/com/betterself/growth/auth backend/src/main/java/com/betterself/growth/identity backend/src/test/java/com/betterself/growth/auth
 git commit -m "feat: add secure authentication and onboarding preferences"
 ```
 
-## Task 4: Dimensions, Goals, Weekly Plans, and Task Definitions
+## 任务 4：维度、目标、周计划与任务定义
 
-**Files:**
-- Create: `backend/src/main/java/com/betterself/growth/goal/DimensionController.java`
-- Create: `backend/src/main/java/com/betterself/growth/goal/GoalController.java`
-- Create: `backend/src/main/java/com/betterself/growth/goal/WeeklyPlanController.java`
-- Create: `backend/src/main/java/com/betterself/growth/goal/TaskController.java`
-- Create: `backend/src/main/java/com/betterself/growth/goal/GoalService.java`
-- Create: `backend/src/main/java/com/betterself/growth/goal/PlanningService.java`
-- Create: `backend/src/main/java/com/betterself/growth/goal/RecurrenceExpander.java`
-- Test: `backend/src/test/java/com/betterself/growth/goal/GoalPolicyTest.java`
-- Test: `backend/src/test/java/com/betterself/growth/goal/RecurrenceExpanderTest.java`
-- Test: `backend/src/test/java/com/betterself/growth/goal/GoalPlanningIT.java`
+**文件：**
+- 新建：`backend/src/main/java/com/betterself/growth/goal/DimensionController.java`
+- 新建：`backend/src/main/java/com/betterself/growth/goal/GoalController.java`
+- 新建：`backend/src/main/java/com/betterself/growth/goal/WeeklyPlanController.java`
+- 新建：`backend/src/main/java/com/betterself/growth/goal/TaskController.java`
+- 新建：`backend/src/main/java/com/betterself/growth/goal/GoalService.java`
+- 新建：`backend/src/main/java/com/betterself/growth/goal/PlanningService.java`
+- 新建：`backend/src/main/java/com/betterself/growth/goal/RecurrenceExpander.java`
+- 测试：`backend/src/test/java/com/betterself/growth/goal/GoalPolicyTest.java`
+- 测试：`backend/src/test/java/com/betterself/growth/goal/RecurrenceExpanderTest.java`
+- 测试：`backend/src/test/java/com/betterself/growth/goal/GoalPlanningIT.java`
 
-- [ ] **Step 1: Write failing goal and timezone tests**
+- [ ] **步骤 1：编写失败的目标与时区测试**
 
 ```java
 @Test
@@ -346,18 +346,18 @@ void expandsWeeklyRuleInUserTimezoneAcrossDst() {
 }
 ```
 
-`GoalPlanningIT` must reject a fourth active goal, reject a duration below 14 or above 84 days, archive a used dimension instead of deleting it, and generate unique `(task_id, planned_start_at)` schedules.
+`GoalPlanningIT` 必须拒绝第四个活跃目标，拒绝低于 14 天或高于 84 天的时长，对已被使用的维度执行归档而非删除，并生成唯一的 `(task_id, planned_start_at)` 日程。
 
-- [ ] **Step 2: Verify RED**
+- [ ] **步骤 2：验证 RED**
 
-Run: `cd backend && ./mvnw test -Dtest=GoalPolicyTest,RecurrenceExpanderTest,GoalPlanningIT`  
-Expected: FAIL because goal planning is missing.
+运行：`cd backend && ./mvnw test -Dtest=GoalPolicyTest,RecurrenceExpanderTest,GoalPlanningIT`  
+预期：失败，因为目标规划缺失。
 
-- [ ] **Step 3: Implement goal planning**
+- [ ] **步骤 3：实现目标规划**
 
-Implement the documented dimension, goal, weekly plan, and task endpoints. Parse only the supported RFC 5545 subset: `FREQ=DAILY|WEEKLY`, `INTERVAL`, `BYDAY`, and `COUNT|UNTIL`; reject all other properties with `INVALID_RRULE`.
+实现文档定义的维度、目标、周计划与任务接口。仅解析支持的 RFC 5545 子集：`FREQ=DAILY|WEEKLY`、`INTERVAL`、`BYDAY` 与 `COUNT|UNTIL`；其余属性一律以 `INVALID_RRULE` 拒绝。
 
-Expose this planning boundary:
+暴露以下规划边界：
 
 ```java
 public interface PlanningService {
@@ -367,35 +367,35 @@ public interface PlanningService {
 }
 ```
 
-Every generated occurrence stores UTC `planned_start_at`, local date, and IANA timezone. Never use server default timezone.
+每个生成的日程都必须存储 UTC `planned_start_at`、本地日期与 IANA 时区。绝不使用服务器默认时区。
 
-- [ ] **Step 4: Verify GREEN**
+- [ ] **步骤 4：验证 GREEN**
 
-Run: `cd backend && ./mvnw test -Dtest=GoalPolicyTest,RecurrenceExpanderTest,GoalPlanningIT`  
-Expected: PASS.
+运行：`cd backend && ./mvnw test -Dtest=GoalPolicyTest,RecurrenceExpanderTest,GoalPlanningIT`  
+预期：通过。
 
-- [ ] **Step 5: Commit planning**
+- [ ] **步骤 5：提交规划**
 
 ```bash
 git add backend/src/main/java/com/betterself/growth/goal backend/src/test/java/com/betterself/growth/goal
 git commit -m "feat: add goals weekly plans and recurring tasks"
 ```
 
-## Task 5: Task Event State Machine, Idempotency, and Experience
+## 任务 5：任务事件状态机、幂等与经验
 
-**Files:**
-- Create: `backend/src/main/java/com/betterself/growth/execution/TaskEventController.java`
-- Create: `backend/src/main/java/com/betterself/growth/execution/TaskExecutionService.java`
-- Create: `backend/src/main/java/com/betterself/growth/execution/TaskStateMachine.java`
-- Create: `backend/src/main/java/com/betterself/growth/execution/ExperienceCalculator.java`
-- Create: `backend/src/main/java/com/betterself/growth/execution/IdempotencyService.java`
-- Create: `backend/src/main/java/com/betterself/growth/execution/ScheduleExpiryJob.java`
-- Test: `backend/src/test/java/com/betterself/growth/execution/TaskStateMachineTest.java`
-- Test: `backend/src/test/java/com/betterself/growth/execution/ExperienceCalculatorTest.java`
-- Test: `backend/src/test/java/com/betterself/growth/execution/TaskExecutionIT.java`
-- Test: `backend/src/test/java/com/betterself/growth/execution/TaskExecutionConcurrencyIT.java`
+**文件：**
+- 新建：`backend/src/main/java/com/betterself/growth/execution/TaskEventController.java`
+- 新建：`backend/src/main/java/com/betterself/growth/execution/TaskExecutionService.java`
+- 新建：`backend/src/main/java/com/betterself/growth/execution/TaskStateMachine.java`
+- 新建：`backend/src/main/java/com/betterself/growth/execution/ExperienceCalculator.java`
+- 新建：`backend/src/main/java/com/betterself/growth/execution/IdempotencyService.java`
+- 新建：`backend/src/main/java/com/betterself/growth/execution/ScheduleExpiryJob.java`
+- 测试：`backend/src/test/java/com/betterself/growth/execution/TaskStateMachineTest.java`
+- 测试：`backend/src/test/java/com/betterself/growth/execution/ExperienceCalculatorTest.java`
+- 测试：`backend/src/test/java/com/betterself/growth/execution/TaskExecutionIT.java`
+- 测试：`backend/src/test/java/com/betterself/growth/execution/TaskExecutionConcurrencyIT.java`
 
-- [ ] **Step 1: Write failing state and idempotency tests**
+- [ ] **步骤 1：编写失败的状态与幂等测试**
 
 ```java
 @ParameterizedTest
@@ -410,16 +410,16 @@ void calculatesDocumentedExperience(TaskEventType type, int minutes, int difficu
 }
 ```
 
-`TaskExecutionIT` must submit the same idempotency key twice and assert one event and one experience update; reuse the key with a different body and expect 409; defer and assert a linked new schedule; skip and assert `SKIPPED`; expire an untouched schedule and assert zero experience; reverse the latest terminal event and assert metrics are recomputed.
+`TaskExecutionIT` 必须对同一幂等键提交两次并断言只有一条事件与一次经验更新；用不同请求体复用该键并预期 409；执行延期并断言生成关联的新日程；执行跳过并断言 `SKIPPED`；将未触碰的日程过期并断言零经验；撤销最新终止事件并断言指标被重算。
 
-- [ ] **Step 2: Verify RED**
+- [ ] **步骤 2：验证 RED**
 
-Run: `cd backend && ./mvnw test -Dtest=TaskStateMachineTest,ExperienceCalculatorTest,TaskExecutionIT`  
-Expected: FAIL because execution behavior is missing.
+运行：`cd backend && ./mvnw test -Dtest=TaskStateMachineTest,ExperienceCalculatorTest,TaskExecutionIT`  
+预期：失败，因为执行行为缺失。
 
-- [ ] **Step 3: Implement the transactional event flow**
+- [ ] **步骤 3：实现事务化事件流**
 
-Implement one `@Transactional` method that loads the user-owned schedule with a pessimistic lock, validates state, checks the durable MySQL idempotency row, writes the immutable event and snapshot, updates state/dimensions/weekly aggregate, creates a deferred schedule when required, writes Outbox/product events, stores the response, commits, and then invalidates the Redis overview key.
+实现一个 `@Transactional` 方法：以悲观锁加载用户所属日程，校验状态，检查 MySQL 中持久的幂等行，写入不可变事件与快照，更新状态/维度/周聚合，在需要时创建延期日程，写入 Outbox/产品事件，存储响应，提交，然后使 Redis 概览键失效。
 
 ```java
 public int earned(TaskEventType type, int estimatedMinutes, int difficulty, double completionRatio, int remainingDailyCap) {
@@ -433,36 +433,36 @@ public int earned(TaskEventType type, int estimatedMinutes, int difficulty, doub
 }
 ```
 
-The expiry job changes only untouched elapsed schedules to `EXPIRED`. Reversal writes a `REVERSED` event and never deletes history.
+过期任务只把未被触碰的已过时日程改为 `EXPIRED`。撤销写入 `REVERSED` 事件，绝不删除历史。
 
-- [ ] **Step 4: Verify GREEN and concurrency safety**
+- [ ] **步骤 4：验证 GREEN 与并发安全**
 
-Run: `cd backend && ./mvnw test -Dtest=TaskStateMachineTest,ExperienceCalculatorTest,TaskExecutionIT`  
-Expected: PASS.
+运行：`cd backend && ./mvnw test -Dtest=TaskStateMachineTest,ExperienceCalculatorTest,TaskExecutionIT`  
+预期：通过。
 
-Run: `cd backend && ./mvnw test -Dtest=TaskExecutionConcurrencyIT`  
-Expected: ten concurrent duplicate requests produce one terminal event.
+运行：`cd backend && ./mvnw test -Dtest=TaskExecutionConcurrencyIT`  
+预期：十个并发重复请求只产生一条终止事件。
 
-- [ ] **Step 5: Commit execution**
+- [ ] **步骤 5：提交执行**
 
 ```bash
 git add backend/src/main/java/com/betterself/growth/execution backend/src/test/java/com/betterself/growth/execution
 git commit -m "feat: add idempotent task execution state machine"
 ```
 
-## Task 6: Insights and Weekly Reviews
+## 任务 6：洞察与周复盘
 
-**Files:**
-- Create: `backend/src/main/java/com/betterself/growth/insight/InsightController.java`
-- Create: `backend/src/main/java/com/betterself/growth/insight/InsightService.java`
-- Create: `backend/src/main/java/com/betterself/growth/insight/WeeklyReviewController.java`
-- Create: `backend/src/main/java/com/betterself/growth/insight/WeeklyReviewService.java`
-- Create: `backend/src/main/java/com/betterself/growth/insight/WeeklyMetricsCalculator.java`
-- Create: `backend/src/main/java/com/betterself/growth/insight/MetricRebuildJob.java`
-- Test: `backend/src/test/java/com/betterself/growth/insight/InsightServiceTest.java`
-- Test: `backend/src/test/java/com/betterself/growth/insight/WeeklyReviewIT.java`
+**文件：**
+- 新建：`backend/src/main/java/com/betterself/growth/insight/InsightController.java`
+- 新建：`backend/src/main/java/com/betterself/growth/insight/InsightService.java`
+- 新建：`backend/src/main/java/com/betterself/growth/insight/WeeklyReviewController.java`
+- 新建：`backend/src/main/java/com/betterself/growth/insight/WeeklyReviewService.java`
+- 新建：`backend/src/main/java/com/betterself/growth/insight/WeeklyMetricsCalculator.java`
+- 新建：`backend/src/main/java/com/betterself/growth/insight/MetricRebuildJob.java`
+- 测试：`backend/src/test/java/com/betterself/growth/insight/InsightServiceTest.java`
+- 测试：`backend/src/test/java/com/betterself/growth/insight/WeeklyReviewIT.java`
 
-- [ ] **Step 1: Write failing metric tests**
+- [ ] **步骤 1：编写失败的指标测试**
 
 ```java
 @Test
@@ -476,46 +476,46 @@ void countsOnlyUnreversedCompletedAndPartialEventsAsEffective() {
 }
 ```
 
-Also test recovery only after seven complete inactive days, personal best only from the current user, and weekly review confirmation not changing next-week settings until the user confirms adjustments.
+同时测试：仅连续七个无行动日后才计入恢复；个人最佳只来自当前用户；周复盘确认前不改变下周设置。
 
-- [ ] **Step 2: Verify RED**
+- [ ] **步骤 2：验证 RED**
 
-Run: `cd backend && ./mvnw test -Dtest=InsightServiceTest,WeeklyReviewIT`  
-Expected: FAIL because insights and reviews are absent.
+运行：`cd backend && ./mvnw test -Dtest=InsightServiceTest,WeeklyReviewIT`  
+预期：失败，因为洞察与复盘缺失。
 
-- [ ] **Step 3: Implement deterministic metrics first**
+- [ ] **步骤 3：先实现确定性指标**
 
-Implement `/insights/overview`, `/insights/trends`, `/insights/calendar`, `/reviews/weekly/{planId}`, and confirmation. Build review facts entirely from event data before any AI call. Cache overview for five minutes, invalidate it after task writes, and rebuild from task events when aggregates drift.
+实现 `/insights/overview`、`/insights/trends`、`/insights/calendar`、`/reviews/weekly/{planId}` 与确认接口。复盘事实必须在任何 AI 调用之前完全由事件数据构建。概览缓存五分钟，任务写入后失效，聚合漂移时从任务事件重建。
 
-- [ ] **Step 4: Verify GREEN**
+- [ ] **步骤 4：验证 GREEN**
 
-Run: `cd backend && ./mvnw test -Dtest=InsightServiceTest,WeeklyReviewIT`  
-Expected: PASS with no query or response that includes other users' ranks.
+运行：`cd backend && ./mvnw test -Dtest=InsightServiceTest,WeeklyReviewIT`  
+预期：通过，且查询或响应中不含其他用户的排名。
 
-- [ ] **Step 5: Commit insights**
+- [ ] **步骤 5：提交洞察**
 
 ```bash
 git add backend/src/main/java/com/betterself/growth/insight backend/src/test/java/com/betterself/growth/insight
 git commit -m "feat: add personal insights and weekly reviews"
 ```
 
-## Task 7: Qwen Provider, Structured Suggestions, SSE, and Safety
+## 任务 7：Qwen 供应商、结构化建议、SSE 与安全
 
-**Files:**
-- Create: `backend/src/main/java/com/betterself/growth/ai/QwenProvider.java`
-- Create: `backend/src/main/java/com/betterself/growth/ai/QwenHttpProvider.java`
-- Create: `backend/src/main/java/com/betterself/growth/ai/MockQwenProvider.java`
-- Create: `backend/src/main/java/com/betterself/growth/ai/AiController.java`
-- Create: `backend/src/main/java/com/betterself/growth/ai/AiService.java`
-- Create: `backend/src/main/java/com/betterself/growth/ai/SuggestionService.java`
-- Create: `backend/src/main/java/com/betterself/growth/safety/RiskClassifier.java`
-- Create: `backend/src/main/java/com/betterself/growth/safety/SafetyService.java`
-- Create: `backend/src/main/java/com/betterself/growth/safety/CrisisResponseService.java`
-- Test: `backend/src/test/java/com/betterself/growth/safety/SafetyServiceTest.java`
-- Test: `backend/src/test/java/com/betterself/growth/ai/QwenContractTest.java`
-- Test: `backend/src/test/java/com/betterself/growth/ai/AiFlowIT.java`
+**文件：**
+- 新建：`backend/src/main/java/com/betterself/growth/ai/QwenProvider.java`
+- 新建：`backend/src/main/java/com/betterself/growth/ai/QwenHttpProvider.java`
+- 新建：`backend/src/main/java/com/betterself/growth/ai/MockQwenProvider.java`
+- 新建：`backend/src/main/java/com/betterself/growth/ai/AiController.java`
+- 新建：`backend/src/main/java/com/betterself/growth/ai/AiService.java`
+- 新建：`backend/src/main/java/com/betterself/growth/ai/SuggestionService.java`
+- 新建：`backend/src/main/java/com/betterself/growth/safety/RiskClassifier.java`
+- 新建：`backend/src/main/java/com/betterself/growth/safety/SafetyService.java`
+- 新建：`backend/src/main/java/com/betterself/growth/safety/CrisisResponseService.java`
+- 测试：`backend/src/test/java/com/betterself/growth/safety/SafetyServiceTest.java`
+- 测试：`backend/src/test/java/com/betterself/growth/ai/QwenContractTest.java`
+- 测试：`backend/src/test/java/com/betterself/growth/ai/AiFlowIT.java`
 
-- [ ] **Step 1: Write failing safety and provider contract tests**
+- [ ] **步骤 1：编写失败的安全与供应商契约测试**
 
 ```java
 @ParameterizedTest
@@ -528,14 +528,14 @@ void sendsCrisisSignalsToL3(String input) {
 }
 ```
 
-`QwenContractTest` must use a local stub server to verify OpenAI-compatible headers, configurable model, timeout, token metadata, one JSON repair attempt, and rejection after a second invalid result. `AiFlowIT` must assert SSE event order `meta -> delta* -> done`, ownership, suggestion expiry, and idempotent adoption.
+`QwenContractTest` 必须使用本地桩服务器验证 OpenAI 兼容请求头、可配置模型、超时、令牌元数据、一次 JSON 修复尝试，以及第二次非法结果后被拒绝。`AiFlowIT` 必须断言 SSE 事件顺序 `meta -> delta* -> done`、归属、建议过期与幂等采纳。
 
-- [ ] **Step 2: Verify RED**
+- [ ] **步骤 2：验证 RED**
 
-Run: `cd backend && ./mvnw test -Dtest=SafetyServiceTest,QwenContractTest,AiFlowIT`  
-Expected: FAIL because AI and safety modules are absent.
+运行：`cd backend && ./mvnw test -Dtest=SafetyServiceTest,QwenContractTest,AiFlowIT`  
+预期：失败，因为 AI 与安全模块缺失。
 
-- [ ] **Step 3: Implement provider isolation and two-stage safety**
+- [ ] **步骤 3：实现供应商隔离与两阶段安全**
 
 ```java
 public interface QwenProvider {
@@ -545,126 +545,126 @@ public interface QwenProvider {
 }
 ```
 
-Input safety runs before context assembly. L2 returns a professional-boundary response; L3 returns only the versioned fixed crisis response and records a redacted safety event. For L0/L1, inject only confirmed preferences, aggregate facts, confirmed memories, and reviewed knowledge. Validate structured suggestions against 1-5 items, 5-60 minutes, difficulty 1-3, dimension weight total 1-30, and quiet hours. Run output safety before exposing any content.
+输入安全检查在上下文组装之前运行。L2 返回专业边界响应；L3 仅返回版本化的固定危机响应并记录脱敏安全事件。对 L0/L1，只注入已确认的偏好、聚合事实、已确认的记忆与已评审的知识。结构化建议须通过 1-5 条、5-60 分钟、难度 1-3、维度权重合计 1-30 与免打扰时段校验。任何内容对外暴露前先运行输出安全检查。
 
-Use `SseEmitter` with only `meta`, `delta`, `safety`, `done`, and `error`. Propagate disconnect cancellation. Do not retry after any delta is emitted.
+使用 `SseEmitter`，只允许 `meta`、`delta`、`safety`、`done` 与 `error` 事件。传播断连取消。发出任何 delta 后不再重试。
 
-- [ ] **Step 4: Verify GREEN and evaluate the fixed safety corpus**
+- [ ] **步骤 4：验证 GREEN 并评估固定安全语料**
 
-Run: `cd backend && ./mvnw test -Dtest=SafetyServiceTest,QwenContractTest,AiFlowIT`  
-Expected: PASS.
+运行：`cd backend && ./mvnw test -Dtest=SafetyServiceTest,QwenContractTest,AiFlowIT`  
+预期：通过。
 
-Run: `cd backend && ./mvnw test -Pqwen-eval -Dai.provider=mock`  
-Expected: 100% L3 recall, no diagnosis/prescription in L2, and valid structured JSON rate at least 99%.
+运行：`cd backend && ./mvnw test -Pqwen-eval -Dai.provider=mock`  
+预期：L3 召回率 100%，L2 中不出现诊断/处方，结构化 JSON 合法率至少 99%。
 
-- [ ] **Step 5: Commit AI and safety**
+- [ ] **步骤 5：提交 AI 与安全**
 
 ```bash
 git add backend/src/main/java/com/betterself/growth/ai backend/src/main/java/com/betterself/growth/safety backend/src/test/java/com/betterself/growth/ai backend/src/test/java/com/betterself/growth/safety
 git commit -m "feat: add safe Qwen assistant and suggestions"
 ```
 
-## Task 8: Privacy, Export, Deletion, Attachments, and Notifications
+## 任务 8：隐私、导出、删除、附件与通知
 
-**Files:**
-- Create: `backend/src/main/java/com/betterself/growth/privacy/PrivacyController.java`
-- Create: `backend/src/main/java/com/betterself/growth/privacy/ExportService.java`
-- Create: `backend/src/main/java/com/betterself/growth/privacy/DeletionService.java`
-- Create: `backend/src/main/java/com/betterself/growth/privacy/RetentionJob.java`
-- Create: `backend/src/main/java/com/betterself/growth/privacy/AttachmentController.java`
-- Create: `backend/src/main/java/com/betterself/growth/shared/storage/ObjectStorage.java`
-- Create: `backend/src/main/java/com/betterself/growth/identity/NotificationController.java`
-- Create: `backend/src/main/java/com/betterself/growth/identity/NotificationService.java`
-- Test: `backend/src/test/java/com/betterself/growth/privacy/PrivacyFlowIT.java`
-- Test: `backend/src/test/java/com/betterself/growth/privacy/RetentionPolicyTest.java`
-- Test: `backend/src/test/java/com/betterself/growth/privacy/AttachmentPolicyTest.java`
+**文件：**
+- 新建：`backend/src/main/java/com/betterself/growth/privacy/PrivacyController.java`
+- 新建：`backend/src/main/java/com/betterself/growth/privacy/ExportService.java`
+- 新建：`backend/src/main/java/com/betterself/growth/privacy/DeletionService.java`
+- 新建：`backend/src/main/java/com/betterself/growth/privacy/RetentionJob.java`
+- 新建：`backend/src/main/java/com/betterself/growth/privacy/AttachmentController.java`
+- 新建：`backend/src/main/java/com/betterself/growth/shared/storage/ObjectStorage.java`
+- 新建：`backend/src/main/java/com/betterself/growth/identity/NotificationController.java`
+- 新建：`backend/src/main/java/com/betterself/growth/identity/NotificationService.java`
+- 测试：`backend/src/test/java/com/betterself/growth/privacy/PrivacyFlowIT.java`
+- 测试：`backend/src/test/java/com/betterself/growth/privacy/RetentionPolicyTest.java`
+- 测试：`backend/src/test/java/com/betterself/growth/privacy/AttachmentPolicyTest.java`
 
-- [ ] **Step 1: Write failing privacy lifecycle tests**
+- [ ] **步骤 1：编写失败的隐私生命周期测试**
 
-`PrivacyFlowIT` must create one export per 24 hours, verify JSON and CSV members, reject a second user's download, expire the object after 24 hours, create a deletion request with exactly seven days cooling-off, revoke sessions, allow cancellation, and process deletion using an injected clock. `AttachmentPolicyTest` must reject unsupported MIME/extension pairs and prevent unscanned object association.
+`PrivacyFlowIT` 必须每 24 小时创建一个导出，验证 JSON 与 CSV 成员，拒绝第二个用户的下载，24 小时后使对象过期，创建带恰好七天冷静期的删除请求，吊销会话，允许取消，并使用注入的时钟处理删除。`AttachmentPolicyTest` 必须拒绝不支持的 MIME/扩展名组合，并阻止未扫描对象关联。
 
-- [ ] **Step 2: Verify RED**
+- [ ] **步骤 2：验证 RED**
 
-Run: `cd backend && ./mvnw test -Dtest=PrivacyFlowIT,RetentionPolicyTest,AttachmentPolicyTest`  
-Expected: FAIL because privacy/file behavior is missing.
+运行：`cd backend && ./mvnw test -Dtest=PrivacyFlowIT,RetentionPolicyTest,AttachmentPolicyTest`  
+预期：失败，因为隐私/文件行为缺失。
 
-- [ ] **Step 3: Implement explicit lifecycle states**
+- [ ] **步骤 3：实现显式生命周期状态**
 
-Implement `/privacy/exports`, status, download, deletion create/current/cancel, conversation deletion, AI memory deletion, and attachment presign. Export machine-readable data to a ZIP containing `manifest.json` and per-category CSV files, store with server-side encryption, return a 15-minute presigned URL, and delete after 24 hours.
+实现 `/privacy/exports`、状态、下载、删除创建/当前/取消、对话删除、AI 记忆删除与附件预签名。导出以机器可读格式打包为 ZIP，包含 `manifest.json` 与按类别的 CSV 文件，服务端加密存储，返回 15 分钟有效期的预签名 URL，24 小时后删除。
 
-Deletion uses `COOLING_OFF -> PROCESSING -> COMPLETED|FAILED`, with `CANCELLED` available only before processing. Pause notifications and new AI calls during cooling-off. Notification preferences support `IN_APP`, `EMAIL`, and `WEB_PUSH`; only dispatch configured channels and enforce quiet hours plus `max_per_day`.
+删除使用 `COOLING_OFF -> PROCESSING -> COMPLETED|FAILED` 状态机，`CANCELLED` 仅在处理开始前可用。冷静期内暂停通知与新的 AI 调用。通知偏好支持 `IN_APP`、`EMAIL` 与 `WEB_PUSH`；只派发已配置的渠道，并强制免打扰时段与 `max_per_day` 上限。
 
-- [ ] **Step 4: Verify GREEN**
+- [ ] **步骤 4：验证 GREEN**
 
-Run: `cd backend && ./mvnw test -Dtest=PrivacyFlowIT,RetentionPolicyTest,AttachmentPolicyTest`  
-Expected: PASS.
+运行：`cd backend && ./mvnw test -Dtest=PrivacyFlowIT,RetentionPolicyTest,AttachmentPolicyTest`  
+预期：通过。
 
-- [ ] **Step 5: Commit privacy and notification behavior**
+- [ ] **步骤 5：提交隐私与通知行为**
 
 ```bash
 git add backend/src/main/java/com/betterself/growth/privacy backend/src/main/java/com/betterself/growth/shared/storage backend/src/main/java/com/betterself/growth/identity backend/src/test/java/com/betterself/growth/privacy
 git commit -m "feat: add privacy lifecycle files and notifications"
 ```
 
-## Task 9: Admin Governance, Audit, and Product Metrics
+## 任务 9：后台治理、审计与产品指标
 
-**Files:**
-- Create: `backend/src/main/java/com/betterself/growth/admin/AdminController.java`
-- Create: `backend/src/main/java/com/betterself/growth/admin/ContentGovernanceService.java`
-- Create: `backend/src/main/java/com/betterself/growth/admin/SafetyReviewService.java`
-- Create: `backend/src/main/java/com/betterself/growth/admin/AuditService.java`
-- Create: `backend/src/main/java/com/betterself/growth/admin/MetricsController.java`
-- Create: `backend/src/main/java/com/betterself/growth/shared/outbox/OutboxPublisher.java`
-- Test: `backend/src/test/java/com/betterself/growth/admin/AdminGovernanceIT.java`
-- Test: `backend/src/test/java/com/betterself/growth/admin/TelemetryPrivacyTest.java`
+**文件：**
+- 新建：`backend/src/main/java/com/betterself/growth/admin/AdminController.java`
+- 新建：`backend/src/main/java/com/betterself/growth/admin/ContentGovernanceService.java`
+- 新建：`backend/src/main/java/com/betterself/growth/admin/SafetyReviewService.java`
+- 新建：`backend/src/main/java/com/betterself/growth/admin/AuditService.java`
+- 新建：`backend/src/main/java/com/betterself/growth/admin/MetricsController.java`
+- 新建：`backend/src/main/java/com/betterself/growth/shared/outbox/OutboxPublisher.java`
+- 测试：`backend/src/test/java/com/betterself/growth/admin/AdminGovernanceIT.java`
+- 测试：`backend/src/test/java/com/betterself/growth/admin/TelemetryPrivacyTest.java`
 
-- [ ] **Step 1: Write failing role and audit tests**
+- [ ] **步骤 1：编写失败的角色与审计测试**
 
-Test that content operators cannot read safety details, safety operators only see redacted excerpts, publication requires MFA plus reviewer, publication creates a new immutable version rather than overwriting, rollback changes the active pointer, and every sensitive action creates an audit row. Test that product events reject email, task notes, AI text, and arbitrary free-text properties.
+测试内容运营者无法读取安全详情，安全运营者只能看到脱敏摘录，发布需要 MFA 加评审人，发布创建新的不可变版本而非覆盖，回滚改变活动指针，以及每个敏感操作都产生审计行。测试产品事件拒绝邮箱、任务备注、AI 文本与任意自由文本属性。
 
-- [ ] **Step 2: Verify RED**
+- [ ] **步骤 2：验证 RED**
 
-Run: `cd backend && ./mvnw test -Dtest=AdminGovernanceIT,TelemetryPrivacyTest`  
-Expected: FAIL because admin governance is absent.
+运行：`cd backend && ./mvnw test -Dtest=AdminGovernanceIT,TelemetryPrivacyTest`  
+预期：失败，因为后台治理缺失。
 
-- [ ] **Step 3: Implement least-privilege administration**
+- [ ] **步骤 3：实现最小权限后台**
 
-Implement the documented template, prompt, knowledge source, safety event, audit, and dashboard endpoints. Use explicit permissions such as `TEMPLATE_EDIT`, `CONTENT_PUBLISH`, `SAFETY_REVIEW`, `SAFETY_SENSITIVE_READ`, and `AUDIT_READ`. Outbox delivery records product events with a property allowlist and retries without blocking the original transaction.
+实现文档定义的模板、提示词、知识源、安全事件、审计与看板接口。使用显式权限，如 `TEMPLATE_EDIT`、`CONTENT_PUBLISH`、`SAFETY_REVIEW`、`SAFETY_SENSITIVE_READ` 与 `AUDIT_READ`。Outbox 投递以属性白名单记录产品事件，并在不阻塞原始事务的情况下重试。
 
-- [ ] **Step 4: Verify GREEN**
+- [ ] **步骤 4：验证 GREEN**
 
-Run: `cd backend && ./mvnw test -Dtest=AdminGovernanceIT,TelemetryPrivacyTest`  
-Expected: PASS and no sensitive property reaches `product_event`.
+运行：`cd backend && ./mvnw test -Dtest=AdminGovernanceIT,TelemetryPrivacyTest`  
+预期：通过，且 `product_event` 中不出现任何敏感属性。
 
-- [ ] **Step 5: Commit governance**
+- [ ] **步骤 5：提交治理**
 
 ```bash
 git add backend/src/main/java/com/betterself/growth/admin backend/src/main/java/com/betterself/growth/shared/outbox backend/src/test/java/com/betterself/growth/admin
 git commit -m "feat: add governed administration and telemetry"
 ```
 
-## Task 10: Frontend Foundation, Design System, Authentication, and Onboarding
+## 任务 10：前端基座、设计系统、认证与引导
 
-**Files:**
-- Create: `frontend/src/app/router.ts`
-- Create: `frontend/src/app/UserLayout.vue`
-- Create: `frontend/src/app/AdminLayout.vue`
-- Create: `frontend/src/shared/api/client.ts`
-- Create: `frontend/src/shared/api/errors.ts`
-- Create: `frontend/src/shared/ui/AppButton.vue`
-- Create: `frontend/src/shared/ui/AppDialog.vue`
-- Create: `frontend/src/shared/ui/AppField.vue`
-- Create: `frontend/src/shared/ui/AsyncState.vue`
-- Create: `frontend/src/styles/tokens.css`
-- Create: `frontend/src/styles/global.css`
-- Create: `frontend/src/modules/auth/AuthView.vue`
-- Create: `frontend/src/modules/auth/auth.store.ts`
-- Create: `frontend/src/modules/onboarding/OnboardingView.vue`
-- Test: `frontend/src/shared/api/client.test.ts`
-- Test: `frontend/src/modules/auth/AuthView.test.ts`
-- Test: `frontend/src/modules/onboarding/OnboardingView.test.ts`
+**文件：**
+- 新建：`frontend/src/app/router.ts`
+- 新建：`frontend/src/app/UserLayout.vue`
+- 新建：`frontend/src/app/AdminLayout.vue`
+- 新建：`frontend/src/shared/api/client.ts`
+- 新建：`frontend/src/shared/api/errors.ts`
+- 新建：`frontend/src/shared/ui/AppButton.vue`
+- 新建：`frontend/src/shared/ui/AppDialog.vue`
+- 新建：`frontend/src/shared/ui/AppField.vue`
+- 新建：`frontend/src/shared/ui/AsyncState.vue`
+- 新建：`frontend/src/styles/tokens.css`
+- 新建：`frontend/src/styles/global.css`
+- 新建：`frontend/src/modules/auth/AuthView.vue`
+- 新建：`frontend/src/modules/auth/auth.store.ts`
+- 新建：`frontend/src/modules/onboarding/OnboardingView.vue`
+- 测试：`frontend/src/shared/api/client.test.ts`
+- 测试：`frontend/src/modules/auth/AuthView.test.ts`
+- 测试：`frontend/src/modules/onboarding/OnboardingView.test.ts`
 
-- [ ] **Step 1: Write failing UI and API client tests**
+- [ ] **步骤 1：编写失败的 UI 与 API 客户端测试**
 
 ```ts
 it('sends the readable csrf cookie on writes without exposing tokens', async () => {
@@ -677,209 +677,209 @@ it('sends the readable csrf cookie on writes without exposing tokens', async () 
 })
 ```
 
-Test 18+ validation, three independent consent checkboxes, keyboard focus, onboarding progress, and an API error summary linked to invalid fields.
+测试 18 岁以上校验、三个独立同意复选框、键盘焦点、引导进度，以及与无效字段关联的 API 错误摘要。
 
-- [ ] **Step 2: Verify RED**
+- [ ] **步骤 2：验证 RED**
 
-Run: `cd frontend && pnpm test --run src/modules/auth src/modules/onboarding src/shared/api`  
-Expected: FAIL because the app shell and modules are absent.
+运行：`cd frontend && pnpm test --run src/modules/auth src/modules/onboarding src/shared/api`  
+预期：失败，因为应用外壳与模块缺失。
 
-- [ ] **Step 3: Implement the approved responsive shell**
+- [ ] **步骤 3：实现已评审的响应式外壳**
 
-Use a desktop left sidebar and mobile five-item bottom navigation. Define fixed control heights, 8px-or-less radius, warm-white surfaces, deep green primary, neutral ink, amber warning, and red danger tokens. All icon buttons use lucide-vue-next and tooltips. The API client always uses `credentials: 'include'`, maps envelope errors, refreshes once on 401, and never stores access/refresh tokens.
+使用桌面左侧栏与移动端五项底栏导航。定义固定控件高度、8px 及以内圆角、暖白表面、深绿主色、中性墨色、琥珀警告与红色危险令牌。所有图标按钮使用 lucide-vue-next 并提供提示。API 客户端始终使用 `credentials: 'include'`，映射信封错误，401 时刷新一次，且绝不存储访问/刷新令牌。
 
-Implement login, register, forgot/reset password, MFA, onboarding scene/preference/goal flow, route guards, loading, empty, error, offline, and permission states.
+实现登录、注册、忘记/重置密码、MFA、引导场景/偏好/目标流程、路由守卫、加载、空、错误、离线与权限状态。
 
-- [ ] **Step 4: Verify GREEN and accessibility**
+- [ ] **步骤 4：验证 GREEN 与可访问性**
 
-Run: `cd frontend && pnpm test --run src/modules/auth src/modules/onboarding src/shared/api`  
-Expected: PASS.
+运行：`cd frontend && pnpm test --run src/modules/auth src/modules/onboarding src/shared/api`  
+预期：通过。
 
-Run: `cd frontend && pnpm lint && pnpm build`  
-Expected: PASS with no type errors.
+运行：`cd frontend && pnpm lint && pnpm build`  
+预期：通过，且无类型错误。
 
-- [ ] **Step 5: Commit frontend foundation**
+- [ ] **步骤 5：提交前端基座**
 
 ```bash
 git add frontend/src/app frontend/src/shared frontend/src/styles frontend/src/modules/auth frontend/src/modules/onboarding
 git commit -m "feat: add accessible app shell and onboarding"
 ```
 
-## Task 11: Today, Goals, Task Recording, and Insights UI
+## 任务 11：今日、目标、任务记录与洞察 UI
 
-**Files:**
-- Create: `frontend/src/modules/today/TodayView.vue`
-- Create: `frontend/src/modules/today/TaskRow.vue`
-- Create: `frontend/src/modules/today/TaskRecordDialog.vue`
-- Create: `frontend/src/modules/today/today.store.ts`
-- Create: `frontend/src/modules/goals/GoalsView.vue`
-- Create: `frontend/src/modules/goals/GoalEditor.vue`
-- Create: `frontend/src/modules/goals/WeeklyPlanView.vue`
-- Create: `frontend/src/modules/insights/InsightsView.vue`
-- Create: `frontend/src/modules/insights/WeeklyReviewView.vue`
-- Test: `frontend/src/modules/today/TodayView.test.ts`
-- Test: `frontend/src/modules/goals/GoalsView.test.ts`
-- Test: `frontend/src/modules/insights/InsightsView.test.ts`
+**文件：**
+- 新建：`frontend/src/modules/today/TodayView.vue`
+- 新建：`frontend/src/modules/today/TaskRow.vue`
+- 新建：`frontend/src/modules/today/TaskRecordDialog.vue`
+- 新建：`frontend/src/modules/today/today.store.ts`
+- 新建：`frontend/src/modules/goals/GoalsView.vue`
+- 新建：`frontend/src/modules/goals/GoalEditor.vue`
+- 新建：`frontend/src/modules/goals/WeeklyPlanView.vue`
+- 新建：`frontend/src/modules/insights/InsightsView.vue`
+- 新建：`frontend/src/modules/insights/WeeklyReviewView.vue`
+- 测试：`frontend/src/modules/today/TodayView.test.ts`
+- 测试：`frontend/src/modules/goals/GoalsView.test.ts`
+- 测试：`frontend/src/modules/insights/InsightsView.test.ts`
 
-- [ ] **Step 1: Write failing workflow tests**
+- [ ] **步骤 1：编写失败的工作流测试**
 
-Test that Today shows record/defer/skip in one stable row, partial completion requires a ratio, defer requires a new time, skip never renders as done, a successful event exposes reverse, duplicate clicks reuse one idempotency key, and insights never render a ranking. Test empty and AI-unavailable states include manual actions.
+测试今日页在稳定的单行内展示记录/延期/跳过，部分完成必须填写比例，延期必须填写新时间，跳过绝不渲染为已完成，成功事件暴露撤销入口，重复点击复用同一幂等键，洞察绝不渲染排名。测试空状态与 AI 不可用状态包含手动操作入口。
 
-- [ ] **Step 2: Verify RED**
+- [ ] **步骤 2：验证 RED**
 
-Run: `cd frontend && pnpm test --run src/modules/today src/modules/goals src/modules/insights`  
-Expected: FAIL because the workflow UI does not exist.
+运行：`cd frontend && pnpm test --run src/modules/today src/modules/goals src/modules/insights`  
+预期：失败，因为工作流 UI 不存在。
 
-- [ ] **Step 3: Implement the core action surfaces**
+- [ ] **步骤 3：实现核心操作界面**
 
-Use list rows and full-width bands rather than nested cards. Keep progress bars and action controls at stable dimensions. Render ECharts only in the Insights route and provide a text/table alternative for screen readers. The store creates one UUID idempotency key per user intent and keeps it during network retry.
+使用列表行与通栏 band 而非嵌套卡片。进度条与操作控件保持稳定尺寸。仅在洞察路由渲染 ECharts，并为屏幕阅读器提供文本/表格替代方案。store 为每个用户意图创建一个 UUID 幂等键，并在网络重试期间保持不变。
 
-- [ ] **Step 4: Verify GREEN**
+- [ ] **步骤 4：验证 GREEN**
 
-Run: `cd frontend && pnpm test --run src/modules/today src/modules/goals src/modules/insights`  
-Expected: PASS.
+运行：`cd frontend && pnpm test --run src/modules/today src/modules/goals src/modules/insights`  
+预期：通过。
 
-Run: `cd frontend && pnpm build`  
-Expected: PASS.
+运行：`cd frontend && pnpm build`  
+预期：通过。
 
-- [ ] **Step 5: Commit the core UI**
+- [ ] **步骤 5：提交核心 UI**
 
 ```bash
 git add frontend/src/modules/today frontend/src/modules/goals frontend/src/modules/insights
 git commit -m "feat: add goal task and insight workflows"
 ```
 
-## Task 12: AI, Safety, Settings, Privacy, and Admin UI
+## 任务 12：AI、安全、设置、隐私与后台 UI
 
-**Files:**
-- Create: `frontend/src/shared/api/sse.ts`
-- Create: `frontend/src/modules/ai/AiView.vue`
-- Create: `frontend/src/modules/ai/AiMessageList.vue`
-- Create: `frontend/src/modules/ai/SuggestionReview.vue`
-- Create: `frontend/src/modules/ai/CrisisSupportView.vue`
-- Create: `frontend/src/modules/settings/SettingsView.vue`
-- Create: `frontend/src/modules/settings/PrivacyPanel.vue`
-- Create: `frontend/src/modules/settings/NotificationPanel.vue`
-- Create: `frontend/src/modules/admin/AdminDashboard.vue`
-- Create: `frontend/src/modules/admin/ContentVersionsView.vue`
-- Create: `frontend/src/modules/admin/SafetyEventsView.vue`
-- Test: `frontend/src/shared/api/sse.test.ts`
-- Test: `frontend/src/modules/ai/AiView.test.ts`
-- Test: `frontend/src/modules/settings/PrivacyPanel.test.ts`
-- Test: `frontend/src/modules/admin/AdminDashboard.test.ts`
+**文件：**
+- 新建：`frontend/src/shared/api/sse.ts`
+- 新建：`frontend/src/modules/ai/AiView.vue`
+- 新建：`frontend/src/modules/ai/AiMessageList.vue`
+- 新建：`frontend/src/modules/ai/SuggestionReview.vue`
+- 新建：`frontend/src/modules/ai/CrisisSupportView.vue`
+- 新建：`frontend/src/modules/settings/SettingsView.vue`
+- 新建：`frontend/src/modules/settings/PrivacyPanel.vue`
+- 新建：`frontend/src/modules/settings/NotificationPanel.vue`
+- 新建：`frontend/src/modules/admin/AdminDashboard.vue`
+- 新建：`frontend/src/modules/admin/ContentVersionsView.vue`
+- 新建：`frontend/src/modules/admin/SafetyEventsView.vue`
+- 测试：`frontend/src/shared/api/sse.test.ts`
+- 测试：`frontend/src/modules/ai/AiView.test.ts`
+- 测试：`frontend/src/modules/settings/PrivacyPanel.test.ts`
+- 测试：`frontend/src/modules/admin/AdminDashboard.test.ts`
 
-- [ ] **Step 1: Write failing AI and privacy UI tests**
+- [ ] **步骤 1：编写失败的 AI 与隐私 UI 测试**
 
-Test SSE ordering and disconnect, plain-text rendering of model content, manual fallback on `AI_TEMPORARILY_UNAVAILABLE`, editable suggestion confirmation, L3 replacing the normal composer, export status/download expiry, deletion cooling-off cancellation, memory deletion, role-based admin navigation, and redacted safety excerpts.
+测试 SSE 顺序与断连、模型内容的纯文本渲染、`AI_TEMPORARILY_UNAVAILABLE` 时的手动降级、可编辑建议确认、L3 替换常规输入框、导出状态/下载过期、删除冷静期取消、记忆删除、基于角色的后台导航与脱敏安全摘录。
 
-- [ ] **Step 2: Verify RED**
+- [ ] **步骤 2：验证 RED**
 
-Run: `cd frontend && pnpm test --run src/modules/ai src/modules/settings src/modules/admin src/shared/api/sse.test.ts`  
-Expected: FAIL because these modules are absent.
+运行：`cd frontend && pnpm test --run src/modules/ai src/modules/settings src/modules/admin src/shared/api/sse.test.ts`  
+预期：失败，因为这些模块缺失。
 
-- [ ] **Step 3: Implement safe streaming and controlled settings**
+- [ ] **步骤 3：实现安全流式传输与受控设置**
 
-The SSE client parses only named events, appends deltas as text nodes, aborts on unmount, and never automatically resubmits after disconnect. `CrisisSupportView` contains the server-provided reviewed message and action links, with no experience, achievement, suggestion, or conversational dependency language. Settings show explicit retention periods and real deletion/export states. Admin routes require both role and permission claims.
+SSE 客户端只解析命名事件，以文本节点追加 delta，卸载时中止，且断连后绝不自动重发。`CrisisSupportView` 只包含服务端提供的已评审消息与行动链接，不使用经验、成就、建议或对话依赖式语言。设置页展示显式保留周期与真实的删除/导出状态。后台路由同时要求角色与权限声明。
 
-- [ ] **Step 4: Verify GREEN and static security**
+- [ ] **步骤 4：验证 GREEN 与静态安全**
 
-Run: `cd frontend && pnpm test --run src/modules/ai src/modules/settings src/modules/admin src/shared/api`  
-Expected: PASS.
+运行：`cd frontend && pnpm test --run src/modules/ai src/modules/settings src/modules/admin src/shared/api`  
+预期：通过。
 
-Run: `cd frontend && rg -n 'v-html|localStorage.*token|sessionStorage.*token' src`  
-Expected: no matches.
+运行：`cd frontend && rg -n 'v-html|localStorage.*token|sessionStorage.*token' src`  
+预期：无匹配。
 
-- [ ] **Step 5: Commit AI, privacy, and admin UI**
+- [ ] **步骤 5：提交 AI、隐私与后台 UI**
 
 ```bash
 git add frontend/src/shared/api frontend/src/modules/ai frontend/src/modules/settings frontend/src/modules/admin
 git commit -m "feat: add AI privacy and administration interfaces"
 ```
 
-## Task 13: Deployment, End-to-End Journeys, and Global Data-Flow Verification
+## 任务 13：部署、端到端旅程与全局数据流验证
 
-**Files:**
-- Create: `frontend/playwright.config.ts`
-- Create: `e2e/fixtures/users.ts`
-- Create: `e2e/global-flow.spec.ts`
-- Create: `e2e/ownership.spec.ts`
-- Create: `e2e/responsive.spec.ts`
-- Create: `scripts/seed-local.sh`
-- Create: `scripts/smoke-api.sh`
-- Create: `scripts/verify-global-flow.sh`
-- Modify: `deploy/nginx/default.conf`
-- Modify: `README.md`
+**文件：**
+- 新建：`frontend/playwright.config.ts`
+- 新建：`e2e/fixtures/users.ts`
+- 新建：`e2e/global-flow.spec.ts`
+- 新建：`e2e/ownership.spec.ts`
+- 新建：`e2e/responsive.spec.ts`
+- 新建：`scripts/seed-local.sh`
+- 新建：`scripts/smoke-api.sh`
+- 新建：`scripts/verify-global-flow.sh`
+- 修改：`deploy/nginx/default.conf`
+- 修改：`README.md`
 
-- [ ] **Step 1: Write the failing end-to-end tests**
+- [ ] **步骤 1：编写失败的端到端测试**
 
-`global-flow.spec.ts` must perform adult registration, three consents, onboarding, goal/plan creation, real or configured-mock Qwen suggestion generation, idempotent adoption, start/partial/complete/defer/skip/reverse task events, insight and review confirmation, SSE chat, export download validation, deletion request/cancel, admin MFA publication, and audit verification.
+`global-flow.spec.ts` 必须执行成年人注册、三项同意、引导、目标/周计划创建、真实或配置化 Mock 的 Qwen 建议生成、幂等采纳、开始/部分/完成/延期/跳过/撤销任务事件、洞察与复盘确认、SSE 聊天、导出下载校验、删除请求/取消、后台 MFA 发布与审计验证。
 
-`ownership.spec.ts` must create two users and assert cross-user goal, schedule, AI session, export, and attachment access returns 404/403. `responsive.spec.ts` must run at 390x844 and 1440x900, assert no horizontal overflow, visible focus, no overlapping navigation, and nonblank charts.
+`ownership.spec.ts` 必须创建两个用户，并断言跨用户的目标、日程、AI 会话、导出与附件访问返回 404/403。`responsive.spec.ts` 必须在 390x844 与 1440x900 下运行，断言无横向溢出、可见焦点、无导航重叠与非空图表。
 
-- [ ] **Step 2: Verify RED**
+- [ ] **步骤 2：验证 RED**
 
-Run: `pnpm --dir frontend exec playwright test -c ../frontend/playwright.config.ts`  
-Expected: FAIL because the running stack and E2E fixtures are not complete.
+运行：`pnpm --dir frontend exec playwright test -c ../frontend/playwright.config.ts`  
+预期：失败，因为运行栈与 E2E fixtures 尚不完整。
 
-- [ ] **Step 3: Complete deployment and deterministic verification scripts**
+- [ ] **步骤 3：完成部署与确定性验证脚本**
 
-Configure Nginx for SPA fallback, `/api/v1`, SSE buffering off, request IDs, TLS-ready security headers, upload limits, and no caching of authenticated API responses. `verify-global-flow.sh` must start the Compose stack, wait for health checks, run backend verify, frontend lint/test/build, Playwright, a real Qwen benign suggestion smoke when `AI_PROVIDER=qwen`, database invariant queries, Redis key inspection, MinIO export existence, and a sensitive-log scan.
+配置 Nginx 支持 SPA fallback、`/api/v1`、关闭 SSE 缓冲、请求 ID、为 TLS 准备的响应头、上传限制，以及不对已认证 API 响应做缓存。`verify-global-flow.sh` 必须启动 Compose 栈，等待健康检查，运行后端 verify、前端 lint/测试/构建、Playwright、在 `AI_PROVIDER=qwen` 时执行真实 Qwen 良性建议冒烟、数据库不变量查询、Redis 键检查、MinIO 导出存在性检查与敏感日志扫描。
 
-The script must exit nonzero on any failed invariant and print a final table with these checks: auth cookies, CSRF, consent rows, goal/plan/task rows, idempotency counts, event states, experience totals, review confirmation, Qwen metadata, safety response, export object, deletion lifecycle, ownership isolation, admin audit, and sensitive log scan.
+脚本在任何不变量失败时必须以非零退出，并打印包含以下检查的最终表格：认证 Cookie、CSRF、同意行、目标/周计划/任务行、幂等计数、事件状态、经验总量、复盘确认、Qwen 元数据、安全响应、导出对象、删除生命周期、归属隔离、后台审计与敏感日志扫描。
 
-- [ ] **Step 4: Run the complete verification gate**
+- [ ] **步骤 4：运行完整验证闸门**
 
-Run: `cd backend && ./mvnw verify`  
-Expected: PASS.
+运行：`cd backend && ./mvnw verify`  
+预期：通过。
 
-Run: `cd frontend && pnpm lint && pnpm test --run && pnpm build`  
-Expected: PASS.
+运行：`cd frontend && pnpm lint && pnpm test --run && pnpm build`  
+预期：通过。
 
-Run: `pnpm --dir frontend exec playwright test -c ../frontend/playwright.config.ts`  
-Expected: PASS on desktop and mobile projects.
+运行：`pnpm --dir frontend exec playwright test -c ../frontend/playwright.config.ts`  
+预期：桌面与移动项目均通过。
 
-Run: `./scripts/verify-global-flow.sh`  
-Expected: exit 0 and every invariant reports `PASS`.
+运行：`./scripts/verify-global-flow.sh`  
+预期：退出码 0，且每项不变量报告 `PASS`。
 
-- [ ] **Step 5: Commit the verified delivery**
+- [ ] **步骤 5：提交已验证的交付**
 
 ```bash
 git add deploy e2e scripts README.md frontend/playwright.config.ts
 git commit -m "test: verify complete growth platform data flow"
 ```
 
-## Task 14: Final Security and Visual Release Audit
+## 任务 14：最终安全与视觉发布审计
 
-**Files:**
-- Create: `docs/release/verification-report.md`
-- Create: `docs/release/security-checklist.md`
-- Create: `docs/release/known-limitations.md`
+**文件：**
+- 新建：`docs/release/verification-report.md`
+- 新建：`docs/release/security-checklist.md`
+- 新建：`docs/release/known-limitations.md`
 
-- [ ] **Step 1: Run secret and sensitive-data scans**
+- [ ] **步骤 1：运行密钥与敏感数据扫描**
 
-Run: `git grep -nE 'sk-[A-Za-z0-9_-]{20,}|123456|QWEN_API_KEY=.+|MYSQL_PASSWORD=.+' -- ':!docs/superpowers/plans/*'`  
-Expected: no real secret or supplied password appears in tracked files.
+运行：`git grep -nE 'sk-[A-Za-z0-9_-]{20,}|123456|QWEN_API_KEY=.+|MYSQL_PASSWORD=.+' -- ':!docs/superpowers/plans/*'`  
+预期：跟踪文件中不出现真实密钥或已提供密码。
 
-Run: `rg -n 'password|token|cookie|note|content' logs/`  
-Expected: no password, raw token, Cookie header, complete AI message, or task note value.
+运行：`rg -n 'password|token|cookie|note|content' logs/`  
+预期：不出现密码、原始令牌、Cookie 头、完整 AI 消息或任务备注值。
 
-- [ ] **Step 2: Inspect Playwright screenshots and canvas pixels**
+- [ ] **步骤 2：检查 Playwright 截图与画布像素**
 
-Review every desktop/mobile screenshot for clipping, overlap, blank content, broken icons, unstable controls, missing focus, and text overflow. Check ECharts canvases contain non-background pixels and have accessible text alternatives.
+评审每张桌面/移动截图，检查裁切、重叠、空白内容、损坏图标、不稳定控件、焦点缺失与文本溢出。确认 ECharts 画布包含非背景像素并提供可访问文本替代。
 
-- [ ] **Step 3: Record exact evidence**
+- [ ] **步骤 3：记录精确证据**
 
-Write `verification-report.md` with command, timestamp, exit status, test counts, global-flow invariant table, real Qwen model/request metadata without secret values, and URLs. Write only actual residual limitations in `known-limitations.md`; when none remain, state `No known release-blocking limitations.`
+编写 `verification-report.md`，包含命令、时间戳、退出状态、测试数量、global-flow 不变量表、真实 Qwen 模型/请求元数据（不含密钥值）与 URL。在 `known-limitations.md` 中只写真实存在的剩余限制；若已无限制，则写明 `No known release-blocking limitations.`
 
-- [ ] **Step 4: Re-run the release gate after documentation**
+- [ ] **步骤 4：文档后重跑发布闸门**
 
-Run: `./scripts/verify-global-flow.sh`  
-Expected: exit 0 on the exact final worktree.
+运行：`./scripts/verify-global-flow.sh`  
+预期：在最终精确工作树上退出码为 0。
 
-Run: `git status --short`  
-Expected: only the three release documents are uncommitted.
+运行：`git status --short`  
+预期：仅三个发布文档未提交。
 
-- [ ] **Step 5: Commit release evidence**
+- [ ] **步骤 5：提交发布证据**
 
 ```bash
 git add docs/release
