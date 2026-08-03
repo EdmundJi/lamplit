@@ -18,6 +18,7 @@ import java.time.temporal.ChronoUnit;
 import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -205,9 +206,34 @@ public class InsightService {
         BigDecimal fulfillment = plannedValue == 0
             ? BigDecimal.ZERO.setScale(3)
             : BigDecimal.valueOf(effectiveValue).divide(BigDecimal.valueOf(plannedValue), 3, RoundingMode.HALF_UP);
+        WeekRange range = week;
+        Map<String, Integer> statusAdvices = new HashMap<>();
+        Map<String, Integer> statusEnergy = new HashMap<>();
+        for (String key : List.of("SHRINK", "KEEP", "LIGHT")) {
+            statusAdvices.put(key, 0);
+        }
+        for (String key : List.of("LOW", "STEADY", "OPEN")) {
+            statusEnergy.put(key, 0);
+        }
+        jdbc.query(
+            """
+                select energy, advice from daily_status_check
+                where user_id = ? and local_date between ? and ?
+                """,
+            rs -> {
+                while (rs.next()) {
+                    statusAdvices.merge(rs.getString("advice"), 1, Integer::sum);
+                    statusEnergy.merge(rs.getString("energy"), 1, Integer::sum);
+                }
+                return null;
+            },
+            userId, Date.valueOf(range.start()), Date.valueOf(range.end())
+        );
+        int statusCheckCount = statusAdvices.values().stream().mapToInt(Integer::intValue).sum();
         return new Overview(
             plannedValue, effectiveValue, fulfillment, experience == null ? 0 : experience,
-            recoveries, personalBest == null ? 0 : personalBest
+            recoveries, personalBest == null ? 0 : personalBest,
+            statusCheckCount, statusAdvices, statusEnergy
         );
     }
 
@@ -236,7 +262,10 @@ public class InsightService {
         BigDecimal fulfillmentRate,
         int totalExperience,
         int recoveryCount,
-        int personalBestDailyActions
+        int personalBestDailyActions,
+        int statusCheckCount,
+        Map<String, Integer> statusAdvices,
+        Map<String, Integer> statusEnergy
     ) {
     }
 

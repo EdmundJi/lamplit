@@ -30,6 +30,7 @@ public class AiService {
     private final CrisisResponseService crisis;
     private final PublicIdGenerator ids;
     private final Clock clock;
+    private final com.betterself.growth.daily.DailyStatusService dailyStatus;
 
     public AiService(
         JdbcTemplate jdbc,
@@ -37,7 +38,8 @@ public class AiService {
         SafetyService safety,
         CrisisResponseService crisis,
         PublicIdGenerator ids,
-        Clock clock
+        Clock clock,
+        com.betterself.growth.daily.DailyStatusService dailyStatus
     ) {
         this.jdbc = jdbc;
         this.provider = provider;
@@ -45,6 +47,7 @@ public class AiService {
         this.crisis = crisis;
         this.ids = ids;
         this.clock = clock;
+        this.dailyStatus = dailyStatus;
     }
 
     @Transactional
@@ -175,6 +178,7 @@ public class AiService {
                 return;
             }
             String systemPrompt = prompt(scene);
+            systemPrompt = withDailyStatus(systemPrompt, userId);
             List<String> deltas = new ArrayList<>();
             QwenProvider.StreamMetadata metadata = provider.stream(
                 new QwenProvider.ChatPrompt(scene, systemPrompt, command.message()), deltas::add
@@ -268,6 +272,26 @@ public class AiService {
             throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "AI_PROMPT_UNAVAILABLE", "AI service is temporarily unavailable");
         }
         return prompt;
+    }
+
+    private String withDailyStatus(String systemPrompt, long userId) {
+        com.betterself.growth.daily.DailyStatusService.StatusView status = dailyStatus.latest(userId);
+        if (status == null) {
+            return systemPrompt;
+        }
+        String energy = switch (status.energy()) {
+            case "LOW" -> "偏低";
+            case "OPEN" -> "充足";
+            default -> "稳定";
+        };
+        String advice = switch (status.advice()) {
+            case "SHRINK" -> "缩小任务：建议今天保留一件最小行动，降低完成比例目标";
+            case "KEEP" -> "保持原计划：状态和时间足够，按原计划推进";
+            default -> "轻量推进：建议先完成一项任务，其余根据实际精力决定";
+        };
+        return systemPrompt + "\n\n【用户今日状态检查】精力：" + energy
+            + "，可用时间：" + status.availableMinutes() + " 分钟，节奏建议：" + advice
+            + "。安排建议时优先遵循该节奏。";
     }
 
     private String normalizeScene(String scene) {

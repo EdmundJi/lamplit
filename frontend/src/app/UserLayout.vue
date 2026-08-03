@@ -5,6 +5,7 @@ import { Activity, Target, CalendarCheck2, ChartNoAxesColumnIncreasing, Heart, S
 import { useAuthStore } from '../modules/auth/auth.store'
 import DesktopPet from '../modules/partners/DesktopPet.vue'
 import WelcomeGuide from '../shared/ui/WelcomeGuide.vue'
+import GlobalUnreadBar from '../shared/ui/GlobalUnreadBar.vue'
 
 const nav = [
   { to: '/today', label: '今日', icon: CalendarCheck2, mobile: true },
@@ -71,6 +72,7 @@ onBeforeUnmount(() => {
     </main>
     <nav class="mobile-nav" aria-label="主导航"><RouterLink v-for="item in mobileNav" :key="item.to" :to="item.to"><component :is="item.icon" :size="20"/><span>{{ item.label }}</span></RouterLink></nav>
     <DesktopPet v-if="!isDesktopCompanion" />
+    <GlobalUnreadBar />
     <WelcomeGuide v-if="showWelcome" @dismiss="dismissWelcome" />
   </div>
 </template>

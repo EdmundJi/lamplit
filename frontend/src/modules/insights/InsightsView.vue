@@ -3,6 +3,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import {
   Award,
   BadgeCheck,
+  BatteryMedium,
   CalendarDays,
   PenLine,
 } from 'lucide-vue-next'
@@ -72,6 +73,10 @@ const badges = computed<Badge[]>(() => computeBadges({
   roles: roles.value,
 }))
 const earnedBadgeCount = computed(() => badges.value.filter(badge => badge.earned).length)
+function advicePercent(advice: string) {
+  const count = data.value?.statusCheckCount ?? 0
+  return count ? Math.round((data.value?.statusAdvices?.[advice] ?? 0) * 100 / count) : 0
+}
 const reviewDraft = computed(() => {
   const [steady, heavy, next] = reviewAnswers
   return [
@@ -137,6 +142,36 @@ onMounted(async () => {
               <small>触发条件：{{ badge.trigger }}</small>
             </div>
           </article>
+        </div>
+      </section>
+
+      <section v-if="data.statusCheckCount" class="band status-band" aria-labelledby="status-title">
+        <div class="section-title">
+          <div>
+            <p class="eyebrow">本周状态检查</p>
+            <h2 id="status-title">你如何安排今天</h2>
+          </div>
+          <BatteryMedium :size="20" />
+        </div>
+        <div class="status-overview">
+          <div class="status-days"><strong>{{ data.statusCheckCount }}</strong><span>填写天数</span></div>
+          <div class="advice-bars">
+            <div class="advice-row">
+              <span>缩小任务</span>
+              <div class="progress" aria-label="缩小任务天数"><span :style="{ width: `${advicePercent('SHRINK')}%` }"></span></div>
+              <b>{{ data.statusAdvices.SHRINK }} 天</b>
+            </div>
+            <div class="advice-row">
+              <span>保持原计划</span>
+              <div class="progress" aria-label="保持原计划天数"><span :style="{ width: `${advicePercent('KEEP')}%` }"></span></div>
+              <b>{{ data.statusAdvices.KEEP }} 天</b>
+            </div>
+            <div class="advice-row">
+              <span>轻量推进</span>
+              <div class="progress" aria-label="轻量推进天数"><span :style="{ width: `${advicePercent('LIGHT')}%` }"></span></div>
+              <b>{{ data.statusAdvices.LIGHT }} 天</b>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -235,6 +270,16 @@ onMounted(async () => {
 .section-title { display: flex; align-items: center; justify-content: space-between; color: var(--primary); margin-bottom: 14px; }
 .section-title h2 { margin: 0; font-size: 18px; }
 .badge-summary { display: inline-flex; align-items: center; gap: 8px; color: var(--primary); font-weight: 700; }
+.status-overview { display: grid; grid-template-columns: minmax(110px, auto) minmax(0, 1fr); gap: 22px; align-items: center; }
+.status-days { display: grid; justify-items: center; gap: 5px; padding: 16px; border: 1px solid var(--border); border-radius: var(--radius); background: color-mix(in srgb, var(--surface) 90%, transparent); box-shadow: var(--shadow-soft); }
+.status-days strong { font-size: 30px; line-height: 1; color: var(--primary); }
+.status-days span { color: var(--muted); font-size: 12px; }
+.advice-bars { display: grid; gap: 10px; }
+.advice-row { display: grid; grid-template-columns: 88px minmax(0, 1fr) 44px; align-items: center; gap: 12px; color: var(--muted); font-size: 13px; }
+.advice-row b { color: var(--ink); font-size: 12px; text-align: right; }
+.advice-row .progress > span { background: var(--primary); }
+.advice-row:nth-child(2) .progress > span { background: var(--accent); }
+.advice-row:nth-child(3) .progress > span { background: var(--amber); }
 .badge-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .badge-card { min-width: 0; min-height: 172px; display: grid; grid-template-rows: auto 1fr; gap: 12px; padding: 15px; border: 1px solid var(--border); border-radius: var(--radius); background: color-mix(in srgb, var(--surface) 92%, transparent); color: var(--muted); opacity: .72; }
 .badge-card.earned { color: var(--ink); opacity: 1; border-color: color-mix(in srgb, var(--badge-color) 42%, var(--border)); background: linear-gradient(145deg, color-mix(in srgb, var(--badge-color) 10%, var(--surface)), var(--surface)); box-shadow: var(--shadow-soft); }

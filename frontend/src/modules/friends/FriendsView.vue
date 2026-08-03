@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { ChevronRight, MailCheck, MailPlus, Send, UserPlus, Users, X } from 'lucide-vue-next'
+import { ChevronRight, MailCheck, MailPlus, MessageCircle, Send, UserPlus, Users, X } from 'lucide-vue-next'
 import { api, type ApiError } from '../../shared/api/client'
 import type { FriendItem, FriendList } from './friends.types'
 
@@ -186,14 +186,17 @@ onMounted(() => load())
           <span class="section-count">{{ list.friends.length }}</span>
         </div>
         <div v-if="list.friends.length" class="friend-grid">
-          <RouterLink v-for="item in list.friends" :key="item.publicId" class="friend-card friend-link" :to="`/friends/${item.publicId}`">
-            <span class="friend-avatar" aria-hidden="true">{{ initial(item.displayName) }}</span>
-            <div class="friend-copy">
-              <strong>{{ item.displayName }}</strong>
-              <small>LV.{{ item.overallLevel }} 成长者 · {{ memberSinceLabel(item.memberSince) }}加入</small>
-            </div>
-            <ChevronRight :size="17" />
-          </RouterLink>
+          <article v-for="item in list.friends" :key="item.publicId" class="friend-card friend-row">
+            <RouterLink class="friend-link" :to="`/friends/${item.publicId}`">
+              <span class="friend-avatar" aria-hidden="true">{{ initial(item.displayName) }}</span>
+              <div class="friend-copy">
+                <strong>{{ item.displayName }}</strong>
+                <small>LV.{{ item.overallLevel }} 成长者 · {{ memberSinceLabel(item.memberSince) }}加入</small>
+              </div>
+              <ChevronRight :size="17" />
+            </RouterLink>
+            <RouterLink class="chat-entry" :to="`/friends/${item.publicId}/chat`" :aria-label="`给${item.displayName}发消息`" title="发消息"><MessageCircle :size="17" /></RouterLink>
+          </article>
         </div>
         <div v-else class="empty">
           <MailPlus :size="26" />
@@ -215,10 +218,13 @@ onMounted(() => load())
 .add-friend-note { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.6; }
 .request-list { display: grid; gap: 9px; margin-top: 10px; }
 .friend-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 10px; }
-.friend-card { min-width: 0; display: grid; grid-template-columns: 46px minmax(0, 1fr) auto; align-items: center; gap: 13px; padding: 13px 15px; border: 1px solid var(--border); border-radius: var(--radius); background: color-mix(in srgb, var(--surface) 90%, transparent); box-shadow: var(--shadow-soft); }
-.friend-link { color: var(--ink); text-decoration: none; transition: transform var(--motion-fast) ease, border-color var(--motion-fast) ease, box-shadow var(--motion-fast) ease; }
-.friend-link:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--primary) 28%, var(--border)); box-shadow: var(--shadow); }
+.friend-card { min-width: 0; display: grid; gap: 0; padding: 0; border: 1px solid var(--border); border-radius: var(--radius); background: color-mix(in srgb, var(--surface) 90%, transparent); box-shadow: var(--shadow-soft); overflow: hidden; }
+.friend-row { grid-template-columns: minmax(0, 1fr) auto; }
+.friend-link { min-width: 0; display: grid; grid-template-columns: 46px minmax(0, 1fr) auto; align-items: center; gap: 13px; padding: 13px 0 13px 15px; color: var(--ink); text-decoration: none; transition: background-color var(--motion-fast) ease; }
+.friend-link:hover { background: color-mix(in srgb, var(--primary) 4%, var(--surface)); }
 .friend-link > svg { color: var(--muted); }
+.chat-entry { width: 46px; min-height: 100%; display: grid; place-items: center; border-left: 1px solid var(--border); color: var(--primary); text-decoration: none; transition: background-color var(--motion-fast) ease; }
+.chat-entry:hover { background: var(--primary-soft); }
 .friend-avatar { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 15px 15px 15px 5px; background: linear-gradient(145deg, var(--primary), color-mix(in srgb, var(--primary) 72%, var(--amber))); color: white; font-size: 19px; font-weight: 900; box-shadow: 0 10px 20px color-mix(in srgb, var(--primary) 20%, transparent); }
 .friend-copy { min-width: 0; display: grid; gap: 4px; }
 .friend-copy strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; }

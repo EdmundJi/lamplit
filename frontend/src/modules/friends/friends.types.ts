@@ -68,3 +68,53 @@ export type FriendProfile = {
   attributes: FriendAttribute[]
   todayTasks: FriendTask[]
 }
+
+export type Conversation = {
+  peerPublicId: string
+  peerDisplayName: string
+  peerLevel: number
+  lastMessage: string
+  lastMessageAt: string
+  lastMessageFromMe: boolean
+  unreadCount: number
+}
+
+export type ChatMessage = {
+  publicId: string
+  body: string
+  fromMe: boolean
+  createdAt: string
+  read: boolean
+}
+
+export type GroupConversation = {
+  publicId: string
+  name: string
+  lastMessage: string
+  lastMessageAt: string
+  unreadCount: number
+  memberCount: number
+}
+
+export type GroupMember = {
+  publicId: string
+  displayName: string
+  level: number
+  owner: boolean
+  joinedAt: string
+}
+
+export type GroupMessage = {
+  publicId: string
+  body: string
+  fromMe: boolean
+  senderName: string
+  createdAt: string
+}
+
+export type UnreadSummary = {
+  totalUnread: number
+  kind: 'single' | 'group' | null
+  publicId: string | null
+  displayName: string | null
+}

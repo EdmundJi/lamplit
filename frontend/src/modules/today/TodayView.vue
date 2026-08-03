@@ -1,13 +1,14 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { BatteryMedium, Check, Clock3, Gauge, Minimize2, Play, RotateCcw, SkipForward, Sparkles, TimerReset, Undo2, X } from 'lucide-vue-next'
 import { api, type ApiError } from '../../shared/api/client'
 import { randomUUID } from '../../shared/uuid'
 import { encouragement, type EncouragementMoment } from '../../shared/encouragement'
 
-type Task = { publicId: string; taskTitle: string; plannedStartAt: string; status: string; roleCode?: string; roleName?: string; estimatedMinutes?: number }
+type Task = { publicId: string; taskTitle: string; plannedStartAt: string; status: string; roleCode?: string; roleName?: string; estimatedMinutes?: number; difficulty?: number }
 type Goal = { publicId: string; title: string; description: string; startDate: string; endDate: string; status: string }
 type CheckMood = 'steady' | 'low' | 'open'
+type DailyStatus = { publicId: string; localDate: string; energy: 'LOW' | 'STEADY' | 'OPEN'; availableMinutes: number; advice: 'SHRINK' | 'KEEP' | 'LIGHT'; updatedAt: string }
 
 const DAILY_COMPLETION_LIMIT = 4
 
@@ -26,6 +27,7 @@ const deferredStart = ref(localDateTime(Date.now() + 86400000))
 const checkMood = ref<CheckMood>('steady')
 const availableMinutes = ref(30)
 const checkSubmitted = ref(false)
+const savedAdvice = ref<'SHRINK' | 'KEEP' | 'LIGHT' | null>(null)
 const recoveryChoice = ref('')
 const focusTask = ref<Task | null>(null)
 const focusRunning = ref(false)
@@ -40,12 +42,38 @@ const remainingCompletions = computed(() => Math.max(0, DAILY_COMPLETION_LIMIT -
 const dailyLimitReached = computed(() => remainingCompletions.value === 0)
 const suggestedPlan = computed(() => {
   if (checkMood.value === 'low' || availableMinutes.value < 20) {
-    return { title: '缩小任务', body: '今天先保留一件最小行动，把完成比例目标降到 50%。', action: '缩小今天' }
+    return { title: '缩小任务', body: '今天先保留一件最小行动，把完成比例目标降到 50%。', action: '缩小今天', advice: 'SHRINK' }
   }
   if (checkMood.value === 'open' && availableMinutes.value >= 45) {
-    return { title: '保持原计划', body: '状态和时间都足够，适合按原计划推进，但仍然保留延期入口。', action: '保持节奏' }
+    return { title: '保持原计划', body: '状态和时间都足够，适合按原计划推进，但仍然保留延期入口。', action: '保持节奏', advice: 'KEEP' }
   }
-  return { title: '轻量推进', body: '先完成最靠前的一项任务，剩余任务根据实际精力决定。', action: '先做一项' }
+  return { title: '轻量推进', body: '先完成最靠前的一项任务，剩余任务根据实际精力决定。', action: '先做一项', advice: 'LIGHT' }
+})
+const activeAdvice = computed(() => savedAdvice.value ?? suggestedPlan.value.advice)
+const recommendedTasks = computed(() => {
+  const list = tasks.value
+    .filter(task => ['PLANNED', 'IN_PROGRESS'].includes(task.status))
+    .slice()
+  if (activeAdvice.value === 'SHRINK') {
+    list.sort((a, b) => (a.estimatedMinutes ?? 99) - (b.estimatedMinutes ?? 99))
+  } else {
+    list.sort((a, b) => new Date(a.plannedStartAt).getTime() - new Date(b.plannedStartAt).getTime())
+  }
+  return list
+})
+const recommendedPublicIds = computed(() => {
+  if (activeAdvice.value === 'SHRINK') {
+    return new Set(recommendedTasks.value.slice(0, 2).map(task => task.publicId))
+  }
+  if (activeAdvice.value === 'LIGHT') {
+    return new Set(recommendedTasks.value.slice(0, 1).map(task => task.publicId))
+  }
+  return new Set<string>()
+})
+const dailyGuidance = computed(() => {
+  if (activeAdvice.value === 'SHRINK') return '今日建议：每项控制在 15 分钟以内，完成比例目标降到 50%。'
+  if (activeAdvice.value === 'KEEP') return '今日建议：按原计划推进，保留延期入口。'
+  return '今日建议：先完成一项，再根据实际精力决定下一项。'
 })
 const focusMinutes = computed(() => Math.max(5, Math.round(focusSeconds.value / 60)))
 const focusClock = computed(() => {
@@ -71,12 +99,19 @@ async function load() {
   error.value = ''
   try {
     const d = localDate()
-    const [todayTasks, activeGoalList] = await Promise.all([
+    const [todayTasks, activeGoalList, status] = await Promise.all([
       api.get<Task[]>(`/task-schedules?localDate=${d}`),
       api.get<Goal[]>('/goals?status=ACTIVE'),
+      api.get<DailyStatus | null>('/daily-status').catch(() => null),
     ])
     tasks.value = todayTasks
     goals.value = activeGoalList
+    if (status) {
+      checkMood.value = status.energy === 'LOW' ? 'low' : status.energy === 'OPEN' ? 'open' : 'steady'
+      availableMinutes.value = status.availableMinutes
+      savedAdvice.value = status.advice
+      checkSubmitted.value = true
+    }
   } catch {
     error.value = '今天的任务暂时无法加载'
   } finally {
@@ -96,9 +131,28 @@ function canComplete(task: Task) {
   return canActOn(task) && !dailyLimitReached.value
 }
 
-function applyCheck() {
+async function applyCheck() {
   checkSubmitted.value = true
-  feedback.value = { tone: 'support', text: `已按“${suggestedPlan.value.title}”整理今天：${suggestedPlan.value.body}` }
+  try {
+    const saved = await api.post<DailyStatus>('/daily-status', {
+      energy: checkMood.value === 'low' ? 'LOW' : checkMood.value === 'open' ? 'OPEN' : 'STEADY',
+      availableMinutes: availableMinutes.value,
+    })
+    savedAdvice.value = saved.advice
+    feedback.value = { tone: 'support', text: `已按“${suggestedPlan.value.title}”整理今天：${suggestedPlan.value.body}` }
+    await nextTick()
+    focusFirstRecommended()
+  } catch {
+    error.value = '状态保存失败，请稍后重试'
+    checkSubmitted.value = false
+  }
+}
+
+function focusFirstRecommended() {
+  const first = recommendedTasks.value[0]
+  if (!first) return
+  const row = document.querySelector(`[data-task-id="${first.publicId}"]`)
+  row?.scrollIntoView({ behavior: 'smooth', block: 'center' })
 }
 
 function applyRecovery(choice: string) {
@@ -296,35 +350,50 @@ onBeforeUnmount(() => clearInterval(focusTimer))
     </section>
 
     <p v-if="loading" class="empty">正在整理今天的安排…</p>
-    <div v-else-if="tasks.length" class="task-list">
-      <article v-for="task in tasks" :key="task.publicId" class="task-row">
-        <div>
-          <span class="status">{{ task.status }}<template v-if="task.roleName"> · {{ task.roleName }}</template></span>
-          <h2>{{ task.taskTitle }}</h2>
-          <time>{{ new Date(task.plannedStartAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) }}</time>
-        </div>
-        <div class="actions">
-          <button class="icon-button focus-button" title="专注执行" aria-label="专注执行" :disabled="!canActOn(task)" @click="startFocus(task)">
-            <TimerReset :size="18" />
-          </button>
-          <button v-if="task.status === 'PLANNED'" class="icon-button" title="开始" aria-label="开始" @click="act(task, 'STARTED')">
-            <Play />
-          </button>
-          <button class="icon-button" :title="dailyLimitReached ? '今日完成额度已用完' : '完成'" aria-label="完成" :disabled="!canComplete(task)" @click="act(task, 'COMPLETED')">
-            <Check />
-          </button>
-          <button class="icon-button" title="部分完成" aria-label="部分完成" :disabled="!canActOn(task)" @click="prepare(task, 'PARTIAL')">
-            <Gauge />
-          </button>
-          <button class="icon-button" title="延期" aria-label="延期" :disabled="!canActOn(task)" @click="prepare(task, 'DEFERRED')">
-            <Clock3 />
-          </button>
-          <button v-if="task.status === 'PLANNED'" class="icon-button" title="跳过" aria-label="跳过" @click="act(task, 'SKIPPED')">
-            <SkipForward />
-          </button>
-        </div>
-      </article>
-    </div>
+    <template v-else-if="tasks.length">
+      <div v-if="checkSubmitted && activeAdvice !== 'KEEP'" class="daily-guidance" :data-advice="activeAdvice" role="status" aria-live="polite">
+        <BatteryMedium :size="17" />
+        <span>{{ dailyGuidance }}</span>
+      </div>
+      <div class="task-list">
+        <article v-for="task in recommendedTasks" :key="task.publicId" class="task-row" :class="{ recommended: recommendedPublicIds.has(task.publicId) }" :data-task-id="task.publicId">
+          <div>
+            <span class="status">{{ task.status }}<template v-if="task.roleName"> · {{ task.roleName }}</template>
+              <template v-if="recommendedPublicIds.has(task.publicId)"><span class="recommended-badge">今天先做</span></template>
+            </span>
+            <h2>{{ task.taskTitle }}</h2>
+            <time>{{ new Date(task.plannedStartAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) }}<template v-if="task.estimatedMinutes"> · 约 {{ task.estimatedMinutes }} 分钟<template v-if="task.difficulty"> · 难度 {{ task.difficulty }}</template></template></time>
+          </div>
+          <div class="actions">
+            <button class="icon-button focus-button" title="专注执行" aria-label="专注执行" :disabled="!canActOn(task)" @click="startFocus(task)">
+              <TimerReset :size="18" />
+            </button>
+            <button v-if="task.status === 'PLANNED'" class="icon-button" title="开始" aria-label="开始" @click="act(task, 'STARTED')">
+              <Play />
+            </button>
+            <button class="icon-button" :title="dailyLimitReached ? '今日完成额度已用完' : '完成'" aria-label="完成" :disabled="!canComplete(task)" @click="act(task, 'COMPLETED')">
+              <Check />
+            </button>
+            <button class="icon-button" title="部分完成" aria-label="部分完成" :disabled="!canActOn(task)" @click="prepare(task, 'PARTIAL')">
+              <Gauge />
+            </button>
+            <button class="icon-button" title="延期" aria-label="延期" :disabled="!canActOn(task)" @click="prepare(task, 'DEFERRED')">
+              <Clock3 />
+            </button>
+            <button v-if="task.status === 'PLANNED'" class="icon-button" title="跳过" aria-label="跳过" @click="act(task, 'SKIPPED')">
+              <SkipForward />
+            </button>
+          </div>
+        </article>
+        <article v-for="task in tasks.filter(item => !['PLANNED', 'IN_PROGRESS'].includes(item.status))" :key="task.publicId" class="task-row">
+          <div>
+            <span class="status">{{ task.status }}<template v-if="task.roleName"> · {{ task.roleName }}</template></span>
+            <h2>{{ task.taskTitle }}</h2>
+            <time>{{ new Date(task.plannedStartAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) }}</time>
+          </div>
+        </article>
+      </div>
+    </template>
     <div v-else-if="!loading" class="empty">
       <h2>今天还没有任务</h2>
       <p>{{ activeGoals.length ? '目标已在上方显示。若要出现可执行任务，请确认周计划下的任务已生成到今天。' : '可以从目标页安排一项小行动。' }}</p>
@@ -403,6 +472,10 @@ onBeforeUnmount(() => clearInterval(focusTimer))
 .task-row:hover { background: var(--surface); border-color: color-mix(in srgb, var(--primary) 24%, var(--border)); box-shadow: var(--shadow-soft); }
 .task-row h2 { font-size: 16px; margin: 4px 0; }
 .task-row time { font-size: 13px; color: var(--muted); }
+.task-row.recommended { border-color: color-mix(in srgb, var(--primary) 44%, var(--border)); background: color-mix(in srgb, var(--primary-soft) 52%, var(--surface)); }
+.recommended-badge { margin-left: 8px; padding: 2px 8px; border-radius: 999px; background: var(--primary); color: white; font-size: 11px; font-weight: 800; }
+.daily-guidance { display: flex; align-items: center; gap: 9px; margin-bottom: 12px; padding: 12px 15px; border: 1px solid color-mix(in srgb, var(--primary) 32%, var(--border)); border-radius: var(--radius); background: color-mix(in srgb, var(--primary-soft) 55%, var(--surface)); color: var(--primary-strong); font-size: 13px; font-weight: 700; }
+.daily-guidance[data-advice='SHRINK'] { border-color: color-mix(in srgb, var(--amber) 40%, var(--border)); background: color-mix(in srgb, var(--amber) 10%, var(--surface)); color: var(--amber); }
 .task-row .actions { flex-wrap: nowrap; }
 .task-row .icon-button { border: 1px solid var(--border); }
 .focus-button { color: var(--primary); }

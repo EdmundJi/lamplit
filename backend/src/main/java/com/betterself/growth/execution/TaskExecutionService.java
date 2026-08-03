@@ -172,7 +172,7 @@ public class TaskExecutionService {
         return jdbc.query(
             """
                 select s.public_id, t.public_id task_public_id, t.title, s.planned_start_at, s.planned_end_at,
-                       s.local_date, s.timezone, s.status, s.deferred_from_id, t.role_code
+                       s.local_date, s.timezone, s.status, s.deferred_from_id, t.role_code, t.estimated_minutes, t.difficulty
                 from task_schedule s join user_task t on t.id = s.task_id
                 where s.user_id = ? and (? is null or s.local_date = ?)
                 order by s.planned_start_at
@@ -183,7 +183,8 @@ public class TaskExecutionService {
                 rs.getTimestamp("planned_end_at") == null ? null : rs.getTimestamp("planned_end_at").toInstant(),
                 rs.getDate("local_date").toLocalDate(), rs.getString("timezone"), rs.getString("status"),
                 rs.getObject("deferred_from_id") != null, rs.getString("role_code"),
-                CareerRole.valueOf(rs.getString("role_code")).displayName()
+                CareerRole.valueOf(rs.getString("role_code")).displayName(),
+                rs.getInt("estimated_minutes"), rs.getInt("difficulty")
             ),
             userId, localDate == null ? null : Date.valueOf(localDate), localDate == null ? null : Date.valueOf(localDate)
         );
@@ -452,7 +453,9 @@ public class TaskExecutionService {
         String status,
         boolean deferred,
         String roleCode,
-        String roleName
+        String roleName,
+        int estimatedMinutes,
+        int difficulty
     ) {
     }
 

@@ -60,3 +60,43 @@ describe('Today actions', () => {
     expect(wrapper.findAll('button[aria-label="完成"]').every(button => button.attributes('disabled') !== undefined)).toBe(true)
   })
 })
+
+describe('Daily status check', () => {
+  it('saves the status and reorders tasks for the shrink advice', async () => {
+    api.get.mockImplementation((path: string) => {
+      if (path.startsWith('/task-schedules')) {
+        return Promise.resolve([
+          { publicId: 'long-task', taskTitle: '长任务', plannedStartAt: new Date().toISOString(), status: 'PLANNED', estimatedMinutes: 45, difficulty: 3 },
+          { publicId: 'short-task', taskTitle: '短任务', plannedStartAt: new Date().toISOString(), status: 'PLANNED', estimatedMinutes: 10, difficulty: 1 },
+        ])
+      }
+      if (path === '/daily-status') return Promise.resolve(null)
+      return Promise.resolve([])
+    })
+    api.post.mockResolvedValue({ publicId: 'status-1', localDate: '2026-08-03', energy: 'LOW', availableMinutes: 15, advice: 'SHRINK', updatedAt: new Date().toISOString() })
+    const wrapper = mount(TodayView, { global: { stubs: { RouterLink: true } } })
+    await flushPromises()
+
+    await wrapper.findAll('.mood-control button')[0].trigger('click')
+    await wrapper.get('.check-result .secondary').trigger('click')
+    await flushPromises()
+
+    expect(api.post).toHaveBeenCalledWith('/daily-status', { energy: 'LOW', availableMinutes: 30 })
+    expect(wrapper.get('.daily-guidance').text()).toContain('每项控制在 15 分钟以内')
+    const titles = wrapper.findAll('.task-row h2').map(node => node.text())
+    expect(titles[0]).toBe('短任务')
+    expect(wrapper.findAll('.recommended-badge').length).toBe(2)
+  })
+
+  it('restores a previously saved status on load', async () => {
+    api.get.mockImplementation((path: string) => {
+      if (path.startsWith('/task-schedules')) return Promise.resolve([])
+      if (path === '/daily-status') return Promise.resolve({ publicId: 'status-1', localDate: '2026-08-03', energy: 'OPEN', availableMinutes: 60, advice: 'KEEP', updatedAt: new Date().toISOString() })
+      return Promise.resolve([])
+    })
+    const wrapper = mount(TodayView, { global: { stubs: { RouterLink: true } } })
+    await flushPromises()
+    expect(wrapper.get('.check-result strong').text()).toBe('保持原计划')
+    expect(wrapper.get('.check-result .secondary').text()).toBe('更新建议')
+  })
+})

@@ -55,6 +55,17 @@ public class FriendService {
         this.taskExecution = taskExecution;
     }
 
+    /**
+     * 校验两个用户是已接受的好友，返回对方内部用户 ID；否则抛 404。
+     */
+    public long requirePeerId(long userId, String peerPublicId) {
+        RelationRow row = relationWithPeer(userId, peerPublicId);
+        if (row == null || !"ACCEPTED".equals(row.status())) {
+            throw new ApiException(HttpStatus.NOT_FOUND, "FRIENDSHIP_NOT_FOUND", "只能和好友互相发消息");
+        }
+        return row.peerUserId();
+    }
+
     public FriendListView list(long userId) {
         List<RelationRow> rows = jdbc.query(
             """
@@ -184,6 +195,14 @@ public class FriendService {
             throw new ApiException(HttpStatus.NOT_FOUND, "FRIENDSHIP_NOT_FOUND", "该好友关系不存在");
         }
         jdbc.update("delete from friend_relationship where id = ?", row.id());
+    }
+
+    public FriendSummaryView summary(long userId, String peerPublicId) {
+        RelationRow row = relationWithPeer(userId, peerPublicId);
+        if (row == null || !"ACCEPTED".equals(row.status())) {
+            throw new ApiException(HttpStatus.NOT_FOUND, "FRIENDSHIP_NOT_FOUND", "只能和好友聊天");
+        }
+        return new FriendSummaryView(row.peerPublicId(), row.peerDisplayName(), levelOf(row.peerUserId()));
     }
 
     public FriendProfileView detail(long userId, String peerPublicId) {
@@ -375,6 +394,9 @@ public class FriendService {
     }
 
     public record FriendListView(List<FriendItem> friends, List<FriendItem> incoming, List<FriendItem> outgoing) {
+    }
+
+    public record FriendSummaryView(String publicId, String displayName, int overallLevel) {
     }
 
     public record RequestCommand(String email) {

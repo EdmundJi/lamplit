@@ -4,7 +4,7 @@ import { init, use, type ECharts } from 'echarts/core'
 import { RadarChart } from 'echarts/charts'
 import { LegendComponent, TooltipComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
-import { ArrowLeft, BadgeCheck, CalendarCheck2, PawPrint, UserRound } from 'lucide-vue-next'
+import { ArrowLeft, BadgeCheck, CalendarCheck2, MessageCircle, PawPrint, UserRound } from 'lucide-vue-next'
 import { api } from '../../shared/api/client'
 import { computeBadges, type Badge } from '../insights/badges'
 import RivePet from '../partners/RivePet.vue'
@@ -123,7 +123,10 @@ onBeforeUnmount(() => {
 <template>
   <section class="page friend-page">
     <header class="page-head friend-head">
-      <RouterLink class="back-link" to="/friends"><ArrowLeft :size="17" />返回好友</RouterLink>
+      <div class="friend-head-row">
+        <RouterLink class="back-link" to="/friends"><ArrowLeft :size="17" />返回好友</RouterLink>
+        <RouterLink v-if="profile" class="secondary button chat-head-entry" :to="`/friends/${profile.publicId}/chat`"><MessageCircle :size="17" />发消息</RouterLink>
+      </div>
       <div v-if="profile" class="friend-identity">
         <span class="friend-avatar" aria-hidden="true">{{ initial }}</span>
         <div>
@@ -217,6 +220,8 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .friend-head { display: flex; flex-direction: column; align-items: flex-start; gap: 18px; }
+.friend-head-row { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.chat-head-entry { display: inline-flex; align-items: center; gap: 7px; }
 .back-link { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); text-decoration: none; font-size: 13px; font-weight: 700; }
 .back-link:hover { color: var(--primary); }
 .friend-identity { display: flex; align-items: center; gap: 15px; }

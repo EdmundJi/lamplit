@@ -55,6 +55,15 @@ public class FriendController {
         return envelope(friends.detail(user.id(), peerPublicId), request);
     }
 
+    @GetMapping("/{peerPublicId}/summary")
+    ApiEnvelope<FriendService.FriendSummaryView> summary(
+        @AuthenticationPrincipal CurrentUser user,
+        @PathVariable String peerPublicId,
+        HttpServletRequest request
+    ) {
+        return envelope(friends.summary(user.id(), peerPublicId), request);
+    }
+
     @PostMapping("/{peerPublicId}/accept")
     ApiEnvelope<FriendService.FriendItem> accept(
         @AuthenticationPrincipal CurrentUser user,

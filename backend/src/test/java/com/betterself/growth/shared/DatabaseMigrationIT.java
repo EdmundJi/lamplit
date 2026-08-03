@@ -65,7 +65,7 @@ class DatabaseMigrationIT {
             Integer.class
         );
 
-        assertThat(version).isEqualTo("10");
+        assertThat(version).isEqualTo("13");
         assertThat(publishedTemplates).isEqualTo(200);
         assertThat(rolesWithFiftyTemplates).isEqualTo(4);
     }
