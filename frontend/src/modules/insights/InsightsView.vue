@@ -5,19 +5,54 @@ import {
   BadgeCheck,
   BatteryMedium,
   CalendarDays,
+  CheckCircle2,
   PenLine,
+  Save,
 } from 'lucide-vue-next'
 import { api } from '../../shared/api/client'
-import { computeBadges, type Badge } from './badges'
+import { growthIcon, type Achievement } from '../achievements/achievement.types'
 
+type InsightOverview = {
+  effectiveActions: number
+  fulfillmentRate: number
+  recoveryCount: number
+  totalExperience: number
+  statusCheckCount: number
+  statusAdvices: Record<string, number>
+}
 type RoleProgress = { roleCode: string; roleName: string; level: number; experience: number; maxExperience: number; totalExperience: number; nextLevelExperience: number | null; experienceToNextLevel: number; levelProgressPercent: number }
 type TrendRow = { date: string; effectiveActions: number; experience: number }
+type WeeklyPlan = { publicId: string; goalPublicId: string; weekStartDate: string; timezone: string; status: string }
+type WeeklyReview = {
+  publicId: string
+  planPublicId: string
+  facts: Record<string, unknown>
+  userReflection: string | null
+  proposedAdjustments: Record<string, unknown>
+  confirmedAdjustments: Record<string, unknown>
+  confirmedAt: string | null
+}
 
-const data = ref<any>(null)
+const data = ref<InsightOverview | null>(null)
 const trends = ref<TrendRow[]>([])
 const roles = ref<RoleProgress[]>([])
+const achievements = ref<Achievement[]>([])
+const weeklyPlans = ref<WeeklyPlan[]>([])
+const selectedPlanId = ref('')
+const review = ref<WeeklyReview | null>(null)
+const loading = ref(true)
 const error = ref('')
-const reviewAnswers = reactive(['', '', ''])
+const reviewLoading = ref(false)
+const reviewSaving = ref(false)
+const reviewConfirming = ref(false)
+const reviewError = ref('')
+const reviewFeedback = ref('')
+const reviewForm = reactive({
+  userReflection: '',
+  steadyAction: '',
+  shrinkAction: '',
+  nextAction: '',
+})
 
 function localDateKey(date: Date) {
   const year = date.getFullYear()
@@ -26,20 +61,11 @@ function localDateKey(date: Date) {
   return `${year}-${month}-${day}`
 }
 
-function longestActionStreak(rows: TrendRow[]) {
-  const activeDates = new Set(rows.filter(row => row.effectiveActions > 0).map(row => row.date))
-  if (!activeDates.size) return 0
-  const sorted = [...activeDates].sort()
-  let longest = 1
-  let current = 1
-  for (let index = 1; index < sorted.length; index += 1) {
-    const previous = new Date(`${sorted[index - 1]}T00:00:00`)
-    const date = new Date(`${sorted[index]}T00:00:00`)
-    const delta = Math.round((date.getTime() - previous.getTime()) / 86400000)
-    current = delta === 1 ? current + 1 : 1
-    longest = Math.max(longest, current)
-  }
-  return longest
+function currentMonday() {
+  const date = new Date()
+  const weekday = date.getDay() || 7
+  date.setDate(date.getDate() - weekday + 1)
+  return localDateKey(date)
 }
 
 const trendMap = computed(() => new Map(trends.value.map(row => [row.date, row])))
@@ -62,39 +88,132 @@ const calendarDays = computed(() => {
     }
   })
 })
-const longestStreak = computed(() => longestActionStreak(trends.value))
 const monthLabel = computed(() => new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'long' }).format(new Date()))
-const badges = computed<Badge[]>(() => computeBadges({
-  effectiveActions: data.value?.effectiveActions ?? 0,
-  fulfillmentRate: data.value?.fulfillmentRate ?? 0,
-  recoveryCount: data.value?.recoveryCount ?? 0,
-  totalExperience: data.value?.totalExperience ?? 0,
-  longestStreak: longestStreak.value,
-  roles: roles.value,
-}))
-const earnedBadgeCount = computed(() => badges.value.filter(badge => badge.earned).length)
+const earnedAchievementCount = computed(() => achievements.value.filter(item => item.earned).length)
+const reviewConfirmed = computed(() => Boolean(review.value?.confirmedAt))
 function advicePercent(advice: string) {
   const count = data.value?.statusCheckCount ?? 0
   return count ? Math.round((data.value?.statusAdvices?.[advice] ?? 0) * 100 / count) : 0
 }
-const reviewDraft = computed(() => {
-  const [steady, heavy, next] = reviewAnswers
-  return [
-    steady ? `本周最稳定的是：${steady}` : '本周最稳定的是：还需要填写。',
-    heavy ? `需要缩小的是：${heavy}` : '需要缩小的是：还需要填写。',
-    next ? `下周保留的动作：${next}` : '下周保留的动作：还需要填写。',
-  ].join('\n')
-})
+
+function stringValue(values: Record<string, unknown>, key: string) {
+  const value = values[key]
+  return typeof value === 'string' ? value : ''
+}
+
+function applyReview(value: WeeklyReview) {
+  review.value = value
+  reviewForm.userReflection = value.userReflection ?? ''
+  reviewForm.steadyAction = stringValue(value.proposedAdjustments, 'steadyAction')
+  reviewForm.shrinkAction = stringValue(value.proposedAdjustments, 'shrinkAction')
+  reviewForm.nextAction = stringValue(value.proposedAdjustments, 'nextAction')
+}
+
+function resetReview() {
+  review.value = null
+  reviewForm.userReflection = ''
+  reviewForm.steadyAction = ''
+  reviewForm.shrinkAction = ''
+  reviewForm.nextAction = ''
+}
+
+function reviewFact(key: string) {
+  const value = review.value?.facts[key]
+  return typeof value === 'number' ? value : Number(value ?? 0)
+}
+
+function fulfillmentPercent() {
+  return Math.round(reviewFact('fulfillmentRate') * 100)
+}
+
+function earnedAtLabel(value: string | null) {
+  if (!value) return ''
+  return new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'short', day: 'numeric' }).format(new Date(value))
+}
+
+function confirmedAtLabel(value: string | null | undefined) {
+  if (!value) return ''
+  return new Intl.DateTimeFormat('zh-CN', { month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(value))
+}
+
+async function loadReview(planId: string) {
+  resetReview()
+  reviewError.value = ''
+  reviewFeedback.value = ''
+  if (!planId) return
+  reviewLoading.value = true
+  try {
+    applyReview(await api.get<WeeklyReview>(`/reviews/weekly/${planId}`))
+  } catch {
+    reviewError.value = '这份周复盘暂时无法加载'
+  } finally {
+    reviewLoading.value = false
+  }
+}
+
+function reviewPayload() {
+  return {
+    userReflection: reviewForm.userReflection,
+    proposedAdjustments: {
+      steadyAction: reviewForm.steadyAction,
+      shrinkAction: reviewForm.shrinkAction,
+      nextAction: reviewForm.nextAction,
+    },
+  }
+}
+
+async function saveReview(showFeedback = true) {
+  if (!selectedPlanId.value || reviewConfirmed.value) return false
+  reviewSaving.value = true
+  reviewError.value = ''
+  reviewFeedback.value = ''
+  try {
+    applyReview(await api.patch<WeeklyReview>(`/reviews/weekly/${selectedPlanId.value}`, reviewPayload()))
+    if (showFeedback) reviewFeedback.value = '复盘草稿已保存'
+    return true
+  } catch {
+    reviewError.value = '复盘草稿暂时无法保存'
+    return false
+  } finally {
+    reviewSaving.value = false
+  }
+}
+
+async function confirmReview() {
+  if (!await saveReview(false)) return
+  reviewConfirming.value = true
+  reviewError.value = ''
+  try {
+    applyReview(await api.post<WeeklyReview>(`/reviews/weekly/${selectedPlanId.value}/confirm`))
+    reviewFeedback.value = '本周复盘已确认'
+  } catch {
+    reviewError.value = '复盘暂时无法确认，请重试'
+  } finally {
+    reviewConfirming.value = false
+  }
+}
 
 onMounted(async () => {
   try {
-    [data.value, trends.value, roles.value] = await Promise.all([
-      api.get<any>('/insights/overview'),
+    const weekStart = currentMonday()
+    const [overview, trendRows, roleRows, achievementRows, planRows] = await Promise.all([
+      api.get<InsightOverview>('/insights/overview'),
       api.get<TrendRow[]>('/insights/trends'),
       api.get<RoleProgress[]>('/progress/roles'),
+      api.get<Achievement[]>('/achievements'),
+      api.get<WeeklyPlan[]>(`/plans/weekly?weekStart=${weekStart}`),
     ])
+    data.value = overview
+    trends.value = trendRows
+    roles.value = roleRows
+    achievements.value = achievementRows
+    weeklyPlans.value = planRows
+    selectedPlanId.value = planRows[0]?.publicId ?? ''
+    await loadReview(selectedPlanId.value)
   } catch {
     error.value = '洞察暂时无法加载'
+  } finally {
+    loading.value = false
   }
 })
 </script>
@@ -108,7 +227,8 @@ onMounted(async () => {
       </div>
     </header>
 
-    <p v-if="error" class="error">{{ error }}</p>
+    <p v-if="error" class="error" role="alert">{{ error }}</p>
+    <div v-else-if="loading" class="loading-state" role="status">正在整理你的成长记录…</div>
     <template v-else-if="data">
       <div class="metrics">
         <div><strong>{{ data.effectiveActions }}</strong><span>本周有效行动</span></div>
@@ -125,21 +245,22 @@ onMounted(async () => {
           </div>
           <div class="badge-summary">
             <BadgeCheck :size="20" />
-            <span>{{ earnedBadgeCount }} / {{ badges.length }}</span>
+            <span>{{ earnedAchievementCount }} / {{ achievements.length }}</span>
           </div>
         </div>
         <div class="badge-grid">
-          <article v-for="badge in badges" :key="badge.title" class="badge-card" :class="[badge.tone, { earned: badge.earned }]">
+          <article v-for="achievement in achievements" :key="achievement.code" class="badge-card" :class="[achievement.tone, { earned: achievement.earned }]">
             <div class="badge-icon" aria-hidden="true">
-              <component :is="badge.icon" :size="22" />
+              <component :is="growthIcon(achievement.iconKey)" :size="22" />
             </div>
             <div class="badge-copy">
               <div class="badge-title-line">
-                <strong>{{ badge.title }}</strong>
-                <span>{{ badge.earned ? '已获得' : '未获得' }}</span>
+                <strong>{{ achievement.name }}</strong>
+                <span>{{ achievement.earned ? '已获得' : '未获得' }}</span>
               </div>
-              <p>{{ badge.body }}</p>
-              <small>触发条件：{{ badge.trigger }}</small>
+              <p>{{ achievement.body }}</p>
+              <small>触发条件：{{ achievement.triggerText }}</small>
+              <small v-if="achievement.earnedAt" class="earned-date">{{ earnedAtLabel(achievement.earnedAt) }} 获得</small>
             </div>
           </article>
         </div>
@@ -230,22 +351,53 @@ onMounted(async () => {
       <section class="band review-section" aria-labelledby="review-title">
         <div class="section-title">
           <div>
-            <p class="eyebrow">周复盘引导</p>
+            <p class="eyebrow">本周复盘</p>
             <h2 id="review-title">确认后再进入下一周</h2>
           </div>
           <PenLine :size="20" />
         </div>
-        <div class="review-grid">
-          <div class="review-questions">
-            <label class="field" for="steady"><span>这周最稳定的行动是什么？</span><textarea id="steady" v-model="reviewAnswers[0]"></textarea></label>
-            <label class="field" for="heavy"><span>哪个任务太大，需要缩小？</span><textarea id="heavy" v-model="reviewAnswers[1]"></textarea></label>
-            <label class="field" for="next"><span>下周要保留哪一个动作？</span><textarea id="next" v-model="reviewAnswers[2]"></textarea></label>
-          </div>
-          <div class="review-draft">
-            <strong>复盘草稿</strong>
-            <p>{{ reviewDraft }}</p>
-          </div>
+        <div v-if="weeklyPlans.length > 1" class="review-toolbar">
+          <label class="plan-picker" for="review-plan">
+            <span>选择计划</span>
+            <select id="review-plan" v-model="selectedPlanId" @change="loadReview(selectedPlanId)">
+              <option v-for="(plan, index) in weeklyPlans" :key="plan.publicId" :value="plan.publicId">计划 {{ index + 1 }} · {{ plan.weekStartDate }}</option>
+            </select>
+          </label>
         </div>
+        <p v-if="!weeklyPlans.length" class="empty review-empty">本周还没有周计划，创建计划后就可以在这里复盘。</p>
+        <div v-else-if="reviewLoading" class="review-loading" role="status">正在读取复盘草稿…</div>
+        <p v-else-if="reviewError && !review" class="error" role="alert">{{ reviewError }}</p>
+        <form v-else-if="review" class="review-form" @submit.prevent="saveReview()">
+          <div v-if="reviewConfirmed" class="confirmed-banner" role="status">
+            <CheckCircle2 :size="19" />
+            <span>已于 {{ confirmedAtLabel(review.confirmedAt) }} 确认</span>
+          </div>
+          <fieldset :disabled="reviewConfirmed || reviewSaving || reviewConfirming">
+            <div class="review-grid">
+              <div class="review-questions">
+                <label class="field" for="reflection"><span>这周想记住什么？</span><textarea id="reflection" v-model="reviewForm.userReflection"></textarea></label>
+                <label class="field" for="steady"><span>这周最稳定的行动是什么？</span><textarea id="steady" v-model="reviewForm.steadyAction"></textarea></label>
+                <label class="field" for="heavy"><span>哪个任务太大，需要缩小？</span><textarea id="heavy" v-model="reviewForm.shrinkAction"></textarea></label>
+                <label class="field" for="next"><span>下周要保留哪一个动作？</span><textarea id="next" v-model="reviewForm.nextAction"></textarea></label>
+              </div>
+              <aside class="review-facts" aria-label="本周计划数据">
+                <strong>计划数据</strong>
+                <dl>
+                  <div><dt>计划行动</dt><dd>{{ reviewFact('plannedActions') }}</dd></div>
+                  <div><dt>有效行动</dt><dd>{{ reviewFact('effectiveActions') }}</dd></div>
+                  <div><dt>兑现率</dt><dd>{{ fulfillmentPercent() }}%</dd></div>
+                </dl>
+                <p>{{ reviewConfirmed ? '这份复盘已经归档。' : '草稿可以反复保存，只有确认后才会归档。' }}</p>
+              </aside>
+            </div>
+          </fieldset>
+          <p v-if="reviewError" class="error compact-message" role="alert">{{ reviewError }}</p>
+          <p v-if="reviewFeedback" class="review-feedback" role="status" aria-live="polite">{{ reviewFeedback }}</p>
+          <div v-if="!reviewConfirmed" class="review-actions">
+            <button type="submit" class="secondary" :disabled="reviewSaving || reviewConfirming"><Save :size="17" />{{ reviewSaving ? '保存中…' : '保存草稿' }}</button>
+            <button type="button" class="primary" :disabled="reviewSaving || reviewConfirming" @click="confirmReview"><CheckCircle2 :size="17" />{{ reviewConfirming ? '确认中…' : '确认本周复盘' }}</button>
+          </div>
+        </form>
       </section>
 
       <section class="band">
@@ -296,6 +448,7 @@ onMounted(async () => {
 .badge-card.earned .badge-title-line span { border-color: color-mix(in srgb, var(--badge-color) 36%, var(--border)); color: var(--badge-color); background: color-mix(in srgb, var(--badge-color) 8%, var(--surface)); }
 .badge-card p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
 .badge-card small { color: var(--muted); font-size: 11px; line-height: 1.45; }
+.badge-card small.earned-date { color: var(--primary); font-weight: 700; }
 .calendar-shell { border: 1px solid var(--border); border-radius: calc(var(--radius) + 4px); background: color-mix(in srgb, var(--surface) 90%, transparent); padding: 16px; overflow-x: auto; box-shadow: var(--shadow-soft); }
 .calendar-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 12px; }
 .calendar-toolbar strong { font-size: 15px; }
@@ -320,17 +473,36 @@ onMounted(async () => {
 .role-progress { display: grid; gap: 8px; }
 .role-progress-copy { display: flex; justify-content: space-between; gap: 16px; color: var(--muted); font-size: 12px; }
 .role-progress-copy b { color: var(--primary); }
-.review-grid { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 22px; align-items: start; }
+.loading-state { min-height: 300px; display: grid; place-items: center; color: var(--muted); }
+.review-toolbar { display: flex; justify-content: flex-end; margin: -4px 0 18px; }
+.plan-picker { width: min(100%, 340px); display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 10px; }
+.plan-picker span { color: var(--muted); font-size: 13px; font-weight: 700; }
+.plan-picker select { min-width: 0; }
+.review-empty { min-height: 120px; display: grid; place-items: center; margin: 0; text-align: center; }
+.review-loading { min-height: 180px; display: grid; place-items: center; color: var(--muted); }
+.review-form { display: grid; gap: 14px; }
+.review-form fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
+.review-grid { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 22px; align-items: start; }
 .review-questions { display: grid; gap: 12px; }
 .field span { font-weight: 650; font-size: 14px; }
-.review-draft { min-height: 230px; padding: 16px; border: 1px solid var(--border); border-radius: var(--radius); background: color-mix(in srgb, var(--surface) 88%, transparent); box-shadow: var(--shadow-soft); }
-.review-draft p { white-space: pre-wrap; color: var(--muted); line-height: 1.75; }
+.review-facts { display: grid; gap: 16px; padding: 4px 0 16px; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.review-facts > strong { padding-top: 12px; }
+.review-facts dl { display: grid; gap: 0; margin: 0; }
+.review-facts dl div { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--surface-muted); }
+.review-facts dt { color: var(--muted); font-size: 13px; }
+.review-facts dd { margin: 0; color: var(--primary); font-size: 20px; font-weight: 800; }
+.review-facts p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.65; }
+.confirmed-banner { min-height: 42px; display: flex; align-items: center; gap: 9px; padding: 0 12px; border-left: 3px solid var(--primary); background: var(--primary-soft); color: var(--primary); font-size: 13px; font-weight: 700; }
+.review-actions { display: flex; justify-content: flex-end; gap: 10px; }
+.review-actions button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-width: 132px; }
+.review-feedback { margin: 0; color: var(--primary); font-size: 13px; font-weight: 700; text-align: right; }
+.compact-message { margin: 0; }
 table { width: 100%; border-collapse: collapse; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; background: var(--surface); }
 th, td { text-align: left; padding: 11px; border-bottom: 1px solid var(--border); }
 tbody tr:hover { background: var(--surface-muted); }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); }
 @media (prefers-reduced-motion: no-preference) {
-  .metrics div, .badge-grid article, .calendar-day, .role-row, tbody tr, .review-draft { animation: insight-enter var(--motion-medium) ease-out both; }
+  .metrics div, .badge-grid article, .calendar-day, .role-row, tbody tr, .review-facts { animation: insight-enter var(--motion-medium) ease-out both; }
   .metrics div:nth-child(2), .badge-grid article:nth-child(2), .role-row:nth-child(2), tbody tr:nth-child(2) { animation-delay: 45ms; }
   .metrics div:nth-child(3), .badge-grid article:nth-child(3), .role-row:nth-child(3), tbody tr:nth-child(3) { animation-delay: 90ms; }
   .metrics div:nth-child(4), .badge-grid article:nth-child(4), .role-row:nth-child(4), tbody tr:nth-child(4) { animation-delay: 135ms; }
@@ -346,6 +518,10 @@ tbody tr:hover { background: var(--surface-muted); }
   .metrics { grid-template-columns: repeat(2, 1fr); }
   .role-row { grid-template-columns: 1fr; gap: 9px; padding: 16px 2px; }
   .role-progress-copy { gap: 8px; }
+  .review-toolbar { justify-content: stretch; }
+  .plan-picker { width: 100%; grid-template-columns: 1fr; gap: 6px; }
+  .review-actions { align-items: stretch; flex-direction: column; }
+  .review-actions button { width: 100%; }
 }
 @media (max-width: 460px) {
   .badge-grid { grid-template-columns: 1fr; }

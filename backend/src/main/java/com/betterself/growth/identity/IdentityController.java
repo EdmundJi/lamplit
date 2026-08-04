@@ -87,6 +87,15 @@ public class IdentityController {
         return envelope(identityService.updateAiMemory(user.id(), body.enabled()), request);
     }
 
+    @PatchMapping("/privacy")
+    ApiEnvelope<IdentityService.PrivacyView> updatePrivacy(
+        @AuthenticationPrincipal CurrentUser user,
+        @Valid @RequestBody IdentityService.PrivacyCommand body,
+        HttpServletRequest request
+    ) {
+        return envelope(identityService.updatePrivacy(user.id(), body), request);
+    }
+
     private <T> ApiEnvelope<T> envelope(T data, HttpServletRequest request) {
         return ApiEnvelope.of(data, String.valueOf(request.getAttribute("requestId")), clock);
     }

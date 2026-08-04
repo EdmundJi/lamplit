@@ -174,7 +174,10 @@ public class TaskExecutionService {
                 select s.public_id, t.public_id task_public_id, t.title, s.planned_start_at, s.planned_end_at,
                        s.local_date, s.timezone, s.status, s.deferred_from_id, t.role_code, t.estimated_minutes, t.difficulty
                 from task_schedule s join user_task t on t.id = s.task_id
+                join weekly_plan p on p.id = t.weekly_plan_id
+                join growth_goal g on g.id = p.goal_id
                 where s.user_id = ? and (? is null or s.local_date = ?)
+                  and ((t.active = 1 and g.status = 'ACTIVE') or s.status not in ('PLANNED', 'IN_PROGRESS'))
                 order by s.planned_start_at
                 """,
             (rs, row) -> new ScheduleView(

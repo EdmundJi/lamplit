@@ -19,6 +19,7 @@ import java.util.Base64;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -146,6 +147,44 @@ class FriendFlowIT {
                 .content("{\"email\":\"missing@example.test\"}"))
             .andExpect(status().isNotFound())
             .andExpect(jsonPath("$.data.code").value("FRIEND_USER_NOT_FOUND"));
+    }
+
+    @Test
+    void soloGrowthHidesAUserFromNewFriendRequests() throws Exception {
+        Session alice = register("alice-solo@example.test", "Alice");
+        Session bob = register("bob-solo@example.test", "Bob");
+
+        mvc.perform(patch("/api/v1/me/privacy")
+                .cookie(bob.access(), bob.csrf())
+                .header("X-CSRF-Token", bob.csrf().getValue())
+                .contentType("application/json")
+                .content("{\"soloGrowth\":true}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.soloGrowth").value(true));
+
+        mvc.perform(post("/api/v1/friends/requests")
+                .cookie(alice.access(), alice.csrf())
+                .header("X-CSRF-Token", alice.csrf().getValue())
+                .contentType("application/json")
+                .content("{\"email\":\"bob-solo@example.test\"}"))
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.data.code").value("FRIEND_USER_NOT_FOUND"));
+
+        assertThat(jdbc.queryForObject("select count(*) from friend_relationship", Integer.class)).isZero();
+
+        mvc.perform(patch("/api/v1/me/privacy")
+                .cookie(bob.access(), bob.csrf())
+                .header("X-CSRF-Token", bob.csrf().getValue())
+                .contentType("application/json")
+                .content("{\"soloGrowth\":false}"))
+            .andExpect(status().isOk());
+
+        mvc.perform(post("/api/v1/friends/requests")
+                .cookie(alice.access(), alice.csrf())
+                .header("X-CSRF-Token", alice.csrf().getValue())
+                .contentType("application/json")
+                .content("{\"email\":\"bob-solo@example.test\"}"))
+            .andExpect(status().isCreated());
     }
 
     @Test

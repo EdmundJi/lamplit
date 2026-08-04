@@ -315,7 +315,7 @@ onBeforeUnmount(() => clearInterval(focusTimer))
           <p>{{ goal.description || '还没有填写完成标准' }}</p>
         </article>
       </div>
-      <p v-if="!tasks.length" class="goal-hint">目标已经保存；今日没有任务通常是因为还没生成本周日程，或任务重复规则没有覆盖今天。</p>
+      <p v-if="!tasks.length" class="goal-hint">目标已经保存；当前任务周期没有覆盖今天。</p>
     </section>
 
     <section v-if="strainedTasks.length || recoveryChoice" class="recovery band" aria-labelledby="recovery-title">
@@ -396,7 +396,7 @@ onBeforeUnmount(() => clearInterval(focusTimer))
     </template>
     <div v-else-if="!loading" class="empty">
       <h2>今天还没有任务</h2>
-      <p>{{ activeGoals.length ? '目标已在上方显示。若要出现可执行任务，请确认周计划下的任务已生成到今天。' : '可以从目标页安排一项小行动。' }}</p>
+      <p>{{ activeGoals.length ? '目标已在上方显示，可以为它添加一项覆盖今天的周期任务。' : '可以从目标页安排一项小行动。' }}</p>
       <RouterLink class="button primary" to="/goals">前往目标</RouterLink>
     </div>
 

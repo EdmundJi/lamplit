@@ -10,19 +10,15 @@ vi.mock('../../shared/api/client', () => ({ api }))
 describe('authentication', () => {
   beforeEach(() => { api.get.mockReset(); api.post.mockReset() })
 
-  it('requires an adult birth date and three independent consents', async () => {
+  it('allows an underage birth date and requires three independent consents', async () => {
     const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/auth', component: AuthView }, { path: '/onboarding', component: { template: '<div />' } }] })
     await router.push('/auth'); await router.isReady()
     const wrapper = mount(AuthView, { global: { plugins: [createPinia(), router] } })
     await wrapper.get('[role=tablist] button:nth-child(2)').trigger('click')
-    await wrapper.get('#email').setValue('adult@example.test')
+    await wrapper.get('#email').setValue('learner@example.test')
     await wrapper.get('#password').setValue('Correct-Horse-Battery-2026!')
     await wrapper.get('#name').setValue('学习者')
-    await wrapper.get('#birth').setValue(new Date().toISOString().slice(0, 10))
-    await wrapper.get('form').trigger('submit')
-    expect(wrapper.get('[role=alert]').text()).toContain('年满 18 岁')
-
-    await wrapper.get('#birth').setValue('1990-01-01')
+    await wrapper.get('#birth').setValue('2015-01-01')
     await wrapper.get('form').trigger('submit')
     expect(wrapper.get('[role=alert]').text()).toContain('三项同意')
     const consents = wrapper.findAll('fieldset input[type=checkbox]')
@@ -30,7 +26,10 @@ describe('authentication', () => {
     for (const consent of consents) await consent.setValue(true)
     api.post.mockResolvedValue({}); api.get.mockResolvedValue({ publicId: 'u', role: 'USER' })
     await wrapper.get('form').trigger('submit'); await flushPromises()
-    expect(api.post).toHaveBeenCalledWith('/auth/register', expect.objectContaining({ consents: { terms: '2026-07', privacy: '2026-07', ai: '2026-07' } }))
+    expect(api.post).toHaveBeenCalledWith('/auth/register', expect.objectContaining({
+      birthDate: '2015-01-01',
+      consents: { terms: '2026-07', privacy: '2026-07', ai: '2026-07' },
+    }))
   })
 
   it('requires MFA before an administrator enters the console', async () => {

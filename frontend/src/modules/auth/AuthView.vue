@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { CheckCircle2, ShieldCheck, Sparkles, Sprout } from 'lucide-vue-next'
 import { useAuthStore } from './auth.store'
@@ -23,14 +23,6 @@ const auth = useAuthStore()
 const router = useRouter()
 const journeyDots = ['目标', '今日', '专注', '记录', '洞察']
 
-const adult = computed(() => {
-  if (!form.birthDate) return false
-  const born = new Date(`${form.birthDate}T00:00:00`)
-  const threshold = new Date()
-  threshold.setFullYear(threshold.getFullYear() - 18)
-  return born <= threshold
-})
-
 async function submit() {
   error.value = ''
   busy.value = true
@@ -50,7 +42,6 @@ async function submit() {
       await api.post('/auth/password/forgot', { email: form.email })
       error.value = '如账户存在，重置方式已发送。'
     } else {
-      if (!adult.value) throw new Error('仅面向年满 18 岁的用户')
       if (!form.terms || !form.privacy || !form.ai) throw new Error('请分别确认三项同意')
       await api.post('/auth/register', {
         email: form.email,
@@ -149,7 +140,6 @@ function backToLogin() {
             <div class="field">
               <label for="birth">出生日期</label>
               <input id="birth" v-model="form.birthDate" type="date" required>
-              <small v-if="form.birthDate && !adult" class="inline-error">需年满 18 岁</small>
             </div>
             <fieldset>
               <legend>同意与隐私</legend>
@@ -210,7 +200,6 @@ fieldset label { font-size: 14px; }
 .submit-button { width: 100%; margin-top: 2px; }
 .link { justify-self: center; background: none; color: var(--primary-strong); }
 .success-note { display: inline-flex; align-items: center; gap: 7px; margin: 0; color: var(--accent-strong); background: color-mix(in srgb, var(--accent) 10%, var(--surface)); border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border)); border-radius: var(--radius); padding: 11px 12px; }
-.inline-error { color: var(--danger); font-size: 12px; }
 @media (prefers-reduced-motion: no-preference) {
   .seal { animation: seal-enter var(--motion-slow) ease-out both; }
   .journey-track::after { animation: journey-fill 3.8s ease-in-out infinite; }

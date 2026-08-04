@@ -57,7 +57,8 @@ class WeeklyReviewIT {
         assertThat(overview.personalBestDailyActions()).isEqualTo(1);
 
         WeeklyReviewService.ReviewView initial = reviews.review(owner.userId(), owner.planPublicId());
-        assertThat(initial.facts()).containsEntry("effectiveActions", 2);
+        assertThat(initial.facts()).containsEntry("plannedActions", 2);
+        assertThat(initial.facts()).containsEntry("effectiveActions", 1);
         assertThat(initial.confirmedAdjustments()).isEmpty();
 
         WeeklyReviewService.ReviewView proposed = reviews.update(

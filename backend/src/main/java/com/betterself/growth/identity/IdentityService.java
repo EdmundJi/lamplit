@@ -1,10 +1,12 @@
 package com.betterself.growth.identity;
 
+import com.betterself.growth.achievement.TitleService;
 import com.betterself.growth.auth.AuthService;
 import com.betterself.growth.insight.InsightService;
 import com.betterself.growth.partner.PartnerService;
 import com.betterself.growth.shared.api.ApiException;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -26,6 +28,7 @@ public class IdentityService {
     private final AuthService authService;
     private final InsightService insights;
     private final PartnerService partners;
+    private final TitleService titles;
     private final Clock clock;
 
     public IdentityService(
@@ -33,12 +36,14 @@ public class IdentityService {
         AuthService authService,
         InsightService insights,
         PartnerService partners,
+        TitleService titles,
         Clock clock
     ) {
         this.jdbc = jdbc;
         this.authService = authService;
         this.insights = insights;
         this.partners = partners;
+        this.titles = titles;
         this.clock = clock;
     }
 
@@ -50,8 +55,11 @@ public class IdentityService {
     public ProfileView profile(long userId) {
         UserProfileRow user = jdbc.queryForObject(
             """
-                select public_id, email, display_name, birth_date, timezone, created_at
-                from sys_user where id = ?
+                select u.public_id, u.email, u.display_name, u.birth_date, u.timezone, u.created_at,
+                       up.solo_growth
+                from sys_user u
+                join user_preference up on up.user_id = u.id
+                where u.id = ?
                 """,
             (rs, row) -> new UserProfileRow(
                 rs.getString("public_id"),
@@ -59,7 +67,8 @@ public class IdentityService {
                 rs.getString("display_name"),
                 rs.getDate("birth_date").toLocalDate(),
                 rs.getString("timezone"),
-                rs.getTimestamp("created_at").toInstant()
+                rs.getTimestamp("created_at").toInstant(),
+                rs.getBoolean("solo_growth")
             ),
             userId
         );
@@ -79,8 +88,20 @@ public class IdentityService {
         return new ProfileView(
             user.publicId(), user.email(), user.displayName(), user.birthDate(), age, user.timezone(), user.createdAt(),
             attributes.overallLevel(), attributes.totalExperience(), effectiveActions == null ? 0 : effectiveActions,
-            partner.wallet(), partner.selectedPet(), partner.pets().size()
+            partner.wallet(), partner.selectedPet(), partner.pets().size(),
+            user.soloGrowth(),
+            titles.equipped(userId)
         );
+    }
+
+    @Transactional
+    public PrivacyView updatePrivacy(long userId, PrivacyCommand command) {
+        jdbc.update(
+            "update user_preference set solo_growth = ?, updated_at = UTC_TIMESTAMP(3) where user_id = ?",
+            command.soloGrowth(),
+            userId
+        );
+        return new PrivacyView(command.soloGrowth());
     }
 
     @Transactional
@@ -206,6 +227,12 @@ public class IdentityService {
     public record ConsentCommand(@NotBlank String type, @NotBlank String version, boolean granted) {
     }
 
+    public record PrivacyCommand(@NotNull Boolean soloGrowth) {
+    }
+
+    public record PrivacyView(boolean soloGrowth) {
+    }
+
     public record ConsentView(String type, String version, boolean granted, Instant recordedAt, Instant withdrawnAt) {
     }
 
@@ -232,7 +259,9 @@ public class IdentityService {
         int effectiveActions,
         PartnerService.WalletView wallet,
         PartnerService.PetView selectedPet,
-        int petCount
+        int petCount,
+        boolean soloGrowth,
+        TitleService.TitleView equippedTitle
     ) {
     }
 
@@ -242,7 +271,8 @@ public class IdentityService {
         String displayName,
         LocalDate birthDate,
         String timezone,
-        Instant createdAt
+        Instant createdAt,
+        boolean soloGrowth
     ) {
     }
 }

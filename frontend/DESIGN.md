@@ -2,7 +2,7 @@
 
 ## Stance
 
-Modern personal-growth workspace for adults building repeatable routines. The interface should feel clear, fresh, and lightly responsive, while staying practical and low-pressure. Experience points describe personal history only; no ranking, diagnosis, or personality claims.
+Modern personal-growth workspace for people building repeatable routines. The interface should feel clear, fresh, and lightly responsive, while staying practical and low-pressure. Experience points describe personal history only; no ranking, diagnosis, or personality claims.
 
 ## Layout
 
@@ -33,6 +33,7 @@ Modern personal-growth workspace for adults building repeatable routines. The in
 - Focus mode is task-scoped and minimal: timer, current task, complete, partial complete, and exit. It uses the same task event semantics as the normal task row.
 - Recovery plan language must be non-punitive. It can suggest keeping one task, shrinking the next action, or restarting tomorrow, but must not imply loss of worth or streak failure.
 - Goal templates are editable starters, not one-click commitments. Selecting a template fills the goal form and explains starter tasks; saving still requires user confirmation.
+- Goals own periodic tasks directly in the primary UI. Weekly plans remain an internal compatibility model; saving a task automatically expands its recurrence across the selected date range.
 - Insights include calendar, personal badges, role progress, trends, and a weekly review guide. Badges are private milestones only, with no ranking or social comparison. Keep the badge system around 20 achievements, each with a distinct icon, an explicit trigger condition, and clear earned/locked states; locked badges are not presented as awarded.
 - Attributes are an action-history visualization, not an assessment. The five system dimensions appear as 智力、体力、执行力、社交力和心境力; raw experience comes from completed task events and the radar uses a bounded display index for comparison across the same user.
 - AI suggestion explanations must show time, difficulty, boundary, and confirmation criteria. AI remains a drafting aid; users explicitly confirm before turning suggestions into tasks.

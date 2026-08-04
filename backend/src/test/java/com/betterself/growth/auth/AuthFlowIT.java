@@ -61,11 +61,16 @@ class AuthFlowIT {
             .andReturn();
 
         String body = registration.getResponse().getContentAsString();
+        Long userId = jdbc.queryForObject(
+            "select id from sys_user where email_normalized = ?",
+            Long.class,
+            "adult@example.test"
+        );
         assertThat(body).doesNotContain("accessToken", "refreshToken", "csrfToken", "\"id\"");
-        assertThat(jdbc.queryForObject("select count(*) from consent_record", Integer.class)).isEqualTo(3);
-        assertThat(jdbc.queryForObject("select count(*) from user_preference", Integer.class)).isEqualTo(1);
-        assertThat(jdbc.queryForObject("select count(*) from user_dimension", Integer.class)).isEqualTo(5);
-        assertThat(jdbc.queryForObject("select count(*) from user_role_progress", Integer.class)).isEqualTo(4);
+        assertThat(jdbc.queryForObject("select count(*) from consent_record where user_id = ?", Integer.class, userId)).isEqualTo(3);
+        assertThat(jdbc.queryForObject("select count(*) from user_preference where user_id = ?", Integer.class, userId)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("select count(*) from user_dimension where user_id = ?", Integer.class, userId)).isEqualTo(5);
+        assertThat(jdbc.queryForObject("select count(*) from user_role_progress where user_id = ?", Integer.class, userId)).isEqualTo(4);
 
         Cookie access = registration.getResponse().getCookie("access_token");
         Cookie csrf = registration.getResponse().getCookie("csrf_token");
@@ -91,8 +96,9 @@ class AuthFlowIT {
                 .content("{\"type\":\"AI\",\"version\":\"2026-07\",\"granted\":false}"))
             .andExpect(status().isOk());
         assertThat(jdbc.queryForObject(
-            "select granted from consent_record where user_id = 1 and consent_type = 'AI'",
-            Boolean.class
+            "select granted from consent_record where user_id = ? and consent_type = 'AI'",
+            Boolean.class,
+            userId
         )).isFalse();
 
         mvc.perform(put("/api/v1/auth/password")
@@ -101,6 +107,20 @@ class AuthFlowIT {
                 .contentType("application/json")
                 .content("{\"currentPassword\":\"Correct-Horse-Battery-2026!\",\"newPassword\":\"Changed-Horse-Battery-2026!\"}"))
             .andExpect(status().isOk());
+    }
+
+    @Test
+    void allowsUsersUnderEighteenToRegister() throws Exception {
+        mvc.perform(post("/api/v1/auth/register")
+                .contentType("application/json")
+                .content(registrationJson("young@example.test", "2015-01-01")))
+            .andExpect(status().isCreated());
+
+        assertThat(jdbc.queryForObject(
+            "select birth_date from sys_user where email_normalized = ?",
+            String.class,
+            "young@example.test"
+        )).isEqualTo("2015-01-01");
     }
 
     @Test
@@ -142,16 +162,35 @@ class AuthFlowIT {
             .andExpect(jsonPath("$.data.effectiveActions").value(0))
             .andExpect(jsonPath("$.data.wallet.coinBalance").value(0))
             .andExpect(jsonPath("$.data.petCount").value(1))
+            .andExpect(jsonPath("$.data.soloGrowth").value(false))
             .andExpect(jsonPath("$.data.selectedPet.speciesCode").value("CAT"));
+
+        Cookie access = registration.getResponse().getCookie("access_token");
+        Cookie csrf = registration.getResponse().getCookie("csrf_token");
+        mvc.perform(patch("/api/v1/me/privacy")
+                .cookie(access, csrf)
+                .header("X-CSRF-Token", csrf.getValue())
+                .contentType("application/json")
+                .content("{\"soloGrowth\":true}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.soloGrowth").value(true));
+
+        mvc.perform(get("/api/v1/me/profile").cookie(access))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.soloGrowth").value(true));
     }
 
     static String registrationJson(String email) {
+        return registrationJson(email, "1990-01-01");
+    }
+
+    static String registrationJson(String email, String birthDate) {
         return """
             {
               "email": "%s",
               "password": "Correct-Horse-Battery-2026!",
               "displayName": "Test User",
-              "birthDate": "1990-01-01",
+              "birthDate": "%s",
               "timezone": "Asia/Shanghai",
               "consents": {
                 "terms": "2026-07",
@@ -159,6 +198,6 @@ class AuthFlowIT {
                 "ai": "2026-07"
               }
             }
-            """.formatted(email);
+            """.formatted(email, birthDate);
     }
 }

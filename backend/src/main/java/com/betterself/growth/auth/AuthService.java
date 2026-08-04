@@ -72,9 +72,6 @@ public class AuthService {
     @Transactional
     public UserView register(RegisterCommand command) {
         ZoneId timezone = parseTimezone(command.timezone());
-        if (!AgePolicy.isAdult(command.birthDate(), timezone, clock)) {
-            throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY, "ADULT_ONLY", "Users must be at least 18 years old");
-        }
         requireConsent(command.consents());
         if (command.password() == null || command.password().length() < 12) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "WEAK_PASSWORD", "Password must contain at least 12 characters");

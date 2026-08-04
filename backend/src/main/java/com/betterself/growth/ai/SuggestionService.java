@@ -204,7 +204,7 @@ public class SuggestionService {
                 continue;
             }
             PlanningService.TaskView task = planning.createTask(userId, new PlanningService.CreateTaskCommand(
-                command.weeklyPlanPublicId(), item.title(), item.description(), item.estimatedMinutes(), item.difficulty(),
+                command.weeklyPlanPublicId(), null, item.title(), item.description(), item.estimatedMinutes(), item.difficulty(),
                 null, item.dimensionWeights(), item.proposedLocalTime(), command.activeFrom(), command.activeUntil(),
                 null, null
             ));

@@ -37,9 +37,10 @@ public class TaskController {
     ApiEnvelope<List<PlanningService.TaskView>> list(
         @AuthenticationPrincipal CurrentUser user,
         @RequestParam(required = false) String weeklyPlanId,
+        @RequestParam(required = false) String goalId,
         HttpServletRequest request
     ) {
-        return envelope(queries.tasks(user.id(), weeklyPlanId), request);
+        return envelope(queries.tasks(user.id(), weeklyPlanId, goalId), request);
     }
 
     @PostMapping

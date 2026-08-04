@@ -35,6 +35,7 @@ public interface PlanningService {
 
     record CreateTaskCommand(
         String weeklyPlanPublicId,
+        String goalPublicId,
         String title,
         String notes,
         int estimatedMinutes,
@@ -65,6 +66,7 @@ public interface PlanningService {
     record TaskView(
         String publicId,
         String weeklyPlanPublicId,
+        String goalPublicId,
         String title,
         String notes,
         int estimatedMinutes,

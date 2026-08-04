@@ -19,6 +19,7 @@ import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
+import java.time.temporal.TemporalAdjusters;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -94,7 +95,6 @@ public class DatabasePlanningService implements PlanningService {
         if (command.difficulty() < 1 || command.difficulty() > 3) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_DIFFICULTY", "Difficulty must be between 1 and 3");
         }
-        PlanRow plan = planRow(userId, command.weeklyPlanPublicId());
         Map<String, Integer> weights = validateWeights(userId, command.dimensionWeights());
         CareerRole role = command.roleCode() == null
             ? CareerRole.infer(weights)
@@ -103,8 +103,30 @@ public class DatabasePlanningService implements PlanningService {
         if (command.rrule() != null && !command.rrule().isBlank()) {
             RecurrenceRule.parse(command.rrule());
         }
-        LocalDate activeFrom = command.activeFrom() == null ? plan.weekStartDate() : command.activeFrom();
-        LocalDate activeUntil = command.activeUntil() == null ? plan.weekStartDate().plusDays(6) : command.activeUntil();
+        boolean goalLinked = command.goalPublicId() != null && !command.goalPublicId().isBlank();
+        PlanRow plan;
+        LocalDate activeFrom;
+        LocalDate activeUntil;
+        if (goalLinked) {
+            GoalRow goal = goalRow(userId, command.goalPublicId());
+            activeFrom = command.activeFrom() == null ? goal.startDate() : command.activeFrom();
+            activeUntil = command.activeUntil() == null ? goal.endDate() : command.activeUntil();
+            if (activeFrom.isBefore(goal.startDate()) || activeUntil.isAfter(goal.endDate())) {
+                throw new ApiException(
+                    HttpStatus.UNPROCESSABLE_ENTITY,
+                    "TASK_OUTSIDE_GOAL",
+                    "Task active dates must be within the goal period"
+                );
+            }
+            plan = ensureCompatibilityPlans(userId, goal.id(), activeFrom, activeUntil);
+        } else {
+            if (command.weeklyPlanPublicId() == null || command.weeklyPlanPublicId().isBlank()) {
+                throw new ApiException(HttpStatus.BAD_REQUEST, "TASK_PARENT_REQUIRED", "A goal or weekly plan is required");
+            }
+            plan = planRow(userId, command.weeklyPlanPublicId());
+            activeFrom = command.activeFrom() == null ? plan.weekStartDate() : command.activeFrom();
+            activeUntil = command.activeUntil() == null ? plan.weekStartDate().plusDays(6) : command.activeUntil();
+        }
         if (activeUntil.isBefore(activeFrom)) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_TASK_DATES", "Task active dates are invalid");
         }
@@ -123,6 +145,24 @@ public class DatabasePlanningService implements PlanningService {
             command.difficulty(), blankToNull(command.rrule()), json(weights), Time.valueOf(localTime),
             Date.valueOf(activeFrom), Date.valueOf(activeUntil)
         );
+        if (goalLinked) {
+            long taskId = jdbc.queryForObject(
+                "select id from user_task where user_id = ? and public_id = ?",
+                Long.class,
+                userId,
+                publicId
+            );
+            materializeTask(
+                userId,
+                taskId,
+                blankToNull(command.rrule()),
+                localTime,
+                activeFrom,
+                activeUntil,
+                command.estimatedMinutes(),
+                parseZone(plan.timezone())
+            );
+        }
         return task(userId, publicId);
     }
 
@@ -243,35 +283,40 @@ public class DatabasePlanningService implements PlanningService {
         );
     }
 
-    public List<TaskView> tasks(long userId, String planPublicId) {
+    public List<TaskView> tasks(long userId, String planPublicId, String goalPublicId) {
         String sql = """
-            select t.public_id, p.public_id plan_public_id, tt.public_id source_template_public_id,
+            select t.public_id, p.public_id plan_public_id, g.public_id goal_public_id,
+                   tt.public_id source_template_public_id,
                    t.role_code, t.title, t.notes, t.estimated_minutes,
                    t.difficulty, t.rrule, t.dimension_weights, t.planned_local_time,
                    t.active_from, t.active_until, t.active
             from user_task t join weekly_plan p on p.id = t.weekly_plan_id
+            join growth_goal g on g.id = p.goal_id
             left join task_template tt on tt.id = t.source_template_id
-            where t.user_id = ? and (? is null or p.public_id = ?)
-            order by t.created_at
+            where t.user_id = ? and (? is null or p.public_id = ?) and (? is null or g.public_id = ?)
+            order by t.active desc, t.active_from, t.created_at
             """;
         return jdbc.query(sql, (rs, row) -> new TaskView(
-            rs.getString("public_id"), rs.getString("plan_public_id"), rs.getString("title"), rs.getString("notes"),
+            rs.getString("public_id"), rs.getString("plan_public_id"), rs.getString("goal_public_id"),
+            rs.getString("title"), rs.getString("notes"),
             rs.getInt("estimated_minutes"), rs.getInt("difficulty"), rs.getString("rrule"),
             readWeights(rs.getString("dimension_weights")), rs.getTime("planned_local_time").toLocalTime(),
             rs.getDate("active_from") == null ? null : rs.getDate("active_from").toLocalDate(),
             rs.getDate("active_until") == null ? null : rs.getDate("active_until").toLocalDate(), rs.getBoolean("active"),
             rs.getString("source_template_public_id"), rs.getString("role_code")
-        ), userId, planPublicId, planPublicId);
+        ), userId, planPublicId, planPublicId, goalPublicId, goalPublicId);
     }
 
     public TaskView task(long userId, String publicId) {
         TaskView view = jdbc.query(
             """
-                select t.public_id, p.public_id plan_public_id, tt.public_id source_template_public_id,
+                select t.public_id, p.public_id plan_public_id, g.public_id goal_public_id,
+                       tt.public_id source_template_public_id,
                        t.role_code, t.title, t.notes, t.estimated_minutes,
                        t.difficulty, t.rrule, t.dimension_weights, t.planned_local_time,
                        t.active_from, t.active_until, t.active
                 from user_task t join weekly_plan p on p.id = t.weekly_plan_id
+                join growth_goal g on g.id = p.goal_id
                 left join task_template tt on tt.id = t.source_template_id
                 where t.user_id = ? and t.public_id = ?
                 """,
@@ -320,6 +365,94 @@ public class DatabasePlanningService implements PlanningService {
             throw notFound("WEEKLY_PLAN_NOT_FOUND");
         }
         return row;
+    }
+
+    private GoalRow goalRow(long userId, String publicId) {
+        GoalRow row = jdbc.query(
+            "select id, start_date, end_date from growth_goal where user_id = ? and public_id = ? and status in ('ACTIVE', 'DRAFT')",
+            rs -> rs.next() ? new GoalRow(rs.getLong(1), rs.getDate(2).toLocalDate(), rs.getDate(3).toLocalDate()) : null,
+            userId,
+            publicId
+        );
+        if (row == null) {
+            throw notFound("GOAL_NOT_FOUND");
+        }
+        return row;
+    }
+
+    private PlanRow ensureCompatibilityPlans(long userId, long goalId, LocalDate activeFrom, LocalDate activeUntil) {
+        String timezone = jdbc.queryForObject("select timezone from sys_user where id = ?", String.class, userId);
+        parseZone(timezone);
+        LocalDate weekStart = activeFrom.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+        LocalDate lastWeekStart = activeUntil.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+        PlanRow first = null;
+        for (LocalDate date = weekStart; !date.isAfter(lastWeekStart); date = date.plusWeeks(1)) {
+            PlanRow plan = findOrCreateCompatibilityPlan(userId, goalId, date, timezone);
+            if (first == null) {
+                first = plan;
+            }
+        }
+        if (first == null) {
+            throw new IllegalStateException("Unable to create compatibility plan");
+        }
+        return first;
+    }
+
+    private PlanRow findOrCreateCompatibilityPlan(long userId, long goalId, LocalDate weekStart, String timezone) {
+        PlanRow existing = compatibilityPlan(userId, goalId, weekStart);
+        if (existing != null) {
+            return existing;
+        }
+        try {
+            jdbc.update(
+                "insert into weekly_plan (public_id, user_id, goal_id, week_start_date, timezone, status) values (?, ?, ?, ?, ?, 'DRAFT')",
+                ids.next(), userId, goalId, Date.valueOf(weekStart), timezone
+            );
+        } catch (DuplicateKeyException ignored) {
+            // A concurrent request created the same compatibility plan.
+        }
+        PlanRow created = compatibilityPlan(userId, goalId, weekStart);
+        if (created == null) {
+            throw new IllegalStateException("Unable to create compatibility plan");
+        }
+        return created;
+    }
+
+    private PlanRow compatibilityPlan(long userId, long goalId, LocalDate weekStart) {
+        return jdbc.query(
+            "select id, week_start_date, timezone from weekly_plan where user_id = ? and goal_id = ? and week_start_date = ?",
+            rs -> rs.next() ? new PlanRow(rs.getLong(1), rs.getDate(2).toLocalDate(), rs.getString(3)) : null,
+            userId,
+            goalId,
+            Date.valueOf(weekStart)
+        );
+    }
+
+    private void materializeTask(
+        long userId,
+        long taskId,
+        String rrule,
+        LocalTime localTime,
+        LocalDate activeFrom,
+        LocalDate activeUntil,
+        int estimatedMinutes,
+        ZoneId timezone
+    ) {
+        List<PlannedOccurrence> occurrences = rrule == null
+            ? List.of(new PlannedOccurrence(activeFrom, activeFrom.atTime(localTime).atZone(timezone).toInstant()))
+            : recurrenceExpander.expand(RecurrenceRule.parse(rrule), activeFrom, localTime, timezone, activeUntil);
+        for (PlannedOccurrence occurrence : occurrences) {
+            jdbc.update(
+                """
+                    insert ignore into task_schedule (
+                        public_id, user_id, task_id, planned_start_at, planned_end_at, local_date, timezone, status
+                    ) values (?, ?, ?, ?, ?, ?, ?, 'PLANNED')
+                    """,
+                ids.next(), userId, taskId, Timestamp.from(occurrence.instant()),
+                Timestamp.from(occurrence.instant().plusSeconds(estimatedMinutes * 60L)),
+                Date.valueOf(occurrence.localDate()), timezone.getId()
+            );
+        }
     }
 
     private List<TaskRow> taskRows(long userId, long planId) {
@@ -396,7 +529,8 @@ public class DatabasePlanningService implements PlanningService {
 
     private TaskView taskView(java.sql.ResultSet rs) throws java.sql.SQLException {
         return new TaskView(
-            rs.getString("public_id"), rs.getString("plan_public_id"), rs.getString("title"), rs.getString("notes"),
+            rs.getString("public_id"), rs.getString("plan_public_id"), rs.getString("goal_public_id"),
+            rs.getString("title"), rs.getString("notes"),
             rs.getInt("estimated_minutes"), rs.getInt("difficulty"), rs.getString("rrule"),
             readWeights(rs.getString("dimension_weights")), rs.getTime("planned_local_time").toLocalTime(),
             rs.getDate("active_from") == null ? null : rs.getDate("active_from").toLocalDate(),

@@ -165,6 +165,103 @@ class GoalPlanningIT {
         assertThat(schedules).isEqualTo(3);
         assertThat(uniqueSchedules).isEqualTo(schedules);
 
+        mvc.perform(post("/api/v1/tasks")
+                .cookie(access, csrf)
+                .header("X-CSRF-Token", csrf.getValue())
+                .contentType("application/json")
+                .content("""
+                    {
+                      "goalPublicId":"%s",
+                      "title":"Practice algorithms",
+                      "estimatedMinutes":25,
+                      "difficulty":2,
+                      "rrule":"FREQ=WEEKLY;BYDAY=TU,TH",
+                      "dimensionWeights":{"%s":10},
+                      "plannedLocalTime":"19:15",
+                      "activeFrom":"2026-08-10",
+                      "activeUntil":"2026-08-23"
+                    }
+                    """.formatted(goalId, systemDimensionCode)))
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.data.goalPublicId").value(goalId))
+            .andExpect(jsonPath("$.data.weeklyPlanPublicId").isNotEmpty())
+            .andExpect(jsonPath("$.data.activeFrom").value("2026-08-10"))
+            .andExpect(jsonPath("$.data.activeUntil").value("2026-08-23"));
+        String periodicTaskId = jdbc.queryForObject(
+            "select public_id from user_task where title = 'Practice algorithms'",
+            String.class
+        );
+        String compatibilityPlanId = jdbc.queryForObject(
+            """
+                select p.public_id from weekly_plan p join growth_goal g on g.id = p.goal_id
+                where g.public_id = ? and p.week_start_date = '2026-08-10'
+                """,
+            String.class,
+            goalId
+        );
+        String secondWeekPlanId = jdbc.queryForObject(
+            """
+                select p.public_id from weekly_plan p join growth_goal g on g.id = p.goal_id
+                where g.public_id = ? and p.week_start_date = '2026-08-17'
+                """,
+            String.class,
+            goalId
+        );
+        assertThat(jdbc.queryForObject(
+            """
+                select count(*) from weekly_plan p join growth_goal g on g.id = p.goal_id
+                where g.public_id = ? and p.week_start_date between '2026-08-10' and '2026-08-17'
+                """,
+            Integer.class,
+            goalId
+        )).isEqualTo(2);
+        assertThat(jdbc.queryForObject(
+            "select count(*) from task_schedule s join user_task t on t.id = s.task_id where t.public_id = ?",
+            Integer.class,
+            periodicTaskId
+        )).isEqualTo(4);
+
+        mvc.perform(get("/api/v1/reviews/weekly/" + compatibilityPlanId).cookie(access))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.facts.plannedActions").value(2));
+        mvc.perform(get("/api/v1/reviews/weekly/" + secondWeekPlanId).cookie(access))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.facts.plannedActions").value(2));
+
+        materialize(access, csrf, compatibilityPlanId);
+        assertThat(jdbc.queryForObject(
+            "select count(*) from task_schedule s join user_task t on t.id = s.task_id where t.public_id = ?",
+            Integer.class,
+            periodicTaskId
+        )).isEqualTo(4);
+
+        mvc.perform(get("/api/v1/tasks")
+                .param("goalId", goalId)
+                .cookie(access))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.length()").value(2))
+            .andExpect(jsonPath("$.data[0].goalPublicId").value(goalId))
+            .andExpect(jsonPath("$.data[1].goalPublicId").value(goalId));
+
+        mvc.perform(post("/api/v1/tasks")
+                .cookie(access, csrf)
+                .header("X-CSRF-Token", csrf.getValue())
+                .contentType("application/json")
+                .content("""
+                    {
+                      "goalPublicId":"%s",
+                      "title":"Outside goal period",
+                      "estimatedMinutes":25,
+                      "difficulty":2,
+                      "rrule":"FREQ=DAILY",
+                      "dimensionWeights":{"%s":10},
+                      "activeFrom":"2026-08-10",
+                      "activeUntil":"2026-09-01"
+                    }
+                    """.formatted(goalId, systemDimensionCode)))
+            .andExpect(status().isUnprocessableEntity())
+            .andExpect(jsonPath("$.data.code").value("TASK_OUTSIDE_GOAL"));
+
         MvcResult otherRegistration = mvc.perform(post("/api/v1/auth/register")
                 .contentType("application/json")
                 .content(registrationJson("planning-other@example.test")))

@@ -114,13 +114,17 @@ public class FriendService {
         String normalized = email.trim().toLowerCase(Locale.ROOT);
         UserRow target = jdbc.query(
             """
-                select id, public_id, display_name, created_at
-                from sys_user where email_normalized = ? and status = 'ACTIVE' and deleted_at is null
+                select u.id, u.public_id, u.display_name, u.created_at
+                from sys_user u
+                join user_preference up on up.user_id = u.id
+                where u.email_normalized = ? and u.status = 'ACTIVE' and u.deleted_at is null
+                  and (up.solo_growth = 0 or u.id = ?)
                 """,
             rs -> rs.next()
                 ? new UserRow(rs.getLong("id"), rs.getString("public_id"), rs.getString("display_name"), rs.getDate("created_at").toLocalDate())
                 : null,
-            normalized
+            normalized,
+            userId
         );
         if (target == null) {
             throw new ApiException(HttpStatus.NOT_FOUND, "FRIEND_USER_NOT_FOUND", "没有找到该邮箱对应的用户");
