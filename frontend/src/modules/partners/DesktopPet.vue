@@ -5,6 +5,7 @@ import { api } from '../../shared/api/client'
 import RivePet from './RivePet.vue'
 import { useDesktopPetStore } from './desktop-pet.store'
 import { randomPetDialogue } from './pet-dialogues'
+import { petVariantStorageKey, variantIndexForKind } from './pet-variants'
 import type { InteractionResult, PartnerProfile, Pet, ShopItem } from './partner.types'
 
 type Dialogue = { text: string; meta: string }
@@ -24,6 +25,7 @@ const feedOpen = ref(false)
 const minimized = ref(false)
 const isDesktop = ref(false)
 const position = ref<Point>({ x: 24, y: 24 })
+const variantIndex = ref(0)
 const foodItems = computed(() => (profile.value?.shopItems ?? []).filter(item => (
   item.itemType === 'FOOD' && (!item.speciesCode || item.speciesCode === pet.value?.speciesCode)
 )))
@@ -83,6 +85,8 @@ async function loadProfile() {
     if (store.petPublicId !== configuredPet.publicId) store.setPet(configuredPet.publicId)
     profile.value = loaded
     pet.value = configuredPet
+    const saved = Number(window.localStorage.getItem(petVariantStorageKey(configuredPet.publicId)) ?? '')
+    variantIndex.value = Number.isInteger(saved) && saved >= 0 ? saved : variantIndexForKind(configuredPet.speciesCode, configuredPet.breed)
   } catch {
     error.value = '桌宠暂时睡着了'
   } finally {
@@ -96,11 +100,11 @@ function showDialogue(message: Dialogue) {
   dialogueTimer = window.setTimeout(() => { dialogue.value = null }, 8000)
 }
 
-async function interact(animate = true) {
+async function interact() {
   if (!pet.value || busy.value) return
   busy.value = true
   error.value = ''
-  if (animate) petRenderer.value?.react('interact')
+  petRenderer.value?.react('greet')
   try {
     const result = await api.post<InteractionResult>(`/partners/pets/${pet.value.publicId}/interact`)
     showDialogue({
@@ -272,8 +276,7 @@ onBeforeUnmount(() => {
         ref="petRenderer"
         :species-code="pet.speciesCode"
         :name="pet.name"
-        :disabled="busy"
-        @activate="interact(false)"
+        :variant-index="variantIndex"
       />
       <p v-else class="desktop-status">{{ loading ? '正在唤醒伙伴…' : error || '伙伴正在休息' }}</p>
 

@@ -1,13 +1,15 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
-import { Coins, HandHeart, Heart, MessageCircle, MonitorOff, MonitorUp, Pencil, Plus, ShoppingBag, Smartphone, Sparkles, X } from 'lucide-vue-next'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { Coins, Gamepad2, HandHeart, Heart, HeartHandshake, MessageCircle, MonitorOff, MonitorUp, PartyPopper, Pencil, Plus, ShoppingBag, Smartphone, Sparkles, X } from 'lucide-vue-next'
 import { api } from '../../shared/api/client'
 import RivePet from './RivePet.vue'
 import { useDesktopPetStore } from './desktop-pet.store'
 import { randomPetDialogue } from './pet-dialogues'
+import { findPetSpecies, petSpeciesOptions, type PetInteractionOption, type PetReaction } from './pet-options'
+import { petVariantStorageKey, variantCountFor, variantIndexForKind } from './pet-variants'
 import type { InteractionResult, PartnerProfile, Pet, ShopItem } from './partner.types'
 
-type DialogueMessage = { text: string; rewarded: boolean; affectionDelta: number }
+type DialogueMessage = { text: string; actionLabel: string; rewarded: boolean; affectionDelta: number }
 type ShopFilter = 'ALL' | ShopItem['itemType']
 
 const profile = ref<PartnerProfile | null>(null)
@@ -18,6 +20,8 @@ const feedback = ref('')
 const panel = ref<'create' | 'edit' | null>(null)
 const petRenderer = ref<InstanceType<typeof RivePet> | null>(null)
 const dialogue = ref<DialogueMessage | null>(null)
+const lastInteraction = ref<PetReaction | null>(null)
+const variantIndex = ref(0)
 const shopFilter = ref<ShopFilter>('ALL')
 const desktopPet = useDesktopPetStore()
 const isDesktopCompanion = Boolean(window.betterSelfDesktop?.isDesktopApp)
@@ -36,32 +40,23 @@ const shopItemImages: Record<string, string> = {
   'pet-decor-plant': '/assets/shop/plant.svg',
 }
 
-const speciesOptions = [
-  { code: 'CAT', label: '猫', breed: '中华田园猫', color: '橘白' },
-  { code: 'DOG', label: '狗', breed: '柯基', color: '焦糖白' },
-  { code: 'HAMSTER', label: '仓鼠', breed: '金丝熊', color: '奶油金' },
-  { code: 'SNAKE', label: '蛇', breed: '玉米蛇', color: '青绿' },
-  { code: 'RABBIT', label: '兔子', breed: '垂耳兔', color: '月白' },
-  { code: 'BIRD', label: '小鸟', breed: '玄凤', color: '淡黄' },
-  { code: 'TURTLE', label: '乌龟', breed: '草龟', color: '苔绿' },
-  { code: 'FOX', label: '狐狸', breed: '赤狐', color: '赤橙' },
-]
-
-const speciesGlyphs: Record<string, string> = {
-  CAT: '猫',
-  DOG: '犬',
-  HAMSTER: '鼠',
-  SNAKE: '蛇',
-  RABBIT: '兔',
-  BIRD: '鸟',
-  TURTLE: '龟',
-  FOX: '狐',
-}
-
 const form = reactive({ speciesCode: 'CAT', name: '小橘', breed: '中华田园猫', furColor: '橘白' })
 const selectedPet = computed(() => profile.value?.selectedPet ?? profile.value?.pets[0])
 const wallet = computed(() => profile.value?.wallet ?? { coinBalance: 0, lifetimeCoins: 0 })
 const isDesktopPet = computed(() => Boolean(selectedPet.value && desktopPet.petPublicId === selectedPet.value.publicId))
+const formSpecies = computed(() => findPetSpecies(form.speciesCode))
+const kindOptions = computed(() => {
+  const options = formSpecies.value?.kinds ?? []
+  if (!form.breed || options.some(option => option.value === form.breed)) return options
+  return [{ value: form.breed, defaultColor: form.furColor }, ...options]
+})
+const currentInteractions = computed(() => findPetSpecies(selectedPet.value?.speciesCode ?? '')?.interactions ?? [])
+const interactionIcons = {
+  greet: HandHeart,
+  play: Gamepad2,
+  comfort: HeartHandshake,
+  celebrate: PartyPopper,
+}
 const progressPercent = computed(() => {
   const pet = selectedPet.value
   if (!pet) return 0
@@ -94,12 +89,42 @@ function syncForm(pet?: Pet) {
   form.furColor = pet.furColor
 }
 
+function resolveVariantIndex(pet: Pet) {
+  const saved = Number(window.localStorage.getItem(petVariantStorageKey(pet.publicId)) ?? '')
+  if (Number.isInteger(saved) && saved >= 0) return saved
+  return variantIndexForKind(pet.speciesCode, pet.breed)
+}
+
+function selectVariant(index: number) {
+  const pet = selectedPet.value
+  if (!pet || busy.value) return
+  const count = variantCountFor(pet.speciesCode)
+  if (count < 2) return
+  const next = ((index % count) + count) % count
+  variantIndex.value = next
+  window.localStorage.setItem(petVariantStorageKey(pet.publicId), String(next))
+}
+
+watch(selectedPet, pet => {
+  if (!pet) return
+  variantIndex.value = resolveVariantIndex(pet)
+}, { immediate: true })
+
 function chooseSpecies(code: string) {
-  const species = speciesOptions.find(item => item.code === code)
+  const species = findPetSpecies(code)
   if (!species) return
   form.speciesCode = species.code
-  form.breed = species.breed
-  form.furColor = species.color
+  form.breed = species.kinds[0].value
+  form.furColor = species.kinds[0].defaultColor
+}
+
+function chooseKind() {
+  const kind = formSpecies.value?.kinds.find(option => option.value === form.breed)
+  if (kind) form.furColor = kind.defaultColor
+}
+
+function speciesGlyph(code: string) {
+  return findPetSpecies(code)?.glyph ?? '伴'
 }
 
 async function savePet() {
@@ -108,16 +133,23 @@ async function savePet() {
   try {
     if (panel.value === 'edit' && selectedPet.value) {
       await api.patch(`/partners/pets/${selectedPet.value.publicId}`, { name: form.name, breed: form.breed, furColor: form.furColor })
+      window.localStorage.removeItem(petVariantStorageKey(selectedPet.value.publicId))
       feedback.value = '伙伴资料已更新'
     } else {
-      const pet = await api.post<Pet>('/partners/pets', form)
+      const pet = await api.post<Pet>('/partners/pets', {
+        speciesCode: form.speciesCode,
+        name: form.name,
+        breed: form.breed,
+        furColor: form.furColor,
+      })
+      window.localStorage.setItem(petVariantStorageKey(pet.publicId), String(variantIndexForKind(pet.speciesCode, pet.breed)))
       await api.post(`/partners/pets/${pet.publicId}/select`)
       feedback.value = '新的伙伴已经加入'
     }
     panel.value = null
     await load(false)
   } catch {
-    error.value = '伙伴资料未保存，请检查名称、品种和颜色'
+    error.value = '伙伴资料未保存，请检查名称、种类和颜色'
   } finally {
     busy.value = false
   }
@@ -126,20 +158,22 @@ async function savePet() {
 async function selectPet(pet: Pet) {
   if (pet.selected) return
   closeDialogue()
+  lastInteraction.value = null
   await api.post(`/partners/pets/${pet.publicId}/select`)
   feedback.value = `已切换到 ${pet.name}`
   await load(false)
 }
 
-async function interact(animate = true) {
-  if (!selectedPet.value || busy.value) return
+async function interact(action: PetInteractionOption) {
+  if (!selectedPet.value || !action || busy.value) return
   busy.value = true
   error.value = ''
   feedback.value = ''
-  if (animate) petRenderer.value?.react('interact')
+  lastInteraction.value = action.action
+  petRenderer.value?.react(action.action)
   try {
     const result = await api.post<InteractionResult>(`/partners/pets/${selectedPet.value.publicId}/interact`)
-    showDialogue(result)
+    showDialogue(result, action.label)
     await load(false)
   } catch {
     error.value = '互动失败，请稍后重试'
@@ -148,9 +182,10 @@ async function interact(animate = true) {
   }
 }
 
-function showDialogue(result: InteractionResult) {
+function showDialogue(result: InteractionResult, actionLabel: string) {
   dialogue.value = {
     text: randomPetDialogue(),
+    actionLabel,
     rewarded: result.rewarded,
     affectionDelta: result.affectionDelta,
   }
@@ -186,11 +221,11 @@ function itemStatus(item: ShopItem) {
 }
 
 function openCreate() {
-  const species = speciesOptions[0]
+  const species = petSpeciesOptions[0]
   form.speciesCode = species.code
   form.name = ''
-  form.breed = species.breed
-  form.furColor = species.color
+  form.breed = species.kinds[0].value
+  form.furColor = species.kinds[0].defaultColor
   panel.value = 'create'
 }
 
@@ -250,8 +285,9 @@ onBeforeUnmount(() => window.clearTimeout(dialogueTimer))
               :key="selectedPet.publicId"
               :species-code="selectedPet.speciesCode"
               :name="selectedPet.name"
-              :disabled="busy"
-              @activate="interact(false)"
+              :variant-index="variantIndex"
+              :show-variant-switcher="true"
+              @select-variant="selectVariant"
             />
             <Transition name="dialogue">
               <aside v-if="dialogue" class="dialogue-bar" role="status" aria-live="polite">
@@ -259,6 +295,7 @@ onBeforeUnmount(() => window.clearTimeout(dialogueTimer))
                   <p>
                     <span class="dialogue-icon" aria-hidden="true"><MessageCircle :size="15" /></span>
                     <strong>{{ selectedPet.name }}</strong>
+                    <span class="dialogue-action">{{ dialogue.actionLabel }}</span>
                     <span class="dialogue-reward" :data-rewarded="dialogue.rewarded">
                       {{ dialogue.rewarded ? `首次互动 +${dialogue.affectionDelta}` : '今日奖励已领取' }}
                     </span>
@@ -291,8 +328,24 @@ onBeforeUnmount(() => window.clearTimeout(dialogueTimer))
             <div class="progress" aria-label="好感度进度"><span :style="{ width: `${progressPercent}%` }" /></div>
             <small>每日首次互动可获得 2 点好感度</small>
           </div>
+          <div class="interaction-panel">
+            <span class="interaction-label">互动方式</span>
+            <div class="interaction-grid" aria-label="选择互动方式">
+              <button
+                v-for="action in currentInteractions"
+                :key="action.action"
+                type="button"
+                class="interaction-option"
+                :class="{ active: lastInteraction === action.action }"
+                :disabled="busy"
+                @click="interact(action)"
+              >
+                <component :is="interactionIcons[action.action]" :size="17" />
+                <span>{{ action.label }}</span>
+              </button>
+            </div>
+          </div>
           <div class="stage-actions">
-            <button class="interact-button" type="button" :disabled="busy" @click="interact()"><HandHeart :size="18" />互动</button>
             <button class="secondary" type="button" @click="openEdit"><Pencil :size="17" />资料</button>
             <button class="secondary" type="button" @click="openCreate"><Plus :size="17" />新伙伴</button>
           </div>
@@ -324,21 +377,26 @@ onBeforeUnmount(() => window.clearTimeout(dialogueTimer))
         <div class="form-head">
           <div>
             <p class="eyebrow">{{ panel === 'edit' ? '自定义伙伴' : '选择伙伴' }}</p>
-            <h2>{{ panel === 'edit' ? '修改名字、品种和颜色' : '创建新的 2D 小动物' }}</h2>
+            <h2>{{ panel === 'edit' ? '修改名字、种类和颜色' : '创建新的 2D 小动物' }}</h2>
           </div>
           <button class="dialogue-close" type="button" aria-label="关闭伙伴资料" @click="panel = null"><X :size="18" /></button>
         </div>
-        <div v-if="panel === 'create'" class="species-grid" aria-label="选择动物类型">
-          <button v-for="species in speciesOptions" :key="species.code" type="button" :class="{ active: form.speciesCode === species.code }" :data-species="species.code" :aria-pressed="form.speciesCode === species.code" @click="chooseSpecies(species.code)">
-            <span class="species-glyph">{{ speciesGlyphs[species.code] }}</span>
+        <div v-if="panel === 'create'" class="species-grid" aria-label="选择动物">
+          <button v-for="species in petSpeciesOptions" :key="species.code" type="button" :class="{ active: form.speciesCode === species.code }" :data-species="species.code" :aria-pressed="form.speciesCode === species.code" @click="chooseSpecies(species.code)">
+            <span class="species-glyph">{{ species.glyph }}</span>
             <span>{{ species.label }}</span>
           </button>
         </div>
         <div class="split">
           <div class="field"><label for="pet-name">名字</label><input id="pet-name" v-model="form.name" required maxlength="40"></div>
-          <div class="field"><label for="pet-breed">品种</label><input id="pet-breed" v-model="form.breed" required maxlength="60"></div>
+          <div class="field">
+            <label for="pet-kind">种类</label>
+            <select id="pet-kind" v-model="form.breed" required @change="chooseKind">
+              <option v-for="kind in kindOptions" :key="kind.value" :value="kind.value">{{ kind.value }}</option>
+            </select>
+          </div>
         </div>
-        <div class="field"><label for="pet-color">毛发颜色</label><input id="pet-color" v-model="form.furColor" required maxlength="40"></div>
+        <div class="field"><label for="pet-color">外观颜色</label><input id="pet-color" v-model="form.furColor" required maxlength="40"></div>
         <div class="actions">
           <button class="interact-button" :disabled="busy">{{ panel === 'edit' ? '保存资料' : '创建伙伴' }}</button>
           <button class="secondary" type="button" @click="panel = null">取消</button>
@@ -352,7 +410,7 @@ onBeforeUnmount(() => window.clearTimeout(dialogueTimer))
         </div>
         <div class="pet-list">
           <button v-for="pet in profile.pets" :key="pet.publicId" type="button" class="pet-card" :class="{ selected: pet.selected }" :data-species="pet.speciesCode" :aria-pressed="pet.selected" @click="selectPet(pet)">
-            <span class="pet-avatar" aria-hidden="true">{{ speciesGlyphs[pet.speciesCode] || '伴' }}</span>
+            <span class="pet-avatar" aria-hidden="true">{{ speciesGlyph(pet.speciesCode) }}</span>
             <span class="pet-card-copy">
               <strong>{{ pet.name }}</strong>
               <small>{{ pet.breed }} · {{ pet.furColor }}</small>
@@ -445,7 +503,15 @@ onBeforeUnmount(() => window.clearTimeout(dialogueTimer))
 .affection-panel small { color: var(--pet-muted); font-size: 11px; }
 .partners-page .progress { height: 10px; background: #f2e3d3; }
 .partners-page .progress > span { background: linear-gradient(90deg, var(--pet-coral), var(--pet-gold), var(--pet-mint)); }
-.stage-actions { display: grid; grid-template-columns: minmax(112px, 1fr) auto auto; gap: 9px; }
+.interaction-panel { display: grid; gap: 8px; }
+.interaction-label { color: var(--pet-muted); font-size: 12px; font-weight: 800; }
+.interaction-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.interaction-option { min-width: 0; min-height: 46px; display: inline-flex; align-items: center; justify-content: flex-start; gap: 8px; padding: 0 11px; border: 1px solid var(--pet-line); background: var(--pet-paper); color: var(--pet-ink); text-align: left; }
+.interaction-option svg { flex: 0 0 auto; color: var(--pet-coral-strong); }
+.interaction-option span { min-width: 0; overflow-wrap: anywhere; }
+.interaction-option:hover, .interaction-option.active { border-color: var(--pet-coral); background: #fff0e6; color: var(--pet-coral-strong); }
+.interaction-option.active { box-shadow: inset 0 -3px 0 var(--pet-coral); }
+.stage-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
 .interact-button { min-height: var(--control); display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 0 16px; border-color: var(--pet-coral-strong); background: var(--pet-coral); color: white; box-shadow: 0 9px 18px rgb(178 74 58 / 18%); }
 .interact-button:hover { background: var(--pet-coral-strong); }
 .partners-page .secondary { border-color: var(--pet-line); background: var(--pet-paper); color: var(--pet-ink); }
@@ -469,6 +535,7 @@ onBeforeUnmount(() => window.clearTimeout(dialogueTimer))
 .dialogue-copy { min-width: 0; display: grid; gap: 7px; }
 .dialogue-copy p { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 5px 8px; min-height: 24px; }
 .dialogue-copy p strong { font-size: 14px; }
+.dialogue-action { padding: 3px 6px; border-radius: 4px; background: #f8e5d5; color: var(--pet-coral-strong); font-size: 10px; font-weight: 800; }
 .dialogue-reward { color: var(--pet-muted); font-size: 11px; font-weight: 700; }
 .dialogue-reward[data-rewarded='true'] { color: #3e805f; }
 .dialogue-copy blockquote { margin: 0; color: var(--pet-ink); font-size: 14px; line-height: 1.6; overflow-wrap: anywhere; }
@@ -483,7 +550,7 @@ onBeforeUnmount(() => window.clearTimeout(dialogueTimer))
 .species-grid button { min-width: 0; min-height: 66px; display: flex; align-items: center; justify-content: flex-start; gap: 9px; padding: 8px; border: 1px solid var(--pet-line); background: var(--pet-paper); color: var(--pet-muted); }
 .species-grid button.active { border-color: var(--pet-coral); background: #fff0e6; color: var(--pet-coral-strong); box-shadow: inset 0 -3px 0 var(--pet-coral); }
 .species-glyph { width: 34px; height: 34px; display: grid; place-items: center; flex: 0 0 auto; border-radius: 50%; background: #f6dfc6; color: var(--pet-ink); font-weight: 900; }
-.partners-page .field input { border-color: var(--pet-line); background: #fffefb; color: var(--pet-ink); }
+.partners-page .field input, .partners-page .field select { border-color: var(--pet-line); background: #fffefb; color: var(--pet-ink); }
 
 .section-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
 .section-count { color: var(--pet-muted); font-size: 12px; font-weight: 700; }
@@ -526,7 +593,7 @@ onBeforeUnmount(() => window.clearTimeout(dialogueTimer))
 .item-status { padding-top: 6px; border-top: 1px dashed var(--pet-line); color: var(--pet-muted); font-size: 11px; }
 
 @media (prefers-reduced-motion: no-preference) {
-  .pet-card, .shop-item, .interact-button { transition: transform var(--motion-fast) ease, border-color var(--motion-fast) ease, box-shadow var(--motion-fast) ease, background-color var(--motion-fast) ease; }
+  .pet-card, .shop-item, .interact-button, .interaction-option { transition: transform var(--motion-fast) ease, border-color var(--motion-fast) ease, box-shadow var(--motion-fast) ease, background-color var(--motion-fast) ease; }
   .pet-card:hover, .shop-item:not(:disabled):hover { transform: translateY(-3px); border-color: var(--pet-coral); box-shadow: var(--pet-shadow); }
   .coin-mark { animation: coin-arrive 420ms ease-out both; }
 }
@@ -564,8 +631,6 @@ onBeforeUnmount(() => window.clearTimeout(dialogueTimer))
   .home-scene { border-radius: 52px 52px 8px 8px; }
   .pet-area { min-height: 280px; border-radius: 45px 45px 5px 5px; }
   .scene-label { top: 14px; left: 15px; }
-  .stage-actions { grid-template-columns: 1fr 1fr; }
-  .stage-actions .interact-button { grid-column: 1 / -1; }
   .name-row { align-items: flex-start; }
   .pet-panel h2 { font-size: 28px; }
   .pet-list { grid-auto-columns: minmax(206px, 82vw); }
@@ -589,6 +654,7 @@ onBeforeUnmount(() => window.clearTimeout(dialogueTimer))
 :global(:root[data-theme='dark']) .partners-page .pet-card,
 :global(:root[data-theme='dark']) .partners-page .shop-item,
 :global(:root[data-theme='dark']) .partners-page .pet-form,
+:global(:root[data-theme='dark']) .partners-page .interaction-option,
 :global(:root[data-theme='dark']) .partners-page .desktop-pet-mobile { background: var(--pet-paper); }
 
 @media (prefers-color-scheme: dark) {

@@ -50,7 +50,7 @@ test('Rive partner renders and direct interaction updates affection', async ({ p
     await new Promise(resolve => setTimeout(resolve, 500))
     await route.continue()
   })
-  await page.getByRole('button', { name: '和小橘互动' }).click()
+  await page.getByRole('button', { name: '摸摸脑袋' }).click()
   await profileRefreshStarted
   await expect(canvas).toBeVisible()
   await expect(page.getByText('正在唤醒伙伴…')).toHaveCount(0)
@@ -60,7 +60,7 @@ test('Rive partner renders and direct interaction updates affection', async ({ p
   await page.unroute('**/api/v1/partners/profile')
 
   await page.getByRole('button', { name: '关闭对话' }).click()
-  await page.getByRole('button', { name: '和小橘互动' }).click()
+  await page.getByRole('button', { name: '摸摸脑袋' }).click()
   await expect(page.locator('.dialogue-bar blockquote')).not.toBeEmpty()
   await expect(page.getByText('今日奖励已领取')).toBeVisible()
   await expect(page.locator('.affection-panel strong')).toHaveText('2 / 10')

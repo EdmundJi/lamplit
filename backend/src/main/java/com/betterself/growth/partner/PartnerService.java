@@ -46,7 +46,7 @@ public class PartnerService {
         ensureWallet(userId);
         String species = species(command.speciesCode());
         String name = required(command.name(), "PET_NAME_REQUIRED", "伙伴名字不能为空", 40);
-        String breed = required(command.breed(), "PET_BREED_REQUIRED", "品种不能为空", 60);
+        String breed = required(command.breed(), "PET_BREED_REQUIRED", "种类不能为空", 60);
         String furColor = required(command.furColor(), "PET_COLOR_REQUIRED", "毛发颜色不能为空", 40);
         boolean firstPet = jdbc.queryForObject("select count(*) = 0 from partner_pet where user_id = ?", Boolean.class, userId);
         String publicId = ids.next();
@@ -67,7 +67,7 @@ public class PartnerService {
     public PetView updatePet(long userId, String petPublicId, UpdatePetCommand command) {
         PetRow current = petRow(userId, petPublicId);
         String name = command.name() == null ? current.name() : required(command.name(), "PET_NAME_REQUIRED", "伙伴名字不能为空", 40);
-        String breed = command.breed() == null ? current.breed() : required(command.breed(), "PET_BREED_REQUIRED", "品种不能为空", 60);
+        String breed = command.breed() == null ? current.breed() : required(command.breed(), "PET_BREED_REQUIRED", "种类不能为空", 60);
         String furColor = command.furColor() == null ? current.furColor() : required(command.furColor(), "PET_COLOR_REQUIRED", "毛发颜色不能为空", 40);
         jdbc.update(
             "update partner_pet set name = ?, breed = ?, fur_color = ?, updated_at = UTC_TIMESTAMP(3) where id = ?",
