@@ -5,19 +5,20 @@ html { background: var(--canvas); color: var(--ink); font-family: "Avenir Next",
 body { margin: 0; min-width: 320px; min-height: 100vh; background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 52%, var(--canvas)) 0, var(--canvas) 430px); }
 ::selection { background: color-mix(in srgb, var(--primary) 24%, transparent); color: var(--ink); }
 button, input, select, textarea { font: inherit; letter-spacing: 0; }
-button, .button { min-height: var(--control); border: 1px solid transparent; border-radius: var(--radius); cursor: pointer; font-weight: 650; }
+button, .button { min-height: var(--control); border: 1px solid transparent; border-radius: var(--radius); cursor: pointer; font-weight: 650; line-height: 1.2; vertical-align: middle; }
 button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, a:focus-visible { outline: 3px solid color-mix(in srgb, var(--focus) 35%, transparent); outline-offset: 2px; }
 button:disabled { cursor: not-allowed; opacity: .62; }
 .primary { background: var(--primary); color: white; padding: 0 16px; box-shadow: 0 9px 20px color-mix(in srgb, var(--primary) 20%, transparent); }
 .primary:hover { background: var(--primary-strong); }
-.secondary { background: color-mix(in srgb, var(--surface) 84%, transparent); color: var(--ink); border-color: var(--border); padding: 0 14px; box-shadow: 0 1px 0 rgb(255 255 255 / 60%) inset; }
+.secondary { background: color-mix(in srgb, var(--surface) 84%, transparent); color: var(--ink); border-color: var(--border); padding: 0 16px; box-shadow: 0 1px 0 rgb(255 255 255 / 60%) inset; }
 .secondary:hover { background: var(--surface-raised); border-color: color-mix(in srgb, var(--primary) 30%, var(--border)); box-shadow: var(--shadow-soft); }
-.danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 32%, var(--border)); background: var(--surface); padding: 0 14px; }
+.danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 32%, var(--border)); background: var(--surface); padding: 0 16px; }
 .danger:hover { background: color-mix(in srgb, var(--danger) 8%, var(--surface)); }
-.icon-button { width: var(--control); padding: 0; display: inline-grid; place-items: center; background: color-mix(in srgb, var(--surface) 86%, transparent); color: currentColor; }
+.icon-button { width: var(--control); height: var(--control); min-width: var(--control); min-height: var(--control); flex: 0 0 var(--control); padding: 0; display: inline-grid; place-items: center; background: color-mix(in srgb, var(--surface) 86%, transparent); color: currentColor; }
 .page { width: min(100%, 1120px); margin: 0 auto; padding: 28px 30px 60px; }
 :root[data-density='compact'] .page { padding-top: 20px; padding-bottom: 46px; }
-.page-head { display: flex; align-items: end; justify-content: space-between; gap: 16px; margin-bottom: 24px; }
+.page-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 24px; }
+.page-head > * { min-width: 0; }
 .page-head h1 { margin: 0; color: var(--ink); font-family: ui-rounded, "SF Pro Rounded", "PingFang SC", sans-serif; font-size: 30px; line-height: 1.15; letter-spacing: 0; }
 .eyebrow { margin: 0 0 5px; color: var(--primary); font-size: 12px; font-weight: 800; letter-spacing: 0; }
 .band { position: relative; border-top: 1px solid color-mix(in srgb, var(--border) 78%, transparent); padding: 20px 0; }
@@ -49,11 +50,13 @@ input[type='checkbox'], input[type='radio'], input[type='range'] { accent-color:
 .actions { display: flex; flex-wrap: wrap; gap: 9px; align-items: center; }
 .progress { height: 8px; border-radius: 999px; background: var(--surface-muted); overflow: hidden; }
 .progress > span { display: block; height: 100%; background: linear-gradient(90deg, var(--primary), var(--accent)); }
-.button { justify-content: center; gap: 7px; }
+.button { justify-content: center; gap: 7px; text-decoration: none; }
 .primary, .secondary, .danger, .icon-button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; }
+.primary, .secondary, .danger { white-space: nowrap; }
+.primary > svg, .secondary > svg, .danger > svg, .button > svg { flex: none; }
 @media (max-width: 760px) {
   .page { padding: 22px 18px 100px; }
-  .page-head { align-items: start; }
+  .page-head { align-items: flex-start; flex-wrap: wrap; }
   .page-head h1 { font-size: 24px; }
   .split { grid-template-columns: 1fr; }
 }

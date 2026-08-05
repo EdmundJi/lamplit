@@ -479,7 +479,8 @@ onBeforeUnmount(() => clearInterval(focusTimer))
 .task-row .actions { flex-wrap: nowrap; }
 .task-row .icon-button { border: 1px solid var(--border); }
 .focus-button { color: var(--primary); }
-.button { display: inline-flex; align-items: center; text-decoration: none; margin-top: 10px; }
+.button { display: inline-flex; align-items: center; text-decoration: none; }
+.empty .button { margin-top: 10px; }
 .action-panel, .focus-panel { position: fixed; z-index: 20; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(420px, calc(100vw - 32px)); display: grid; gap: 16px; padding: 24px; border: 1px solid var(--border); border-radius: calc(var(--radius) + 6px); background: var(--surface); box-shadow: var(--shadow); }
 .action-panel input { width: 100%; }
 .focus-panel { text-align: center; }
@@ -506,14 +507,14 @@ onBeforeUnmount(() => clearInterval(focusTimer))
   .goal-summary-head { align-items: flex-start; flex-direction: column; }
   .goal-strip { grid-template-columns: 1fr; }
   .recovery { flex-direction: column; align-items: flex-start; }
-  .recovery-actions { justify-content: flex-start; }
+  .recovery-actions { width: 100%; justify-content: flex-start; }
   .check-result { grid-template-columns: 24px minmax(0, 1fr); }
   .check-result button { grid-column: 1 / -1; }
 }
 @media (max-width: 600px) {
   .task-quota { grid-template-columns: 1fr; gap: 8px; }
   .task-row { align-items: flex-start; flex-direction: column; }
-  .task-row .actions { width: 100%; padding-top: 4px; justify-content: flex-end; }
+  .task-row .actions { width: 100%; display: grid; grid-template-columns: repeat(auto-fit, var(--control)); gap: 8px; padding-top: 4px; justify-content: end; }
   .minutes-control { grid-template-columns: 1fr; }
 }
 </style>

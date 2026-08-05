@@ -1267,10 +1267,13 @@ onMounted(async () => {
 
   .page-head .actions {
     width: 100%;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .page-head .actions button {
-    flex: 1;
+    width: 100%;
+    min-width: 0;
   }
 
   .two-columns,
@@ -1296,6 +1299,7 @@ onMounted(async () => {
 
 @media (max-width: 520px) {
   .task-builder-head,
+  .preset-toolbar,
   .template-head,
   .goal-footer {
     align-items: flex-start;
@@ -1309,6 +1313,19 @@ onMounted(async () => {
 
   .goal-card {
     min-height: 360px;
+  }
+
+  .editor > .actions,
+  .task-builder > .actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .editor > .actions button,
+  .task-builder > .actions button,
+  .refresh-button {
+    width: 100%;
+    min-width: 0;
   }
 }
 </style>

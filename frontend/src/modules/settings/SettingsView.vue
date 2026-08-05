@@ -461,8 +461,15 @@ h2 {
 }
 
 @media (max-width: 520px) {
+  .appearance-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: stretch;
+  }
+
   .appearance-actions .secondary {
-    flex: 1;
+    width: 100%;
+    min-width: 0;
   }
 
   .swatches {
@@ -471,6 +478,6 @@ h2 {
 
   .swatches button { min-height: 132px; grid-template-rows: 72px auto; }
   .theme-preview { height: 72px; }
-  .current-style { flex-basis: 100%; }
+  .current-style { grid-column: 1 / -1; }
 }
 </style>

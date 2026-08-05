@@ -234,5 +234,12 @@ onMounted(load)
   .conversation-card:nth-child(4), .member-option:nth-child(4) { animation-delay: 150ms; }
 }
 @keyframes conversation-enter { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: translateY(0); } }
-@media (max-width: 720px) { .member-pick { grid-template-columns: 1fr; } .head-actions { flex-direction: column; align-items: flex-start; gap: 8px; } }
+@media (max-width: 720px) {
+  .member-pick { grid-template-columns: 1fr; }
+  .head-actions { width: 100%; justify-content: space-between; gap: 8px; }
+}
+@media (max-width: 420px) {
+  .head-actions { display: grid; grid-template-columns: 1fr; align-items: stretch; }
+  .conversation-count, .create-group-button { width: 100%; justify-content: center; }
+}
 </style>

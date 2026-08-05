@@ -219,6 +219,7 @@ onMounted(() => load())
 .request-list { display: grid; gap: 9px; margin-top: 10px; }
 .friend-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 10px; }
 .friend-card { min-width: 0; display: grid; gap: 0; padding: 0; border: 1px solid var(--border); border-radius: var(--radius); background: color-mix(in srgb, var(--surface) 90%, transparent); box-shadow: var(--shadow-soft); overflow: hidden; }
+.incoming-card, .outgoing-card { grid-template-columns: 44px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 13px 15px; }
 .friend-row { grid-template-columns: minmax(0, 1fr) auto; }
 .friend-link { min-width: 0; display: grid; grid-template-columns: 46px minmax(0, 1fr) auto; align-items: center; gap: 13px; padding: 13px 0 13px 15px; color: var(--ink); text-decoration: none; transition: background-color var(--motion-fast) ease; }
 .friend-link:hover { background: color-mix(in srgb, var(--primary) 4%, var(--surface)); }
@@ -246,7 +247,9 @@ onMounted(() => load())
   .friend-grid { grid-template-columns: 1fr; }
   .add-friend-row { grid-template-columns: 1fr; }
   .incoming-card { grid-template-columns: 44px minmax(0, 1fr); }
+  .outgoing-card { grid-template-columns: 44px minmax(0, 1fr); }
   .request-actions { grid-column: 1 / -1; display: flex; }
   .request-actions .primary, .request-actions .secondary { flex: 1; }
+  .outgoing-card > .secondary { grid-column: 1 / -1; width: 100%; }
 }
 </style>

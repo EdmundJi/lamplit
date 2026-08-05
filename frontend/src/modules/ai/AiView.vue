@@ -386,8 +386,9 @@ onBeforeUnmount(() => {
 .message.assistant > span { background: linear-gradient(135deg, var(--primary), var(--accent)); color: white; }
 .message-body { margin: 5px 0 0; }
 .user-text { white-space: pre-wrap; line-height: 1.7; }
-.composer { display: grid; grid-template-columns: 1fr 44px; gap: 10px; padding-top: 16px; }
+.composer { display: grid; grid-template-columns: minmax(0, 1fr) var(--control); align-items: end; gap: 10px; padding-top: 16px; }
 .composer textarea { min-height: 84px; resize: vertical; border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; background: var(--surface); color: var(--ink); }
+.composer .icon-button { align-self: end; }
 .ai-side { display: grid; gap: 14px; }
 .history-panel, .suggestion-panel, .goal-draft-panel { display: grid; gap: 14px; padding: 16px; border: 1px solid var(--border); border-radius: calc(var(--radius) + 4px); background: color-mix(in srgb, var(--surface) 90%, transparent); box-shadow: var(--shadow-soft); }
 .panel-title { display: flex; align-items: start; justify-content: space-between; gap: 12px; }
@@ -413,7 +414,7 @@ onBeforeUnmount(() => {
 .starter-tasks { display: grid; gap: 7px; }
 .starter-tasks > strong { font-size: 12px; }
 .starter-task { display: grid; grid-template-columns: minmax(0, 1fr) 62px 82px; gap: 6px; }
-.starter-task input, .starter-task select { min-width: 0; min-height: 36px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--ink); padding: 7px; font-size: 11px; }
+.starter-task input, .starter-task select { min-width: 0; min-height: var(--control); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--ink); padding: 7px; font-size: 11px; }
 .json-preview { border-top: 1px solid var(--border); padding-top: 9px; }
 .json-preview summary { color: var(--primary); cursor: pointer; font-size: 12px; font-weight: 700; }
 .json-preview pre { max-height: 220px; overflow: auto; margin: 9px 0 0; padding: 10px; border-radius: var(--radius); background: var(--surface-muted); color: var(--ink); font: 11px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
@@ -476,8 +477,6 @@ onBeforeUnmount(() => {
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (max-width: 900px) {
   .ai-workspace { grid-template-columns: 1fr; }
-}
-@media (max-width: 900px) {
   .ai-side { grid-template-columns: 1fr; }
 }
 @media (max-width: 560px) {

@@ -260,7 +260,7 @@ async function toggleSoloGrowth() {
 .title-item.held .title-icon { color: var(--primary); background: var(--primary-soft); }
 .title-copy { min-width: 0; display: grid; gap: 4px; }
 .title-copy small { color: var(--muted); font-size: 11px; line-height: 1.4; }
-.title-action { width: 36px; min-height: 36px; border: 1px solid var(--border); color: var(--primary); }
+.title-action { width: 36px; height: 36px; min-width: 36px; min-height: 36px; flex-basis: 36px; border: 1px solid var(--border); color: var(--primary); }
 .locked-label { color: var(--muted); font-size: 11px; white-space: nowrap; }
 .pet-section, .quick-section { min-width: 0; }
 .section-title { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; color: var(--primary); }
