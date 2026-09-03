@@ -8,7 +8,7 @@ import MarkdownDocument from '../../shared/ui/MarkdownDocument.vue'
 import { pickThinkingMessage } from './ai-thinking'
 import { saveGoalDraft, type GoalDraft } from './goal-draft'
 
-type ChatMessage = { role: 'USER' | 'ASSISTANT'; text: string }
+type ChatMessage = { role: 'USER' | 'ASSISTANT'; text: string; model?: string }
 type SessionSummary = {
   publicId: string
   scene: string
@@ -117,7 +117,11 @@ async function openSession(item: SessionSummary) {
     if (requestId !== openSessionRequest) return
     messages.value = loaded
       .filter(row => row.role === 'USER' || row.role === 'ASSISTANT')
-      .map(row => ({ role: row.role as ChatMessage['role'], text: row.content }))
+      .map(row => ({
+        role: row.role as ChatMessage['role'],
+        text: row.content,
+        model: row.model || undefined,
+      }))
   } catch {
     if (requestId !== openSessionRequest) return
     error.value = '历史对话暂时无法打开'
@@ -149,14 +153,23 @@ async function send() {
     messages.value.push({ role: 'USER', text })
     message.value = ''
     let assistant = ''
+    let assistantModel: string | undefined
     await postSse(`/ai/sessions/${session.value}/messages:stream`, { message: text }, event => {
+      if (event.name === 'meta') {
+        const meta = event.data as { model?: string | null }
+        assistantModel = meta.model || undefined
+      }
       if (event.name === 'delta') {
         const delta = (event.data as { text?: string }).text ?? ''
         if (delta) stopThinking()
         assistant += delta
         const last = messages.value.at(-1)
-        if (last?.role === 'ASSISTANT') last.text = assistant
-        else messages.value.push({ role: 'ASSISTANT', text: assistant })
+        if (last?.role === 'ASSISTANT') {
+          last.text = assistant
+          last.model = assistantModel
+        } else {
+          messages.value.push({ role: 'ASSISTANT', text: assistant, model: assistantModel })
+        }
       }
       if (event.name === 'safety') {
         stopThinking()
@@ -164,7 +177,8 @@ async function send() {
       }
       if (event.name === 'error') {
         stopThinking()
-        error.value = 'AI 暂时不可用，请稍后再试。'
+        const failure = event.data as { message?: string }
+        error.value = failure.message || 'AI 暂时不可用，请稍后再试。'
       }
     }, controller.signal)
     await loadHistory()
@@ -251,6 +265,7 @@ onBeforeUnmount(() => {
               <span>{{ m.role === 'USER' ? '你' : 'AI' }}</span>
               <div v-if="m.role === 'ASSISTANT'" class="message-body">
                 <MarkdownDocument :text="m.text" />
+                <small v-if="m.model" class="message-model">{{ m.model }}</small>
               </div>
               <p v-else class="message-body user-text">{{ m.text }}</p>
             </div>
@@ -470,6 +485,12 @@ onBeforeUnmount(() => {
 }
 .message.user .message-body {
   padding: 2px 0 0;
+}
+.message-model {
+  display: block;
+  margin-top: 9px;
+  color: var(--muted);
+  font-size: 11px;
 }
 @keyframes message-enter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes assistant-breathe { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--primary) 0%, transparent); } 50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--primary) 14%, transparent); } }

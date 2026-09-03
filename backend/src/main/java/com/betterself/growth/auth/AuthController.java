@@ -1,5 +1,6 @@
 package com.betterself.growth.auth;
 
+import com.betterself.growth.admin.LocalAdminLoginProperties;
 import com.betterself.growth.shared.api.ApiEnvelope;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -9,6 +10,9 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Past;
 import jakarta.validation.constraints.Size;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.core.env.Environment;
+import org.springframework.core.env.Profiles;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -25,23 +29,30 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/auth")
+@EnableConfigurationProperties(LocalAdminLoginProperties.class)
 public class AuthController {
 
     private final AuthService authService;
     private final SessionService sessionService;
     private final CookieFactory cookieFactory;
     private final Clock clock;
+    private final LocalAdminLoginProperties localAdminLogin;
+    private final boolean localProfileActive;
 
     public AuthController(
         AuthService authService,
         SessionService sessionService,
         CookieFactory cookieFactory,
-        Clock clock
+        Clock clock,
+        LocalAdminLoginProperties localAdminLogin,
+        Environment environment
     ) {
         this.authService = authService;
         this.sessionService = sessionService;
         this.cookieFactory = cookieFactory;
         this.clock = clock;
+        this.localAdminLogin = localAdminLogin;
+        this.localProfileActive = environment.acceptsProfiles(Profiles.of("local"));
     }
 
     @PostMapping("/register")
@@ -73,7 +84,8 @@ public class AuthController {
         HttpServletResponse response
     ) {
         AuthService.UserView user = authService.authenticate(body.email(), body.password());
-        if (!"USER".equals(user.role())) {
+        boolean localAdmin = localProfileActive && localAdminLogin.allowsDirectLogin(body.email(), user.role());
+        if (!"USER".equals(user.role()) && !localAdmin) {
             return ApiEnvelope.of(Map.of("status", "MFA_PENDING"), requestId(request), clock);
         }
         SessionService.IssuedSession session = sessionService.issue(user.id(), body.deviceLabel(), request);
@@ -169,7 +181,7 @@ public class AuthController {
     public record ConsentRequest(@NotBlank String terms, @NotBlank String privacy, @NotBlank String ai) {
     }
 
-    public record LoginRequest(@NotBlank @Email String email, @NotBlank String password, String deviceLabel) {
+    public record LoginRequest(@NotBlank String email, @NotBlank String password, String deviceLabel) {
     }
 
     public record ForgotRequest(@NotBlank @Email String email) {

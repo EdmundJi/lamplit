@@ -14,7 +14,9 @@ async function request<T>(path: string, init: RequestInit = {}, retried = false)
     const csrf = cookie('csrf_token')
     if (csrf) headers.set('X-CSRF-Token', decodeURIComponent(csrf))
   }
-  const response = await fetch(`/api/v1${path}`, { ...init, headers, credentials: 'include' })
+  const requestInit: RequestInit = { ...init, headers, credentials: 'include' }
+  if (method === 'GET') requestInit.cache = 'no-store'
+  const response = await fetch(`/api/v1${path}`, requestInit)
   if (response.status === 401 && !retried && path !== '/auth/refresh') {
     const refreshed = await fetch('/api/v1/auth/refresh', { method: 'POST', credentials: 'include', headers })
     if (refreshed.ok) return request(path, init, true)

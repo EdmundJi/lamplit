@@ -59,4 +59,31 @@ describe('authentication', () => {
     expect(api.post).toHaveBeenLastCalledWith('/auth/mfa/verify', { email: 'admin@example.test', password: 'Correct-Horse-Battery-2026!', code: '123456' })
     expect(router.currentRoute.value.path).toBe('/admin')
   })
+
+  it('enters the console directly when local admin login returns an administrator', async () => {
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/auth', component: AuthView },
+        { path: '/admin', component: { template: '<div />' } },
+      ],
+    })
+    await router.push('/auth'); await router.isReady()
+    api.post.mockResolvedValue({
+      publicId: 'local-admin',
+      email: 'admin',
+      displayName: '本地管理员',
+      timezone: 'Asia/Shanghai',
+      role: 'ADMIN',
+    })
+    const wrapper = mount(AuthView, { global: { plugins: [createPinia(), router] } })
+
+    await wrapper.get('#email').setValue('admin')
+    await wrapper.get('#password').setValue('admin123')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+
+    expect(api.post).toHaveBeenCalledWith('/auth/login', { email: 'admin', password: 'admin123' })
+    expect(router.currentRoute.value.path).toBe('/admin')
+  })
 })

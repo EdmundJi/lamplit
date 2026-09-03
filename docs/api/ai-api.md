@@ -50,8 +50,8 @@ L2/L3 安全响应使用 `meta -> safety -> done`，不得发送 `delta`。供�
 
 ## 千问适配
 
-后端通过 `QwenProvider` 隔离供应商。`QWEN_PROVIDER=mock` 用于本地确定性验证；`QWEN_PROVIDER=qwen` 时调用 OpenAI 兼容的 `/chat/completions`，模型、超时、基础 URL 和密钥全部由环境变量提供。
+后端通过 `QwenProvider` 隔离供应商。`QWEN_PROVIDER=mock` 仅用于本地确定性验证；`QWEN_PROVIDER=qwen` 时调用 OpenAI 兼容的 `/chat/completions`，对话请求使用 `stream=true` 并解析服务端事件，模型、超时、基础 URL 和密钥全部由环境变量提供。模型请求默认等待 120 秒，SSE 连接默认保留 130 秒，可分别通过 `QWEN_TIMEOUT` 和 `QWEN_STREAM_TIMEOUT` 调整。缺少有效密钥或仍使用占位值时，应用会在启动阶段拒绝启用真实服务。
 
 硅基流动使用 `QWEN_BASE_URL=https://api.siliconflow.cn/v1`，模型填写平台返回的完整 ID，例如 `Qwen/Qwen3-30B-A3B-Instruct-2507`。阿里云百炼使用 `QWEN_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1`。密钥必须与基础 URL 所属平台匹配。
 
-真实供应商密钥不得写入仓库。结构化输出最多修复一次，无效输出、超时和非 2xx 响应统一映射为可恢复的 AI 服务错误。
+真实供应商密钥不得写入仓库。结构化输出最多修复一次，无效输出、超时、鉴权失败、限流和非 2xx 响应统一映射为可恢复的 AI 服务错误；错误正文不会回传供应商响应内容。

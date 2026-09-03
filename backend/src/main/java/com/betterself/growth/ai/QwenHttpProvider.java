@@ -15,7 +15,10 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
+import java.util.stream.Stream;
 
 @Component
 @ConditionalOnProperty(name = "app.ai.provider", havingValue = "qwen")
@@ -33,16 +36,30 @@ public class QwenHttpProvider implements QwenProvider {
         @Value("${app.ai.base-url}") String baseUrl,
         @Value("${app.ai.api-key}") String apiKey,
         @Value("${app.ai.model}") String model,
-        @Value("${app.ai.timeout:PT30S}") Duration timeout
+        @Value("${app.ai.timeout:PT120S}") Duration timeout
     ) {
-        if (apiKey == null || apiKey.isBlank()) {
+        String normalizedApiKey = apiKey == null ? "" : apiKey.trim();
+        if (normalizedApiKey.isBlank() || isPlaceholder(normalizedApiKey)) {
             throw new IllegalStateException("QWEN_API_KEY is required when app.ai.provider=qwen");
+        }
+        if (baseUrl == null || baseUrl.isBlank()) {
+            throw new IllegalStateException("QWEN_BASE_URL is required when app.ai.provider=qwen");
+        }
+        if (model == null || model.isBlank()) {
+            throw new IllegalStateException("QWEN_MODEL is required when app.ai.provider=qwen");
         }
         this.client = HttpClient.newBuilder().connectTimeout(timeout).build();
         this.objectMapper = objectMapper;
-        this.endpoint = URI.create(baseUrl.replaceAll("/$", "") + "/chat/completions");
-        this.apiKey = apiKey;
-        this.model = model;
+        try {
+            this.endpoint = URI.create(baseUrl.trim().replaceAll("/$", "") + "/chat/completions");
+        } catch (IllegalArgumentException exception) {
+            throw new IllegalStateException("QWEN_BASE_URL is invalid", exception);
+        }
+        if (!"http".equalsIgnoreCase(this.endpoint.getScheme()) && !"https".equalsIgnoreCase(this.endpoint.getScheme())) {
+            throw new IllegalStateException("QWEN_BASE_URL must use HTTP or HTTPS");
+        }
+        this.apiKey = normalizedApiKey;
+        this.model = model.trim();
         this.timeout = timeout;
     }
 
@@ -95,17 +112,42 @@ public class QwenHttpProvider implements QwenProvider {
     @Override
     public StreamMetadata stream(ChatPrompt prompt, Consumer<String> deltaConsumer) {
         long started = System.nanoTime();
-        JsonNode root = call(List.of(
-            Map.of("role", "system", "content", prompt.systemPrompt()),
-            Map.of("role", "user", "content", prompt.userMessage())
-        ), false);
-        String content = root.path("choices").path(0).path("message").path("content").asText();
-        for (int offset = 0; offset < content.length(); offset += 32) {
-            deltaConsumer.accept(content.substring(offset, Math.min(content.length(), offset + 32)));
+        AtomicBoolean receivedContent = new AtomicBoolean(false);
+        AtomicReference<String> requestId = new AtomicReference<>("");
+        AtomicReference<String> responseModel = new AtomicReference<>(model);
+        AtomicReference<Integer> inputTokens = new AtomicReference<>(0);
+        AtomicReference<Integer> outputTokens = new AtomicReference<>(0);
+        HttpRequest request = request(
+            List.of(
+                Map.of("role", "system", "content", prompt.systemPrompt()),
+                Map.of("role", "user", "content", prompt.userMessage())
+            ),
+            false,
+            true
+        );
+        try {
+            HttpResponse<Stream<String>> response = client.send(request, HttpResponse.BodyHandlers.ofLines());
+            if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                throw providerFailure(response.statusCode());
+            }
+            try (Stream<String> lines = response.body()) {
+                lines.filter(line -> line.startsWith("data:"))
+                    .map(line -> line.substring(5).trim())
+                    .filter(payload -> !payload.isEmpty() && !"[DONE]".equals(payload))
+                    .forEach(payload -> consumeChunk(
+                        payload, requestId, responseModel, inputTokens, outputTokens, receivedContent, deltaConsumer
+                    ));
+            }
+            if (!receivedContent.get()) {
+                throw unavailable("AI_EMPTY_RESPONSE");
+            }
+        } catch (ApiException exception) {
+            throw exception;
+        } catch (Exception exception) {
+            throw unavailable("AI_PROVIDER_UNAVAILABLE");
         }
         return new StreamMetadata(
-            root.path("model").asText(model), root.path("id").asText(),
-            root.path("usage").path("prompt_tokens").asInt(), root.path("usage").path("completion_tokens").asInt(),
+            responseModel.get(), requestId.get(), inputTokens.get(), outputTokens.get(),
             Duration.ofNanos(System.nanoTime() - started).toMillis()
         );
     }
@@ -126,23 +168,10 @@ public class QwenHttpProvider implements QwenProvider {
 
     private JsonNode call(List<Map<String, String>> messages, boolean jsonMode) {
         try {
-            Map<String, Object> body = new java.util.LinkedHashMap<>();
-            body.put("model", model);
-            body.put("messages", messages);
-            body.put("temperature", 0.2);
-            body.put("max_tokens", 2000);
-            if (jsonMode) {
-                body.put("response_format", Map.of("type", "json_object"));
-            }
-            HttpRequest request = HttpRequest.newBuilder(endpoint)
-                .timeout(timeout)
-                .header("Authorization", "Bearer " + apiKey)
-                .header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(body)))
-                .build();
+            HttpRequest request = request(messages, jsonMode, false);
             HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                throw unavailable("AI_PROVIDER_ERROR");
+                throw providerFailure(response.statusCode());
             }
             return objectMapper.readTree(response.body());
         } catch (ApiException exception) {
@@ -154,5 +183,86 @@ public class QwenHttpProvider implements QwenProvider {
 
     private ApiException unavailable(String code) {
         return new ApiException(HttpStatus.SERVICE_UNAVAILABLE, code, "AI service is temporarily unavailable");
+    }
+
+    private boolean isPlaceholder(String value) {
+        String normalized = value.toLowerCase(java.util.Locale.ROOT);
+        return normalized.startsWith("replace-with-")
+            || normalized.startsWith("your-")
+            || normalized.equals("test-key")
+            || normalized.equals("changeme")
+            || normalized.equals("change-me");
+    }
+
+    private HttpRequest request(List<Map<String, String>> messages, boolean jsonMode, boolean stream) {
+        try {
+            Map<String, Object> body = new java.util.LinkedHashMap<>();
+            body.put("model", model);
+            body.put("messages", messages);
+            body.put("temperature", 0.2);
+            body.put("max_tokens", 2000);
+            if (jsonMode) {
+                body.put("response_format", Map.of("type", "json_object"));
+            }
+            if (stream) {
+                body.put("stream", true);
+                body.put("stream_options", Map.of("include_usage", true));
+            }
+            return HttpRequest.newBuilder(endpoint)
+                .timeout(timeout)
+                .header("Authorization", "Bearer " + apiKey)
+                .header("Content-Type", "application/json")
+                .header("Accept", stream ? "text/event-stream" : "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(body)))
+                .build();
+        } catch (Exception exception) {
+            throw unavailable("AI_PROVIDER_UNAVAILABLE");
+        }
+    }
+
+    private void consumeChunk(
+        String payload,
+        AtomicReference<String> requestId,
+        AtomicReference<String> responseModel,
+        AtomicReference<Integer> inputTokens,
+        AtomicReference<Integer> outputTokens,
+        AtomicBoolean receivedContent,
+        Consumer<String> deltaConsumer
+    ) {
+        try {
+            JsonNode chunk = objectMapper.readTree(payload);
+            if (chunk.has("error")) {
+                throw unavailable("AI_PROVIDER_ERROR");
+            }
+            if (chunk.hasNonNull("id")) requestId.set(chunk.path("id").asText());
+            if (chunk.hasNonNull("model")) responseModel.set(chunk.path("model").asText(model));
+            JsonNode usage = chunk.path("usage");
+            if (usage.hasNonNull("prompt_tokens")) inputTokens.set(usage.path("prompt_tokens").asInt());
+            if (usage.hasNonNull("completion_tokens")) outputTokens.set(usage.path("completion_tokens").asInt());
+            for (JsonNode choice : chunk.path("choices")) {
+                String text = choice.path("delta").path("content").asText("");
+                if (!text.isEmpty()) {
+                    receivedContent.set(true);
+                    deltaConsumer.accept(text);
+                }
+            }
+        } catch (ApiException exception) {
+            throw exception;
+        } catch (Exception exception) {
+            throw new IllegalStateException("Invalid AI stream payload", exception);
+        }
+    }
+
+    private ApiException providerFailure(int statusCode) {
+        if (statusCode == 401 || statusCode == 403) {
+            return unavailable("AI_PROVIDER_AUTH_FAILED");
+        }
+        if (statusCode == 429) {
+            return unavailable("AI_PROVIDER_RATE_LIMITED");
+        }
+        if (statusCode >= 400 && statusCode < 500) {
+            return unavailable("AI_PROVIDER_REQUEST_REJECTED");
+        }
+        return unavailable("AI_PROVIDER_ERROR");
     }
 }

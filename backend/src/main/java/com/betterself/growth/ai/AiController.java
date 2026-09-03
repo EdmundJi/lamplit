@@ -3,6 +3,7 @@ package com.betterself.growth.ai;
 import com.betterself.growth.auth.CurrentUser;
 import com.betterself.growth.shared.api.ApiEnvelope;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.util.List;
 
 @RestController
@@ -27,12 +29,20 @@ public class AiController {
     private final SuggestionService suggestions;
     private final GoalTemplateService goalTemplates;
     private final Clock clock;
+    private final Duration streamTimeout;
 
-    public AiController(AiService ai, SuggestionService suggestions, GoalTemplateService goalTemplates, Clock clock) {
+    public AiController(
+        AiService ai,
+        SuggestionService suggestions,
+        GoalTemplateService goalTemplates,
+        Clock clock,
+        @Value("${app.ai.stream-timeout:PT130S}") Duration streamTimeout
+    ) {
         this.ai = ai;
         this.suggestions = suggestions;
         this.goalTemplates = goalTemplates;
         this.clock = clock;
+        this.streamTimeout = streamTimeout;
     }
 
     @PostMapping("/sessions")
@@ -67,7 +77,7 @@ public class AiController {
         @PathVariable String sessionId,
         @RequestBody AiService.ChatCommand body
     ) {
-        SseEmitter emitter = new SseEmitter(35_000L);
+        SseEmitter emitter = new SseEmitter(streamTimeout.toMillis());
         ai.stream(user.id(), sessionId, body, emitter);
         return emitter;
     }

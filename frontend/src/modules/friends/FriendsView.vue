@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { ChevronRight, MailCheck, MailPlus, MessageCircle, Send, UserPlus, Users, X } from 'lucide-vue-next'
 import { api, type ApiError } from '../../shared/api/client'
+import { notifyDataChanged, onDataChanged } from '../../shared/data-sync'
 import type { FriendItem, FriendList } from './friends.types'
 
 const list = ref<FriendList>({ friends: [], incoming: [], outgoing: [] })
@@ -62,6 +63,7 @@ async function sendRequest() {
       : `申请已发送给 ${item.displayName}，等待对方接受`
     email.value = ''
     await load(false)
+    notifyDataChanged(['social'])
   } catch (err) {
     error.value = friendlyError(err, '申请发送失败，请稍后重试')
   } finally {
@@ -76,6 +78,7 @@ async function accept(item: FriendItem) {
     await api.post<FriendItem>(`/friends/${item.publicId}/accept`)
     feedback.value = `已和 ${item.displayName} 成为好友`
     await load(false)
+    notifyDataChanged(['social'])
   } catch (err) {
     error.value = friendlyError(err, '接受失败，请稍后重试')
   } finally {
@@ -90,6 +93,7 @@ async function reject(item: FriendItem) {
     await api.post(`/friends/${item.publicId}/reject`)
     feedback.value = `已拒绝 ${item.displayName} 的申请`
     await load(false)
+    notifyDataChanged(['social'])
   } catch (err) {
     error.value = friendlyError(err, '操作失败，请稍后重试')
   } finally {
@@ -104,6 +108,7 @@ async function remove(item: FriendItem) {
     await api.delete(`/friends/${item.publicId}`)
     feedback.value = `已删除好友 ${item.displayName}`
     await load(false)
+    notifyDataChanged(['social'])
   } catch (err) {
     error.value = friendlyError(err, '删除失败，请稍后重试')
   } finally {
@@ -111,7 +116,10 @@ async function remove(item: FriendItem) {
   }
 }
 
-onMounted(() => load())
+const stopDataSync = onDataChanged('social', () => load(false))
+
+onMounted(() => load(true))
+onBeforeUnmount(stopDataSync)
 </script>
 
 <template>

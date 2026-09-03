@@ -90,6 +90,8 @@ services:
       QWEN_BASE_URL: ${QWEN_BASE_URL:-https://dashscope.aliyuncs.com/compatible-mode/v1}
       QWEN_API_KEY: ${QWEN_API_KEY:-}
       QWEN_MODEL: ${QWEN_MODEL:-qwen-plus}
+      QWEN_TIMEOUT: ${QWEN_TIMEOUT:-PT120S}
+      QWEN_STREAM_TIMEOUT: ${QWEN_STREAM_TIMEOUT:-PT130S}
       AI_RETENTION_DAYS: ${AI_RETENTION_DAYS:-30}
     ports:
       - "8080:8080"

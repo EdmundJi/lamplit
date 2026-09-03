@@ -37,6 +37,18 @@ describe('AI safety UI', () => {
     expect(wrapper.get('button[aria-label="发送"]').attributes('disabled')).toBeUndefined()
   })
 
+  it('shows the provider error returned by the real AI adapter', async () => {
+    postSse.mockImplementation(async (_path, _body, emit) => emit({
+      name: 'error',
+      data: { code: 'AI_PROVIDER_AUTH_FAILED', message: '智能服务密钥无效，请检查服务器上的模型服务配置。' },
+    }))
+    const wrapper = mount(AiView, { global: { stubs: { RouterLink: true } } })
+    await wrapper.get('textarea').setValue('帮我拆解目标')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    expect(wrapper.get('.error').text()).toContain('智能服务密钥无效')
+  })
+
   it('loads a historical session and continues the same conversation', async () => {
     api.get.mockImplementation((path: string) => {
       if (path === '/ai/sessions') return Promise.resolve([

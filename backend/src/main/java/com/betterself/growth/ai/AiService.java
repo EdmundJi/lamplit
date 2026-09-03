@@ -209,12 +209,30 @@ public class AiService {
             emitter.completeWithError(exception);
         } catch (RuntimeException exception) {
             try {
-                emitter.send(SseEmitter.event().name("error").data(new StreamError("AI_STREAM_FAILED", "AI service is temporarily unavailable")));
+                emitter.send(SseEmitter.event().name("error").data(streamError(exception)));
                 emitter.complete();
             } catch (IOException ignored) {
                 emitter.completeWithError(exception);
             }
         }
+    }
+
+    private StreamError streamError(RuntimeException exception) {
+        if (exception instanceof ApiException apiException) {
+            return switch (apiException.code()) {
+                case "AI_PROVIDER_AUTH_FAILED" -> new StreamError(
+                    apiException.code(), "智能服务密钥无效，请检查服务器上的模型服务配置。"
+                );
+                case "AI_PROVIDER_RATE_LIMITED" -> new StreamError(
+                    apiException.code(), "智能服务当前达到调用限额，请稍后再试。"
+                );
+                case "AI_PROVIDER_REQUEST_REJECTED" -> new StreamError(
+                    apiException.code(), "智能服务拒绝了请求，请检查模型名称和接口地址。"
+                );
+                default -> new StreamError(apiException.code(), "智能服务暂时不可用，请稍后再试。");
+            };
+        }
+        return new StreamError("AI_STREAM_FAILED", "智能服务暂时不可用，请稍后再试。");
     }
 
     private String insertMessage(

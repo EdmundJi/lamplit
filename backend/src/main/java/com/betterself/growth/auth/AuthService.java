@@ -141,10 +141,10 @@ public class AuthService {
                 resultSet.getString("status"),
                 resultSet.getString("password_hash")
             ) : null,
-            normalizeEmail(email)
+            normalizeLoginIdentifier(email)
         );
         if (user == null || !passwordEncoder.matches(password, user.passwordHash()) || !"ACTIVE".equals(user.status())) {
-            throw new ApiException(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS", "Email or password is incorrect");
+            throw new ApiException(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS", "账号或密码不正确");
         }
         return new UserView(user.id(), user.publicId(), user.email(), user.displayName(), user.timezone(), user.role());
     }
@@ -307,6 +307,13 @@ public class AuthService {
             throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_EMAIL", "A valid email is required");
         }
         return email.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private String normalizeLoginIdentifier(String identifier) {
+        if (identifier == null || identifier.isBlank()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_LOGIN_IDENTIFIER", "请输入邮箱或管理员账号");
+        }
+        return identifier.trim().toLowerCase(Locale.ROOT);
     }
 
     public record RegisterCommand(

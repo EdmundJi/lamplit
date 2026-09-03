@@ -15,6 +15,7 @@ import {
   Sparkles,
 } from 'lucide-vue-next'
 import { api, type ApiError } from '../../shared/api/client'
+import { notifyDataChanged } from '../../shared/data-sync'
 
 type Scene = 'STUDY' | 'FITNESS' | 'CAREER' | 'EMOTIONAL_SUPPORT'
 type StarterTask = {
@@ -107,6 +108,7 @@ async function finish() {
       ...form,
       starterTemplatePublicIds: selectedIds.value,
     })
+    notifyDataChanged(['goals', 'tasks', 'today', 'insights', 'attributes', 'achievements', 'profile', 'partners'])
     step.value = 4
   } catch (failure) {
     const apiError = failure as Partial<ApiError>

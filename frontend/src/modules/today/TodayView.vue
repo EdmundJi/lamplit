@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { BatteryMedium, Check, Clock3, Gauge, Minimize2, Play, RotateCcw, SkipForward, Sparkles, TimerReset, Undo2, X } from 'lucide-vue-next'
 import { api, type ApiError } from '../../shared/api/client'
+import { notifyDataChanged, onDataChanged } from '../../shared/data-sync'
 import { randomUUID } from '../../shared/uuid'
 import { encouragement, type EncouragementMoment } from '../../shared/encouragement'
 
@@ -94,8 +95,8 @@ function localDate(value = new Date()) {
   return `${year}-${month}-${day}`
 }
 
-async function load() {
-  loading.value = true
+async function load(showLoading = true) {
+  if (showLoading) loading.value = true
   error.value = ''
   try {
     const d = localDate()
@@ -115,7 +116,7 @@ async function load() {
   } catch {
     error.value = '今天的任务暂时无法加载'
   } finally {
-    loading.value = false
+    if (showLoading) loading.value = false
   }
 }
 
@@ -139,6 +140,7 @@ async function applyCheck() {
       availableMinutes: availableMinutes.value,
     })
     savedAdvice.value = saved.advice
+    notifyDataChanged(['today', 'insights'])
     feedback.value = { tone: 'support', text: `已按“${suggestedPlan.value.title}”整理今天：${suggestedPlan.value.body}` }
     await nextTick()
     focusFirstRecommended()
@@ -216,6 +218,7 @@ async function act(task: Task, eventType: string, extra: Record<string, unknown>
         ].filter(Boolean).join(' · ') || undefined,
       }
     }
+    notifyDataChanged(['tasks', 'today', 'insights', 'attributes', 'achievements', 'profile', 'partners'])
     actionKeys.delete(intent)
     selected.value = null
   } catch (caught) {
@@ -248,11 +251,17 @@ async function reverse() {
   await api.post(`/task-schedules/${last.value.schedule}/events/${last.value.event}/reverse`, undefined, { 'Idempotency-Key': randomUUID() })
   last.value = null
   feedback.value = null
-  await load()
+  await load(false)
+  notifyDataChanged(['tasks', 'today', 'insights', 'attributes', 'achievements', 'profile', 'partners'])
 }
 
-onMounted(load)
-onBeforeUnmount(() => clearInterval(focusTimer))
+const stopDataSync = onDataChanged(['goals', 'tasks'], () => load(false))
+
+onMounted(() => load(true))
+onBeforeUnmount(() => {
+  stopDataSync()
+  clearInterval(focusTimer)
+})
 </script>
 
 <template>

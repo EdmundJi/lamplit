@@ -6,6 +6,7 @@ import { RadarChart } from 'echarts/charts'
 import { LegendComponent, TooltipComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 import { api } from '../../shared/api/client'
+import { onDataChanged } from '../../shared/data-sync'
 
 use([RadarChart, LegendComponent, TooltipComponent, CanvasRenderer])
 
@@ -107,21 +108,28 @@ function resizeChart() {
   chart?.resize()
 }
 
-onMounted(async () => {
+async function load(showLoading = true) {
+  if (showLoading) loading.value = true
+  error.value = ''
   try {
     data.value = await api.get<AttributesOverview>('/insights/attributes')
-    loading.value = false
+    if (showLoading) loading.value = false
     await nextTick()
     renderChart()
     window.addEventListener('resize', resizeChart)
   } catch {
     error.value = '属性数据暂时无法加载'
   } finally {
-    loading.value = false
+    if (showLoading) loading.value = false
   }
-})
+}
+
+const stopDataSync = onDataChanged(['attributes', 'tasks'], () => load(false))
+
+onMounted(() => load(true))
 
 onBeforeUnmount(() => {
+  stopDataSync()
   window.removeEventListener('resize', resizeChart)
   chart?.dispose()
 })

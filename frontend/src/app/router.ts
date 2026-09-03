@@ -32,5 +32,5 @@ router.beforeEach(async to => {
   if (!auth.initialized) await auth.load()
   if (!to.meta.public && !auth.signedIn) return '/auth'
   if (to.meta.admin && !auth.isAdmin) return '/today'
-  if (to.path === '/auth' && auth.signedIn) return '/today'
+  if (to.path === '/auth' && auth.signedIn) return auth.isAdmin ? '/admin' : '/today'
 })

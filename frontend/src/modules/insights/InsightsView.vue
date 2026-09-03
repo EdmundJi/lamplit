@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import {
   Award,
   BadgeCheck,
@@ -10,6 +10,7 @@ import {
   Save,
 } from 'lucide-vue-next'
 import { api } from '../../shared/api/client'
+import { onDataChanged } from '../../shared/data-sync'
 import { growthIcon, type Achievement } from '../achievements/achievement.types'
 
 type InsightOverview = {
@@ -193,7 +194,9 @@ async function confirmReview() {
   }
 }
 
-onMounted(async () => {
+async function load(showLoading = true) {
+  if (showLoading) loading.value = true
+  error.value = ''
   try {
     const weekStart = currentMonday()
     const [overview, trendRows, roleRows, achievementRows, planRows] = await Promise.all([
@@ -208,14 +211,22 @@ onMounted(async () => {
     roles.value = roleRows
     achievements.value = achievementRows
     weeklyPlans.value = planRows
-    selectedPlanId.value = planRows[0]?.publicId ?? ''
+    const selectedPlanStillExists = planRows.some(plan => plan.publicId === selectedPlanId.value)
+    selectedPlanId.value = selectedPlanStillExists
+      ? selectedPlanId.value
+      : planRows[0]?.publicId ?? ''
     await loadReview(selectedPlanId.value)
   } catch {
     error.value = '洞察暂时无法加载'
   } finally {
-    loading.value = false
+    if (showLoading) loading.value = false
   }
-})
+}
+
+const stopDataSync = onDataChanged(['insights', 'attributes', 'tasks', 'achievements'], () => load(false))
+
+onMounted(() => load(true))
+onBeforeUnmount(stopDataSync)
 </script>
 
 <template>

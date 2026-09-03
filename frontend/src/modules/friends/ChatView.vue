@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { ArrowLeft, Send, Smile } from 'lucide-vue-next'
 import { api, type ApiError } from '../../shared/api/client'
+import { notifyDataChanged } from '../../shared/data-sync'
 import { useAuthStore } from '../auth/auth.store'
 import EmojiPicker from './EmojiPicker.vue'
 import EmojiText from './EmojiText.vue'
@@ -109,6 +110,7 @@ async function send() {
     draft.value = ''
     showEmoji.value = false
     messages.value = await api.get<ChatMessage[]>(`/friends/messages?peerPublicId=${encodeURIComponent(props.publicId)}`)
+    notifyDataChanged('social')
     await nextTick()
     scrollToBottom()
   } catch (err) {

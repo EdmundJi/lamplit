@@ -38,6 +38,10 @@ management:
 
 app:
   admin:
+    local-login:
+      enabled: ${LOCAL_ADMIN_LOGIN_ENABLED:false}
+      username: ${LOCAL_ADMIN_LOGIN_USERNAME:}
+      password: ${LOCAL_ADMIN_LOGIN_PASSWORD:}
     bootstrap:
       email: ${ADMIN_BOOTSTRAP_EMAIL:}
       password: ${ADMIN_BOOTSTRAP_PASSWORD:}
@@ -68,5 +72,6 @@ app:
     base-url: ${QWEN_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}
     api-key: ${QWEN_API_KEY:}
     model: ${QWEN_MODEL:qwen-plus}
-    timeout: ${QWEN_TIMEOUT:PT30S}
+    timeout: ${QWEN_TIMEOUT:PT120S}
+    stream-timeout: ${QWEN_STREAM_TIMEOUT:PT130S}
     retention-days: ${AI_RETENTION_DAYS:30}

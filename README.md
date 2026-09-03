@@ -64,6 +64,6 @@ docker compose --env-file .env.local -f deploy/compose.yaml config
 ./scripts/verify-global-flow.sh
 ```
 
-该闸门验证：认证 Cookie 与 CSRF、同意持久化、目标/周计划/任务物化、任务状态转换与撤销、AI SSE 与固定危机替代、建议幂等采纳、ZIP 导出、归属隔离、删除冷静期/取消、数据库不变量、Redis 健康与敏感日志扫描。要进行真实供应商冒烟，仅在进程环境中设置 `QWEN_PROVIDER=qwen` 并提供 `QWEN_API_KEY`；绝不提交该密钥。
+该闸门验证：认证 Cookie 与 CSRF、同意持久化、目标/周计划/任务物化、任务状态转换与撤销、AI SSE 与固定危机替代、建议幂等采纳、ZIP 导出、归属隔离、删除冷静期/取消、数据库不变量、Redis 健康与敏感日志扫描。自动化验收默认使用 `QWEN_PROVIDER=mock`，不会访问外部模型。要让产品实际调用模型服务，请在未提交的 `.env.local` 或服务器环境中设置 `QWEN_PROVIDER=qwen`、匹配的 `QWEN_BASE_URL`、`QWEN_MODEL`、有效的 `QWEN_API_KEY`，以及可选的 `QWEN_TIMEOUT`（默认 120 秒）和 `QWEN_STREAM_TIMEOUT`（默认 130 秒）；占位密钥会被拒绝，真实密钥绝不写入仓库。
 
 后端健康检查地址为 `http://localhost:8080/actuator/health`。Nginx 用作 SPA 边缘服务器时，已配置暴露同一地址并代理 `/api/v1`。

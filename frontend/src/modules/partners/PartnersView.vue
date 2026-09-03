@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { Coins, Gamepad2, HandHeart, Heart, HeartHandshake, MessageCircle, MonitorOff, MonitorUp, PartyPopper, Pencil, Plus, ShoppingBag, Smartphone, Sparkles, X } from 'lucide-vue-next'
 import { api } from '../../shared/api/client'
+import { notifyDataChanged, onDataChanged } from '../../shared/data-sync'
 import RivePet from './RivePet.vue'
 import { useDesktopPetStore } from './desktop-pet.store'
 import { randomPetDialogue } from './pet-dialogues'
@@ -90,8 +91,12 @@ function syncForm(pet?: Pet) {
 }
 
 function resolveVariantIndex(pet: Pet) {
-  const saved = Number(window.localStorage.getItem(petVariantStorageKey(pet.publicId)) ?? '')
-  if (Number.isInteger(saved) && saved >= 0) return saved
+  try {
+    const saved = Number(window.localStorage?.getItem(petVariantStorageKey(pet.publicId)) ?? '')
+    if (Number.isInteger(saved) && saved >= 0) return saved
+  } catch {
+    // Some embedded browsers disable local storage; the deterministic default still works.
+  }
   return variantIndexForKind(pet.speciesCode, pet.breed)
 }
 
@@ -102,7 +107,11 @@ function selectVariant(index: number) {
   if (count < 2) return
   const next = ((index % count) + count) % count
   variantIndex.value = next
-  window.localStorage.setItem(petVariantStorageKey(pet.publicId), String(next))
+  try {
+    window.localStorage?.setItem(petVariantStorageKey(pet.publicId), String(next))
+  } catch {
+    // The selection remains active for this session when storage is unavailable.
+  }
 }
 
 watch(selectedPet, pet => {
@@ -133,7 +142,11 @@ async function savePet() {
   try {
     if (panel.value === 'edit' && selectedPet.value) {
       await api.patch(`/partners/pets/${selectedPet.value.publicId}`, { name: form.name, breed: form.breed, furColor: form.furColor })
-      window.localStorage.removeItem(petVariantStorageKey(selectedPet.value.publicId))
+      try {
+        window.localStorage?.removeItem(petVariantStorageKey(selectedPet.value.publicId))
+      } catch {
+        // Ignore unavailable browser storage; the server data is still saved.
+      }
       feedback.value = '伙伴资料已更新'
     } else {
       const pet = await api.post<Pet>('/partners/pets', {
@@ -142,12 +155,17 @@ async function savePet() {
         breed: form.breed,
         furColor: form.furColor,
       })
-      window.localStorage.setItem(petVariantStorageKey(pet.publicId), String(variantIndexForKind(pet.speciesCode, pet.breed)))
+      try {
+        window.localStorage?.setItem(petVariantStorageKey(pet.publicId), String(variantIndexForKind(pet.speciesCode, pet.breed)))
+      } catch {
+        // Ignore unavailable browser storage; the server data is still saved.
+      }
       await api.post(`/partners/pets/${pet.publicId}/select`)
       feedback.value = '新的伙伴已经加入'
     }
     panel.value = null
     await load(false)
+    notifyDataChanged(['partners', 'profile'])
   } catch {
     error.value = '伙伴资料未保存，请检查名称、种类和颜色'
   } finally {
@@ -162,6 +180,7 @@ async function selectPet(pet: Pet) {
   await api.post(`/partners/pets/${pet.publicId}/select`)
   feedback.value = `已切换到 ${pet.name}`
   await load(false)
+  notifyDataChanged(['partners', 'profile'])
 }
 
 async function interact(action: PetInteractionOption) {
@@ -175,6 +194,7 @@ async function interact(action: PetInteractionOption) {
     const result = await api.post<InteractionResult>(`/partners/pets/${selectedPet.value.publicId}/interact`)
     showDialogue(result, action.label)
     await load(false)
+    notifyDataChanged(['partners', 'profile'])
   } catch {
     error.value = '互动失败，请稍后重试'
   } finally {
@@ -205,6 +225,7 @@ async function purchase(item: ShopItem) {
     petRenderer.value?.react(item.itemType === 'FOOD' ? 'feed' : 'celebrate')
     feedback.value = `${result.item.name} 已使用，${result.pet.name} 好感度 +${result.item.affectionGain}`
     await load(false)
+    notifyDataChanged(['partners', 'profile'])
   } catch (err: any) {
     error.value = err?.code === 'INSUFFICIENT_COINS' ? '金币不足，完成今日任务可以获得金币' : '购买失败，请稍后重试'
   }
@@ -251,8 +272,13 @@ function toggleDesktopPet() {
   if (isDesktopCompanion) window.betterSelfDesktop?.showPet()
 }
 
-onMounted(load)
-onBeforeUnmount(() => window.clearTimeout(dialogueTimer))
+const stopDataSync = onDataChanged(['partners', 'tasks'], () => load(false))
+
+onMounted(() => load(true))
+onBeforeUnmount(() => {
+  stopDataSync()
+  window.clearTimeout(dialogueTimer)
+})
 </script>
 
 <template>

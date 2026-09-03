@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ChevronRight, MessageCircle, MessagesSquare, Plus, Users, UsersRound, X } from 'lucide-vue-next'
 import { api, type ApiError } from '../../shared/api/client'
+import { notifyDataChanged, onDataChanged } from '../../shared/data-sync'
 import EmojiText from './EmojiText.vue'
 import type { Conversation, FriendItem, GroupConversation } from './friends.types'
 
@@ -42,8 +43,8 @@ function targetOf(row: ConversationRow) {
   return row.kind === 'group' ? `/friends/groups/${row.peerPublicId}` : `/friends/${row.peerPublicId}/chat`
 }
 
-async function load() {
-  loading.value = true
+async function load(showLoading = true) {
+  if (showLoading) loading.value = true
   error.value = ''
   try {
     const [single, groups] = await Promise.all([
@@ -59,7 +60,7 @@ async function load() {
   } catch {
     error.value = '会话暂时无法加载'
   } finally {
-    loading.value = false
+    if (showLoading) loading.value = false
   }
 }
 
@@ -107,7 +108,8 @@ async function createGroup() {
     })
     feedback.value = '群聊已创建'
     creating.value = false
-    await load()
+    await load(false)
+    notifyDataChanged('social')
     router.push(`/friends/groups/${group.publicId}`)
   } catch (err) {
     error.value = (err as Partial<ApiError> | null)?.code === 'GROUP_MEMBER_LIMIT'
@@ -118,7 +120,10 @@ async function createGroup() {
   }
 }
 
-onMounted(load)
+const stopDataSync = onDataChanged('social', () => load(false))
+
+onMounted(() => load(true))
+onBeforeUnmount(stopDataSync)
 </script>
 
 <template>

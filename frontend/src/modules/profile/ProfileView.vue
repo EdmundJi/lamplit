@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { Award, BarChart3, CalendarDays, Check, ChevronRight, Coins, EyeOff, PawPrint, Settings, Sparkles, Target, UserRound, Users, X } from 'lucide-vue-next'
 import { api } from '../../shared/api/client'
+import { notifyDataChanged, onDataChanged } from '../../shared/data-sync'
 import { growthIcon, type Title } from '../achievements/achievement.types'
 import RivePet from '../partners/RivePet.vue'
 import type { Pet, Wallet } from '../partners/partner.types'
@@ -46,7 +47,9 @@ const petProgress = computed(() => {
   return Math.min(100, Math.round(pet.affection * 100 / Math.max(1, pet.nextLevelAffection)))
 })
 
-onMounted(async () => {
+async function load(showLoading = true) {
+  if (showLoading) loading.value = true
+  error.value = ''
   try {
     const [profileData, titleData] = await Promise.all([
       api.get<Profile>('/me/profile'),
@@ -57,9 +60,9 @@ onMounted(async () => {
   } catch {
     error.value = '个人资料暂时无法加载'
   } finally {
-    loading.value = false
+    if (showLoading) loading.value = false
   }
-})
+}
 
 async function equipTitle(title: Title) {
   titleBusy.value = title.code
@@ -68,6 +71,7 @@ async function equipTitle(title: Title) {
     titles.value = await api.patch<Title[]>('/titles/equipped', { code: title.code })
     if (profile.value) profile.value.equippedTitle = titles.value.find(item => item.equipped) ?? null
     titleFeedback.value = `已佩戴「${title.name}」`
+    notifyDataChanged('achievements')
   } catch {
     titleFeedback.value = '称号暂时无法更新'
   } finally {
@@ -82,6 +86,7 @@ async function unequipTitle() {
     titles.value = await api.delete<Title[]>('/titles/equipped')
     if (profile.value) profile.value.equippedTitle = null
     titleFeedback.value = '已卸下称号'
+    notifyDataChanged('achievements')
   } catch {
     titleFeedback.value = '称号暂时无法更新'
   } finally {
@@ -98,12 +103,18 @@ async function toggleSoloGrowth() {
     const result = await api.patch<{ soloGrowth: boolean }>('/me/privacy', { soloGrowth: nextValue })
     profile.value.soloGrowth = result.soloGrowth
     privacyFeedback.value = result.soloGrowth ? '已进入独自升级模式' : '已允许其他用户找到你'
+    notifyDataChanged(['profile', 'social'])
   } catch {
     privacyFeedback.value = '隐私设置暂时无法更新'
   } finally {
     privacyBusy.value = false
   }
 }
+
+const stopDataSync = onDataChanged(['tasks', 'partners'], () => load(false))
+
+onMounted(() => load(true))
+onBeforeUnmount(stopDataSync)
 </script>
 
 <template>

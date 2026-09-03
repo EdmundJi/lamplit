@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Coins, HandHeart, House, Minus, MoreHorizontal, PawPrint, Utensils, X } from 'lucide-vue-next'
 import { api } from '../../shared/api/client'
+import { notifyDataChanged, onDataChanged } from '../../shared/data-sync'
 import RivePet from './RivePet.vue'
 import { useDesktopPetStore } from './desktop-pet.store'
 import { randomPetDialogue } from './pet-dialogues'
@@ -112,6 +113,7 @@ async function interact() {
       meta: result.rewarded ? `今日首次互动 +${result.affectionDelta} 好感` : '今天已经领取过互动奖励',
     })
     await loadProfile()
+    notifyDataChanged(['partners', 'profile'])
   } catch {
     error.value = '互动失败，请稍后再试'
   } finally {
@@ -133,6 +135,7 @@ async function feed(item: ShopItem) {
     showDialogue({ text: `${item.name}真好吃，谢谢你陪我！`, meta: `好感度 +${result.item.affectionGain}` })
     feedOpen.value = false
     await loadProfile()
+    notifyDataChanged(['partners', 'profile'])
   } catch (reason: any) {
     error.value = reason?.code === 'INSUFFICIENT_COINS' ? '金币不足，完成任务后再来喂我吧' : '喂食失败，请稍后再试'
   } finally {
@@ -219,6 +222,8 @@ function handleResize() {
 
 watch(() => store.petPublicId, () => loadProfile())
 
+const stopDataSync = onDataChanged(['partners', 'tasks'], () => loadProfile())
+
 onMounted(() => {
   store.hydrate()
   window.addEventListener('pointerdown', closeTransient)
@@ -238,6 +243,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  stopDataSync()
   window.clearTimeout(dialogueTimer)
   window.removeEventListener('pointermove', drag)
   window.removeEventListener('resize', handleResize)

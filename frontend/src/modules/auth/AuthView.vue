@@ -34,7 +34,9 @@ async function submit() {
         mode.value = 'mfa'
         return
       }
-      await router.push(window.betterSelfDesktop?.isDesktopApp ? '/desktop-pet' : '/today')
+      await router.push(result.role !== 'USER'
+        ? '/admin'
+        : window.betterSelfDesktop?.isDesktopApp ? '/desktop-pet' : '/today')
     } else if (mode.value === 'mfa') {
       await auth.verifyAdminMfa(form.email, form.password, form.mfaCode)
       await router.push('/admin')
@@ -120,12 +122,27 @@ function backToLogin() {
             {{ error }}
           </p>
           <div class="field">
-            <label for="email">邮箱</label>
-            <input id="email" v-model="form.email" type="email" autocomplete="email" :readonly="mode === 'mfa'" required>
+            <label for="email">{{ mode === 'login' ? '邮箱或管理员账号' : '邮箱' }}</label>
+            <input
+              id="email"
+              v-model="form.email"
+              :type="mode === 'login' || mode === 'mfa' ? 'text' : 'email'"
+              :autocomplete="mode === 'login' ? 'username' : 'email'"
+              :readonly="mode === 'mfa'"
+              required
+            >
           </div>
           <div v-if="mode !== 'forgot'" class="field">
             <label for="password">密码</label>
-            <input id="password" v-model="form.password" type="password" :autocomplete="mode === 'login' ? 'current-password' : 'new-password'" :readonly="mode === 'mfa'" minlength="12" required>
+            <input
+              id="password"
+              v-model="form.password"
+              type="password"
+              :autocomplete="mode === 'login' ? 'current-password' : 'new-password'"
+              :readonly="mode === 'mfa'"
+              :minlength="mode === 'register' ? 12 : undefined"
+              required
+            >
           </div>
           <div v-if="mode === 'mfa'" class="field">
             <label for="mfa-code">动态验证码</label>

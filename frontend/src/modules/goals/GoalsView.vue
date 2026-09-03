@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import {
   BookOpen,
   BriefcaseBusiness,
@@ -20,6 +20,7 @@ import {
 } from 'lucide-vue-next'
 import { api, type ApiError } from '../../shared/api/client'
 import { encouragement } from '../../shared/encouragement'
+import { notifyDataChanged, onDataChanged } from '../../shared/data-sync'
 import { takeGoalDraft, type GoalDraft } from '../ai/goal-draft'
 
 type Goal = {
@@ -222,8 +223,8 @@ function goalsNext() {
   goalsCurrent.value = Math.min(goals.value.length - 1, goalsCurrent.value + 1)
 }
 
-async function load() {
-  loading.value = true
+async function load(showLoading = true) {
+  if (showLoading) loading.value = true
   const selectedGoalId = currentGoal.value?.publicId
   try {
     const [goalRows, dimensionRows, taskRows] = await Promise.all([
@@ -240,7 +241,7 @@ async function load() {
   } catch {
     error.value = '目标与任务暂时无法加载'
   } finally {
-    loading.value = false
+    if (showLoading) loading.value = false
   }
 }
 
@@ -379,7 +380,8 @@ async function createGoal() {
     const created = await api.post<Goal>('/goals', goalForm)
     panel.value = null
     feedback.value = { tone: 'support', text: encouragement('goalCreated') }
-    await load()
+    await load(false)
+    notifyDataChanged(['goals', 'today', 'insights'])
     const index = goals.value.findIndex(goal => goal.publicId === created.publicId)
     if (index >= 0) goalsCurrent.value = index
   } catch (err) {
@@ -409,7 +411,8 @@ async function createTask() {
     })
     panel.value = null
     feedback.value = { tone: 'support', text: '任务与周期已保存，并已排入对应日期。' }
-    await load()
+    await load(false)
+    notifyDataChanged(['goals', 'tasks', 'today', 'insights'])
   } catch (err) {
     error.value = friendlyTaskError(err)
   } finally {
@@ -422,6 +425,7 @@ async function setTaskActive(task: Task, active: boolean) {
   try {
     const updated = await api.post<Task>(`/tasks/${task.publicId}/${active ? 'resume' : 'pause'}`)
     task.active = updated.active
+    notifyDataChanged(['goals', 'tasks', 'today', 'insights'])
   } catch {
     error.value = '任务状态暂时无法更新，请重试'
   }
@@ -433,16 +437,20 @@ async function setGoalStatus(goal: Goal, action: string) {
     if (action === 'complete') {
       feedback.value = { tone: 'celebrate', text: encouragement('goalCompleted') }
     }
+    notifyDataChanged(['goals', 'today', 'insights'])
   } catch (err) {
     error.value = friendlyGoalError(err, '目标状态暂时无法更新，请重试')
   }
 }
 
+const stopDataSync = onDataChanged(['goals', 'tasks'], () => load(false))
+
 onMounted(async () => {
   await load()
   const draft = takeGoalDraft()
-  if (draft) applyAiGoalDraft(draft)
+    if (draft) applyAiGoalDraft(draft)
 })
+onBeforeUnmount(stopDataSync)
 </script>
 
 <template>
