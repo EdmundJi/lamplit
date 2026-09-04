@@ -164,6 +164,90 @@ describe('Goal and task workflow', () => {
     expect(window.sessionStorage.getItem('better-self:ai-goal-draft')).toBeNull()
   })
 
+  it('creates every AI starter task after the confirmed goal is saved', async () => {
+    window.sessionStorage.setItem('better-self:ai-goal-draft', JSON.stringify({
+      sourceSessionPublicId: 'session-1',
+      title: '八周六级备考',
+      description: '完成四套真题模考',
+      dimensionCode: 'KNOWLEDGE',
+      durationDays: 56,
+      weeklyFocus: '词汇、听力与真题',
+      starterTasks: [
+        { title: '每天背诵 30 个高频词', estimatedMinutes: 30, difficulty: 2 },
+        { title: '精听一篇听力真题', estimatedMinutes: 45, difficulty: 3 },
+        { title: '精读一篇阅读真题', estimatedMinutes: 40, difficulty: 2 },
+      ],
+    }))
+    const createdGoal = {
+      ...goals[0],
+      publicId: 'goal-ai',
+      startDate: '2026-09-05',
+      endDate: '2026-10-30',
+    }
+    let taskNumber = 0
+    api.post.mockImplementation((path: string) => {
+      if (path === '/goals') return Promise.resolve(createdGoal)
+      if (path === '/tasks') return Promise.resolve({ publicId: `task-ai-${++taskNumber}` })
+      return Promise.resolve({})
+    })
+
+    const wrapper = mount(GoalsView)
+    await flushPromises()
+    await wrapper.get('#goal-start').setValue('2026-09-05')
+    await wrapper.get('#goal-end').setValue('2026-10-30')
+    await wrapper.get('.editor').trigger('submit')
+    await flushPromises()
+
+    expect(api.post.mock.calls.map(call => call[0])).toEqual(['/goals', '/tasks', '/tasks', '/tasks'])
+    const taskCalls = api.post.mock.calls.filter(call => call[0] === '/tasks')
+    expect(taskCalls.map(call => (call[1] as { title: string }).title)).toEqual([
+      '每天背诵 30 个高频词',
+      '精听一篇听力真题',
+      '精读一篇阅读真题',
+    ])
+    expect(taskCalls[0][1]).toMatchObject({
+      goalPublicId: 'goal-ai',
+      estimatedMinutes: 30,
+      difficulty: 2,
+      rrule: null,
+      plannedLocalTime: '09:00',
+      activeFrom: '2026-09-05',
+      activeUntil: '2026-10-30',
+      dimensionWeights: { KNOWLEDGE: 10 },
+    })
+    expect(wrapper.get('.feedback-banner').text()).toContain('已创建 3 个起步任务')
+  })
+
+  it('reports partial AI starter task failures without claiming full success', async () => {
+    window.sessionStorage.setItem('better-self:ai-goal-draft', JSON.stringify({
+      sourceSessionPublicId: 'session-1',
+      title: '学习目标',
+      description: '完成复习',
+      dimensionCode: 'KNOWLEDGE',
+      durationDays: 28,
+      weeklyFocus: '保持频率',
+      starterTasks: [
+        { title: '复习一节', estimatedMinutes: 25, difficulty: 2 },
+        { title: '记录错题', estimatedMinutes: 10, difficulty: 1 },
+      ],
+    }))
+    let taskNumber = 0
+    api.post.mockImplementation((path: string) => {
+      if (path === '/goals') return Promise.resolve({ ...goals[0], publicId: 'goal-partial' })
+      if (path === '/tasks' && taskNumber++ === 1) return Promise.reject({ code: 'INVALID_TASK_DATES' })
+      if (path === '/tasks') return Promise.resolve({ publicId: 'task-ok' })
+      return Promise.resolve({})
+    })
+
+    const wrapper = mount(GoalsView)
+    await flushPromises()
+    await wrapper.get('.editor').trigger('submit')
+    await flushPromises()
+
+    expect(wrapper.get('.error').text()).toContain('目标已保存，但 1 个起步任务未保存')
+    expect(wrapper.get('.feedback-banner').text()).toContain('已创建 1 个起步任务')
+  })
+
   it('shows a specific message when the active goal limit blocks creation', async () => {
     api.post.mockRejectedValue({ status: 409, code: 'ACTIVE_GOAL_LIMIT', message: 'At most three active goals are allowed' })
     const wrapper = mount(GoalsView)

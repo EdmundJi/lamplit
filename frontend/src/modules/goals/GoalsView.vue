@@ -21,7 +21,7 @@ import {
 import { api, type ApiError } from '../../shared/api/client'
 import { encouragement } from '../../shared/encouragement'
 import { notifyDataChanged, onDataChanged } from '../../shared/data-sync'
-import { takeGoalDraft, type GoalDraft } from '../ai/goal-draft'
+import { takeGoalDraft, type GoalDraft, type GoalDraftTask } from '../ai/goal-draft'
 
 type Goal = {
   publicId: string
@@ -158,6 +158,8 @@ const presetDraw = ref<PresetDraw | null>(null)
 const presetsLoading = ref(false)
 const presetError = ref('')
 const goalsCurrent = ref(0)
+const aiStarterTasks = ref<GoalDraftTask[]>([])
+const aiStarterDimensionCode = ref('')
 
 const goalForm = reactive({
   dimensionPublicId: '',
@@ -248,7 +250,17 @@ async function load(showLoading = true) {
 function openGoal() {
   goalPrompt.value = encouragement('goalDraft')
   feedback.value = null
+  if (panel.value !== 'goal') {
+    aiStarterTasks.value = []
+    aiStarterDimensionCode.value = ''
+  }
   panel.value = 'goal'
+}
+
+function cancelGoal() {
+  panel.value = null
+  aiStarterTasks.value = []
+  aiStarterDimensionCode.value = ''
 }
 
 function syncTaskPeriod(goalPublicId = taskForm.goalPublicId) {
@@ -328,6 +340,8 @@ function choosePreset(preset: Preset) {
 }
 
 function applyGoalTemplate(template: GoalTemplate) {
+  aiStarterTasks.value = []
+  aiStarterDimensionCode.value = ''
   const dimension = dimensions.value.find(item => String(item.name).includes(template.dimensionName)) ?? dimensions.value[0]
   goalForm.dimensionPublicId = dimension?.publicId ?? goalForm.dimensionPublicId
   goalForm.title = template.title
@@ -342,12 +356,25 @@ function applyGoalTemplate(template: GoalTemplate) {
 
 function applyAiGoalDraft(draft: GoalDraft) {
   const dimension = dimensions.value.find(item => item.code === draft.dimensionCode) ?? dimensions.value[0]
+  aiStarterTasks.value = Array.isArray(draft.starterTasks)
+    ? draft.starterTasks
+      .filter(task => task && typeof task.title === 'string' && task.title.trim())
+      .map(task => ({
+        title: task.title.trim(),
+        estimatedMinutes: task.estimatedMinutes,
+        difficulty: task.difficulty,
+      }))
+    : []
+  aiStarterDimensionCode.value = typeof draft.dimensionCode === 'string' ? draft.dimensionCode : ''
   goalForm.dimensionPublicId = dimension?.publicId ?? goalForm.dimensionPublicId
   goalForm.title = draft.title
   goalForm.description = draft.description
   goalForm.startDate = today()
   goalForm.endDate = plusDays(goalForm.startDate, draft.durationDays - 1)
-  goalPrompt.value = `本周重点：${draft.weeklyFocus} 起步任务：${draft.starterTasks.map(task => task.title).join('、')}。`
+  const taskTitles = aiStarterTasks.value.map(task => task.title).join('、')
+  goalPrompt.value = taskTitles
+    ? `本周重点：${draft.weeklyFocus} 起步任务：${taskTitles}。`
+    : `本周重点：${draft.weeklyFocus}`
   feedback.value = { tone: 'support', text: 'AI 目标草案已填入。你可以继续修改，确认后再保存。' }
   panel.value = 'goal'
 }
@@ -373,15 +400,74 @@ function friendlyTaskError(value: unknown) {
   return messages[code ?? ''] ?? '任务未保存，请检查周期、日期和其他属性'
 }
 
+function boundedNumber(value: unknown, fallback: number, min: number, max: number) {
+  const parsed = typeof value === 'number' ? value : Number(value)
+  if (!Number.isFinite(parsed)) return fallback
+  return Math.round(Math.min(max, Math.max(min, parsed)))
+}
+
+function aiTaskDimensionCode(created: Goal) {
+  return dimensions.value.find(item => item.publicId === goalForm.dimensionPublicId)?.code
+    ?? dimensions.value.find(item => item.publicId === created.dimensionPublicId)?.code
+    ?? aiStarterDimensionCode.value
+}
+
+async function createAiStarterTasks(created: Goal, starterTasks: GoalDraftTask[], startDate: string, endDate: string) {
+  const dimensionCode = aiTaskDimensionCode(created)
+  if (!dimensionCode) {
+    return { created: 0, failed: starterTasks.length, firstError: { code: 'INVALID_DIMENSION_WEIGHTS' } }
+  }
+
+  let createdCount = 0
+  let firstError: unknown
+  for (const starter of starterTasks) {
+    try {
+      await api.post('/tasks', {
+        goalPublicId: created.publicId,
+        title: starter.title.trim(),
+        notes: '',
+        estimatedMinutes: boundedNumber(starter.estimatedMinutes, 15, 5, 240),
+        difficulty: boundedNumber(starter.difficulty, 2, 1, 3),
+        rrule: null,
+        plannedLocalTime: '09:00',
+        activeFrom: startDate,
+        activeUntil: endDate,
+        dimensionWeights: { [dimensionCode]: 10 },
+      })
+      createdCount += 1
+    } catch (failure) {
+      firstError ??= failure
+    }
+  }
+  return { created: createdCount, failed: starterTasks.length - createdCount, firstError }
+}
+
 async function createGoal() {
   busy.value = true
   error.value = ''
+  const starterTasks = aiStarterTasks.value.map(task => ({ ...task }))
+  const startDate = goalForm.startDate
+  const endDate = goalForm.endDate
   try {
     const created = await api.post<Goal>('/goals', goalForm)
+    const taskResult = starterTasks.length
+      ? await createAiStarterTasks(created, starterTasks, startDate, endDate)
+      : { created: 0, failed: 0, firstError: undefined }
     panel.value = null
-    feedback.value = { tone: 'support', text: encouragement('goalCreated') }
+    aiStarterTasks.value = []
+    aiStarterDimensionCode.value = ''
+    feedback.value = {
+      tone: 'support',
+      text: taskResult.created
+        ? `${encouragement('goalCreated')} 已创建 ${taskResult.created} 个起步任务。`
+        : encouragement('goalCreated'),
+    }
+    if (taskResult.failed) {
+      const detail = taskResult.firstError ? friendlyTaskError(taskResult.firstError) : '请在目标下重新添加。'
+      error.value = `目标已保存，但 ${taskResult.failed} 个起步任务未保存。${detail}`
+    }
     await load(false)
-    notifyDataChanged(['goals', 'today', 'insights'])
+    notifyDataChanged(['goals', 'tasks', 'today', 'insights'])
     const index = goals.value.findIndex(goal => goal.publicId === created.publicId)
     if (index >= 0) goalsCurrent.value = index
   } catch (err) {
@@ -508,9 +594,30 @@ onBeforeUnmount(stopDataSync)
           <input id="goal-end" v-model="goalForm.endDate" type="date" required>
         </div>
       </div>
+      <fieldset v-if="aiStarterTasks.length" class="ai-starter-tasks">
+        <legend>起步任务（{{ aiStarterTasks.length }} 项）</legend>
+        <div v-for="(task, index) in aiStarterTasks" :key="index" class="ai-starter-task">
+          <label>
+            <span class="sr-only">起步任务 {{ index + 1 }} 名称</span>
+            <input v-model="task.title" :disabled="busy" maxlength="160" required>
+          </label>
+          <label>
+            <span class="sr-only">起步任务 {{ index + 1 }} 预计分钟</span>
+            <input v-model.number="task.estimatedMinutes" :disabled="busy" type="number" min="5" max="60" required>
+          </label>
+          <label>
+            <span class="sr-only">起步任务 {{ index + 1 }} 难度</span>
+            <select v-model.number="task.difficulty" :disabled="busy">
+              <option :value="1">难度 1</option>
+              <option :value="2">难度 2</option>
+              <option :value="3">难度 3</option>
+            </select>
+          </label>
+        </div>
+      </fieldset>
       <div class="actions">
-        <button class="primary" :disabled="busy">保存目标</button>
-        <button class="secondary" type="button" @click="panel = null">取消</button>
+        <button class="primary" :disabled="busy">{{ busy ? '正在保存…' : '保存目标' }}</button>
+        <button class="secondary" type="button" :disabled="busy" @click="cancelGoal">取消</button>
       </div>
     </form>
 
@@ -823,6 +930,51 @@ onBeforeUnmount(stopDataSync)
 .support-line svg {
   flex: none;
   margin-top: 4px;
+}
+
+.ai-starter-tasks {
+  display: grid;
+  gap: 9px;
+  margin: 0;
+  padding: 13px;
+  border: 1px solid color-mix(in srgb, var(--primary) 24%, var(--border));
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--primary-soft) 34%, var(--surface));
+}
+
+.ai-starter-tasks legend {
+  padding: 0 5px;
+  color: var(--primary-strong);
+  font-size: 14px;
+  font-weight: 750;
+}
+
+.ai-starter-task {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 84px 100px;
+  gap: 8px;
+}
+
+.ai-starter-task label,
+.ai-starter-task input,
+.ai-starter-task select {
+  min-width: 0;
+}
+
+.ai-starter-task input,
+.ai-starter-task select {
+  width: 100%;
+  min-height: var(--control);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  padding: 9px 10px;
+}
+
+.ai-starter-task input:hover,
+.ai-starter-task select:hover {
+  border-color: color-mix(in srgb, var(--primary) 30%, var(--border));
 }
 
 .form-grid {
@@ -1289,6 +1441,14 @@ onBeforeUnmount(stopDataSync)
   .task-property-grid,
   .task-meta {
     grid-template-columns: 1fr;
+  }
+
+  .ai-starter-task {
+    grid-template-columns: minmax(0, 1fr) 84px;
+  }
+
+  .ai-starter-task label:last-child {
+    grid-column: 1 / -1;
   }
 
   .role-tabs {
