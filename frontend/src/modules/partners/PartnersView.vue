@@ -1,34 +1,15 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Coins, Gamepad2, HandHeart, Heart, HeartHandshake, MessageCircle, MonitorOff, MonitorUp, PartyPopper, Pencil, Plus, ShoppingBag, Smartphone, Sparkles, X } from 'lucide-vue-next'
-import { api } from '../../shared/api/client'
-import { notifyDataChanged, onDataChanged } from '../../shared/data-sync'
+import { onDataChanged } from '../../shared/data-sync'
 import RivePet from './RivePet.vue'
-import { useDesktopPetStore } from './desktop-pet.store'
 import { randomPetDialogue } from './pet-dialogues'
 import { findPetSpecies, petSpeciesOptions, type PetInteractionOption, type PetReaction } from './pet-options'
-import { petVariantStorageKey, variantCountFor, variantIndexForKind } from './pet-variants'
-import type { InteractionResult, PartnerProfile, Pet, ShopItem } from './partner.types'
+import { useDesktopCompanion, usePartnerProfile, usePetForm, usePetVariant } from './partners.logic'
+import type { Pet, ShopItem } from './partner.types'
 
 type DialogueMessage = { text: string; actionLabel: string; rewarded: boolean; affectionDelta: number }
 type ShopFilter = 'ALL' | ShopItem['itemType']
-
-const profile = ref<PartnerProfile | null>(null)
-const loading = ref(true)
-const busy = ref(false)
-const error = ref('')
-const feedback = ref('')
-const panel = ref<'create' | 'edit' | null>(null)
-const petRenderer = ref<InstanceType<typeof RivePet> | null>(null)
-const dialogue = ref<DialogueMessage | null>(null)
-const lastInteraction = ref<PetReaction | null>(null)
-const variantIndex = ref(0)
-const shopFilter = ref<ShopFilter>('ALL')
-const desktopPet = useDesktopPetStore()
-const isDesktopCompanion = Boolean(window.betterSelfDesktop?.isDesktopApp)
-let dialogueTimer: number | undefined
-
-desktopPet.hydrate()
 
 const shopItemImages: Record<string, string> = {
   'pet-food-salmon-bento': '/assets/shop/salmon-bento.svg',
@@ -41,16 +22,25 @@ const shopItemImages: Record<string, string> = {
   'pet-decor-plant': '/assets/shop/plant.svg',
 }
 
-const form = reactive({ speciesCode: 'CAT', name: '小橘', breed: '中华田园猫', furColor: '橘白' })
-const selectedPet = computed(() => profile.value?.selectedPet ?? profile.value?.pets[0])
-const wallet = computed(() => profile.value?.wallet ?? { coinBalance: 0, lifetimeCoins: 0 })
-const isDesktopPet = computed(() => Boolean(selectedPet.value && desktopPet.petPublicId === selectedPet.value.publicId))
-const formSpecies = computed(() => findPetSpecies(form.speciesCode))
-const kindOptions = computed(() => {
-  const options = formSpecies.value?.kinds ?? []
-  if (!form.breed || options.some(option => option.value === form.breed)) return options
-  return [{ value: form.breed, defaultColor: form.furColor }, ...options]
-})
+const {
+  profile, loading, busy, error, feedback, selectedPet, wallet, load,
+  selectPet: requestSelectPet, interact: requestInteract, purchase: requestPurchase, itemDisabled, itemStatus,
+  savePet: requestSavePet,
+} = usePartnerProfile()
+const { form, formSpecies, kindOptions, syncFrom, resetForCreate, chooseSpecies, chooseKind, speciesGlyph } = usePetForm()
+const variant = usePetVariant()
+const { variantIndex } = variant
+const desktopPet = useDesktopCompanion()
+const isDesktopCompanion = desktopPet.isDesktopApp
+
+const panel = ref<'create' | 'edit' | null>(null)
+const petRenderer = ref<InstanceType<typeof RivePet> | null>(null)
+const dialogue = ref<DialogueMessage | null>(null)
+const lastInteraction = ref<PetReaction | null>(null)
+const shopFilter = ref<ShopFilter>('ALL')
+let dialogueTimer: number | undefined
+
+const isDesktopPet = computed(() => desktopPet.isDesktopPet(selectedPet.value))
 const currentInteractions = computed(() => findPetSpecies(selectedPet.value?.speciesCode ?? '')?.interactions ?? [])
 const interactionIcons = {
   greet: HandHeart,
@@ -68,141 +58,14 @@ const visibleItems = computed(() => {
   return shopFilter.value === 'ALL' ? items : items.filter(item => item.itemType === shopFilter.value)
 })
 
-async function load(showLoading = true) {
-  if (showLoading) loading.value = true
-  error.value = ''
-  try {
-    profile.value = await api.get<PartnerProfile>('/partners/profile')
-    syncForm(profile.value.selectedPet)
-    window.dispatchEvent(new CustomEvent('better-self:partners-updated'))
-  } catch {
-    error.value = '伙伴资料暂时无法加载'
-  } finally {
-    if (showLoading) loading.value = false
-  }
-}
-
-function syncForm(pet?: Pet) {
-  if (!pet) return
-  form.speciesCode = pet.speciesCode
-  form.name = pet.name
-  form.breed = pet.breed
-  form.furColor = pet.furColor
-}
-
-function resolveVariantIndex(pet: Pet) {
-  try {
-    const saved = Number(window.localStorage?.getItem(petVariantStorageKey(pet.publicId)) ?? '')
-    if (Number.isInteger(saved) && saved >= 0) return saved
-  } catch {
-    // Some embedded browsers disable local storage; the deterministic default still works.
-  }
-  return variantIndexForKind(pet.speciesCode, pet.breed)
-}
+watch(selectedPet, pet => variant.syncFor(pet), { immediate: true })
 
 function selectVariant(index: number) {
-  const pet = selectedPet.value
-  if (!pet || busy.value) return
-  const count = variantCountFor(pet.speciesCode)
-  if (count < 2) return
-  const next = ((index % count) + count) % count
-  variantIndex.value = next
-  try {
-    window.localStorage?.setItem(petVariantStorageKey(pet.publicId), String(next))
-  } catch {
-    // The selection remains active for this session when storage is unavailable.
-  }
+  if (busy.value) return
+  variant.select(selectedPet.value, index)
 }
 
-watch(selectedPet, pet => {
-  if (!pet) return
-  variantIndex.value = resolveVariantIndex(pet)
-}, { immediate: true })
-
-function chooseSpecies(code: string) {
-  const species = findPetSpecies(code)
-  if (!species) return
-  form.speciesCode = species.code
-  form.breed = species.kinds[0].value
-  form.furColor = species.kinds[0].defaultColor
-}
-
-function chooseKind() {
-  const kind = formSpecies.value?.kinds.find(option => option.value === form.breed)
-  if (kind) form.furColor = kind.defaultColor
-}
-
-function speciesGlyph(code: string) {
-  return findPetSpecies(code)?.glyph ?? '伴'
-}
-
-async function savePet() {
-  busy.value = true
-  error.value = ''
-  try {
-    if (panel.value === 'edit' && selectedPet.value) {
-      await api.patch(`/partners/pets/${selectedPet.value.publicId}`, { name: form.name, breed: form.breed, furColor: form.furColor })
-      try {
-        window.localStorage?.removeItem(petVariantStorageKey(selectedPet.value.publicId))
-      } catch {
-        // Ignore unavailable browser storage; the server data is still saved.
-      }
-      feedback.value = '伙伴资料已更新'
-    } else {
-      const pet = await api.post<Pet>('/partners/pets', {
-        speciesCode: form.speciesCode,
-        name: form.name,
-        breed: form.breed,
-        furColor: form.furColor,
-      })
-      try {
-        window.localStorage?.setItem(petVariantStorageKey(pet.publicId), String(variantIndexForKind(pet.speciesCode, pet.breed)))
-      } catch {
-        // Ignore unavailable browser storage; the server data is still saved.
-      }
-      await api.post(`/partners/pets/${pet.publicId}/select`)
-      feedback.value = '新的伙伴已经加入'
-    }
-    panel.value = null
-    await load(false)
-    notifyDataChanged(['partners', 'profile'])
-  } catch {
-    error.value = '伙伴资料未保存，请检查名称、种类和颜色'
-  } finally {
-    busy.value = false
-  }
-}
-
-async function selectPet(pet: Pet) {
-  if (pet.selected) return
-  closeDialogue()
-  lastInteraction.value = null
-  await api.post(`/partners/pets/${pet.publicId}/select`)
-  feedback.value = `已切换到 ${pet.name}`
-  await load(false)
-  notifyDataChanged(['partners', 'profile'])
-}
-
-async function interact(action: PetInteractionOption) {
-  if (!selectedPet.value || !action || busy.value) return
-  busy.value = true
-  error.value = ''
-  feedback.value = ''
-  lastInteraction.value = action.action
-  petRenderer.value?.react(action.action)
-  try {
-    const result = await api.post<InteractionResult>(`/partners/pets/${selectedPet.value.publicId}/interact`)
-    showDialogue(result, action.label)
-    await load(false)
-    notifyDataChanged(['partners', 'profile'])
-  } catch {
-    error.value = '互动失败，请稍后重试'
-  } finally {
-    busy.value = false
-  }
-}
-
-function showDialogue(result: InteractionResult, actionLabel: string) {
+function showDialogue(result: { rewarded: boolean; affectionDelta: number }, actionLabel: string) {
   dialogue.value = {
     text: randomPetDialogue(),
     actionLabel,
@@ -218,58 +81,45 @@ function closeDialogue() {
   dialogue.value = null
 }
 
+async function savePet() {
+  const ok = await requestSavePet(panel.value === 'edit' ? 'edit' : 'create', form)
+  if (ok) panel.value = null
+}
+
+async function selectPet(pet: Pet) {
+  if (pet.selected) return
+  closeDialogue()
+  lastInteraction.value = null
+  await requestSelectPet(pet)
+}
+
+async function interact(action: PetInteractionOption) {
+  if (!selectedPet.value || !action || busy.value) return
+  lastInteraction.value = action.action
+  petRenderer.value?.react(action.action)
+  const result = await requestInteract(selectedPet.value.publicId)
+  if (result) showDialogue(result, action.label)
+}
+
 async function purchase(item: ShopItem) {
-  if (!selectedPet.value || itemDisabled(item)) return
-  try {
-    const result = await api.post<any>('/partners/purchase', { petPublicId: selectedPet.value.publicId, itemPublicId: item.publicId })
-    petRenderer.value?.react(item.itemType === 'FOOD' ? 'feed' : 'celebrate')
-    feedback.value = `${result.item.name} 已使用，${result.pet.name} 好感度 +${result.item.affectionGain}`
-    await load(false)
-    notifyDataChanged(['partners', 'profile'])
-  } catch (err: any) {
-    error.value = err?.code === 'INSUFFICIENT_COINS' ? '金币不足，完成今日任务可以获得金币' : '购买失败，请稍后重试'
-  }
-}
-
-function itemDisabled(item: ShopItem) {
-  return item.price > wallet.value.coinBalance || Boolean(item.speciesCode && item.speciesCode !== selectedPet.value?.speciesCode)
-}
-
-function itemStatus(item: ShopItem) {
-  if (item.speciesCode && item.speciesCode !== selectedPet.value?.speciesCode) return `仅适合${item.speciesName}`
-  if (item.price > wallet.value.coinBalance) return '金币不足'
-  return '可以使用'
+  if (!selectedPet.value) return
+  const result = await requestPurchase(item)
+  if (result) petRenderer.value?.react(item.itemType === 'FOOD' ? 'feed' : 'celebrate')
 }
 
 function openCreate() {
-  const species = petSpeciesOptions[0]
-  form.speciesCode = species.code
-  form.name = ''
-  form.breed = species.kinds[0].value
-  form.furColor = species.kinds[0].defaultColor
+  resetForCreate()
   panel.value = 'create'
 }
 
 function openEdit() {
-  syncForm(selectedPet.value)
+  syncFrom(selectedPet.value)
   panel.value = 'edit'
 }
 
 function toggleDesktopPet() {
-  const pet = selectedPet.value
-  if (!pet) return
-  if (isDesktopPet.value) {
-    if (isDesktopCompanion) {
-      window.betterSelfDesktop?.showPet()
-      return
-    }
-    desktopPet.clear()
-    feedback.value = '桌宠已取消'
-    return
-  }
-  desktopPet.setPet(pet.publicId)
-  feedback.value = `${pet.name} 已成为你的桌宠`
-  if (isDesktopCompanion) window.betterSelfDesktop?.showPet()
+  const message = desktopPet.toggle(selectedPet.value)
+  if (message) feedback.value = message
 }
 
 const stopDataSync = onDataChanged(['partners', 'tasks'], () => load(false))
@@ -282,7 +132,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section class="page partners-page">
+  <section class="page page--scene partners-page">
     <header class="page-head partner-head">
       <div>
         <p class="eyebrow">伙伴小屋</p>
@@ -479,17 +329,17 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .partners-page {
-  --pet-paper: #fffdf8;
-  --pet-cream: #fff7e8;
+  --pet-paper: var(--surface);
+  --pet-cream: var(--surface-muted);
   --pet-apricot: #f3a65a;
-  --pet-coral: #df6b57;
-  --pet-coral-strong: #bd4f3f;
+  --pet-coral: var(--primary);
+  --pet-coral-strong: var(--primary-strong);
   --pet-gold: #e3af3d;
   --pet-mint: #6eaa8c;
   --pet-sky: #6f91bc;
-  --pet-ink: #3d302a;
-  --pet-muted: #78675f;
-  --pet-line: #ead5bd;
+  --pet-ink: var(--ink);
+  --pet-muted: var(--muted);
+  --pet-line: var(--border);
   --pet-scene: #fff7e8;
   --pet-shadow: 0 16px 34px rgb(104 66 43 / 13%);
   color: var(--pet-ink);
@@ -667,11 +517,11 @@ onBeforeUnmount(() => {
 }
 
 :global(:root[data-theme='dark']) .partners-page {
-  --pet-paper: #2b2522;
-  --pet-cream: #332920;
-  --pet-ink: #fff5e9;
-  --pet-muted: #c9b6a8;
-  --pet-line: #5b493d;
+  --pet-paper: var(--surface);
+  --pet-cream: var(--surface-muted);
+  --pet-ink: var(--ink);
+  --pet-muted: var(--muted);
+  --pet-line: var(--border);
   --pet-scene: #f6ead9;
 }
 
@@ -685,14 +535,33 @@ onBeforeUnmount(() => {
 
 @media (prefers-color-scheme: dark) {
   :global(:root[data-theme='system']) .partners-page {
-    --pet-paper: #2b2522;
-    --pet-cream: #332920;
-    --pet-ink: #fff5e9;
-    --pet-muted: #c9b6a8;
-    --pet-line: #5b493d;
+    --pet-paper: var(--surface);
+    --pet-cream: var(--surface-muted);
+    --pet-ink: var(--ink);
+    --pet-muted: var(--muted);
+    --pet-line: var(--border);
     --pet-scene: #f6ead9;
   }
 }
 
 @keyframes coin-arrive { from { opacity: 0; transform: rotate(-18deg) scale(.78); } to { opacity: 1; transform: rotate(0) scale(1); } }
+
+/* Scene artwork keeps its own palette; all interactive surfaces share the app theme. */
+.partners-page .partner-stage { padding: 0; border: 0; gap: 28px; margin-bottom: 32px; }
+.partners-page .home-scene { border: 8px solid var(--forest); background: var(--forest); border-radius: var(--radius-scene); padding: 0; box-shadow: none; }
+.partners-page .pet-area { border-radius: calc(var(--radius-scene) - 8px); }
+.partners-page .affection-panel, .partners-page .pet-card, .partners-page .shop-item, .partners-page .pet-form, .partners-page .desktop-pet-control { border-radius: var(--radius-panel); box-shadow: none; }
+.partners-page .wallet-pill, .partners-page .partner-feedback { background: var(--surface-muted); color: var(--ink); border-color: var(--border); box-shadow: none; border-radius: var(--radius); }
+.partners-page .wallet-copy small { color: var(--muted); }
+.partners-page .interaction-option, .partners-page .shop-tabs { background: var(--surface); color: var(--ink); border-color: var(--border); }
+.partners-page .interaction-option.active, .partners-page .interaction-option:hover, .partners-page .pet-card.selected, .partners-page .species-grid button.active { background: var(--primary-soft); color: var(--primary-strong); border-color: var(--primary); box-shadow: none; }
+.partners-page .field input, .partners-page .species-token, .partners-page .level-badge, .partners-page .desktop-pet-icon { background: var(--surface-muted); color: var(--primary-strong); border-color: var(--border); }
+.partners-page .scene-label, .partners-page .dialogue-bar { background: var(--surface); color: var(--ink); border-color: var(--border); box-shadow: var(--shadow-soft); }
+.partners-page .dialogue-bar::after { background: var(--surface); border-color: var(--border); }
+.partners-page .dialogue-action { background: var(--primary-soft); color: var(--primary-strong); }
+.partners-page .dialogue-close:hover { background: var(--surface-muted); }
+.partners-page .shop-art { background: var(--surface-muted); }
+.partners-page .shop-item[data-kind='DECOR'] .shop-art { background: var(--surface-muted); }
+.partners-page .item-meta b { color: var(--amber); }
+@media (max-width: 1000px) { .partners-page .partner-stage { grid-template-columns: minmax(0,1fr); } }
 </style>

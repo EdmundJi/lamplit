@@ -1,122 +1,28 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { onBeforeUnmount, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ChevronRight, MessageCircle, MessagesSquare, Plus, Users, UsersRound, X } from 'lucide-vue-next'
-import { api, type ApiError } from '../../shared/api/client'
-import { notifyDataChanged, onDataChanged } from '../../shared/data-sync'
+import { onDataChanged } from '../../shared/data-sync'
 import EmojiText from './EmojiText.vue'
-import type { Conversation, FriendItem, GroupConversation } from './friends.types'
+import { friendInitial as initial, chatTimeLabel as timeLabel, useConversations, useGroupComposer, type ConversationRow } from './friends.logic'
 
-type ConversationRow = { kind: 'single'; peerPublicId: string; displayName: string; level: number; lastMessage: string; lastMessageAt: string; lastMessageFromMe: boolean; unreadCount: number; memberCount: null } | { kind: 'group'; peerPublicId: string; displayName: string; level: null; lastMessage: string; lastMessageAt: string; lastMessageFromMe: null; unreadCount: number; memberCount: number }
-
-const conversations = ref<ConversationRow[]>([])
-const friends = ref<FriendItem[]>([])
-const loading = ref(true)
-const error = ref('')
-const feedback = ref('')
-const creating = ref(false)
-const groupName = ref('')
-const selected = ref<Set<string>>(new Set())
-const busy = ref(false)
 const router = useRouter()
-
-function initial(name: string) {
-  const characters = Array.from(name.trim())
-  if (!characters.length) return '好'
-  if (/\p{Script=Han}/u.test(characters[0])) return characters[0]
-  return characters[0].toUpperCase()
-}
-
-function timeLabel(value: string) {
-  const date = new Date(value)
-  const now = new Date()
-  const sameDay = date.getFullYear() === now.getFullYear()
-    && date.getMonth() === now.getMonth()
-    && date.getDate() === now.getDate()
-  if (sameDay) {
-    return new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit' }).format(date)
-  }
-  return new Intl.DateTimeFormat('zh-CN', { month: 'numeric', day: 'numeric' }).format(date)
-}
+const { conversations, loading, error, load } = useConversations()
+const {
+  creating: groupCreating, friends: groupFriends, groupName, selected: groupSelected, busy: groupBusy,
+  error: groupError, feedback: groupFeedback, open: openGroupCreate, close: closeGroupCreate,
+  toggleMember: toggleGroupMember, create: submitGroupCreate,
+} = useGroupComposer()
 
 function targetOf(row: ConversationRow) {
   return row.kind === 'group' ? `/friends/groups/${row.peerPublicId}` : `/friends/${row.peerPublicId}/chat`
 }
 
-async function load(showLoading = true) {
-  if (showLoading) loading.value = true
-  error.value = ''
-  try {
-    const [single, groups] = await Promise.all([
-      api.get<Conversation[]>('/friends/conversations'),
-      api.get<GroupConversation[]>('/friends/groups'),
-    ])
-    const rows: ConversationRow[] = [
-      ...single.map(item => ({ kind: 'single' as const, peerPublicId: item.peerPublicId, displayName: item.peerDisplayName, level: item.peerLevel, lastMessage: item.lastMessage, lastMessageAt: item.lastMessageAt, lastMessageFromMe: item.lastMessageFromMe, unreadCount: item.unreadCount, memberCount: null })),
-      ...groups.map(item => ({ kind: 'group' as const, peerPublicId: item.publicId, displayName: item.name, level: null, lastMessage: item.lastMessage ?? '', lastMessageAt: item.lastMessageAt ?? '', lastMessageFromMe: null, unreadCount: item.unreadCount, memberCount: item.memberCount })),
-    ]
-    rows.sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime())
-    conversations.value = rows
-  } catch {
-    error.value = '会话暂时无法加载'
-  } finally {
-    if (showLoading) loading.value = false
-  }
-}
-
-async function openCreate() {
-  creating.value = true
-  feedback.value = ''
-  groupName.value = ''
-  selected.value = new Set()
-  try {
-    const list = await api.get<{ friends: FriendItem[] }>('/friends')
-    friends.value = list.friends
-  } catch {
-    error.value = '好友列表暂时无法加载'
-    creating.value = false
-  }
-}
-
-function toggleMember(publicId: string) {
-  const next = new Set(selected.value)
-  if (next.has(publicId)) {
-    next.delete(publicId)
-  } else {
-    if (next.size >= 9) return
-    next.add(publicId)
-  }
-  selected.value = next
-}
-
 async function createGroup() {
-  const name = groupName.value.trim()
-  if (!name) {
-    error.value = '请填写群聊名称'
-    return
-  }
-  if (!selected.value.size) {
-    error.value = '至少选择一位好友'
-    return
-  }
-  busy.value = true
-  error.value = ''
-  try {
-    const group = await api.post<{ publicId: string }>('/friends/groups', {
-      name,
-      memberPublicIds: Array.from(selected.value),
-    })
-    feedback.value = '群聊已创建'
-    creating.value = false
+  const publicId = await submitGroupCreate()
+  if (publicId) {
     await load(false)
-    notifyDataChanged('social')
-    router.push(`/friends/groups/${group.publicId}`)
-  } catch (err) {
-    error.value = (err as Partial<ApiError> | null)?.code === 'GROUP_MEMBER_LIMIT'
-      ? '群聊最多 10 人（含自己）'
-      : '创建失败，请稍后重试'
-  } finally {
-    busy.value = false
+    router.push(`/friends/groups/${publicId}`)
   }
 }
 
@@ -135,29 +41,29 @@ onBeforeUnmount(stopDataSync)
       </div>
       <div class="head-actions">
         <div v-if="conversations.length" class="conversation-count"><MessagesSquare :size="16" /><span>{{ conversations.length }} 个会话</span></div>
-        <button class="primary create-group-button" type="button" @click="openCreate"><Plus :size="16" />发起群聊</button>
+        <button class="primary create-group-button" type="button" @click="openGroupCreate"><Plus :size="16" />发起群聊</button>
       </div>
     </header>
 
-    <p v-if="error" class="error" role="alert">{{ error }}</p>
-    <div v-if="feedback" class="feedback-banner" data-tone="support" role="status" aria-live="polite"><MessagesSquare :size="19" /><p>{{ feedback }}</p></div>
+    <p v-if="error || groupError" class="error" role="alert">{{ error || groupError }}</p>
+    <div v-if="groupFeedback" class="feedback-banner" data-tone="support" role="status" aria-live="polite"><MessagesSquare :size="19" /><p>{{ groupFeedback }}</p></div>
 
-    <form v-if="creating" class="band group-create" @submit.prevent="createGroup">
+    <form v-if="groupCreating" class="band group-create" @submit.prevent="createGroup">
       <div class="section-title">
         <div><p class="eyebrow">群聊</p><h2>选择好友发起群聊（最多 10 人）</h2></div>
-        <button type="button" class="icon-button" aria-label="关闭" @click="creating = false"><X :size="18" /></button>
+        <button type="button" class="icon-button" aria-label="关闭" @click="closeGroupCreate"><X :size="18" /></button>
       </div>
       <div class="field"><label for="group-name">群聊名称</label><input id="group-name" v-model="groupName" maxlength="80" placeholder="例如：周末学习小组" /></div>
       <div class="member-pick">
-        <label v-for="item in friends" :key="item.publicId" class="member-option" :class="{ checked: selected.has(item.publicId) }">
-          <input type="checkbox" :checked="selected.has(item.publicId)" :disabled="!selected.has(item.publicId) && selected.size >= 9" @change="toggleMember(item.publicId)" />
+        <label v-for="item in groupFriends" :key="item.publicId" class="member-option" :class="{ checked: groupSelected.has(item.publicId) }">
+          <input type="checkbox" :checked="groupSelected.has(item.publicId)" :disabled="!groupSelected.has(item.publicId) && groupSelected.size >= 9" @change="toggleGroupMember(item.publicId)" />
           <span class="member-avatar" aria-hidden="true">{{ initial(item.displayName) }}</span>
           <span class="member-copy"><strong>{{ item.displayName }}</strong><small>LV.{{ item.overallLevel }} 成长者</small></span>
-          <span v-if="selected.has(item.publicId)" class="member-check">已选</span>
+          <span v-if="groupSelected.has(item.publicId)" class="member-check">已选</span>
         </label>
-        <p v-if="!friends.length" class="muted">还没有好友，先去添加好友吧。</p>
+        <p v-if="!groupFriends.length" class="muted">还没有好友，先去添加好友吧。</p>
       </div>
-      <div class="actions"><button class="primary" type="submit" :disabled="busy">创建群聊（{{ selected.size }} / 9）</button></div>
+      <div class="actions"><button class="primary" type="submit" :disabled="groupBusy">创建群聊（{{ groupSelected.size }} / 9）</button></div>
     </form>
 
     <p v-if="loading" class="empty">正在整理会话…</p>
@@ -247,4 +153,9 @@ onBeforeUnmount(stopDataSync)
   .head-actions { display: grid; grid-template-columns: 1fr; align-items: stretch; }
   .conversation-count, .create-group-button { width: 100%; justify-content: center; }
 }
+.conversation-list { gap: 0; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-panel); overflow: hidden; }
+.conversation-card { border: 0; border-bottom: 1px solid var(--border); border-radius: 0; padding: 22px; background: transparent; box-shadow: none; }
+.conversation-card:last-child { border-bottom: 0; }
+.member-avatar { border-radius: 50%; background: var(--primary-soft); color: var(--primary-strong); }
+.group-create { padding: 24px; margin-bottom: 24px; border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface); }
 </style>

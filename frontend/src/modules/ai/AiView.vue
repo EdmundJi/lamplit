@@ -230,11 +230,12 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section class="page ai-page">
+  <section class="page page--talk ai-page">
     <header class="page-head">
       <div>
         <p class="eyebrow">内容由 AI 生成，请核对后使用</p>
         <h1>AI 助手</h1>
+        <p class="page-description">把还没理清的想法，一起变成可行动的下一步。</p>
       </div>
       <button class="secondary" @click="reset">
         <Plus :size="17" />
@@ -506,4 +507,14 @@ onBeforeUnmount(() => {
   .starter-task { grid-template-columns: 1fr 62px; }
   .starter-task select { grid-column: 1 / -1; }
 }
+.ai-page { max-width: 1264px; }
+.ai-workspace { gap: 24px; grid-template-columns: minmax(0, 1fr) 300px; }
+.chat-column { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-panel); padding: 20px; }
+.chat { border: 0; box-shadow: none; padding: 10px 0; min-height: 360px; background: transparent; }
+.scene-tabs { border: 0; background: var(--surface-muted); border-radius: var(--radius); }
+.ai-side > section { border-radius: var(--radius-panel); box-shadow: none; background: var(--surface); }
+.message > span { border-radius: 50%; }
+.composer { border-top: 1px solid var(--border); }
+.composer textarea { background: var(--surface-muted); border-radius: var(--radius); }
+@media (max-width: 900px) { .ai-workspace { grid-template-columns: minmax(0,1fr); } .chat-column { padding: 16px; } }
 </style>

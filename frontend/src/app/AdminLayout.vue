@@ -23,7 +23,7 @@ import OperationGuideBar from '../shared/ui/OperationGuideBar.vue'
 
 <style scoped>
 .admin-shell { min-height: 100vh; background: var(--canvas); }
-.admin-shell > header { position: sticky; top: 0; z-index: 10; height: 58px; padding: 0 28px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid color-mix(in srgb, white 10%, transparent); background: #3f322c; color: white; box-shadow: inset 0 3px 0 var(--primary), 0 8px 24px rgb(63 42 32 / 16%); }
+.admin-shell > header { position: sticky; top: 0; z-index: 10; height: 64px; padding: 0 28px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid color-mix(in srgb, white 10%, transparent); background: var(--forest-deep); color: white; }
 .admin-shell :deep(.operation-guide) { top: 58px; }
 header a { color: white; text-decoration: none; }
 .brand, .return-link { display: inline-flex; align-items: center; gap: 8px; }

@@ -1,129 +1,34 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ArrowLeft, Send, Smile } from 'lucide-vue-next'
-import { api, type ApiError } from '../../shared/api/client'
-import { notifyDataChanged } from '../../shared/data-sync'
+import { api } from '../../shared/api/client'
 import { useAuthStore } from '../auth/auth.store'
 import EmojiPicker from './EmojiPicker.vue'
+import ConversationRail from './ConversationRail.vue'
 import EmojiText from './EmojiText.vue'
-import type { ChatMessage } from './friends.types'
+import { chatTimeLabel as messageTime, friendInitial, useChatThread } from './friends.logic'
 
 const props = defineProps<{ publicId: string }>()
 
 const auth = useAuthStore()
-const messages = ref<ChatMessage[]>([])
-const peerName = ref('')
+const { messages, peerName, loading, error, busy, draft, open, startPoll, stopPoll, send: submit, insertEmoji } = useChatThread()
 const peerLevel = ref(1)
-const draft = ref('')
 const showEmoji = ref(false)
-const loading = ref(true)
-const error = ref('')
-const busy = ref(false)
 const listElement = ref<HTMLElement | null>(null)
-let pollTimer: number | undefined
 
 const myName = computed(() => auth.user?.displayName ?? '我')
-const myInitial = computed(() => {
-  const name = myName.value.trim()
-  const characters = Array.from(name)
-  if (!characters.length) return '好'
-  if (/\p{Script=Han}/u.test(characters[0])) return characters[0]
-  return characters[0].toUpperCase()
-})
-const peerInitial = computed(() => {
-  const characters = Array.from(peerName.value.trim())
-  if (!characters.length) return '好'
-  if (/\p{Script=Han}/u.test(characters[0])) return characters[0]
-  return characters[0].toUpperCase()
-})
-
-function messageTime(value: string) {
-  const date = new Date(value)
-  const now = new Date()
-  const sameDay = date.getFullYear() === now.getFullYear()
-    && date.getMonth() === now.getMonth()
-    && date.getDate() === now.getDate()
-  if (sameDay) {
-    return new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit' }).format(date)
-  }
-  return new Intl.DateTimeFormat('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(date)
-}
+const myInitial = computed(() => friendInitial(myName.value))
+const peerInitial = computed(() => friendInitial(peerName.value))
 
 function scrollToBottom() {
   if (listElement.value) listElement.value.scrollTop = listElement.value.scrollHeight
 }
 
-async function loadMessages(beforeId?: string) {
-  const query = beforeId ? `&beforePublicId=${encodeURIComponent(beforeId)}` : ''
-  const loaded = await api.get<ChatMessage[]>(`/friends/messages?peerPublicId=${encodeURIComponent(props.publicId)}${query}`)
-  if (beforeId) {
-    messages.value = [...loaded, ...messages.value]
-  } else {
-    messages.value = loaded
-  }
-  return loaded
-}
-
-async function load() {
-  error.value = ''
-  try {
-    const [summary, loaded] = await Promise.all([
-      api.get<{ publicId: string; displayName: string; overallLevel: number }>(`/friends/${props.publicId}/summary`),
-      loadMessages(),
-    ])
-    peerName.value = summary.displayName
-    peerLevel.value = summary.overallLevel
-    await api.post<unknown>(`/friends/messages/read`, { peerPublicId: props.publicId })
-    await nextTick()
-    scrollToBottom()
-  } catch (err) {
-    error.value = (err as Partial<ApiError> | null)?.code === 'FRIENDSHIP_NOT_FOUND'
-      ? '只能和好友聊天，或者对方已删除好友关系'
-      : '消息暂时无法加载'
-  } finally {
-    loading.value = false
-  }
-}
-
-async function poll() {
-  if (document.hidden) return
-  try {
-    const incoming = await api.get<ChatMessage[]>(`/friends/messages?peerPublicId=${encodeURIComponent(props.publicId)}`)
-    if (incoming.length > messages.value.length) {
-      messages.value = incoming
-      await api.post<unknown>('/friends/messages/read', { peerPublicId: props.publicId })
-      await nextTick()
-      scrollToBottom()
-    }
-  } catch {
-    // 轮询失败静默，等待下次
-  }
-}
-
 async function send() {
-  const body = draft.value.trim()
-  if (!body) return
-  busy.value = true
-  error.value = ''
-  try {
-    await api.post<ChatMessage>('/friends/messages', { peerPublicId: props.publicId, body })
-    draft.value = ''
-    showEmoji.value = false
-    messages.value = await api.get<ChatMessage[]>(`/friends/messages?peerPublicId=${encodeURIComponent(props.publicId)}`)
-    notifyDataChanged('social')
-    await nextTick()
-    scrollToBottom()
-  } catch (err) {
-    error.value = (err as Partial<ApiError> | null)?.code === 'INVALID_MESSAGE_BODY'
-      ? '消息内容不能为空或超过 1000 个字符'
-      : '发送失败，请稍后重试'
-  } finally {
-    busy.value = false
-  }
-}
-
-function insertEmoji(char: string) {
-  draft.value += char
+  await submit()
+  showEmoji.value = false
+  await nextTick()
+  scrollToBottom()
 }
 
 function keydown(event: KeyboardEvent) {
@@ -134,17 +39,25 @@ function keydown(event: KeyboardEvent) {
 }
 
 onMounted(async () => {
-  await load()
-  pollTimer = window.setInterval(poll, 4000)
+  const summary = await api.get<{ publicId: string; displayName: string; overallLevel: number }>(`/friends/${props.publicId}/summary`).catch(() => null)
+  if (summary) peerLevel.value = summary.overallLevel
+  await open('single', props.publicId, summary?.displayName ?? '')
+  await nextTick()
+  scrollToBottom()
+  startPoll()
 })
 
-onBeforeUnmount(() => {
-  if (pollTimer) window.clearInterval(pollTimer)
+watch(messages, () => {
+  void nextTick().then(scrollToBottom)
 })
+
+onBeforeUnmount(stopPoll)
 </script>
 
 <template>
-  <section class="page chat-page">
+  <div class="chat-shell">
+    <ConversationRail />
+  <section class="page page--talk chat-page">
     <header class="page-head chat-head">
       <RouterLink class="back-link" to="/friends/chat"><ArrowLeft :size="17" />返回会话</RouterLink>
       <div class="chat-identity">
@@ -190,9 +103,14 @@ onBeforeUnmount(() => {
       </div>
     </div>
   </section>
+  </div>
 </template>
 
 <style scoped>
+.chat-shell { display: flex; gap: 24px; align-items: flex-start; width: min(100%, 1264px); margin: 0 auto; padding: 0 32px; }
+.chat-shell > .page { flex: 1; min-width: 0; padding-inline: 0; }
+@media (max-width: 1099px) { .chat-shell { display: block; padding: 0; } .chat-shell > .page { padding-inline: 18px; } }
+
 .chat-head { flex-direction: column; align-items: flex-start; gap: 16px; }
 .back-link { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); text-decoration: none; font-size: 13px; font-weight: 700; }
 .back-link:hover { color: var(--primary); }
@@ -219,4 +137,11 @@ onBeforeUnmount(() => {
 .composer-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 9px; align-items: end; padding: 10px; border: 1px solid var(--border); border-radius: calc(var(--radius) + 4px); background: var(--surface); box-shadow: var(--shadow-soft); }
 .composer-row textarea { min-height: 44px; max-height: 120px; resize: vertical; }
 .emoji-toggle.active { background: var(--primary-soft); color: var(--primary-strong); }
+.chat-page { max-width: 1060px; }
+.chat-head::before { display: none; }
+.chat-head > :first-child { flex: none; }
+.message-list { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-panel); padding: 24px; min-height: 45vh; }
+.msg-avatar, .chat-avatar { border-radius: 50%; box-shadow: none; }
+.composer { background: var(--canvas); padding-block: 10px; }
+@media (max-width:760px) { .composer { bottom: calc(72px + env(safe-area-inset-bottom)); } .message-list { padding: 14px; } }
 </style>

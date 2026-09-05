@@ -40,6 +40,7 @@ describe('Personal profile', () => {
     expect(wrapper.text()).toContain('LV.3')
     expect(wrapper.text()).toContain('小橘')
     expect(wrapper.text()).toContain('成长之路')
+    await wrapper.get('.titles-toggle').trigger('click')
     expect(wrapper.text()).toContain('未获得')
   })
 

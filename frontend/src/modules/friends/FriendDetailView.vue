@@ -5,29 +5,20 @@ import { RadarChart } from 'echarts/charts'
 import { LegendComponent, TooltipComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 import { ArrowLeft, BadgeCheck, CalendarCheck2, MessageCircle, PawPrint, UserRound } from 'lucide-vue-next'
-import { api } from '../../shared/api/client'
 import { computeBadges, type Badge } from '../insights/badges'
 import RivePet from '../partners/RivePet.vue'
-import type { FriendProfile } from './friends.types'
+import { friendInitial, memberSinceLabel as memberSinceLabelOf, useFriendProfile } from './friends.logic'
 
 use([RadarChart, LegendComponent, TooltipComponent, CanvasRenderer])
 
 const props = defineProps<{ publicId: string }>()
 
 const chartElement = ref<HTMLElement | null>(null)
-const profile = ref<FriendProfile | null>(null)
-const loading = ref(true)
-const error = ref('')
+const { profile, loading, error, load, doneCount, petProgress } = useFriendProfile()
 let chart: ECharts | undefined
 
-const initial = computed(() => {
-  const characters = Array.from(profile.value?.displayName.trim() ?? '')
-  if (!characters.length) return '好'
-  if (/\p{Script=Han}/u.test(characters[0])) return characters[0]
-  return characters[0].toUpperCase()
-})
+const initial = computed(() => friendInitial(profile.value?.displayName ?? ''))
 
-const doneCount = computed(() => profile.value?.todayTasks.filter(task => task.status === 'DONE').length ?? 0)
 const badges = computed<Badge[]>(() => {
   const data = profile.value
   if (!data) return []
@@ -41,14 +32,7 @@ const badges = computed<Badge[]>(() => {
   })
 })
 const earnedBadgeCount = computed(() => badges.value.filter(badge => badge.earned).length)
-const petProgress = computed(() => {
-  const pet = profile.value?.pet
-  if (!pet) return 0
-  return Math.min(100, Math.round(pet.affection * 100 / Math.max(1, pet.nextLevelAffection)))
-})
-const memberSinceLabel = computed(() => profile.value
-  ? new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' }).format(new Date(`${profile.value.memberSince}T00:00:00`))
-  : '')
+const memberSinceLabel = computed(() => profile.value ? memberSinceLabelOf(profile.value.memberSince) : '')
 
 function taskTime(value: string) {
   return new Date(value).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
@@ -63,9 +47,10 @@ function renderChart() {
   const muted = styles.getPropertyValue('--muted').trim() || '#74675f'
   const border = styles.getPropertyValue('--border').trim() || '#e4d5c7'
   const surface = styles.getPropertyValue('--surface').trim() || '#fffdfa'
-  const primary = styles.getPropertyValue('--primary').trim() || '#c85f47'
+  const primary = styles.getPropertyValue('--primary-strong').trim() || '#255643'
   chart.setOption({
-    animationDuration: 720,
+    animation: !['off', 'reduced'].includes(document.documentElement.dataset.motion ?? '') && !window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches,
+    animationDuration: 400,
     animationEasing: 'cubicOut',
     tooltip: {
       trigger: 'item',
@@ -101,16 +86,11 @@ function resizeChart() {
 }
 
 onMounted(async () => {
-  try {
-    profile.value = await api.get<FriendProfile>(`/friends/${props.publicId}`)
-    loading.value = false
+  await load(props.publicId)
+  if (profile.value) {
     await nextTick()
     renderChart()
     window.addEventListener('resize', resizeChart)
-  } catch {
-    error.value = '只能查看好友的资料，或者对方已删除好友关系'
-  } finally {
-    loading.value = false
   }
 })
 
@@ -269,9 +249,9 @@ onBeforeUnmount(() => {
 .badge-card { min-width: 0; min-height: 172px; display: grid; grid-template-rows: auto 1fr; gap: 12px; padding: 15px; border: 1px solid var(--border); border-radius: var(--radius); background: color-mix(in srgb, var(--surface) 92%, transparent); color: var(--muted); opacity: .72; }
 .badge-card.earned { color: var(--ink); opacity: 1; border-color: color-mix(in srgb, var(--badge-color) 42%, var(--border)); background: linear-gradient(145deg, color-mix(in srgb, var(--badge-color) 10%, var(--surface)), var(--surface)); box-shadow: var(--shadow-soft); }
 .badge-card.green { --badge-color: var(--primary); }
-.badge-card.blue { --badge-color: #2a6b80; }
+.badge-card.blue { --badge-color: var(--tone-blue); }
 .badge-card.amber { --badge-color: var(--amber); }
-.badge-card.violet { --badge-color: #70517a; }
+.badge-card.violet { --badge-color: var(--tone-violet); }
 .badge-icon { width: 44px; height: 44px; display: grid; place-items: center; border: 1px solid color-mix(in srgb, var(--badge-color) 32%, var(--border)); border-radius: 14px; color: var(--badge-color); background: var(--surface); box-shadow: inset 0 -10px 18px color-mix(in srgb, var(--badge-color) 7%, transparent); }
 .badge-card:not(.earned) .badge-icon { color: var(--muted); border-color: var(--border); background: var(--surface-muted); }
 .badge-copy { display: grid; gap: 7px; align-content: start; min-width: 0; }
@@ -291,4 +271,6 @@ onBeforeUnmount(() => {
 @media (max-width: 820px) { .badge-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 600px) { .metrics { grid-template-columns: repeat(2, 1fr); } .metrics div { min-height: 88px; } }
 @media (max-width: 460px) { .badge-grid { grid-template-columns: 1fr; } }
+.badge-card, .friend-pet-stage { border-radius: var(--radius-panel); box-shadow: none; }
+.page > .band { padding-block: 28px; }
 </style>

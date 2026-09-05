@@ -1,154 +1,23 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { nextTick } from 'vue'
 import { BatteryMedium, Check, Clock3, Gauge, Minimize2, Play, RotateCcw, SkipForward, Sparkles, TimerReset, Undo2, X } from 'lucide-vue-next'
-import { api, type ApiError } from '../../shared/api/client'
-import { notifyDataChanged, onDataChanged } from '../../shared/data-sync'
-import { randomUUID } from '../../shared/uuid'
-import { encouragement, type EncouragementMoment } from '../../shared/encouragement'
+import GrowthScene from '../../shared/ui/GrowthScene.vue'
+import { taskStatusLabel } from '../../shared/task-status'
+import { useDialogFocus } from '../../shared/ui/use-dialog-focus'
+import { DAILY_COMPLETION_LIMIT, useTodayLogic } from './today.logic'
 
-type Task = { publicId: string; taskTitle: string; plannedStartAt: string; status: string; roleCode?: string; roleName?: string; estimatedMinutes?: number; difficulty?: number }
-type Goal = { publicId: string; title: string; description: string; startDate: string; endDate: string; status: string }
-type CheckMood = 'steady' | 'low' | 'open'
-type DailyStatus = { publicId: string; localDate: string; energy: 'LOW' | 'STEADY' | 'OPEN'; availableMinutes: number; advice: 'SHRINK' | 'KEEP' | 'LIGHT'; updatedAt: string }
+const {
+  tasks, goals, loading, error, feedback, last,
+  selected, completionPercent, deferredStart,
+  checkMood, availableMinutes, checkSubmitted, showCheck, recoveryChoice,
+  focusTask, focusRunning,
+  strainedTasks, activeGoals, completedTaskCount, remainingCompletions, dailyLimitReached,
+  suggestedPlan, activeAdvice, recommendedTasks, recommendedPublicIds, dailyGuidance, focusMinutes, focusClock,
+  prepare, canActOn, canComplete, applyCheck, applyRecovery, startFocus, toggleFocus, closeFocus,
+  act, confirmAction, finishFocus, reverse,
+} = useTodayLogic()
 
-const DAILY_COMPLETION_LIMIT = 4
-
-const tasks = ref<Task[]>([])
-const goals = ref<Goal[]>([])
-const loading = ref(true)
-const error = ref('')
-const feedback = ref<{ tone: 'support' | 'celebrate'; text: string; experience?: string } | null>(null)
-const last = ref<{ schedule: string; event: string } | null>(null)
-const pending = ref(new Set<string>())
-const actionKeys = new Map<string, string>()
-const selected = ref<{ task: Task; eventType: 'PARTIAL' | 'DEFERRED' } | null>(null)
-const completionPercent = ref(50)
-const deferredStart = ref(localDateTime(Date.now() + 86400000))
-
-const checkMood = ref<CheckMood>('steady')
-const availableMinutes = ref(30)
-const checkSubmitted = ref(false)
-const savedAdvice = ref<'SHRINK' | 'KEEP' | 'LIGHT' | null>(null)
-const recoveryChoice = ref('')
-const focusTask = ref<Task | null>(null)
-const focusRunning = ref(false)
-const focusSeconds = ref(25 * 60)
-let focusTimer: ReturnType<typeof setInterval> | undefined
-
-const plannedTasks = computed(() => tasks.value.filter(task => ['PLANNED', 'IN_PROGRESS'].includes(task.status)))
-const strainedTasks = computed(() => tasks.value.filter(task => ['DEFERRED', 'SKIPPED', 'EXPIRED'].includes(task.status)))
-const activeGoals = computed(() => goals.value.filter(goal => goal.status === 'ACTIVE'))
-const completedTaskCount = computed(() => tasks.value.filter(task => task.status === 'DONE').length)
-const remainingCompletions = computed(() => Math.max(0, DAILY_COMPLETION_LIMIT - completedTaskCount.value))
-const dailyLimitReached = computed(() => remainingCompletions.value === 0)
-const suggestedPlan = computed(() => {
-  if (checkMood.value === 'low' || availableMinutes.value < 20) {
-    return { title: '缩小任务', body: '今天先保留一件最小行动，把完成比例目标降到 50%。', action: '缩小今天', advice: 'SHRINK' }
-  }
-  if (checkMood.value === 'open' && availableMinutes.value >= 45) {
-    return { title: '保持原计划', body: '状态和时间都足够，适合按原计划推进，但仍然保留延期入口。', action: '保持节奏', advice: 'KEEP' }
-  }
-  return { title: '轻量推进', body: '先完成最靠前的一项任务，剩余任务根据实际精力决定。', action: '先做一项', advice: 'LIGHT' }
-})
-const activeAdvice = computed(() => savedAdvice.value ?? suggestedPlan.value.advice)
-const recommendedTasks = computed(() => {
-  const list = tasks.value
-    .filter(task => ['PLANNED', 'IN_PROGRESS'].includes(task.status))
-    .slice()
-  if (activeAdvice.value === 'SHRINK') {
-    list.sort((a, b) => (a.estimatedMinutes ?? 99) - (b.estimatedMinutes ?? 99))
-  } else {
-    list.sort((a, b) => new Date(a.plannedStartAt).getTime() - new Date(b.plannedStartAt).getTime())
-  }
-  return list
-})
-const recommendedPublicIds = computed(() => {
-  if (activeAdvice.value === 'SHRINK') {
-    return new Set(recommendedTasks.value.slice(0, 2).map(task => task.publicId))
-  }
-  if (activeAdvice.value === 'LIGHT') {
-    return new Set(recommendedTasks.value.slice(0, 1).map(task => task.publicId))
-  }
-  return new Set<string>()
-})
-const dailyGuidance = computed(() => {
-  if (activeAdvice.value === 'SHRINK') return '今日建议：每项控制在 15 分钟以内，完成比例目标降到 50%。'
-  if (activeAdvice.value === 'KEEP') return '今日建议：按原计划推进，保留延期入口。'
-  return '今日建议：先完成一项，再根据实际精力决定下一项。'
-})
-const focusMinutes = computed(() => Math.max(5, Math.round(focusSeconds.value / 60)))
-const focusClock = computed(() => {
-  const minutes = Math.floor(focusSeconds.value / 60).toString().padStart(2, '0')
-  const seconds = Math.floor(focusSeconds.value % 60).toString().padStart(2, '0')
-  return `${minutes}:${seconds}`
-})
-
-function localDateTime(value: number) {
-  const date = new Date(value - new Date(value).getTimezoneOffset() * 60000)
-  return date.toISOString().slice(0, 16)
-}
-
-function localDate(value = new Date()) {
-  const year = value.getFullYear()
-  const month = String(value.getMonth() + 1).padStart(2, '0')
-  const day = String(value.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
-
-async function load(showLoading = true) {
-  if (showLoading) loading.value = true
-  error.value = ''
-  try {
-    const d = localDate()
-    const [todayTasks, activeGoalList, status] = await Promise.all([
-      api.get<Task[]>(`/task-schedules?localDate=${d}`),
-      api.get<Goal[]>('/goals?status=ACTIVE'),
-      api.get<DailyStatus | null>('/daily-status').catch(() => null),
-    ])
-    tasks.value = todayTasks
-    goals.value = activeGoalList
-    if (status) {
-      checkMood.value = status.energy === 'LOW' ? 'low' : status.energy === 'OPEN' ? 'open' : 'steady'
-      availableMinutes.value = status.availableMinutes
-      savedAdvice.value = status.advice
-      checkSubmitted.value = true
-    }
-  } catch {
-    error.value = '今天的任务暂时无法加载'
-  } finally {
-    if (showLoading) loading.value = false
-  }
-}
-
-function prepare(task: Task, eventType: 'PARTIAL' | 'DEFERRED') {
-  selected.value = { task, eventType }
-}
-
-function canActOn(task: Task) {
-  return ['PLANNED', 'IN_PROGRESS'].includes(task.status)
-}
-
-function canComplete(task: Task) {
-  return canActOn(task) && !dailyLimitReached.value
-}
-
-async function applyCheck() {
-  checkSubmitted.value = true
-  try {
-    const saved = await api.post<DailyStatus>('/daily-status', {
-      energy: checkMood.value === 'low' ? 'LOW' : checkMood.value === 'open' ? 'OPEN' : 'STEADY',
-      availableMinutes: availableMinutes.value,
-    })
-    savedAdvice.value = saved.advice
-    notifyDataChanged(['today', 'insights'])
-    feedback.value = { tone: 'support', text: `已按“${suggestedPlan.value.title}”整理今天：${suggestedPlan.value.body}` }
-    await nextTick()
-    focusFirstRecommended()
-  } catch {
-    error.value = '状态保存失败，请稍后重试'
-    checkSubmitted.value = false
-  }
-}
+useDialogFocus(() => Boolean(selected.value || focusTask.value), '.today-dialog', () => { selected.value = null; closeFocus() })
 
 function focusFirstRecommended() {
   const first = recommendedTasks.value[0]
@@ -157,119 +26,19 @@ function focusFirstRecommended() {
   row?.scrollIntoView({ behavior: 'smooth', block: 'center' })
 }
 
-function applyRecovery(choice: string) {
-  recoveryChoice.value = choice
-  feedback.value = { tone: 'support', text: `恢复计划已选：${choice}。系统不会追责中断，今天只需要重新拿回一点节奏。` }
+async function submitCheck() {
+  if (!(await applyCheck())) return
+  await nextTick()
+  focusFirstRecommended()
 }
-
-function startFocus(task: Task) {
-  focusTask.value = task
-  focusSeconds.value = Math.max(5, task.estimatedMinutes ?? 25) * 60
-  focusRunning.value = false
-}
-
-function toggleFocus() {
-  focusRunning.value = !focusRunning.value
-  if (focusRunning.value) {
-    focusTimer = setInterval(() => {
-      if (focusSeconds.value <= 1) {
-        focusSeconds.value = 0
-        focusRunning.value = false
-        clearInterval(focusTimer)
-        return
-      }
-      focusSeconds.value -= 1
-    }, 1000)
-  } else {
-    clearInterval(focusTimer)
-  }
-}
-
-function closeFocus() {
-  clearInterval(focusTimer)
-  focusRunning.value = false
-  focusTask.value = null
-}
-
-async function act(task: Task, eventType: string, extra: Record<string, unknown> = {}) {
-  if (eventType === 'COMPLETED' && dailyLimitReached.value) {
-    error.value = '今天已完成 4 个任务，明天再继续吧'
-    return
-  }
-  const intent = `${task.publicId}:${eventType}`
-  if (pending.value.has(intent)) return
-  const key = actionKeys.get(intent) ?? randomUUID()
-  actionKeys.set(intent, key)
-  pending.value.add(intent)
-  error.value = ''
-  try {
-    const result: any = await api.post(`/task-schedules/${task.publicId}/events`, { eventType, ...extra }, { 'Idempotency-Key': key })
-    task.status = result.scheduleStatus
-    last.value = { schedule: task.publicId, event: result.eventPublicId }
-    const moments: Partial<Record<string, EncouragementMoment>> = { STARTED: 'taskStarted', COMPLETED: 'taskCompleted', PARTIAL: 'taskPartial', DEFERRED: 'taskDeferred', SKIPPED: 'taskSkipped' }
-    const moment = moments[eventType]
-    if (moment) {
-      feedback.value = {
-        tone: eventType === 'COMPLETED' ? 'celebrate' : 'support',
-        text: encouragement(moment),
-        experience: [
-          result.roleExperienceDelta > 0 ? `${result.roleProgress.roleName} +${result.roleExperienceDelta} 经验 · LV.${result.roleProgress.level}` : '',
-          result.coinDelta > 0 ? `金币 +${result.coinDelta}` : '',
-        ].filter(Boolean).join(' · ') || undefined,
-      }
-    }
-    notifyDataChanged(['tasks', 'today', 'insights', 'attributes', 'achievements', 'profile', 'partners'])
-    actionKeys.delete(intent)
-    selected.value = null
-  } catch (caught) {
-    const apiError = caught as Partial<ApiError>
-    error.value = apiError.code === 'DAILY_TASK_COMPLETION_LIMIT_REACHED'
-      ? '今天已完成 4 个任务，明天再继续吧'
-      : '记录未保存，请重试'
-  } finally {
-    pending.value.delete(intent)
-  }
-}
-
-async function confirmAction() {
-  if (!selected.value) return
-  const { task, eventType } = selected.value
-  if (eventType === 'PARTIAL') await act(task, eventType, { completionRatio: completionPercent.value / 100 })
-  else await act(task, eventType, { deferredStartAt: new Date(deferredStart.value).toISOString() })
-}
-
-async function finishFocus(eventType: 'COMPLETED' | 'PARTIAL') {
-  if (!focusTask.value) return
-  const task = focusTask.value
-  closeFocus()
-  if (eventType === 'PARTIAL') await act(task, eventType, { completionRatio: 0.5 })
-  else await act(task, eventType)
-}
-
-async function reverse() {
-  if (!last.value) return
-  await api.post(`/task-schedules/${last.value.schedule}/events/${last.value.event}/reverse`, undefined, { 'Idempotency-Key': randomUUID() })
-  last.value = null
-  feedback.value = null
-  await load(false)
-  notifyDataChanged(['tasks', 'today', 'insights', 'attributes', 'achievements', 'profile', 'partners'])
-}
-
-const stopDataSync = onDataChanged(['goals', 'tasks'], () => load(false))
-
-onMounted(() => load(true))
-onBeforeUnmount(() => {
-  stopDataSync()
-  clearInterval(focusTimer)
-})
 </script>
 
 <template>
-  <section class="page">
+  <section class="page today-page">
     <header class="page-head">
       <div>
         <p class="eyebrow">{{ new Intl.DateTimeFormat('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' }).format(new Date()) }}</p>
-        <h1>今日</h1>
+        <h1>今天，先向前一小步。</h1>
       </div>
       <button v-if="last" class="secondary" @click="reverse">
         <Undo2 :size="17" />
@@ -283,7 +52,22 @@ onBeforeUnmount(() => {
       <p>{{ feedback.text }}<strong v-if="feedback.experience">{{ feedback.experience }}</strong></p>
     </div>
 
-    <section class="daily-check band" aria-labelledby="daily-check-title">
+    <section class="today-hero" aria-label="今日起点">
+      <div class="next-step">
+        <div class="hero-label"><span class="live-dot" /> 今日起点 <span>先做这一件</span></div>
+        <template v-if="loading"><h2>正在整理你的下一步…</h2><p>给今天，留一点真实的空间。</p></template>
+        <template v-else-if="recommendedTasks[0]">
+          <p class="next-step-kicker">从这一件事开始</p>
+          <h2>{{ recommendedTasks[0].taskTitle }}</h2>
+          <p>{{ recommendedTasks[0].roleName || '属于你的成长行动' }}<span v-if="recommendedTasks[0].estimatedMinutes"> · 约 {{ recommendedTasks[0].estimatedMinutes }} 分钟</span></p>
+          <div class="hero-actions"><button class="primary" :disabled="!canActOn(recommendedTasks[0])" @click="startFocus(recommendedTasks[0])"><Play :size="16" />专注这一步</button><button class="rhythm-toggle" :aria-expanded="showCheck" aria-controls="daily-rhythm" @click="showCheck = !showCheck"><BatteryMedium :size="16" />调整今日节奏</button></div>
+        </template>
+        <template v-else><p class="next-step-kicker">每一步，都有它的意义</p><h2>{{ tasks.length ? '今天留下的努力，都在这里。' : '从一件做得到的小事开始。' }}</h2><p>{{ tasks.length ? '可以回望一下，也可以让自己休息片刻。' : '不用排满今天，先给一个想法留出位置。' }}</p><RouterLink class="button primary" :to="tasks.length ? '/insights' : '/goals'">{{ tasks.length ? '看看成长记录' : '安排一件小事' }}</RouterLink></template>
+      </div>
+      <RouterLink class="today-scene" to="/town"><GrowthScene /><span class="scene-caption"><span><strong>我的街角</strong><small>场景预览 · 去看看你的成长小镇</small></span><span class="scene-arrow">↗</span></span></RouterLink>
+    </section>
+    <button v-if="!recommendedTasks.length" class="rhythm-toggle standalone-rhythm" :aria-expanded="showCheck" aria-controls="daily-rhythm" @click="showCheck = !showCheck"><BatteryMedium :size="16" />调整今日节奏</button>
+    <section v-show="showCheck" id="daily-rhythm" class="daily-check band" aria-labelledby="daily-check-title">
       <div class="check-copy">
         <p class="eyebrow">每日状态检查</p>
         <h2 id="daily-check-title">今天用哪种节奏开始？</h2>
@@ -305,9 +89,71 @@ onBeforeUnmount(() => {
           <strong>{{ suggestedPlan.title }}</strong>
           <p>{{ suggestedPlan.body }}</p>
         </div>
-        <button class="secondary" type="button" @click="applyCheck">{{ checkSubmitted ? '更新建议' : suggestedPlan.action }}</button>
+        <button class="secondary" type="button" @click="submitCheck">{{ checkSubmitted ? '更新建议' : suggestedPlan.action }}</button>
       </div>
     </section>
+
+    <section v-if="!loading && tasks.length" class="task-quota" :data-limit-reached="dailyLimitReached" aria-live="polite">
+      <div class="quota-copy">
+        <span>今日完成额度</span>
+        <strong>{{ completedTaskCount }} / {{ DAILY_COMPLETION_LIMIT }}</strong>
+      </div>
+      <progress :value="Math.min(completedTaskCount, DAILY_COMPLETION_LIMIT)" :max="DAILY_COMPLETION_LIMIT" :aria-label="`今日已完成 ${completedTaskCount} 个任务，最多 ${DAILY_COMPLETION_LIMIT} 个`" />
+      <p>{{ dailyLimitReached ? '今日额度已用完，未完成的任务可以延期或留待明天。' : `还可以完成 ${remainingCompletions} 个任务。` }}</p>
+    </section>
+
+    <p v-if="loading" class="empty">正在整理今天的安排…</p>
+    <template v-else-if="tasks.length">
+      <div v-if="checkSubmitted && activeAdvice !== 'KEEP'" class="daily-guidance" :data-advice="activeAdvice" role="status" aria-live="polite">
+        <BatteryMedium :size="17" />
+        <span>{{ dailyGuidance }}</span>
+      </div>
+      <div class="task-list">
+        <article v-for="task in recommendedTasks" :key="task.publicId" class="task-row" :class="{ recommended: recommendedPublicIds.has(task.publicId) }" :data-task-id="task.publicId">
+          <div>
+            <span class="status">{{ taskStatusLabel(task.status) }}<template v-if="task.roleName"> · {{ task.roleName }}</template>
+              <template v-if="recommendedPublicIds.has(task.publicId)"><span class="recommended-badge">今天先做</span></template>
+            </span>
+            <h2>{{ task.taskTitle }}</h2>
+            <time>{{ new Date(task.plannedStartAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) }}<template v-if="task.estimatedMinutes"> · 约 {{ task.estimatedMinutes }} 分钟<template v-if="task.difficulty"> · 难度 {{ task.difficulty }}</template></template></time>
+          </div>
+          <div class="actions">
+            <button v-if="task.status === 'PLANNED'" class="secondary" title="开始" aria-label="开始" :disabled="!canActOn(task)" @click="act(task, 'STARTED')">
+              <Play :size="16" />开始
+            </button>
+            <button class="primary" :title="dailyLimitReached ? '今日完成额度已用完' : '完成'" aria-label="完成" :disabled="!canComplete(task)" @click="act(task, 'COMPLETED')">
+              <Check :size="16" />完成
+            </button>
+            <details class="task-more"><summary aria-label="更多任务操作">更多</summary><div>
+            <button class="secondary" title="专注执行" aria-label="专注执行" :disabled="!canActOn(task)" @click="startFocus(task)">
+              <TimerReset :size="16" />专注执行
+            </button>
+            <button class="secondary" title="部分完成" aria-label="部分完成" :disabled="!canActOn(task)" @click="prepare(task, 'PARTIAL')">
+              <Gauge :size="16" />部分完成
+            </button>
+            <button class="secondary" title="延期" aria-label="延期" :disabled="!canActOn(task)" @click="prepare(task, 'DEFERRED')">
+              <Clock3 :size="16" />延期
+            </button>
+            <button v-if="task.status === 'PLANNED'" class="secondary" title="跳过" aria-label="跳过" :disabled="!canActOn(task)" @click="act(task, 'SKIPPED')">
+              <SkipForward :size="16" />跳过
+            </button>
+            </div></details>
+          </div>
+        </article>
+        <article v-for="task in tasks.filter(item => !['PLANNED', 'IN_PROGRESS'].includes(item.status))" :key="task.publicId" class="task-row">
+          <div>
+            <span class="status">{{ taskStatusLabel(task.status) }}<template v-if="task.roleName"> · {{ task.roleName }}</template></span>
+            <h2>{{ task.taskTitle }}</h2>
+            <time>{{ new Date(task.plannedStartAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) }}</time>
+          </div>
+        </article>
+      </div>
+    </template>
+    <div v-else-if="!loading" class="empty">
+      <h2>今天还没有任务</h2>
+      <p>{{ activeGoals.length ? '目标已在上方显示，可以为它添加一项覆盖今天的周期任务。' : '可以从目标页安排一项小行动。' }}</p>
+      <RouterLink class="button primary" to="/goals">前往目标</RouterLink>
+    </div>
 
     <section v-if="activeGoals.length" class="goal-today band" aria-labelledby="today-goals-title">
       <div class="goal-summary-head">
@@ -349,67 +195,9 @@ onBeforeUnmount(() => {
       </div>
     </section>
 
-    <section v-if="!loading && tasks.length" class="task-quota" :data-limit-reached="dailyLimitReached" aria-live="polite">
-      <div class="quota-copy">
-        <span>今日完成额度</span>
-        <strong>{{ completedTaskCount }} / {{ DAILY_COMPLETION_LIMIT }}</strong>
-      </div>
-      <progress :value="Math.min(completedTaskCount, DAILY_COMPLETION_LIMIT)" :max="DAILY_COMPLETION_LIMIT" :aria-label="`今日已完成 ${completedTaskCount} 个任务，最多 ${DAILY_COMPLETION_LIMIT} 个`" />
-      <p>{{ dailyLimitReached ? '今日额度已用完，未完成的任务可以延期或留待明天。' : `还可以完成 ${remainingCompletions} 个任务。` }}</p>
-    </section>
-
-    <p v-if="loading" class="empty">正在整理今天的安排…</p>
-    <template v-else-if="tasks.length">
-      <div v-if="checkSubmitted && activeAdvice !== 'KEEP'" class="daily-guidance" :data-advice="activeAdvice" role="status" aria-live="polite">
-        <BatteryMedium :size="17" />
-        <span>{{ dailyGuidance }}</span>
-      </div>
-      <div class="task-list">
-        <article v-for="task in recommendedTasks" :key="task.publicId" class="task-row" :class="{ recommended: recommendedPublicIds.has(task.publicId) }" :data-task-id="task.publicId">
-          <div>
-            <span class="status">{{ task.status }}<template v-if="task.roleName"> · {{ task.roleName }}</template>
-              <template v-if="recommendedPublicIds.has(task.publicId)"><span class="recommended-badge">今天先做</span></template>
-            </span>
-            <h2>{{ task.taskTitle }}</h2>
-            <time>{{ new Date(task.plannedStartAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) }}<template v-if="task.estimatedMinutes"> · 约 {{ task.estimatedMinutes }} 分钟<template v-if="task.difficulty"> · 难度 {{ task.difficulty }}</template></template></time>
-          </div>
-          <div class="actions">
-            <button class="icon-button focus-button" title="专注执行" aria-label="专注执行" :disabled="!canActOn(task)" @click="startFocus(task)">
-              <TimerReset :size="18" />
-            </button>
-            <button v-if="task.status === 'PLANNED'" class="icon-button" title="开始" aria-label="开始" @click="act(task, 'STARTED')">
-              <Play />
-            </button>
-            <button class="icon-button" :title="dailyLimitReached ? '今日完成额度已用完' : '完成'" aria-label="完成" :disabled="!canComplete(task)" @click="act(task, 'COMPLETED')">
-              <Check />
-            </button>
-            <button class="icon-button" title="部分完成" aria-label="部分完成" :disabled="!canActOn(task)" @click="prepare(task, 'PARTIAL')">
-              <Gauge />
-            </button>
-            <button class="icon-button" title="延期" aria-label="延期" :disabled="!canActOn(task)" @click="prepare(task, 'DEFERRED')">
-              <Clock3 />
-            </button>
-            <button v-if="task.status === 'PLANNED'" class="icon-button" title="跳过" aria-label="跳过" @click="act(task, 'SKIPPED')">
-              <SkipForward />
-            </button>
-          </div>
-        </article>
-        <article v-for="task in tasks.filter(item => !['PLANNED', 'IN_PROGRESS'].includes(item.status))" :key="task.publicId" class="task-row">
-          <div>
-            <span class="status">{{ task.status }}<template v-if="task.roleName"> · {{ task.roleName }}</template></span>
-            <h2>{{ task.taskTitle }}</h2>
-            <time>{{ new Date(task.plannedStartAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) }}</time>
-          </div>
-        </article>
-      </div>
-    </template>
-    <div v-else-if="!loading" class="empty">
-      <h2>今天还没有任务</h2>
-      <p>{{ activeGoals.length ? '目标已在上方显示，可以为它添加一项覆盖今天的周期任务。' : '可以从目标页安排一项小行动。' }}</p>
-      <RouterLink class="button primary" to="/goals">前往目标</RouterLink>
-    </div>
-
-    <section v-if="selected" class="action-panel" role="dialog" aria-modal="true" :aria-label="selected.eventType === 'PARTIAL' ? '记录部分完成' : '选择延期时间'">
+    <Teleport to="body">
+    <div v-if="selected || focusTask" class="dialog-backdrop" @click="selected = null; closeFocus()" />
+    <section v-if="selected" class="action-panel today-dialog" role="dialog" aria-modal="true" tabindex="-1" :aria-label="selected.eventType === 'PARTIAL' ? '记录部分完成' : '选择延期时间'">
       <template v-if="selected.eventType === 'PARTIAL'">
         <label for="completion">完成比例：{{ completionPercent }}%</label>
         <input id="completion" v-model.number="completionPercent" type="range" min="10" max="90" step="10">
@@ -424,7 +212,7 @@ onBeforeUnmount(() => {
       </div>
     </section>
 
-    <section v-if="focusTask" class="focus-panel" role="dialog" aria-modal="true" aria-labelledby="focus-title">
+    <section v-if="focusTask" class="focus-panel today-dialog" role="dialog" aria-modal="true" tabindex="-1" aria-labelledby="focus-title">
       <button class="icon-button close-focus" type="button" aria-label="关闭专注模式" @click="closeFocus">
         <X :size="18" />
       </button>
@@ -439,10 +227,49 @@ onBeforeUnmount(() => {
       </div>
       <small>当前专注片段：{{ focusMinutes }} 分钟</small>
     </section>
+    </Teleport>
   </section>
 </template>
 
 <style scoped>
+.today-page { display: flex; flex-direction: column; gap: 20px; }
+.today-page > .page-head { margin-bottom: 4px; }
+.today-hero { display: grid; grid-template-columns: 1.3fr 1fr; border: 1px solid var(--border); background: var(--surface); border-radius: var(--radius-scene); overflow: hidden; }
+.next-step { padding: 28px 32px; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; }
+.hero-label { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; letter-spacing: .04em; font-weight: 650; }
+.hero-label > span:last-child { margin-left: 8px; letter-spacing: 0; }
+.live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+.next-step .next-step-kicker { margin: 26px 0 8px; font-size: 12px; color: var(--muted); }
+.next-step h2 { font-size: clamp(23px, 2.4vw, 32px); line-height: 1.4; letter-spacing: -.6px; margin: 0; }
+.next-step p { color: var(--muted); font-size: 13px; margin: 12px 0 20px; }
+.hero-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 16px; }
+.rhythm-toggle { display: inline-flex; align-items: center; gap: 6px; background: transparent; color: var(--muted); font-size: 12px; padding: 0; }
+.standalone-rhythm { align-self: flex-start; }
+.today-scene { position: relative; display: block; overflow: hidden; min-height: 280px; color: var(--on-forest); text-decoration: none; background: var(--forest); }
+.today-scene :deep(.growth-scene) { height: 100%; }
+.scene-caption { position: absolute; bottom: 0; left: 0; right: 0; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 22px; background: linear-gradient(transparent, #173d32e8); }
+.scene-caption strong, .scene-caption small { display: block; }
+.scene-caption strong { font-size: 15px; font-weight: 500; }
+.scene-caption small { font-size: 10px; opacity: .75; margin-top: 4px; }
+.scene-arrow { display: grid; place-items: center; border: 1px solid #a2b49370; border-radius: 50%; width: 34px; height: 34px; }
+.task-more { position: relative; }
+.task-more summary { display: grid; place-items: center; min-width: 66px; height: 44px; padding: 0 12px; border: 1px solid var(--border); border-radius: var(--radius); cursor: pointer; list-style: none; font-size: 14px; font-weight: 650; color: var(--muted); }
+.task-more summary::-webkit-details-marker { display: none; }
+.task-more summary::marker { content: ''; }
+.task-more > div { position: absolute; right: 0; top: 48px; z-index: 8; width: 168px; padding: 6px; display: grid; gap: 4px; background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow); border-radius: var(--radius); }
+.task-more > div button { justify-content: flex-start; border: 0; }
+.today-dialog { z-index: 51 !important; max-height: calc(100dvh - 40px); overflow-y: auto; }
+@media (max-width: 760px) {
+  .today-hero { grid-template-columns: 1fr; }
+  .today-scene { min-height: 108px; height: 108px; order: -1; }
+  .today-scene :deep(svg) { width: 240px; margin-left: auto; }
+  .scene-caption { top: 0; padding: 18px; background: linear-gradient(90deg, #173d32, transparent); }
+  .scene-arrow { display: none; }
+  .next-step { padding: 22px; }
+  .next-step .next-step-kicker { margin-top: 16px; }
+  .today-page { gap: 16px; }
+  .today-page .task-row .actions { display: flex; width: 100%; flex-wrap: wrap; justify-content: flex-end; }
+}
 .feedback-banner strong { display: block; margin-top: 3px; color: var(--amber); font: 700 13px Inter, "PingFang SC", sans-serif; }
 .daily-check { display: grid; grid-template-columns: minmax(260px, .52fr) minmax(0, 1fr); gap: 18px 26px; align-items: stretch; padding: 20px; border: 1px solid var(--border); border-radius: calc(var(--radius) + 4px); background: color-mix(in srgb, var(--surface) 88%, transparent); box-shadow: var(--shadow-soft); overflow: hidden; }
 .check-copy h2, .recovery h2 { margin: 0; font-size: 18px; }
@@ -523,7 +350,9 @@ onBeforeUnmount(() => {
 @media (max-width: 600px) {
   .task-quota { grid-template-columns: 1fr; gap: 8px; }
   .task-row { align-items: flex-start; flex-direction: column; }
-  .task-row .actions { width: 100%; display: grid; grid-template-columns: repeat(auto-fit, var(--control)); gap: 8px; padding-top: 4px; justify-content: end; }
+  .task-row .actions { width: 100%; display: flex; flex-wrap: wrap; gap: 8px; padding-top: 6px; justify-content: flex-start; }
+  .task-row .actions > button, .task-row .actions .task-more { flex: 1 1 auto; min-width: 96px; }
+  .task-row .actions .task-more summary { width: 100%; }
   .minutes-control { grid-template-columns: 1fr; }
 }
 </style>

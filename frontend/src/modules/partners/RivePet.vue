@@ -37,6 +37,15 @@ let inputs: StateMachineInput[] = []
 let resizeObserver: ResizeObserver | null = null
 let reactionTimer: number | undefined
 let inputTimers: number[] = []
+let motionObserver: MutationObserver | null = null
+function reduceMotion() {
+  return ['off', 'reduced'].includes(document.documentElement.dataset.motion ?? '') || window.matchMedia('(prefers-reduced-motion: reduce)').matches
+}
+function syncPlayback() {
+  if (!rive) return
+  if (reduceMotion() || document.hidden) rive.pause()
+  else rive.play()
+}
 
 function cleanup() {
   window.clearTimeout(reactionTimer)
@@ -63,7 +72,7 @@ async function initialize() {
   await nextTick()
   if (!canvas.value || animation.value !== config) return
 
-  const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  const prefersReducedMotion = reduceMotion()
   const canvasElement = canvas.value
 
   rive = new Rive({
@@ -142,7 +151,7 @@ function react(kind: PetReaction = 'greet') {
   const duration = kind === 'comfort' ? 900 : kind === 'celebrate' ? 820 : 720
   reactionTimer = window.setTimeout(() => { reacting.value = false }, duration)
 
-  if (config.kind === 'image' || !rive) return
+  if (config.kind === 'image' || !rive || reduceMotion()) return
   rive.play(config.stateMachine)
 
   for (const spec of config.reactions?.[kind] ?? []) {
@@ -162,9 +171,16 @@ function onDocumentPointerDown() {
 }
 
 watch(() => [props.speciesCode, props.variantIndex] as const, initialize, { immediate: true })
-onMounted(() => document.addEventListener('pointerdown', onDocumentPointerDown))
+onMounted(() => {
+  document.addEventListener('pointerdown', onDocumentPointerDown)
+  document.addEventListener('visibilitychange', syncPlayback)
+  motionObserver = new MutationObserver(syncPlayback)
+  motionObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-motion'] })
+})
 onBeforeUnmount(() => {
   document.removeEventListener('pointerdown', onDocumentPointerDown)
+  document.removeEventListener('visibilitychange', syncPlayback)
+  motionObserver?.disconnect()
   cleanup()
 })
 

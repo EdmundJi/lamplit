@@ -1,124 +1,33 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ArrowLeft, Send, Smile, Users } from 'lucide-vue-next'
-import { api, type ApiError } from '../../shared/api/client'
-import { notifyDataChanged } from '../../shared/data-sync'
 import { useAuthStore } from '../auth/auth.store'
 import EmojiPicker from './EmojiPicker.vue'
+import ConversationRail from './ConversationRail.vue'
 import EmojiText from './EmojiText.vue'
-import type { GroupMember, GroupMessage } from './friends.types'
+import { chatTimeLabel as messageTime, friendInitial as initialOf, useChatThread, useGroupInfo } from './friends.logic'
 
 const props = defineProps<{ publicId: string }>()
 
 const auth = useAuthStore()
-const messages = ref<GroupMessage[]>([])
-const groupName = ref('')
-const members = ref<GroupMember[]>([])
-const draft = ref('')
+const { messages, loading, error, busy, draft, open, startPoll, stopPoll, send: submit, insertEmoji } = useChatThread()
+const { groupName, members, load: loadGroupInfo } = useGroupInfo()
 const showEmoji = ref(false)
-const loading = ref(true)
-const error = ref('')
-const busy = ref(false)
 const listElement = ref<HTMLElement | null>(null)
-let pollTimer: number | undefined
 
 const myName = computed(() => auth.user?.displayName ?? '我')
-const myInitial = computed(() => {
-  const characters = Array.from(myName.value.trim())
-  if (!characters.length) return '好'
-  if (/\p{Script=Han}/u.test(characters[0])) return characters[0]
-  return characters[0].toUpperCase()
-})
+const myInitial = computed(() => initialOf(myName.value))
 const memberOf = computed(() => new Map(members.value.map(member => [member.publicId, member])))
-
-function initialOf(name: string) {
-  const characters = Array.from(name.trim())
-  if (!characters.length) return '好'
-  if (/\p{Script=Han}/u.test(characters[0])) return characters[0]
-  return characters[0].toUpperCase()
-}
-
-function messageTime(value: string) {
-  const date = new Date(value)
-  const now = new Date()
-  const sameDay = date.getFullYear() === now.getFullYear()
-    && date.getMonth() === now.getMonth()
-    && date.getDate() === now.getDate()
-  if (sameDay) {
-    return new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit' }).format(date)
-  }
-  return new Intl.DateTimeFormat('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(date)
-}
 
 function scrollToBottom() {
   if (listElement.value) listElement.value.scrollTop = listElement.value.scrollHeight
 }
 
-async function loadMessages() {
-  return api.get<GroupMessage[]>(`/friends/groups/${encodeURIComponent(props.publicId)}/messages`)
-}
-
-async function load() {
-  error.value = ''
-  try {
-    const [group, loaded] = await Promise.all([
-      api.get<{ publicId: string; name: string; members: GroupMember[] }>(`/friends/groups/${encodeURIComponent(props.publicId)}`),
-      loadMessages(),
-    ])
-    groupName.value = group.name
-    members.value = group.members
-    messages.value = loaded
-    await api.post<unknown>(`/friends/groups/${encodeURIComponent(props.publicId)}/read`)
-    await nextTick()
-    scrollToBottom()
-  } catch (err) {
-    error.value = (err as Partial<ApiError> | null)?.code === 'GROUP_NOT_FOUND'
-      ? '群聊不存在或你不在群内'
-      : '消息暂时无法加载'
-  } finally {
-    loading.value = false
-  }
-}
-
-async function poll() {
-  if (document.hidden) return
-  try {
-    const incoming = await loadMessages()
-    if (incoming.length > messages.value.length) {
-      messages.value = incoming
-      await api.post<unknown>(`/friends/groups/${encodeURIComponent(props.publicId)}/read`)
-      await nextTick()
-      scrollToBottom()
-    }
-  } catch {
-    // 轮询失败静默
-  }
-}
-
 async function send() {
-  const body = draft.value.trim()
-  if (!body) return
-  busy.value = true
-  error.value = ''
-  try {
-    await api.post<GroupMessage>(`/friends/groups/${encodeURIComponent(props.publicId)}/messages`, { body })
-    draft.value = ''
-    showEmoji.value = false
-    messages.value = await loadMessages()
-    notifyDataChanged('social')
-    await nextTick()
-    scrollToBottom()
-  } catch (err) {
-    error.value = (err as Partial<ApiError> | null)?.code === 'INVALID_MESSAGE_BODY'
-      ? '消息内容不能为空或超过 1000 个字符'
-      : '发送失败，请稍后重试'
-  } finally {
-    busy.value = false
-  }
-}
-
-function insertEmoji(char: string) {
-  draft.value += char
+  await submit()
+  showEmoji.value = false
+  await nextTick()
+  scrollToBottom()
 }
 
 function keydown(event: KeyboardEvent) {
@@ -129,17 +38,23 @@ function keydown(event: KeyboardEvent) {
 }
 
 onMounted(async () => {
-  await load()
-  pollTimer = window.setInterval(poll, 4000)
+  await Promise.all([loadGroupInfo(props.publicId), open('group', props.publicId, '')])
+  await nextTick()
+  scrollToBottom()
+  startPoll()
 })
 
-onBeforeUnmount(() => {
-  if (pollTimer) window.clearInterval(pollTimer)
+watch(messages, () => {
+  void nextTick().then(scrollToBottom)
 })
+
+onBeforeUnmount(stopPoll)
 </script>
 
 <template>
-  <section class="page chat-page">
+  <div class="chat-shell">
+    <ConversationRail />
+  <section class="page page--talk chat-page">
     <header class="page-head chat-head">
       <RouterLink class="back-link" to="/friends/chat"><ArrowLeft :size="17" />返回会话</RouterLink>
       <div class="chat-identity">
@@ -157,7 +72,7 @@ onBeforeUnmount(() => {
       <p v-if="loading" class="empty">正在读取消息…</p>
       <template v-else-if="messages.length">
         <article v-for="message in messages" :key="message.publicId" class="msg-row" :class="{ mine: message.fromMe }">
-          <span class="msg-avatar" :class="{ mine: message.fromMe }" aria-hidden="true">{{ message.fromMe ? myInitial : initialOf(message.senderName) }}</span>
+          <span class="msg-avatar" :class="{ mine: message.fromMe }" aria-hidden="true">{{ message.fromMe ? myInitial : initialOf(message.senderName ?? '') }}</span>
           <div class="msg-main">
             <span class="msg-name">{{ message.fromMe ? myName : message.senderName }}</span>
             <div class="msg-bubble">
@@ -185,9 +100,14 @@ onBeforeUnmount(() => {
       </div>
     </div>
   </section>
+  </div>
 </template>
 
 <style scoped>
+.chat-shell { display: flex; gap: 24px; align-items: flex-start; width: min(100%, 1264px); margin: 0 auto; padding: 0 32px; }
+.chat-shell > .page { flex: 1; min-width: 0; padding-inline: 0; }
+@media (max-width: 1099px) { .chat-shell { display: block; padding: 0; } .chat-shell > .page { padding-inline: 18px; } }
+
 .chat-head { flex-direction: column; align-items: flex-start; gap: 16px; }
 .back-link { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); text-decoration: none; font-size: 13px; font-weight: 700; }
 .back-link:hover { color: var(--primary); }
@@ -214,4 +134,11 @@ onBeforeUnmount(() => {
 .composer-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 9px; align-items: end; padding: 10px; border: 1px solid var(--border); border-radius: calc(var(--radius) + 4px); background: var(--surface); box-shadow: var(--shadow-soft); }
 .composer-row textarea { min-height: 44px; max-height: 120px; resize: vertical; }
 .emoji-toggle.active { background: var(--primary-soft); color: var(--primary-strong); }
+.chat-page { max-width: 1060px; }
+.chat-head::before { display: none; }
+.chat-head > :first-child { flex: none; }
+.message-list { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-panel); padding: 24px; min-height: 45vh; }
+.msg-avatar, .chat-avatar { border-radius: 50%; box-shadow: none; }
+.composer { background: var(--canvas); padding-block: 10px; }
+@media (max-width:760px) { .composer { bottom: calc(72px + env(safe-area-inset-bottom)); } .message-list { padding: 14px; } }
 </style>

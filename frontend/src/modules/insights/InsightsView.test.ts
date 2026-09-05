@@ -52,6 +52,9 @@ describe('Insights', () => {
     await flushPromises()
 
     expect(api.get).toHaveBeenCalledWith('/achievements')
+    // Badges start collapsed to the ones actually earned; the rest sit behind the toggle.
+    expect(wrapper.findAll('.badge-card')).toHaveLength(1)
+    await wrapper.get('.badge-toggle').trigger('click')
     expect(wrapper.findAll('.badge-card')).toHaveLength(2)
     expect(wrapper.text()).toContain('第一步')
     expect(wrapper.text()).toContain('累计完成 1 次有效行动')

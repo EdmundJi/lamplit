@@ -17,7 +17,7 @@ describe('Today actions', () => {
   it('coalesces duplicate clicks into one idempotent request and supports reversal', async () => {
     let resolve!: (value: unknown) => void
     api.post.mockImplementationOnce(() => new Promise(done => { resolve = done }))
-    const wrapper = mount(TodayView, { global: { stubs: { RouterLink: { template: '<a><slot /></a>' } } } })
+    const wrapper = mount(TodayView, { global: { stubs: { Teleport: true, RouterLink: { template: '<a><slot /></a>' } } } })
     await flushPromises()
     const complete = wrapper.get('button[aria-label="完成"]')
     await complete.trigger('click'); await complete.trigger('click')
@@ -33,7 +33,7 @@ describe('Today actions', () => {
 
   it('requires an explicit ratio for partial completion', async () => {
     api.post.mockResolvedValue({ scheduleStatus: 'PARTIAL', eventPublicId: 'event-2' })
-    const wrapper = mount(TodayView, { global: { stubs: { RouterLink: true } } })
+    const wrapper = mount(TodayView, { global: { stubs: { Teleport: true, RouterLink: true } } })
     await flushPromises(); await wrapper.get('button[aria-label="部分完成"]').trigger('click')
     await wrapper.get('#completion').setValue(60); await wrapper.get('[role=dialog] .primary').trigger('click'); await flushPromises()
     expect(api.post).toHaveBeenCalledWith('/task-schedules/schedule-1/events', { eventType: 'PARTIAL', completionRatio: 0.6 }, expect.any(Object))
@@ -52,7 +52,7 @@ describe('Today actions', () => {
           { publicId: 'schedule-5', taskTitle: '第五个任务', plannedStartAt: new Date().toISOString(), status: 'PLANNED' },
         ]
       : []))
-    const wrapper = mount(TodayView, { global: { stubs: { RouterLink: true } } })
+    const wrapper = mount(TodayView, { global: { stubs: { Teleport: true, RouterLink: true } } })
     await flushPromises()
 
     expect(wrapper.get('.task-quota').text()).toContain('4 / 4')
@@ -74,7 +74,7 @@ describe('Daily status check', () => {
       return Promise.resolve([])
     })
     api.post.mockResolvedValue({ publicId: 'status-1', localDate: '2026-08-03', energy: 'LOW', availableMinutes: 15, advice: 'SHRINK', updatedAt: new Date().toISOString() })
-    const wrapper = mount(TodayView, { global: { stubs: { RouterLink: true } } })
+    const wrapper = mount(TodayView, { global: { stubs: { Teleport: true, RouterLink: true } } })
     await flushPromises()
 
     await wrapper.findAll('.mood-control button')[0].trigger('click')
@@ -94,7 +94,7 @@ describe('Daily status check', () => {
       if (path === '/daily-status') return Promise.resolve({ publicId: 'status-1', localDate: '2026-08-03', energy: 'OPEN', availableMinutes: 60, advice: 'KEEP', updatedAt: new Date().toISOString() })
       return Promise.resolve([])
     })
-    const wrapper = mount(TodayView, { global: { stubs: { RouterLink: true } } })
+    const wrapper = mount(TodayView, { global: { stubs: { Teleport: true, RouterLink: true } } })
     await flushPromises()
     expect(wrapper.get('.check-result strong').text()).toBe('保持原计划')
     expect(wrapper.get('.check-result .secondary').text()).toBe('更新建议')

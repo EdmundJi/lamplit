@@ -42,7 +42,8 @@ const guide = computed(() => resolveGuide(route.path))
 </script>
 
 <template>
-  <aside v-if="guide" class="operation-guide" :aria-label="guide.label">
+  <details v-if="guide" class="operation-guide" :aria-label="guide.label">
+    <summary><ListChecks :size="14" />{{ guide.label }} · 使用提示</summary>
     <div class="guide-inner">
       <div class="guide-label">
         <ListChecks :size="18" />
@@ -56,19 +57,21 @@ const guide = computed(() => resolveGuide(route.path))
         </li>
       </ol>
     </div>
-  </aside>
+  </details>
 </template>
 
 <style scoped>
 .operation-guide {
-  position: sticky;
-  top: 0;
+  position: relative;
   z-index: 6;
   border-bottom: 1px solid var(--border);
   background: color-mix(in srgb, var(--surface) 94%, transparent);
-  backdrop-filter: blur(14px);
-  box-shadow: 0 7px 20px color-mix(in srgb, var(--ink) 5%, transparent);
+  color: var(--muted);
 }
+.operation-guide summary { display: flex; align-items: center; gap: 8px; width: fit-content; margin-left: auto; padding: 7px 32px; cursor: pointer; font-size: 11px; list-style: none; }
+.operation-guide summary::-webkit-details-marker { display: none; }
+.operation-guide summary::after { content: '+'; margin-left: 10px; }
+.operation-guide[open] summary::after { content: '−'; }
 
 .guide-inner {
   width: min(100%, 1120px);

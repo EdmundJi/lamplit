@@ -41,7 +41,7 @@ describe('privacy settings', () => {
     const wrapper = mount(SettingsView, { global: { plugins: [createPinia(), router] } })
     await flushPromises()
     expect(wrapper.text()).toContain('7 天冷静期')
-    await wrapper.get('input[aria-label="启用 EMAIL"]').setValue(false); await flushPromises()
+    await wrapper.get('input[aria-label="启用邮件提醒"]').setValue(false); await flushPromises()
     expect(api.put).toHaveBeenCalledWith('/me/notifications/EMAIL', { enabled: false, maxPerDay: 2 })
     await wrapper.findAll('button').find(button => button.text().includes('撤销注销'))!.trigger('click')
     expect(api.post).toHaveBeenCalledWith('/privacy/deletion/cancel')

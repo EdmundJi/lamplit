@@ -1,32 +1,39 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
-import { Activity, Target, CalendarCheck2, ChartNoAxesColumnIncreasing, Heart, Menu, Sparkles, Settings, PawPrint, UserRound, Users, X } from 'lucide-vue-next'
+import { Activity, Building2, Target, CalendarCheck2, ChartNoAxesColumnIncreasing, ArrowUpRight, Sparkles, Settings, PawPrint, UserRound, Users, X, Bell, PanelLeftClose } from 'lucide-vue-next'
 import { useAuthStore } from '../modules/auth/auth.store'
 import DesktopPet from '../modules/partners/DesktopPet.vue'
 import WelcomeGuide from '../shared/ui/WelcomeGuide.vue'
 import GlobalUnreadBar from '../shared/ui/GlobalUnreadBar.vue'
 import OperationGuideBar from '../shared/ui/OperationGuideBar.vue'
+import { useDialogFocus } from '../shared/ui/use-dialog-focus'
 
 const nav = [
-  { to: '/today', label: '今日', icon: CalendarCheck2, mobile: 'primary' },
-  { to: '/goals', label: '目标', icon: Target, mobile: 'primary' },
-  { to: '/partners', label: '伙伴', icon: PawPrint, mobile: 'more' },
-  { to: '/friends', label: '好友', icon: Users, mobile: 'more' },
-  { to: '/attributes', label: '属性', icon: Activity, mobile: 'primary' },
-  { to: '/insights', label: '洞察', icon: ChartNoAxesColumnIncreasing, mobile: 'more' },
-  { to: '/ai', label: 'AI 助手', icon: Sparkles, mobile: 'primary' },
-  { to: '/profile', label: '个人', icon: UserRound, mobile: 'primary' },
-  { to: '/settings', label: '设置', icon: Settings, mobile: 'more' },
+  { to: '/today', label: '今日', icon: CalendarCheck2, mobile: 'primary', group: '行动' },
+  { to: '/goals', label: '目标', icon: Target, mobile: 'primary', group: '行动' },
+  { to: '/ai', label: 'AI 助手', icon: Sparkles, mobile: 'more', group: '行动' },
+  { to: '/attributes', label: '属性', icon: Activity, mobile: 'more', group: '成长' },
+  { to: '/insights', label: '洞察', icon: ChartNoAxesColumnIncreasing, mobile: 'more', group: '成长' },
+  { to: '/town', label: '小镇', icon: Building2, mobile: 'primary', group: '陪伴' },
+  { to: '/partners', label: '伙伴', icon: PawPrint, mobile: 'more', group: '陪伴' },
+  { to: '/friends', label: '好友', icon: Users, mobile: 'more', group: '陪伴' },
+  { to: '/profile', label: '个人', icon: UserRound, mobile: 'more', group: '账户' },
+  { to: '/settings', label: '设置', icon: Settings, mobile: 'more', group: '账户' },
 ]
+const groups = ['行动', '成长', '陪伴']
 const mobileNav = nav.filter(item => item.mobile === 'primary')
 const mobileMoreNav = nav.filter(item => item.mobile === 'more')
 
 const auth = useAuthStore()
 const route = useRoute()
+const currentNav = computed(() => nav.find(item => route.path === item.to || route.path.startsWith(`${item.to}/`)))
 const isDesktopCompanion = Boolean(window.betterSelfDesktop?.isDesktopApp)
 const showWelcome = ref(false)
 const showMobileMore = ref(false)
+useDialogFocus(() => showMobileMore.value, '.mobile-more-sheet', () => { showMobileMore.value = false })
+useDialogFocus(() => showWelcome.value, '.welcome-dialog', () => dismissWelcome())
+const quietWorkspace = computed(() => route.path === '/ai' || route.path.includes('/chat') || route.path.includes('/groups/') || route.path === '/town')
 const welcomeKey = computed(() => `better-self:welcome:${auth.user?.publicId ?? 'guest'}`)
 const mobileMoreActive = computed(() => mobileMoreNav.some(item => route.path === item.to || route.path.startsWith(`${item.to}/`)))
 const brandInitial = computed(() => {
@@ -69,12 +76,15 @@ onBeforeUnmount(() => {
 </script>
 <template>
   <div class="shell">
+    <a class="skip-link" href="#main-content">跳到主要内容</a>
     <aside class="sidebar">
-      <RouterLink class="brand" to="/today"><span class="brand-mark" :aria-label="`${auth.user?.displayName ?? '用户'}的标识`">{{ brandInitial }}</span><strong>更好的自己</strong></RouterLink>
-      <nav aria-label="主导航"><RouterLink v-for="item in nav" :key="item.to" :to="item.to"><component :is="item.icon" :size="19"/><span>{{ item.label }}</span></RouterLink></nav>
-      <p class="sidebar-note"><Heart :size="16" fill="currentColor" /><span>今天完成一点，也很好。</span></p>
+      <RouterLink class="brand" to="/today"><span class="brand-mark" aria-hidden="true"><Building2 :size="23" /></span><span><strong>更好的自己</strong><small>一步一步，自成风景</small></span></RouterLink>
+      <nav aria-label="主导航"><section v-for="group in groups" :key="group" class="nav-group"><p>{{ group }}</p><RouterLink v-for="item in nav.filter(item => item.group === group)" :key="item.to" :to="item.to"><component :is="item.icon" :size="19"/><span>{{ item.label }}</span><span v-if="route.path === item.to" class="nav-dot" /></RouterLink></section></nav>
+      <RouterLink class="sidebar-note" to="/town"><span class="note-orbit" aria-hidden="true">✦</span><strong>让每一步，<br>长成看得见的生活。</strong><span>去小镇走走 <ArrowUpRight :size="15" /></span></RouterLink>
+      <div class="sidebar-account"><RouterLink to="/profile"><span class="account-avatar">{{ brandInitial }}</span><span><strong>{{ auth.user?.displayName || '我的成长档案' }}</strong><small>今天完成一点，也很好</small></span></RouterLink><RouterLink class="account-settings" to="/settings" aria-label="设置"><Settings :size="18" /></RouterLink></div>
     </aside>
-    <main class="workspace">
+    <main id="main-content" class="workspace" tabindex="-1">
+      <header class="workspace-topbar"><span class="workspace-context"><PanelLeftClose :size="17" /><span>{{ currentNav?.group || '成长' }}</span><span class="context-slash">/</span><strong>{{ currentNav?.label || '更好的自己' }}</strong></span><div><RouterLink class="topbar-ai" to="/ai"><Sparkles :size="15" />和 AI 理一理</RouterLink><RouterLink class="icon-button" to="/friends/chat" aria-label="消息中心"><Bell :size="18" /></RouterLink></div></header>
       <OperationGuideBar />
       <RouterView v-slot="{ Component, route }">
         <Transition name="route-view" mode="out-in">
@@ -85,7 +95,7 @@ onBeforeUnmount(() => {
     <Transition name="mobile-more">
       <div v-if="showMobileMore" class="mobile-more-layer">
         <button class="mobile-more-backdrop" type="button" aria-label="关闭更多功能" @click="closeMobileMore" />
-        <section id="mobile-more-menu" class="mobile-more-sheet" aria-labelledby="mobile-more-title">
+        <section id="mobile-more-menu" class="mobile-more-sheet" role="dialog" aria-modal="true" tabindex="-1" aria-labelledby="mobile-more-title">
           <header>
             <div><p class="eyebrow">完整导航</p><h2 id="mobile-more-title">更多功能</h2></div>
             <button class="icon-button" type="button" aria-label="关闭更多功能" @click="closeMobileMore"><X :size="20" /></button>
@@ -101,10 +111,10 @@ onBeforeUnmount(() => {
     </Transition>
     <nav class="mobile-nav" aria-label="主导航">
       <RouterLink v-for="item in mobileNav" :key="item.to" :to="item.to"><component :is="item.icon" :size="20"/><span>{{ item.label }}</span></RouterLink>
-      <button type="button" :class="{ 'is-active': mobileMoreActive }" :aria-expanded="showMobileMore" aria-controls="mobile-more-menu" @click="showMobileMore = !showMobileMore"><Menu :size="20"/><span>更多</span></button>
+      <button type="button" :class="{ 'is-active': mobileMoreActive }" :aria-expanded="showMobileMore" aria-controls="mobile-more-menu" @click="showMobileMore = !showMobileMore"><UserRound :size="20"/><span>我的</span></button>
     </nav>
-    <DesktopPet v-if="!isDesktopCompanion" />
-    <GlobalUnreadBar />
+    <DesktopPet v-if="!isDesktopCompanion && !quietWorkspace" />
+    <GlobalUnreadBar v-if="!quietWorkspace" />
     <WelcomeGuide v-if="showWelcome" @dismiss="dismissWelcome" />
   </div>
 </template>
@@ -153,4 +163,43 @@ nav a.router-link-active { background: color-mix(in srgb, var(--primary-soft) 76
 }
 @media (prefers-reduced-motion: no-preference) { .brand-mark { transition: transform var(--motion-medium) ease; } .brand:hover .brand-mark { transform: rotate(-8deg) scale(1.04); } nav a.router-link-active svg { animation: nav-pop var(--motion-medium) ease-out; } .route-view-enter-active, .route-view-leave-active { transition: opacity var(--motion-medium) ease, transform var(--motion-medium) ease; } .route-view-enter-from { opacity: 0; transform: translateY(8px); } .route-view-leave-to { opacity: 0; transform: translateY(-4px); } }
 @keyframes nav-pop { 0% { transform: scale(.88); } 70% { transform: scale(1.08); } 100% { transform: scale(1); } }
+
+.sidebar { padding: 28px 16px 16px; background: var(--nav-bg); color: var(--on-forest); border: 0; box-shadow: none; overflow-y: auto; }
+.sidebar::before, .brand-mark::after { display: none; }
+.brand { color: var(--on-forest); padding: 0 6px 30px; gap: 11px; }
+.brand-mark { background: var(--sun); color: var(--forest); width: 38px; height: 42px; border-radius: 12px 12px 5px 5px; box-shadow: none; }
+.brand strong { font-size: 17px; letter-spacing: .02em; }
+.brand small { display: block; font-size: 10px; color: var(--nav-faint); margin-top: 2px; letter-spacing: .08em; }
+.nav-group { margin-bottom: 16px; }
+.nav-group > p { padding-left: 14px; margin: 0 0 7px; color: var(--nav-muted); font-size: 10px; letter-spacing: .16em; }
+.sidebar nav a { color: var(--nav-ink); min-height: 42px; margin-bottom: 3px; font-size: 13px; }
+.sidebar nav a:hover { color: var(--nav-ink-strong); background: var(--nav-hover); }
+.sidebar nav a.router-link-active { background: var(--nav-active-bg); color: var(--nav-active-ink); box-shadow: none; font-weight: 750; }
+.nav-dot { width: 5px; height: 5px; margin-left: auto; border-radius: 50%; background: currentColor; }
+.sidebar-note { display: block; margin: auto 0 20px; padding: 18px 16px; background: var(--nav-card); border: 1px solid var(--nav-card-border); border-radius: 14px; text-decoration: none; color: var(--nav-card-ink); }
+.sidebar-note strong { display: block; font-size: 15px; font-weight: 500; line-height: 1.8; }
+.sidebar-note > span:last-child { margin-top: 12px; display: flex; justify-content: space-between; font-size: 11px; color: var(--nav-ink); }
+.note-orbit { display: block; font-size: 26px; color: var(--sun); margin-bottom: 6px; }
+.sidebar-account { display: flex; gap: 6px; align-items: center; border-top: 1px solid var(--nav-line); padding-top: 16px; }
+.sidebar-account > a:first-child { display: flex; align-items: center; gap: 9px; min-width: 0; color: var(--nav-card-ink); text-decoration: none; flex: 1; }
+.sidebar-account strong { display: block; font-size: 12px; }
+.sidebar-account small { display: block; font-size: 9px; color: var(--nav-muted); }
+.account-avatar { display: grid; place-items: center; width: 32px; height: 32px; flex: none; border-radius: 50%; background: var(--nav-avatar); color: var(--nav-avatar-ink); font-size: 12px; }
+.account-settings { color: var(--nav-faint); padding: 8px; }
+.workspace-topbar { min-height: 64px; display: flex; justify-content: space-between; align-items: center; padding: 0 32px; border-bottom: 1px solid var(--border); background: var(--surface); }
+.workspace-context { display: flex; gap: 12px; align-items: center; color: var(--muted); font-size: 12px; }
+.workspace-context strong { color: var(--ink); font-weight: 500; }
+.context-slash { opacity: .4; }
+.workspace-topbar > div { display: flex; align-items: center; gap: 18px; }
+.topbar-ai { display: flex; align-items: center; gap: 7px; color: var(--primary-strong); text-decoration: none; font-size: 12px; }
+.mobile-more-sheet { max-height: 75dvh; overflow-y: auto; }
+@media (max-width:760px) {
+  .workspace-topbar { min-height: 54px; padding: 0 18px; }
+  .workspace-context > svg, .workspace-context > span:not(.context-slash) { display: none; }
+  .context-slash { display: none; }
+  .mobile-nav { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .mobile-nav a, .mobile-nav button { font-size: 11px; }
+  .mobile-more-links { grid-template-columns: repeat(3, minmax(0,1fr)); }
+  .mobile-nav a.router-link-active, .mobile-nav button.is-active, .mobile-nav button[aria-expanded='true'] { box-shadow: none; }
+}
 </style>

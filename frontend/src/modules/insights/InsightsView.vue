@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import {
   Award,
   BadgeCheck,
@@ -8,219 +8,81 @@ import {
   CheckCircle2,
   PenLine,
   Save,
+  TrendingUp,
 } from 'lucide-vue-next'
-import { api } from '../../shared/api/client'
 import { onDataChanged } from '../../shared/data-sync'
-import { growthIcon, type Achievement } from '../achievements/achievement.types'
+import { growthIcon } from '../achievements/achievement.types'
+import {
+  advicePercent as advicePercentOf,
+  confirmedAtLabel,
+  earnedAtLabel,
+  fulfillmentPercent as fulfillmentPercentOf,
+  monthLabel as monthLabelOf,
+  reviewFact as reviewFactOf,
+  useInsightsOverview,
+  useWeeklyReview,
+} from './insights.logic'
 
-type InsightOverview = {
-  effectiveActions: number
-  fulfillmentRate: number
-  recoveryCount: number
-  totalExperience: number
-  statusCheckCount: number
-  statusAdvices: Record<string, number>
-}
-type RoleProgress = { roleCode: string; roleName: string; level: number; experience: number; maxExperience: number; totalExperience: number; nextLevelExperience: number | null; experienceToNextLevel: number; levelProgressPercent: number }
-type TrendRow = { date: string; effectiveActions: number; experience: number }
-type WeeklyPlan = { publicId: string; goalPublicId: string; weekStartDate: string; timezone: string; status: string }
-type WeeklyReview = {
-  publicId: string
-  planPublicId: string
-  facts: Record<string, unknown>
-  userReflection: string | null
-  proposedAdjustments: Record<string, unknown>
-  confirmedAdjustments: Record<string, unknown>
-  confirmedAt: string | null
-}
+const {
+  overview: data,
+  trends,
+  roles,
+  achievements,
+  weeklyPlans,
+  selectedPlanId,
+  loading,
+  error,
+  changeSummary,
+  calendarDays,
+  earnedAchievementCount,
+  load: loadOverview,
+} = useInsightsOverview()
 
-const data = ref<InsightOverview | null>(null)
-const trends = ref<TrendRow[]>([])
-const roles = ref<RoleProgress[]>([])
-const achievements = ref<Achievement[]>([])
-const weeklyPlans = ref<WeeklyPlan[]>([])
-const selectedPlanId = ref('')
-const review = ref<WeeklyReview | null>(null)
-const loading = ref(true)
-const error = ref('')
-const reviewLoading = ref(false)
-const reviewSaving = ref(false)
-const reviewConfirming = ref(false)
-const reviewError = ref('')
-const reviewFeedback = ref('')
-const reviewForm = reactive({
-  userReflection: '',
-  steadyAction: '',
-  shrinkAction: '',
-  nextAction: '',
-})
+const {
+  review,
+  form: reviewForm,
+  loading: reviewLoading,
+  saving: reviewSaving,
+  confirming: reviewConfirming,
+  error: reviewError,
+  feedback: reviewFeedback,
+  confirmed: reviewConfirmed,
+  load: loadReviewFor,
+  save: saveReviewFor,
+  confirm: confirmReviewFor,
+} = useWeeklyReview()
 
-function localDateKey(date: Date) {
-  const year = date.getFullYear()
-  const month = `${date.getMonth() + 1}`.padStart(2, '0')
-  const day = `${date.getDate()}`.padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
+const showAllBadges = ref(false)
+const monthLabel = computed(() => monthLabelOf())
+const visibleAchievements = computed(() => (showAllBadges.value ? achievements.value : achievements.value.filter(item => item.earned)))
 
-function currentMonday() {
-  const date = new Date()
-  const weekday = date.getDay() || 7
-  date.setDate(date.getDate() - weekday + 1)
-  return localDateKey(date)
-}
-
-const trendMap = computed(() => new Map(trends.value.map(row => [row.date, row])))
-const calendarDays = computed(() => {
-  const now = new Date()
-  const first = new Date(now.getFullYear(), now.getMonth(), 1)
-  const start = new Date(first)
-  start.setDate(first.getDate() - first.getDay())
-  return Array.from({ length: 42 }, (_, index) => {
-    const day = new Date(start)
-    day.setDate(start.getDate() + index)
-    const date = localDateKey(day)
-    const row = trendMap.value.get(date)
-    return {
-      date,
-      label: day.getDate(),
-      currentMonth: day.getMonth() === now.getMonth(),
-      tone: row?.effectiveActions ? 'done' : row?.experience ? 'partial' : 'empty',
-      row,
-    }
-  })
-})
-const monthLabel = computed(() => new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'long' }).format(new Date()))
-const earnedAchievementCount = computed(() => achievements.value.filter(item => item.earned).length)
-const reviewConfirmed = computed(() => Boolean(review.value?.confirmedAt))
 function advicePercent(advice: string) {
-  const count = data.value?.statusCheckCount ?? 0
-  return count ? Math.round((data.value?.statusAdvices?.[advice] ?? 0) * 100 / count) : 0
-}
-
-function stringValue(values: Record<string, unknown>, key: string) {
-  const value = values[key]
-  return typeof value === 'string' ? value : ''
-}
-
-function applyReview(value: WeeklyReview) {
-  review.value = value
-  reviewForm.userReflection = value.userReflection ?? ''
-  reviewForm.steadyAction = stringValue(value.proposedAdjustments, 'steadyAction')
-  reviewForm.shrinkAction = stringValue(value.proposedAdjustments, 'shrinkAction')
-  reviewForm.nextAction = stringValue(value.proposedAdjustments, 'nextAction')
-}
-
-function resetReview() {
-  review.value = null
-  reviewForm.userReflection = ''
-  reviewForm.steadyAction = ''
-  reviewForm.shrinkAction = ''
-  reviewForm.nextAction = ''
-}
-
-function reviewFact(key: string) {
-  const value = review.value?.facts[key]
-  return typeof value === 'number' ? value : Number(value ?? 0)
+  return advicePercentOf(data.value, advice)
 }
 
 function fulfillmentPercent() {
-  return Math.round(reviewFact('fulfillmentRate') * 100)
+  return fulfillmentPercentOf(review.value)
 }
 
-function earnedAtLabel(value: string | null) {
-  if (!value) return ''
-  return new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'short', day: 'numeric' }).format(new Date(value))
+function reviewFact(key: string) {
+  return reviewFactOf(review.value, key)
 }
 
-function confirmedAtLabel(value: string | null | undefined) {
-  if (!value) return ''
-  return new Intl.DateTimeFormat('zh-CN', { month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(value))
+function loadReview(planId: string) {
+  return loadReviewFor(planId)
 }
 
-async function loadReview(planId: string) {
-  resetReview()
-  reviewError.value = ''
-  reviewFeedback.value = ''
-  if (!planId) return
-  reviewLoading.value = true
-  try {
-    applyReview(await api.get<WeeklyReview>(`/reviews/weekly/${planId}`))
-  } catch {
-    reviewError.value = '这份周复盘暂时无法加载'
-  } finally {
-    reviewLoading.value = false
-  }
-}
-
-function reviewPayload() {
-  return {
-    userReflection: reviewForm.userReflection,
-    proposedAdjustments: {
-      steadyAction: reviewForm.steadyAction,
-      shrinkAction: reviewForm.shrinkAction,
-      nextAction: reviewForm.nextAction,
-    },
-  }
-}
-
-async function saveReview(showFeedback = true) {
-  if (!selectedPlanId.value || reviewConfirmed.value) return false
-  reviewSaving.value = true
-  reviewError.value = ''
-  reviewFeedback.value = ''
-  try {
-    applyReview(await api.patch<WeeklyReview>(`/reviews/weekly/${selectedPlanId.value}`, reviewPayload()))
-    if (showFeedback) reviewFeedback.value = '复盘草稿已保存'
-    return true
-  } catch {
-    reviewError.value = '复盘草稿暂时无法保存'
-    return false
-  } finally {
-    reviewSaving.value = false
-  }
+function saveReview(showFeedback = true) {
+  return saveReviewFor(selectedPlanId.value, showFeedback)
 }
 
 async function confirmReview() {
-  if (!await saveReview(false)) return
-  reviewConfirming.value = true
-  reviewError.value = ''
-  try {
-    applyReview(await api.post<WeeklyReview>(`/reviews/weekly/${selectedPlanId.value}/confirm`))
-    reviewFeedback.value = '本周复盘已确认'
-  } catch {
-    reviewError.value = '复盘暂时无法确认，请重试'
-  } finally {
-    reviewConfirming.value = false
-  }
+  await confirmReviewFor(selectedPlanId.value)
 }
 
 async function load(showLoading = true) {
-  if (showLoading) loading.value = true
-  error.value = ''
-  try {
-    const weekStart = currentMonday()
-    const [overview, trendRows, roleRows, achievementRows, planRows] = await Promise.all([
-      api.get<InsightOverview>('/insights/overview'),
-      api.get<TrendRow[]>('/insights/trends'),
-      api.get<RoleProgress[]>('/progress/roles'),
-      api.get<Achievement[]>('/achievements'),
-      api.get<WeeklyPlan[]>(`/plans/weekly?weekStart=${weekStart}`),
-    ])
-    data.value = overview
-    trends.value = trendRows
-    roles.value = roleRows
-    achievements.value = achievementRows
-    weeklyPlans.value = planRows
-    const selectedPlanStillExists = planRows.some(plan => plan.publicId === selectedPlanId.value)
-    selectedPlanId.value = selectedPlanStillExists
-      ? selectedPlanId.value
-      : planRows[0]?.publicId ?? ''
-    await loadReview(selectedPlanId.value)
-  } catch {
-    error.value = '洞察暂时无法加载'
-  } finally {
-    if (showLoading) loading.value = false
-  }
+  await loadOverview(showLoading)
+  if (!error.value) await loadReview(selectedPlanId.value)
 }
 
 const stopDataSync = onDataChanged(['insights', 'attributes', 'tasks', 'achievements'], () => load(false))
@@ -228,13 +90,13 @@ const stopDataSync = onDataChanged(['insights', 'attributes', 'tasks', 'achievem
 onMounted(() => load(true))
 onBeforeUnmount(stopDataSync)
 </script>
-
 <template>
-  <section class="page">
+  <section class="page page--read insights-page">
     <header class="page-head">
       <div>
         <p class="eyebrow">只和自己的历史比较</p>
         <h1>洞察</h1>
+        <p class="page-description">回望留下的足迹，找到下一周适合的节奏。</p>
       </div>
     </header>
 
@@ -248,33 +110,15 @@ onBeforeUnmount(stopDataSync)
         <div><strong>{{ data.totalExperience }}</strong><span>累计行动经验</span></div>
       </div>
 
-      <section class="band badge-section" aria-labelledby="badge-title">
+      <section class="band summary-band" aria-labelledby="summary-title">
         <div class="section-title">
           <div>
-            <p class="eyebrow">个人徽章</p>
-            <h2 id="badge-title">只记录你的里程碑</h2>
+            <p class="eyebrow">这段时间的变化</p>
+            <h2 id="summary-title">{{ changeSummary.headline }}</h2>
           </div>
-          <div class="badge-summary">
-            <BadgeCheck :size="20" />
-            <span>{{ earnedAchievementCount }} / {{ achievements.length }}</span>
-          </div>
+          <TrendingUp :size="20" />
         </div>
-        <div class="badge-grid">
-          <article v-for="achievement in achievements" :key="achievement.code" class="badge-card" :class="[achievement.tone, { earned: achievement.earned }]">
-            <div class="badge-icon" aria-hidden="true">
-              <component :is="growthIcon(achievement.iconKey)" :size="22" />
-            </div>
-            <div class="badge-copy">
-              <div class="badge-title-line">
-                <strong>{{ achievement.name }}</strong>
-                <span>{{ achievement.earned ? '已获得' : '未获得' }}</span>
-              </div>
-              <p>{{ achievement.body }}</p>
-              <small>触发条件：{{ achievement.triggerText }}</small>
-              <small v-if="achievement.earnedAt" class="earned-date">{{ earnedAtLabel(achievement.earnedAt) }} 获得</small>
-            </div>
-          </article>
-        </div>
+        <p class="summary-detail">{{ changeSummary.detail }}</p>
       </section>
 
       <section v-if="data.statusCheckCount" class="band status-band" aria-labelledby="status-title">
@@ -305,6 +149,24 @@ onBeforeUnmount(stopDataSync)
             </div>
           </div>
         </div>
+      </section>
+
+      <section class="band trend-section" aria-labelledby="trend-title">
+        <div class="section-title">
+          <div>
+            <p class="eyebrow">最近趋势</p>
+            <h2 id="trend-title">每天留下了多少</h2>
+          </div>
+          <TrendingUp :size="20" />
+        </div>
+        <div class="trend-table">
+          <table>
+            <caption class="sr-only">每日有效行动与经验</caption>
+            <thead><tr><th>日期</th><th>有效行动</th><th>经验</th></tr></thead>
+            <tbody><tr v-for="row in trends" :key="row.date"><td>{{ row.date }}</td><td>{{ row.effectiveActions }}</td><td>{{ row.experience }}</td></tr></tbody>
+          </table>
+        </div>
+        <p v-if="!trends.length" class="empty">完成行动后，这里会出现你的趋势。</p>
       </section>
 
       <section class="band calendar-section" aria-labelledby="calendar-title">
@@ -411,15 +273,39 @@ onBeforeUnmount(stopDataSync)
         </form>
       </section>
 
-      <section class="band">
-        <h2>最近趋势</h2>
-        <table>
-          <caption class="sr-only">每日有效行动与经验</caption>
-          <thead><tr><th>日期</th><th>有效行动</th><th>经验</th></tr></thead>
-          <tbody><tr v-for="row in trends" :key="row.date"><td>{{ row.date }}</td><td>{{ row.effectiveActions }}</td><td>{{ row.experience }}</td></tr></tbody>
-        </table>
-        <p v-if="!trends.length" class="empty">完成行动后，这里会出现你的趋势。</p>
+      <section class="band badge-section" aria-labelledby="badge-title">
+        <div class="section-title">
+          <div>
+            <p class="eyebrow">个人徽章</p>
+            <h2 id="badge-title">只记录你的里程碑</h2>
+          </div>
+          <div class="badge-summary">
+            <BadgeCheck :size="20" />
+            <span>{{ earnedAchievementCount }} / {{ achievements.length }}</span>
+            <button type="button" class="secondary badge-toggle" :aria-expanded="showAllBadges" @click="showAllBadges = !showAllBadges">
+              {{ showAllBadges ? '只看已获得' : `查看全部 ${achievements.length} 个` }}
+            </button>
+          </div>
+        </div>
+        <div class="badge-grid">
+          <article v-for="achievement in visibleAchievements" :key="achievement.code" class="badge-card" :class="[achievement.tone, { earned: achievement.earned }]">
+            <div class="badge-icon" aria-hidden="true">
+              <component :is="growthIcon(achievement.iconKey)" :size="22" />
+            </div>
+            <div class="badge-copy">
+              <div class="badge-title-line">
+                <strong>{{ achievement.name }}</strong>
+                <span>{{ achievement.earned ? '已获得' : '未获得' }}</span>
+              </div>
+              <p>{{ achievement.body }}</p>
+              <small>触发条件：{{ achievement.triggerText }}</small>
+              <small v-if="achievement.earnedAt" class="earned-date">{{ earnedAtLabel(achievement.earnedAt) }} 获得</small>
+            </div>
+          </article>
+        </div>
+        <p v-if="!visibleAchievements.length" class="empty badge-empty">还没有获得徽章。完成行动后，里程碑会出现在这里。</p>
       </section>
+
     </template>
   </section>
 </template>
@@ -427,9 +313,17 @@ onBeforeUnmount(stopDataSync)
 <style scoped>
 .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 24px; }
 .metrics div { min-height: 104px; display: grid; align-content: end; gap: 8px; padding: 16px; border: 1px solid var(--border); border-radius: var(--radius); background: color-mix(in srgb, var(--surface) 88%, transparent); box-shadow: var(--shadow-soft); }
-.metrics div:last-child { border: 1px solid var(--border); }
+.metrics div:last-child { border: 0; }
 .metrics strong { display: block; font-size: 30px; line-height: 1; color: var(--primary); }
 .metrics span { font-size: 13px; color: var(--muted); }
+.summary-band .section-title h2 { font-size: 22px; line-height: 1.45; }
+.summary-detail { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.7; }
+.trend-table { overflow-x: auto; }
+.trend-table table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.trend-table th, .trend-table td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); }
+.trend-table th { color: var(--muted); font-size: 13px; font-weight: 650; }
+.badge-toggle { min-height: 34px; padding: 0 12px; font-size: 13px; }
+.badge-empty { padding: 28px 20px; }
 .section-title { display: flex; align-items: center; justify-content: space-between; color: var(--primary); margin-bottom: 14px; }
 .section-title h2 { margin: 0; font-size: 18px; }
 .badge-summary { display: inline-flex; align-items: center; gap: 8px; color: var(--primary); font-weight: 700; }
@@ -447,9 +341,9 @@ onBeforeUnmount(stopDataSync)
 .badge-card { min-width: 0; min-height: 172px; display: grid; grid-template-rows: auto 1fr; gap: 12px; padding: 15px; border: 1px solid var(--border); border-radius: var(--radius); background: color-mix(in srgb, var(--surface) 92%, transparent); color: var(--muted); opacity: .72; }
 .badge-card.earned { color: var(--ink); opacity: 1; border-color: color-mix(in srgb, var(--badge-color) 42%, var(--border)); background: linear-gradient(145deg, color-mix(in srgb, var(--badge-color) 10%, var(--surface)), var(--surface)); box-shadow: var(--shadow-soft); }
 .badge-card.green { --badge-color: var(--primary); }
-.badge-card.blue { --badge-color: #2a6b80; }
+.badge-card.blue { --badge-color: var(--tone-blue); }
 .badge-card.amber { --badge-color: var(--amber); }
-.badge-card.violet { --badge-color: #70517a; }
+.badge-card.violet { --badge-color: var(--tone-violet); }
 .badge-icon { width: 44px; height: 44px; display: grid; place-items: center; border: 1px solid color-mix(in srgb, var(--badge-color) 32%, var(--border)); border-radius: 14px; color: var(--badge-color); background: var(--surface); box-shadow: inset 0 -10px 18px color-mix(in srgb, var(--badge-color) 7%, transparent); }
 .badge-card:not(.earned) .badge-icon { color: var(--muted); border-color: var(--border); background: var(--surface-muted); }
 .badge-copy { display: grid; gap: 7px; align-content: start; min-width: 0; }
@@ -538,4 +432,13 @@ tbody tr:hover { background: var(--surface-muted); }
   .badge-grid { grid-template-columns: 1fr; }
   .calendar-day { min-height: 34px; }
 }
+.insights-page { display: flex; flex-direction: column; }
+.metrics { gap: 0; padding: 12px; background: var(--forest); border-radius: var(--radius-scene); overflow: hidden; }
+.metrics > div { padding: 24px; border: 0; border-right: 1px solid #54745e; border-radius: 0; background: transparent; box-shadow: none; }
+.metrics > div:last-child { border-right: 0; }
+.metrics strong { color: var(--sun); font-size: 38px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.metrics span { color: #c6d6c3; font-size: 12px; }
+.calendar-shell, .badge-card, .role-row { border-radius: var(--radius-panel); box-shadow: none; }
+.review-form { padding: 24px; border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface); }
+@media (max-width: 760px) { .metrics { grid-template-columns: repeat(2, minmax(0,1fr)); } .metrics > div { padding: 16px; border: 0; } .metrics strong { font-size: 30px; } .review-form { padding: 16px; } }
 </style>

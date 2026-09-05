@@ -2,113 +2,24 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { Award, BarChart3, CalendarDays, Check, ChevronRight, Coins, EyeOff, PawPrint, Settings, Sparkles, Target, UserRound, Users, X } from 'lucide-vue-next'
-import { api } from '../../shared/api/client'
-import { notifyDataChanged, onDataChanged } from '../../shared/data-sync'
-import { growthIcon, type Title } from '../achievements/achievement.types'
+import { onDataChanged } from '../../shared/data-sync'
+import { growthIcon } from '../achievements/achievement.types'
 import RivePet from '../partners/RivePet.vue'
-import type { Pet, Wallet } from '../partners/partner.types'
+import { avatarInitial, memberSinceLabel, petProgressPercent, useProfile, usePrivacy, useTitles } from './profile.logic'
 
-type Profile = {
-  publicId: string
-  email: string
-  displayName: string
-  birthDate: string
-  age: number
-  timezone: string
-  createdAt: string
-  overallLevel: number
-  totalExperience: number
-  effectiveActions: number
-  wallet: Wallet
-  selectedPet: Pet
-  petCount: number
-  soloGrowth: boolean
-  equippedTitle: Title | null
-}
+const { profile, loading, error, load: loadProfile } = useProfile()
+const { titles, busy: titleBusy, feedback: titleFeedback, heldTitles, load: loadTitles, equip: equipTitle, unequip: unequipTitle } = useTitles(profile)
+const { busy: privacyBusy, feedback: privacyFeedback, toggleSoloGrowth } = usePrivacy(profile)
 
-const profile = ref<Profile | null>(null)
-const titles = ref<Title[]>([])
-const loading = ref(true)
-const error = ref('')
-const titleBusy = ref('')
-const titleFeedback = ref('')
-const privacyBusy = ref(false)
-const privacyFeedback = ref('')
-const initial = computed(() => {
-  const name = profile.value?.displayName.trim() ?? ''
-  return Array.from(name)[0]?.toUpperCase() ?? '我'
-})
-const memberSince = computed(() => profile.value
-  ? new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' }).format(new Date(profile.value.createdAt))
-  : '')
-const petProgress = computed(() => {
-  const pet = profile.value?.selectedPet
-  if (!pet) return 0
-  return Math.min(100, Math.round(pet.affection * 100 / Math.max(1, pet.nextLevelAffection)))
-})
+const showAllTitles = ref(false)
+const visibleTitles = computed(() => (showAllTitles.value ? titles.value : heldTitles.value))
+const initial = computed(() => avatarInitial(profile.value?.displayName ?? ''))
+const memberSince = computed(() => (profile.value ? memberSinceLabel(profile.value.createdAt) : ''))
+const petProgress = computed(() => petProgressPercent(profile.value?.selectedPet))
 
 async function load(showLoading = true) {
-  if (showLoading) loading.value = true
-  error.value = ''
-  try {
-    const [profileData, titleData] = await Promise.all([
-      api.get<Profile>('/me/profile'),
-      api.get<Title[]>('/titles'),
-    ])
-    profile.value = profileData
-    titles.value = titleData
-  } catch {
-    error.value = '个人资料暂时无法加载'
-  } finally {
-    if (showLoading) loading.value = false
-  }
-}
-
-async function equipTitle(title: Title) {
-  titleBusy.value = title.code
-  titleFeedback.value = ''
-  try {
-    titles.value = await api.patch<Title[]>('/titles/equipped', { code: title.code })
-    if (profile.value) profile.value.equippedTitle = titles.value.find(item => item.equipped) ?? null
-    titleFeedback.value = `已佩戴「${title.name}」`
-    notifyDataChanged('achievements')
-  } catch {
-    titleFeedback.value = '称号暂时无法更新'
-  } finally {
-    titleBusy.value = ''
-  }
-}
-
-async function unequipTitle() {
-  titleBusy.value = 'UNEQUIP'
-  titleFeedback.value = ''
-  try {
-    titles.value = await api.delete<Title[]>('/titles/equipped')
-    if (profile.value) profile.value.equippedTitle = null
-    titleFeedback.value = '已卸下称号'
-    notifyDataChanged('achievements')
-  } catch {
-    titleFeedback.value = '称号暂时无法更新'
-  } finally {
-    titleBusy.value = ''
-  }
-}
-
-async function toggleSoloGrowth() {
-  if (!profile.value || privacyBusy.value) return
-  privacyBusy.value = true
-  privacyFeedback.value = ''
-  const nextValue = !profile.value.soloGrowth
-  try {
-    const result = await api.patch<{ soloGrowth: boolean }>('/me/privacy', { soloGrowth: nextValue })
-    profile.value.soloGrowth = result.soloGrowth
-    privacyFeedback.value = result.soloGrowth ? '已进入独自升级模式' : '已允许其他用户找到你'
-    notifyDataChanged(['profile', 'social'])
-  } catch {
-    privacyFeedback.value = '隐私设置暂时无法更新'
-  } finally {
-    privacyBusy.value = false
-  }
+  await loadProfile(showLoading)
+  if (!error.value) await loadTitles()
 }
 
 const stopDataSync = onDataChanged(['tasks', 'partners'], () => load(false))
@@ -171,11 +82,16 @@ onBeforeUnmount(stopDataSync)
       <section class="titles-band band" aria-labelledby="titles-title">
         <div class="section-title">
           <div><p class="eyebrow">个人称号</p><h2 id="titles-title">你的行动留下了这些名字</h2></div>
-          <Award :size="21" />
+          <div class="titles-tools">
+            <span class="titles-count"><Award :size="17" />{{ heldTitles.length }} / {{ titles.length }}</span>
+            <button v-if="titles.length" type="button" class="secondary titles-toggle" :aria-expanded="showAllTitles" @click="showAllTitles = !showAllTitles">
+              {{ showAllTitles ? '只看已获得' : `查看全部 ${titles.length} 个` }}
+            </button>
+          </div>
         </div>
         <p v-if="titleFeedback" class="title-feedback" role="status" aria-live="polite">{{ titleFeedback }}</p>
-        <div v-if="titles.length" class="title-grid">
-          <article v-for="title in titles" :key="title.code" class="title-item" :class="{ held: title.held, equipped: title.equipped }">
+        <div v-if="visibleTitles.length" class="title-grid">
+          <article v-for="title in visibleTitles" :key="title.code" class="title-item" :class="{ held: title.held, equipped: title.equipped }">
             <span class="title-icon"><component :is="growthIcon(title.graphicKey)" :size="20" /></span>
             <span class="title-copy"><strong>{{ title.name }}</strong><small>{{ title.description }}</small></span>
             <button v-if="title.equipped" type="button" class="icon-button title-action" title="卸下称号" aria-label="卸下称号" :disabled="Boolean(titleBusy)" @click="unequipTitle"><X :size="17" /></button>
@@ -233,11 +149,11 @@ onBeforeUnmount(stopDataSync)
 .avatar-shell { width: 92px; aspect-ratio: 1; display: grid; place-items: center; padding: 3px; border: 1px solid transparent; border-radius: 29px 29px 29px 10px; }
 .avatar { width: 100%; height: 100%; display: grid; place-items: center; border-radius: 25px 25px 25px 7px; background: linear-gradient(145deg, var(--primary), color-mix(in srgb, var(--primary) 72%, var(--amber))); color: white; font-size: 34px; font-weight: 900; box-shadow: 0 14px 30px color-mix(in srgb, var(--primary) 24%, transparent); }
 .avatar-shell[data-frame='emerald'], .avatar-shell[data-frame='green'] { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent); }
-.avatar-shell[data-frame='sky'] { border-color: #3f7f8f; box-shadow: 0 0 0 3px color-mix(in srgb, #3f7f8f 14%, transparent); }
+.avatar-shell[data-frame='sky'] { border-color: var(--dim-relationship); box-shadow: 0 0 0 3px color-mix(in srgb, var(--dim-relationship) 14%, transparent); }
 .avatar-shell[data-frame='ember'] { border-color: var(--amber); box-shadow: 0 0 0 3px color-mix(in srgb, var(--amber) 15%, transparent); }
-.avatar-shell[data-frame='gold'] { border-color: #bd8b26; box-shadow: 0 0 0 3px rgb(189 139 38 / 15%); }
-.avatar-shell[data-frame='violet'] { border-color: #70517a; box-shadow: 0 0 0 3px rgb(112 81 122 / 15%); }
-.avatar-shell[data-frame='rose'] { border-color: #b45c73; box-shadow: 0 0 0 3px rgb(180 92 115 / 15%); }
+.avatar-shell[data-frame='gold'] { border-color: var(--tone-gold); box-shadow: 0 0 0 3px color-mix(in srgb, var(--tone-gold) 15%, transparent); }
+.avatar-shell[data-frame='violet'] { border-color: var(--tone-violet); box-shadow: 0 0 0 3px color-mix(in srgb, var(--tone-violet) 15%, transparent); }
+.avatar-shell[data-frame='rose'] { border-color: var(--tone-rose); box-shadow: 0 0 0 3px color-mix(in srgb, var(--tone-rose) 15%, transparent); }
 .avatar-shell[data-frame='rainbow'] { border-color: var(--primary); box-shadow: 3px 3px 0 var(--accent), -3px -3px 0 var(--amber); }
 .identity-copy h2 { margin: 0; font-size: 28px; }
 .identity-copy > p:last-child { margin: 8px 0 0; color: var(--muted); font-size: 13px; }
@@ -262,6 +178,9 @@ onBeforeUnmount(stopDataSync)
 .privacy-feedback { grid-column: 2; margin: 0; color: var(--primary); font-size: 12px; text-align: right; }
 .profile-grid { display: grid; grid-template-columns: minmax(340px, .85fr) minmax(0, 1fr); gap: 28px; padding: 28px 0; }
 .titles-band { padding-top: 28px; }
+.titles-tools { display: flex; align-items: center; gap: 10px; }
+.titles-count { display: inline-flex; align-items: center; gap: 6px; color: var(--primary); font-weight: 700; font-size: 13px; }
+.titles-toggle { min-height: 34px; padding: 0 12px; font-size: 13px; }
 .title-feedback { margin: -4px 0 12px; color: var(--primary); font-size: 13px; }
 .title-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; }
 .title-item { min-width: 0; min-height: 88px; display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 11px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); opacity: .66; }
@@ -295,8 +214,8 @@ onBeforeUnmount(stopDataSync)
 .quick-icon.coral { color: var(--primary); background: var(--primary-soft); }
 .quick-icon.amber { color: var(--amber); background: color-mix(in srgb, var(--amber) 12%, var(--surface)); }
 .quick-icon.green { color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--surface)); }
-.quick-icon.blue { color: #3f7f8f; background: color-mix(in srgb, #3f7f8f 12%, var(--surface)); }
-.quick-icon.violet { color: #70517a; background: color-mix(in srgb, #70517a 12%, var(--surface)); }
+.quick-icon.blue { color: var(--dim-relationship); background: color-mix(in srgb, var(--dim-relationship) 12%, var(--surface)); }
+.quick-icon.violet { color: var(--tone-violet); background: color-mix(in srgb, var(--tone-violet) 12%, var(--surface)); }
 .account-band dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 0; border-top: 1px solid var(--border); }
 .account-band dl div { min-width: 0; padding: 14px 12px; border-bottom: 1px solid var(--border); }
 .account-band dt { color: var(--muted); font-size: 12px; }
@@ -314,4 +233,14 @@ onBeforeUnmount(stopDataSync)
 @keyframes profile-enter { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: translateY(0); } }
 @media (max-width: 940px) { .identity-band { grid-template-columns: 82px minmax(0, 1fr); } .identity-stats { grid-column: 1 / -1; } .profile-grid { grid-template-columns: 1fr; } .title-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 620px) { .identity-band { grid-template-columns: 68px minmax(0, 1fr); gap: 14px; } .avatar-shell { width: 68px; border-radius: 22px 22px 22px 8px; } .avatar { border-radius: 18px 18px 18px 5px; font-size: 25px; } .identity-copy h2 { font-size: 23px; } .identity-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); } .identity-stats div { padding: 10px; } .identity-stats strong { font-size: 19px; } .privacy-band { grid-template-columns: 1fr; } .privacy-control { justify-content: space-between; } .privacy-feedback { grid-column: 1; text-align: left; } .title-grid { grid-template-columns: 1fr; } .account-band dl { grid-template-columns: 1fr; } }
+.profile-page { max-width: 1264px; }
+.identity-band { padding: 30px; border-radius: var(--radius-scene); background: var(--forest); border: 0; color: var(--on-forest); margin-bottom: 28px; }
+.identity-band .eyebrow, .identity-band .identity-copy p, .identity-band .identity-stats span { color: var(--nav-ink); }
+.identity-band .identity-copy h2 { color: var(--on-forest); }
+.identity-band .identity-stats strong { color: var(--sun); font-weight: 600; }
+.identity-band .avatar { background: var(--sun); color: var(--forest); }
+.identity-band .avatar-shell { border-color: var(--nav-card-border); }
+.title-item, .pet-stage { border-radius: var(--radius-panel); box-shadow: none; }
+.profile-grid > section { padding: 22px; border: 1px solid var(--border); background: var(--surface); border-radius: var(--radius-panel); }
+@media (max-width:760px) { .identity-band { padding: 22px; } .profile-grid > section { padding: 16px; } }
 </style>

@@ -1,9 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { Download, LogOut, Monitor, Moon, Paintbrush, PanelsTopLeft, RotateCcw, Sparkles, Sun, Trash2, Zap } from 'lucide-vue-next'
+import { AlertTriangle, Download, LogOut, Monitor, Moon, Paintbrush, PanelsTopLeft, RotateCcw, Sparkles, Sun, Trash2, Zap } from 'lucide-vue-next'
 import { useRouter } from 'vue-router'
-import { api } from '../../shared/api/client'
-import { randomUUID } from '../../shared/uuid'
 import { useAuthStore } from '../auth/auth.store'
 import {
   accentOptions,
@@ -18,62 +16,28 @@ import {
   type RadiusStyle,
   type ThemeMode,
 } from '../../shared/ui/appearance.store'
+import { channelHint, channelLabel, retentionOptions, useSettingsData } from './settings.logic'
 
-const prefs = ref<any>(null)
-const notifications = ref<any[]>([])
-const exportJob = ref<any>(null)
-const deletion = ref<any>(null)
-const error = ref('')
+const { prefs, notifications, deletion, exportJob, error, load, setRetention, toggleNotification, createExport, requestDeletion, cancelDeletion } = useSettingsData()
 const auth = useAuthStore()
 const router = useRouter()
 const appearance = useAppearanceStore()
 const currentAccent = computed(() => accentOptions.find(option => option.value === appearance.accent) ?? accentOptions[0])
+const confirmingDeletion = ref(false)
 
 appearance.hydrate()
 
 const themeIcons: Record<ThemeMode, unknown> = { light: Sun, dark: Moon, system: Monitor }
 
-onMounted(async () => {
-  try {
-    const [loadedPrefs, loadedNotifications, loadedDeletion] = await Promise.all([
-      api.get<any>('/me/preferences'),
-      api.get<any[]>('/me/notifications'),
-      api.get<any>('/privacy/deletion').catch(() => null),
-    ])
-    prefs.value = loadedPrefs
-    notifications.value = loadedNotifications
-    deletion.value = loadedDeletion
-  } catch {
-    error.value = '设置暂时无法加载'
-  }
-})
+onMounted(() => load())
 
 async function retention(days: number) {
-  await api.put('/privacy/ai/retention', { days })
-  prefs.value.aiRetentionDays = days
+  await setRetention(days)
 }
 
-async function toggleNotification(n: any) {
-  const previous = n.enabled
-  n.enabled = !previous
-  try {
-    Object.assign(n, await api.put<any>(`/me/notifications/${n.channel}`, { enabled: n.enabled, maxPerDay: n.maxPerDay }))
-  } catch {
-    n.enabled = previous
-    error.value = '通知设置未保存，请重试'
-  }
-}
-
-async function createExport() {
-  exportJob.value = await api.post<any>('/privacy/exports', undefined, { 'Idempotency-Key': randomUUID() })
-}
-
-async function requestDeletion() {
-  deletion.value = await api.post<any>('/privacy/deletion')
-}
-
-async function cancelDeletion() {
-  deletion.value = await api.post<any>('/privacy/deletion/cancel')
+async function confirmRequestDeletion() {
+  await requestDeletion()
+  confirmingDeletion.value = false
 }
 
 async function logout() {
@@ -217,7 +181,7 @@ function replayWelcome() {
       <h2>AI 数据保留</h2>
       <p class="muted">对话到期后自动删除；安全事件按独立政策最小化保留。</p>
       <div class="actions">
-        <button v-for="d in [7, 30, 90]" :key="d" class="secondary" :aria-pressed="prefs.aiRetentionDays === d" @click="retention(d)">
+        <button v-for="d in retentionOptions" :key="d" class="secondary" :aria-pressed="prefs.aiRetentionDays === d" @click="retention(d)">
           {{ d }} 天
         </button>
       </div>
@@ -225,12 +189,13 @@ function replayWelcome() {
 
     <section class="band">
       <h2>通知</h2>
+      <p class="muted">选择在哪里收到提醒。每个渠道每天都有条数上限，不会连续打扰。</p>
       <div v-for="n in notifications" :key="n.channel" class="setting-row">
         <div>
-          <strong>{{ n.channel }}</strong>
-          <small>每日最多 {{ n.maxPerDay }} 条</small>
+          <strong>{{ channelLabel(n.channel) }}</strong>
+          <small>{{ channelHint(n.channel) }} · 每日最多 {{ n.maxPerDay }} 条</small>
         </div>
-        <input :checked="n.enabled" type="checkbox" :aria-label="`启用 ${n.channel}`" @change="toggleNotification(n)">
+        <input :checked="n.enabled" type="checkbox" :aria-label="`启用${channelLabel(n.channel)}`" @change="toggleNotification(n)">
       </div>
     </section>
 
@@ -249,12 +214,22 @@ function replayWelcome() {
     <section class="band danger-zone">
       <h2>注销账户</h2>
       <template v-if="deletion?.status === 'COOLING_OFF'">
-        <p>账户处于 7 天冷静期。计划处理时间：{{ new Date(deletion.processAfter).toLocaleString() }}</p>
+        <p>账户处于 7 天冷静期。计划处理时间：{{ new Date(deletion.processAfter!).toLocaleString() }}</p>
         <button class="secondary" @click="cancelDeletion">撤销注销</button>
+      </template>
+      <template v-else-if="confirmingDeletion">
+        <p class="danger-warning"><AlertTriangle :size="16" />请求后会立即暂停通知与好友可见性；7 天冷静期内可以撤销，超过后账户与全部数据将被永久删除，无法恢复。</p>
+        <div class="actions">
+          <button class="secondary" @click="confirmingDeletion = false">取消</button>
+          <button class="danger" @click="confirmRequestDeletion">
+            <Trash2 :size="17" />
+            确认请求注销
+          </button>
+        </div>
       </template>
       <template v-else>
         <p class="muted">请求后会立即暂停通知与业务访问，7 天内可以撤销。</p>
-        <button class="danger" @click="requestDeletion">
+        <button class="danger" @click="confirmingDeletion = true">
           <Trash2 :size="17" />
           请求注销
         </button>
@@ -443,6 +418,9 @@ h2 {
   color: var(--danger);
 }
 
+.danger-warning { display: flex; align-items: flex-start; gap: 8px; color: var(--danger); }
+.danger-warning svg { flex: none; margin-top: 2px; }
+
 @media (prefers-reduced-motion: no-preference) {
   .appearance-section {
     animation: settings-rise var(--motion-medium) ease-out both;
@@ -480,4 +458,10 @@ h2 {
   .theme-preview { height: 72px; }
   .current-style { grid-column: 1 / -1; }
 }
+.settings-page { max-width: 1060px; }
+.settings-page > .band { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-panel); padding: 24px; margin-bottom: 18px; }
+.swatches button { border-radius: var(--radius-panel); box-shadow: none; }
+.theme-preview { border-radius: 10px; }
+.settings-page .danger-zone { border-color: color-mix(in srgb, var(--danger) 35%, var(--border)); }
+@media (max-width: 760px) { .settings-page > .band { padding: 18px; } }
 </style>

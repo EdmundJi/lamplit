@@ -1,66 +1,19 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
-import { BarChart3, Brain, BriefcaseBusiness, HeartHandshake, Sparkles, Sprout } from 'lucide-vue-next'
+import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { BarChart3 } from 'lucide-vue-next'
 import { init, use, type ECharts } from 'echarts/core'
 import { RadarChart } from 'echarts/charts'
 import { LegendComponent, TooltipComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
-import { api } from '../../shared/api/client'
 import { onDataChanged } from '../../shared/data-sync'
+import { attributeIcons, attributeProgress as progress, attributeTones, useAttributesOverview } from './attributes.logic'
 
 use([RadarChart, LegendComponent, TooltipComponent, CanvasRenderer])
 
-type AttributeRow = {
-  code: string
-  name: string
-  dimensionName: string
-  description: string
-  experience: number
-  level: number
-  radarScore: number
-  currentLevelExperience: number
-  nextLevelExperience?: number | null
-  experienceToNextLevel: number
-}
-
-type AttributesOverview = {
-  totalExperience: number
-  overallLevel: number
-  attributes: AttributeRow[]
-}
-
-const attributeIcons: Record<string, unknown> = {
-  KNOWLEDGE: Brain,
-  HEALTH: Sprout,
-  CAREER: BriefcaseBusiness,
-  RELATIONSHIP: HeartHandshake,
-  WELLBEING: Sparkles,
-}
-
-const attributeTones: Record<string, string> = {
-  KNOWLEDGE: '#c85f47',
-  HEALTH: '#4f856a',
-  CAREER: '#b67a22',
-  RELATIONSHIP: '#3f7f8f',
-  WELLBEING: '#9b5f77',
-}
+const { data, loading, error, strongest, load: loadOverview } = useAttributesOverview()
 
 const chartElement = ref<HTMLElement | null>(null)
-const data = ref<AttributesOverview | null>(null)
-const loading = ref(true)
-const error = ref('')
 let chart: ECharts | undefined
-
-const strongest = computed(() => data.value?.attributes.reduce<AttributeRow | null>(
-  (best, item) => !best || item.experience > best.experience ? item : best,
-  null,
-))
-
-function progress(row: AttributeRow) {
-  if (!row.nextLevelExperience) return 100
-  const span = row.nextLevelExperience - row.currentLevelExperience
-  return span <= 0 ? 100 : Math.max(0, Math.min(100, Math.round((row.experience - row.currentLevelExperience) * 100 / span)))
-}
 
 function renderChart() {
   if (!chartElement.value || !data.value) return
@@ -71,9 +24,10 @@ function renderChart() {
   const muted = styles.getPropertyValue('--muted').trim() || '#74675f'
   const border = styles.getPropertyValue('--border').trim() || '#e4d5c7'
   const surface = styles.getPropertyValue('--surface').trim() || '#fffdfa'
-  const primary = styles.getPropertyValue('--primary').trim() || '#c85f47'
+  const primary = styles.getPropertyValue('--primary-strong').trim() || '#255643'
   chart.setOption({
-    animationDuration: 720,
+    animation: !['off', 'reduced'].includes(document.documentElement.dataset.motion ?? '') && !window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches,
+    animationDuration: 400,
     animationEasing: 'cubicOut',
     tooltip: {
       trigger: 'item',
@@ -109,18 +63,11 @@ function resizeChart() {
 }
 
 async function load(showLoading = true) {
-  if (showLoading) loading.value = true
-  error.value = ''
-  try {
-    data.value = await api.get<AttributesOverview>('/insights/attributes')
-    if (showLoading) loading.value = false
+  await loadOverview(showLoading)
+  if (!error.value) {
     await nextTick()
     renderChart()
     window.addEventListener('resize', resizeChart)
-  } catch {
-    error.value = '属性数据暂时无法加载'
-  } finally {
-    if (showLoading) loading.value = false
   }
 }
 
@@ -136,7 +83,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section class="page attributes-page">
+  <section class="page page--read attributes-page">
     <header class="page-head">
       <div>
         <p class="eyebrow">每次完成都会留下真实增量</p>
@@ -228,4 +175,13 @@ onBeforeUnmount(() => {
 @keyframes icon-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
 @media (max-width: 850px) { .attribute-overview { grid-template-columns: 1fr; } .radar-copy { max-width: none; } .radar-chart { min-height: 330px; } }
 @media (max-width: 560px) { .attribute-overview { padding-top: 18px; } .radar-chart { min-height: 290px; } .attribute-card { grid-template-columns: 44px minmax(0, 1fr); } .score { grid-column: 1 / -1; grid-template-columns: auto auto; justify-content: end; align-items: baseline; } .attribute-heading > div { align-items: start; flex-direction: column; gap: 2px; } }
+.attributes-page { max-width: 1264px; }
+.attribute-overview { padding: 30px; border: 1px solid var(--border); border-radius: var(--radius-scene); background: var(--surface); margin-bottom: 24px; }
+.radar-copy h2 { font-size: 28px; line-height: 1.5; max-width: 12em; text-wrap: balance; }
+.radar-copy dl div { border: 0; border-radius: var(--radius); padding: 16px; }
+.radar-copy dd { font-size: 25px; font-variant-numeric: tabular-nums; }
+.attribute-card { border-radius: var(--radius-panel); padding: 20px; box-shadow: none; }
+.overall-level strong { color: var(--primary-strong); }
+.attribute-heading b, .score b { color: var(--ink); }
+@media (max-width: 900px) { .attribute-overview { grid-template-columns: minmax(0,1fr); padding: 22px; } .radar-copy { max-width: none; } .radar-copy h2 { max-width: none; } }
 </style>

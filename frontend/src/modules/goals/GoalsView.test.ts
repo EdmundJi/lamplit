@@ -39,7 +39,8 @@ describe('Goal and task workflow', () => {
     await wrapper.get('.page-head button.primary').trigger('click')
     expect(wrapper.get('.support-line').text().length).toBeGreaterThan(12)
 
-    await wrapper.get('button[aria-label="完成目标"]').trigger('click')
+    const completeGoal = wrapper.findAll('.goal-more button').find(button => button.text().includes('标记为完成'))
+    await completeGoal!.trigger('click')
     await flushPromises()
     expect(api.post).toHaveBeenCalledWith('/goals/goal-1/complete')
     expect(wrapper.get('.feedback-banner[data-tone="celebrate"]').text().length).toBeGreaterThan(12)

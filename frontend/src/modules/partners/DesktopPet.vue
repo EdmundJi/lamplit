@@ -343,7 +343,7 @@ onBeforeUnmount(() => {
 .desktop-dialogue { position: absolute; z-index: 4; top: 9px; left: 10px; width: calc(100% - 20px); display: grid; grid-template-columns: minmax(0, 1fr) 26px; gap: 3px 6px; padding: 9px 7px 9px 11px; border: 1px solid #d9ad88; border-radius: 7px; background: rgb(255 253 248 / 96%); box-shadow: 0 10px 25px rgb(82 48 29 / 17%); }
 .desktop-dialogue::after { content: ''; position: absolute; left: 34px; bottom: -6px; width: 10px; height: 10px; transform: rotate(45deg); border-right: 1px solid #d9ad88; border-bottom: 1px solid #d9ad88; background: #fffdf8; }
 .desktop-dialogue strong { min-width: 0; color: #49362d; font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
-.desktop-dialogue small { grid-column: 1; color: #4f856a; font-size: 10px; }
+.desktop-dialogue small { grid-column: 1; color: var(--dim-health); font-size: 10px; }
 .desktop-dialogue button { grid-column: 2; grid-row: 1 / span 2; width: 26px; height: 26px; min-height: 26px; }
 .desktop-pet-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 11px; color: #78675f; font-size: 10px; }
 .desktop-pet-footer span:last-child { display: inline-flex; align-items: center; gap: 4px; color: #9a6914; font-weight: 800; }
@@ -364,4 +364,8 @@ onBeforeUnmount(() => {
 @media (prefers-reduced-motion: no-preference) { .desktop-pet { animation: desktop-pet-arrive var(--motion-slow) ease-out both; } }
 @media (max-width: 900px) { .desktop-pet:not(.standalone) { display: none; } }
 @keyframes desktop-pet-arrive { from { opacity: 0; } to { opacity: 1; } }
+.desktop-pet { z-index: 30; border-color: var(--border); border-radius: var(--radius-panel); background: var(--surface); color: var(--ink); box-shadow: var(--shadow); }
+.desktop-pet::before { box-shadow: inset 0 3px 0 var(--primary); }
+.desktop-pet .desktop-dialogue { background: var(--surface); color: var(--ink); border-color: var(--border); border-radius: var(--radius); }
+.desktop-pet .desktop-menu, .desktop-pet .feed-tray { border-radius: var(--radius); }
 </style>

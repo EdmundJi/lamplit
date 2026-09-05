@@ -22,6 +22,13 @@ const statusOptions = [
   { value: 'DELETED', label: '已删除' },
 ]
 const metricLabels: Record<string, string> = { activeUsers: '活跃用户', taskEvents: '任务事件', safetyEvents: '安全事件', deletionBacklog: '注销积压' }
+// Operators read these tables all day; show the meaning, keep the raw code in the title.
+const reviewLabels: Record<string, string> = { PENDING: '待复核', IN_REVIEW: '复核中', RESOLVED: '已处理', DISMISSED: '已忽略' }
+const directionLabels: Record<string, string> = { INPUT: '用户输入', OUTPUT: '模型输出' }
+const riskLabels: Record<string, string> = { L0: 'L0 正常', L1: 'L1 关注', L2: 'L2 边界', L3: 'L3 危机' }
+const reviewLabel = (value: string) => reviewLabels[value] ?? value
+const directionLabel = (value: string) => directionLabels[value] ?? value
+const riskLabel = (value: string) => riskLabels[value] ?? value
 const metricIcons = [Users, Activity, ShieldAlert, FileClock]
 
 const tab = ref<'overview' | 'users' | 'safety' | 'audit'>('overview')
@@ -225,7 +232,7 @@ onMounted(load)
       <div class="table-wrap">
         <table>
           <thead><tr><th>风险</th><th>场景</th><th>方向</th><th>脱敏摘要</th><th>状态</th><th>时间</th></tr></thead>
-          <tbody><tr v-for="event in events" :key="event.publicId"><td><span class="risk">{{ event.riskLevel }}</span></td><td>{{ event.scene }}</td><td>{{ event.direction }}</td><td>{{ event.excerpt }}</td><td>{{ event.reviewStatus }}</td><td>{{ timeLabel(event.createdAt) }}</td></tr></tbody>
+          <tbody><tr v-for="event in events" :key="event.publicId"><td><span class="risk" :title="event.riskLevel">{{ riskLabel(event.riskLevel) }}</span></td><td>{{ event.scene }}</td><td>{{ directionLabel(event.direction) }}</td><td>{{ event.excerpt }}</td><td>{{ reviewLabel(event.reviewStatus) }}</td><td>{{ timeLabel(event.createdAt) }}</td></tr></tbody>
         </table>
       </div>
     </section>
@@ -287,4 +294,7 @@ td select { min-height: 34px; border: 1px solid var(--border); border-radius: va
 @media (max-width: 560px) {
   .admin-metrics, .overview-grid, .admin-form-grid { grid-template-columns: 1fr; }
 }
+.overview-grid { background: var(--surface); border-radius: var(--radius-panel); padding: 24px; border: 1px solid var(--border); }
+table { font-size: 13px; background: var(--surface); }
+th { background: var(--surface-muted); color: var(--primary-strong); }
 </style>

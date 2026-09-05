@@ -292,4 +292,11 @@ async function finish() {
   .setup-actions button { width: 100%; }
   .completion-facts { display: grid; justify-items: start; }
 }
+.onboarding-page { max-width: 900px; padding-top: 40px; }
+.setup-band { background: var(--surface); padding: 32px; border: 1px solid var(--border); border-radius: var(--radius-scene); margin-bottom: 32px; }
+.setup-title h1 { font-size: 32px; line-height: 1.45; }
+.scene-option { border-radius: var(--radius-panel); padding: 20px; }
+.scene-option[aria-pressed='true'] { box-shadow: inset 0 0 0 1px var(--primary); }
+.brand-mark { border-radius: 12px 12px 5px 5px; background: var(--forest); color: var(--sun); }
+@media (max-width:760px) { .setup-band { padding: 20px; } .setup-title h1 { font-size: 26px; } }
 </style>

@@ -1,118 +1,26 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { ChevronRight, MailCheck, MailPlus, MessageCircle, Send, UserPlus, Users, X } from 'lucide-vue-next'
-import { api, type ApiError } from '../../shared/api/client'
-import { notifyDataChanged, onDataChanged } from '../../shared/data-sync'
-import type { FriendItem, FriendList } from './friends.types'
+import { onDataChanged } from '../../shared/data-sync'
+import { friendInitial as initial, memberSinceLabel, useFriendDirectory } from './friends.logic'
 
-const list = ref<FriendList>({ friends: [], incoming: [], outgoing: [] })
+const { list, loading, busy, error, feedback, load, sendRequest: submitRequest, accept, reject, remove } = useFriendDirectory()
 const email = ref('')
-const loading = ref(true)
-const busy = ref(false)
-const error = ref('')
-const feedback = ref('')
+const showAdd = ref(false)
+const emailInput = ref<HTMLInputElement | null>(null)
 
-function friendlyError(err: unknown, fallback: string) {
-  const code = (err as Partial<ApiError> | null)?.code
-  const messages: Record<string, string> = {
-    FRIEND_USER_NOT_FOUND: '没有找到该邮箱对应的用户',
-    FRIEND_SELF_REQUEST: '不能添加自己为好友',
-    FRIEND_REQUEST_EXISTS: '好友申请已发送，等待对方接受',
-    FRIENDS_ALREADY: '你们已经是好友了',
-    FRIEND_REQUEST_NOT_FOUND: '没有找到该好友申请',
-    FRIENDSHIP_NOT_FOUND: '该好友关系不存在',
-  }
-  return messages[code ?? ''] ?? fallback
-}
-
-function initial(name: string) {
-  const characters = Array.from(name.trim())
-  if (!characters.length) return '好'
-  if (/\p{Script=Han}/u.test(characters[0])) return characters[0]
-  return characters[0].toUpperCase()
-}
-
-function memberSinceLabel(date: string) {
-  return new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' }).format(new Date(`${date}T00:00:00`))
-}
-
-async function load(showLoading = true) {
-  if (showLoading) loading.value = true
-  error.value = ''
-  try {
-    list.value = await api.get<FriendList>('/friends')
-  } catch {
-    error.value = '好友列表暂时无法加载'
-  } finally {
-    if (showLoading) loading.value = false
-  }
+async function toggleAdd() {
+  showAdd.value = !showAdd.value
+  if (!showAdd.value) return
+  await nextTick()
+  emailInput.value?.focus()
 }
 
 async function sendRequest() {
-  const address = email.value.trim()
-  if (!address) {
-    error.value = '请输入好友的注册邮箱'
-    return
-  }
-  busy.value = true
-  error.value = ''
-  try {
-    const item = await api.post<FriendItem>('/friends/requests', { email: address })
-    feedback.value = item.status === 'ACCEPTED'
-      ? `已和 ${item.displayName} 成为好友`
-      : `申请已发送给 ${item.displayName}，等待对方接受`
+  const ok = await submitRequest(email.value)
+  if (ok) {
     email.value = ''
-    await load(false)
-    notifyDataChanged(['social'])
-  } catch (err) {
-    error.value = friendlyError(err, '申请发送失败，请稍后重试')
-  } finally {
-    busy.value = false
-  }
-}
-
-async function accept(item: FriendItem) {
-  busy.value = true
-  error.value = ''
-  try {
-    await api.post<FriendItem>(`/friends/${item.publicId}/accept`)
-    feedback.value = `已和 ${item.displayName} 成为好友`
-    await load(false)
-    notifyDataChanged(['social'])
-  } catch (err) {
-    error.value = friendlyError(err, '接受失败，请稍后重试')
-  } finally {
-    busy.value = false
-  }
-}
-
-async function reject(item: FriendItem) {
-  busy.value = true
-  error.value = ''
-  try {
-    await api.post(`/friends/${item.publicId}/reject`)
-    feedback.value = `已拒绝 ${item.displayName} 的申请`
-    await load(false)
-    notifyDataChanged(['social'])
-  } catch (err) {
-    error.value = friendlyError(err, '操作失败，请稍后重试')
-  } finally {
-    busy.value = false
-  }
-}
-
-async function remove(item: FriendItem) {
-  busy.value = true
-  error.value = ''
-  try {
-    await api.delete(`/friends/${item.publicId}`)
-    feedback.value = `已删除好友 ${item.displayName}`
-    await load(false)
-    notifyDataChanged(['social'])
-  } catch (err) {
-    error.value = friendlyError(err, '删除失败，请稍后重试')
-  } finally {
-    busy.value = false
+    showAdd.value = false
   }
 }
 
@@ -128,8 +36,14 @@ onBeforeUnmount(stopDataSync)
       <div>
         <p class="eyebrow">同行的伙伴</p>
         <h1>好友</h1>
+        <p class="page-description">各自向前，也在彼此的生活里留一盏灯。</p>
       </div>
-      <div v-if="list.friends.length" class="friend-count"><Users :size="16" /><span>{{ list.friends.length }} 位好友</span></div>
+      <div class="page-head-actions">
+        <span v-if="list.friends.length" class="friend-count"><Users :size="16" /><span>{{ list.friends.length }} 位好友</span></span>
+        <button class="primary" type="button" :aria-expanded="showAdd" aria-controls="add-friend-panel" @click="toggleAdd">
+          <UserPlus :size="16" />{{ showAdd ? '收起添加' : '添加好友' }}
+        </button>
+      </div>
     </header>
 
     <p v-if="error" class="error" role="alert">{{ error }}</p>
@@ -137,13 +51,13 @@ onBeforeUnmount(stopDataSync)
       <MailCheck :size="19" /><p>{{ feedback }}</p>
     </div>
 
-    <form class="band add-friend-band" @submit.prevent="sendRequest">
+    <form v-if="showAdd" id="add-friend-panel" class="band add-friend-band" @submit.prevent="sendRequest">
       <div class="section-title">
         <div><p class="eyebrow">添加好友</p><h2>通过注册邮箱找到对方</h2></div>
-        <UserPlus :size="20" />
+        <button class="icon-button" type="button" aria-label="收起添加好友" @click="showAdd = false"><X :size="18" /></button>
       </div>
       <div class="add-friend-row">
-        <label class="field"><span class="sr-only">好友邮箱</span><input v-model="email" type="email" placeholder="输入对方的注册邮箱" maxlength="254" /></label>
+        <label class="field"><span class="sr-only">好友邮箱</span><input ref="emailInput" v-model="email" type="email" placeholder="输入对方的注册邮箱" maxlength="254" /></label>
         <button class="primary" :disabled="busy" type="submit"><Send :size="16" />发送申请</button>
       </div>
       <p class="add-friend-note">对方同意后，你们可以互相查看今日行动、等级、宠物、徽章和成长雷达。</p>
@@ -209,7 +123,7 @@ onBeforeUnmount(stopDataSync)
         <div v-else class="empty">
           <MailPlus :size="26" />
           <h3>还没有好友</h3>
-          <p>用上方表单输入好友的注册邮箱，发送第一份同行邀请。</p>
+          <p>点右上角的「添加好友」，输入对方的注册邮箱，发送第一份同行邀请。</p>
         </div>
       </section>
     </template>
@@ -217,6 +131,7 @@ onBeforeUnmount(stopDataSync)
 </template>
 
 <style scoped>
+.page-head-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .friend-count { display: inline-flex; align-items: center; gap: 8px; padding: 8px 13px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--primary); font-size: 13px; font-weight: 700; }
 .add-friend-band { display: grid; gap: 13px; }
 .section-title { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 4px; color: var(--primary); }
@@ -260,4 +175,10 @@ onBeforeUnmount(stopDataSync)
   .request-actions .primary, .request-actions .secondary { flex: 1; }
   .outgoing-card > .secondary { grid-column: 1 / -1; width: 100%; }
 }
+.friend-card { border-radius: var(--radius-panel); box-shadow: none; }
+.friend-avatar { border-radius: 50%; background: var(--primary-soft); color: var(--primary-strong); box-shadow: none; }
+.add-friend-band { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-panel); padding: 24px; margin-bottom: 24px; }
+.friend-link { padding-block: 20px; }
+.friend-grid { gap: 16px; }
+@media (max-width: 760px) { .add-friend-band { padding: 18px; } }
 </style>
