@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>室内场景视觉验证</title>
+  <style>
+    body { margin: 0; padding: 20px; background: #0f172a; color: #f8fafc; font-family: system-ui, sans-serif; }
+    h1 { font-size: 18px; margin: 0 0 16px 0; }
+    #controls { margin-bottom: 16px; display: flex; gap: 12px; }
+    button { 
+      padding: 8px 16px; 
+      background: #1e293b; 
+      color: #f8fafc; 
+      border: 1px solid #334155; 
+      border-radius: 4px; 
+      cursor: pointer;
+      font-size: 14px;
+    }
+    button:hover { background: #334155; }
+    button.active { background: #38bdf8; border-color: #38bdf8; }
+    #info { 
+      margin-bottom: 16px; 
+      padding: 12px; 
+      background: #1e293b; 
+      border-radius: 4px; 
+      font-size: 13px;
+      border: 1px solid #334155;
+    }
+    #info span { color: #38bdf8; font-weight: 600; }
+    canvas { border: 1px solid #334155; display: block; image-rendering: pixelated; }
+  </style>
+</head>
+<body>
+  <h1>🏠 成长小镇 · 室内场景验证</h1>
+  <div id="controls">
+    <button data-room="home-living-room">客厅</button>
+    <button data-room="academy-study">自习室</button>
+    <button data-room="public-gym">健身房</button>
+  </div>
+  <div id="info">
+    房间: <span id="room-title">-</span> | 
+    尺寸: <span id="room-size">-</span> | 
+    家具: <span id="furniture-count">-</span> | 
+    插槽: <span id="slot-count">-</span>
+  </div>
+  <div id="game"></div>
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.80.1/phaser.min.js"></script>
+  <script type="module">
+    let game, currentScene, currentRoomData;
+    
+    const config = {
+      type: Phaser.AUTO,
+      width: 900,
+      height: 600,
+      parent: 'game',
+      backgroundColor: '#000',
+      pixelArt: true,
+      scene: { preload, create }
+    };
+    
+    function preload() {
+      this.load.atlas('interior', '/assets/town/interior-atlas.png', '/assets/town/interior-atlas.json');
+      for (let i = 1; i <= 20; i++) {
+        this.load.spritesheet(`char_${i}`, `/assets/town/characters/c${String(i).padStart(2, '0')}.png`, {
+          frameWidth: 32, frameHeight: 64
+        });
+      }
+    }
+    
+    function create() {
+      currentScene = this;
+      loadRoom('home-living-room');
+    }
+    
+    async function loadRoom(roomId) {
+      const res = await fetch(`/assets/town/maps/${roomId}.json`);
+      currentRoomData = await res.json();
+      
+      document.getElementById('room-title').textContent = currentRoomData.title;
+      document.getElementById('room-size').textContent = `${currentRoomData.cols}×${currentRoomData.rows}`;
+      document.getElementById('furniture-count').textContent = currentRoomData.furniture.length;
+      document.getElementById('slot-count').textContent = currentRoomData.slots.length;
+      
+      document.querySelectorAll('button').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.room === roomId);
+      });
+      
+      if (currentScene) renderRoom(currentScene, currentRoomData);
+    }
+    
+    function renderRoom(scene, room) {
+      scene.children.removeAll();
+      
+      const { cols, rows, tileSize, backgroundColor } = room;
+      const worldW = cols * tileSize, worldH = rows * tileSize;
+      
+      scene.cameras.main.setBounds(0, 0, worldW, worldH);
+      scene.cameras.main.setZoom(Math.min(900 / worldW, 600 / worldH) * 0.9);
+      scene.cameras.main.centerOn(worldW / 2, worldH / 2);
+      scene.cameras.main.setBackgroundColor(backgroundColor);
+      
+      // Floor
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const tile = room.layers.floor[r]?.[c];
+          if (tile) {
+            scene.add.image(c * tileSize + tileSize / 2, r * tileSize + tileSize / 2, 'interior', tile).setOrigin(0.5);
+          }
+        }
+      }
+      
+      // Walls
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const tile = room.layers.walls[r]?.[c];
+          if (tile) {
+            scene.add.image(c * tileSize + tileSize / 2, r * tileSize + tileSize / 2, 'interior', tile).setOrigin(0.5);
+          }
+        }
+      }
+      
+      // Furniture
+      room.furniture.forEach(item => {
+        const { frame, x, y, originX = 0.5, originY = 1, depth, displayWidth, displayHeight } = item;
+        const sprite = scene.add.image(x, y, 'interior', frame).setOrigin(originX, originY);
+        if (displayWidth) sprite.displayWidth = displayWidth;
+        if (displayHeight) sprite.displayHeight = displayHeight;
+        sprite.setDepth(depth !== undefined ? depth : y);
+      });
+      
+      // Slots
+      const metrics = { homeAchievements: 3, knowledgeDone: 8, healthDone: 5 };
+      room.slots.forEach(slot => {
+        const value = metrics[slot.metric] || 0;
+        const count = Math.min(Math.floor(value / (slot.perItem || 1)), slot.max);
+        for (let i = 0; i < count; i++) {
+          const frame = slot.frames[i % slot.frames.length];
+          const x = slot.anchor.x + slot.step.x * i;
+          const y = slot.anchor.y + slot.step.y * i;
+          const sprite = scene.add.image(x, y, 'interior', frame)
+            .setOrigin(slot.originX ?? 0.5, slot.originY ?? 1);
+          sprite.setDepth(slot.depth !== undefined ? slot.depth : y);
+        }
+      });
+      
+      // Residents
+      if (room.seats.length > 0) {
+        const examples = [
+          { sheet: 5, state: 'reading' },
+          { sheet: 12, state: 'phone' },
+          { sheet: 3, state: 'idle' }
+        ];
+        room.seats.slice(0, 3).forEach((seat, idx) => {
+          const ex = examples[idx];
+          if (ex) {
+            const sprite = scene.add.sprite(seat.x, seat.y, `char_${ex.sheet}`);
+            const row = { reading: 6, phone: 5, idle: 3 }[ex.state];
+            sprite.setFrame(row * 4);
+          }
+        });
+      }
+    }
+    
+    document.querySelectorAll('button[data-room]').forEach(btn => {
+      btn.addEventListener('click', () => loadRoom(btn.dataset.room));
+    });
+    
+    game = new Phaser.Game(config);
+  </script>
+</body>
+</html>

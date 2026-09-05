@@ -1,4 +1,12 @@
 export type SseEvent = { name: 'meta'|'delta'|'safety'|'done'|'error'; data: unknown }
+
+/** Thrown when the stream request itself is rejected (quota, auth, outage) so callers can branch on status/code. */
+export class SseRequestError extends Error {
+  constructor(public readonly status: number, public readonly code: string, message: string) {
+    super(message)
+    this.name = 'SseRequestError'
+  }
+}
 const eventNames = new Set<SseEvent['name']>(['meta', 'delta', 'safety', 'done', 'error'])
 
 export function parseSseBlock(block: string): SseEvent | null {
@@ -23,7 +31,10 @@ async function stream(path:string, body:unknown, onEvent:(event:SseEvent)=>void,
     const refreshed=await fetch('/api/v1/auth/refresh',{method:'POST',credentials:'include',headers:{Accept:'application/json'},signal})
     if(refreshed.ok)return stream(path,body,onEvent,signal,true)
   }
-  if(!response.ok||!response.body)throw new Error('AI_TEMPORARILY_UNAVAILABLE')
+  if(!response.ok||!response.body){
+    const envelope=await response.json().catch(()=>null) as {data?:{code?:string;message?:string}}|null
+    throw new SseRequestError(response.status,envelope?.data?.code??'AI_TEMPORARILY_UNAVAILABLE',envelope?.data?.message??'AI_TEMPORARILY_UNAVAILABLE')
+  }
   const reader=response.body.getReader();const decoder=new TextDecoder();let buffer=''
   while(true){
     const {value,done}=await reader.read()

@@ -245,7 +245,7 @@ public class FriendService {
         );
     }
 
-    private int longestActionStreak(long userId) {
+    public int longestActionStreak(long userId) {
         List<LocalDate> activeDates = jdbc.queryForList(
             """
                 select distinct s.local_date from task_event e join task_schedule s on s.id = e.schedule_id

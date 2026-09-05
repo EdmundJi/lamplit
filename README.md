@@ -36,6 +36,14 @@ pnpm install
 pnpm dev
 ```
 
+成长小镇页面使用已购买的 LimeZu 像素素材，素材不进入版本库。首次运行前把 `modernexteriors-win.zip` 和 `moderninteriors-win.zip` 放到 `tmp/`，然后生成图集（需要 Pillow）：
+
+```bash
+python3 scripts/build-town-assets.py
+```
+
+规则与数据映射见 `docs/成长小镇.md`。
+
 ## 首位管理员
 
 应用不开放公开的管理员注册入口。要在不存在活跃 `ADMIN` 时创建首位管理员，请在启动后端前设置以下环境变量：

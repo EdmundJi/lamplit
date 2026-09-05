@@ -76,3 +76,6 @@ app:
     stream-timeout: ${QWEN_STREAM_TIMEOUT:PT130S}
     json-mode: ${QWEN_JSON_MODE:true}
     retention-days: ${AI_RETENTION_DAYS:30}
+  town:
+    reflection-cron: ${TOWN_REFLECTION_CRON:0 15 3 * * *}
+    chat-stream-timeout: ${TOWN_CHAT_STREAM_TIMEOUT:PT130S}

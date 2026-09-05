@@ -1,0 +1,111 @@
+package com.betterself.growth.town;
+
+import com.betterself.growth.auth.CurrentUser;
+import com.betterself.growth.shared.api.ApiEnvelope;
+import com.betterself.growth.shared.api.ApiException;
+import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+
+import java.time.Clock;
+import java.time.Duration;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.util.List;
+
+@RestController
+@RequestMapping("/api/v1/town")
+public class TownController {
+
+    private final TownService town;
+    private final TownNpcService npc;
+    private final TownReflectionService reflections;
+    private final TownPresenceService presence;
+    private final Clock clock;
+    private final Duration streamTimeout;
+
+    public TownController(
+        TownService town,
+        TownNpcService npc,
+        TownReflectionService reflections,
+        TownPresenceService presence,
+        Clock clock,
+        @Value("${app.town.chat-stream-timeout:PT130S}") Duration streamTimeout
+    ) {
+        this.town = town;
+        this.npc = npc;
+        this.reflections = reflections;
+        this.presence = presence;
+        this.clock = clock;
+        this.streamTimeout = streamTimeout;
+    }
+
+    @GetMapping
+    ApiEnvelope<TownService.TownView> town(@AuthenticationPrincipal CurrentUser user, HttpServletRequest request) {
+        return envelope(town.town(user.id()), request);
+    }
+
+    @GetMapping("/npc/{npc}/messages")
+    ApiEnvelope<List<TownNpcService.MessageView>> messages(
+        @AuthenticationPrincipal CurrentUser user,
+        @PathVariable("npc") String npcCode,
+        HttpServletRequest request
+    ) {
+        return envelope(npc.messages(user.id(), npcCode), request);
+    }
+
+    @PostMapping(value = "/npc/{npc}/chat:stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    SseEmitter chat(
+        @AuthenticationPrincipal CurrentUser user,
+        @PathVariable("npc") String npcCode,
+        @RequestBody TownNpcService.ChatCommand body
+    ) {
+        SseEmitter emitter = new SseEmitter(streamTimeout.toMillis());
+        npc.chat(user.id(), npcCode, body, emitter);
+        return emitter;
+    }
+
+    @PostMapping("/presence")
+    ApiEnvelope<TownPresenceService.PresenceWriteView> presence(
+        @AuthenticationPrincipal CurrentUser user,
+        @RequestBody TownPresenceService.PresenceCommand body,
+        HttpServletRequest request
+    ) {
+        return envelope(presence.report(user.id(), body), request);
+    }
+
+    @GetMapping("/reflection/latest")
+    ApiEnvelope<TownReflectionService.ReflectionView> latestReflection(
+        @AuthenticationPrincipal CurrentUser user,
+        HttpServletRequest request
+    ) {
+        TownReflectionService.ReflectionView view = reflections.latest(user.id());
+        if (view == null) {
+            throw new ApiException(HttpStatus.NOT_FOUND, "TOWN_REFLECTION_NOT_FOUND", "还没有反思记录");
+        }
+        return envelope(view, request);
+    }
+
+    @PostMapping("/reflection/generate")
+    ApiEnvelope<TownReflectionService.ReflectionView> generateReflection(
+        @AuthenticationPrincipal CurrentUser user,
+        HttpServletRequest request
+    ) {
+        TownService.UserRow self = town.user(user.id());
+        LocalDate today = clock.instant().atZone(ZoneId.of(self.timezone())).toLocalDate();
+        return envelope(reflections.generate(user.id(), today), request);
+    }
+
+    private <T> ApiEnvelope<T> envelope(T data, HttpServletRequest request) {
+        return ApiEnvelope.of(data, String.valueOf(request.getAttribute("requestId")), clock);
+    }
+}

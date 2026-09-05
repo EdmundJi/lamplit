@@ -1,0 +1,36 @@
+import { chromium } from '/Users/asherji/code/personal_study/frontend/node_modules/@playwright/test/index.mjs'
+const OUT = '/Users/asherji/.claude/jobs/4675194c/tmp/ui'
+const browser = await chromium.launch()
+const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
+page.on('pageerror', e => console.log('PAGEERROR', e.message))
+await page.addInitScript(() => { try { localStorage.setItem('better-self:welcome:seen','dismissed') } catch {} })
+await page.goto('http://127.0.0.1:5173/auth', { waitUntil: 'domcontentloaded' }); await page.waitForTimeout(1200)
+await page.evaluate(async () => { await fetch('/api/v1/auth/login', { method:'POST', credentials:'include', headers:{'Content-Type':'application/json',Accept:'application/json'}, body: JSON.stringify({ email:'town-demo-1788569807@example.com', password:'Correct-Horse-Battery-2026!' }) }) })
+await page.goto('http://127.0.0.1:5173/town', { waitUntil: 'domcontentloaded' })
+await page.waitForSelector('canvas', { timeout: 30000 }); await page.waitForTimeout(4000)
+for (const el of await page.$$('.welcome-backdrop button')) { try { await el.click({ timeout: 400 }); break } catch {} }
+const selfX = () => page.evaluate(() => window.__townScene?.selfWalker?.sprite?.x ?? null)
+await page.locator('canvas').click({ position: { x: 700, y: 500 } })
+await page.waitForTimeout(300)
+// walk: hold ArrowRight for 1s
+let a = await selfX()
+await page.keyboard.down('ArrowRight'); await page.waitForTimeout(1000); await page.keyboard.up('ArrowRight')
+let b = await selfX()
+console.log('walk 1s ->', (b - a).toFixed(1), 'px')
+// run: hold Shift + ArrowRight for 1s
+await page.waitForTimeout(400)
+a = await selfX()
+await page.keyboard.down('Shift'); await page.keyboard.down('ArrowRight'); await page.waitForTimeout(1000)
+await page.keyboard.up('ArrowRight'); await page.keyboard.up('Shift')
+b = await selfX()
+console.log('run(shift) 1s ->', (b - a).toFixed(1), 'px')
+// HUD toggle
+await page.getByRole('button', { name: '开始奔跑' }).click()
+await page.waitForTimeout(300)
+a = await selfX()
+await page.keyboard.down('ArrowRight'); await page.waitForTimeout(1000); await page.keyboard.up('ArrowRight')
+b = await selfX()
+console.log('run(toggle) 1s ->', (b - a).toFixed(1), 'px')
+console.log('button now:', await page.getByRole('button', { name: '奔跑中' }).count())
+await page.screenshot({ path: `${OUT}/town_run.png` })
+await browser.close()
