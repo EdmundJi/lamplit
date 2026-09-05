@@ -197,4 +197,32 @@ class TemplateRetellGeneratorTest {
 
         assertThat(text).isNotBlank();
     }
+
+    @Test
+    void anEyewitnessDoesNotSayTheyHeardIt() {
+        TemplateRetellGenerator generator = new TemplateRetellGenerator();
+
+        // hops 0 = 目击者本人。他在场、他看见了，说"听说"就穿帮了。
+        String witnessed = generator.retell(List.of(new TownRetellGenerator.Request(
+            "k", "柯云", "persona", List.of(), 0, "安禾今天在学院看了很久的书"))).get(0).text();
+
+        assertThat(witnessed).doesNotContain("听说").doesNotContain("传");
+        assertThat(witnessed).contains("安禾");
+    }
+
+    @Test
+    void doesNotStackAHedgeOnTopOfAnAlreadyHedgedPrefix() {
+        TemplateRetellGenerator generator = new TemplateRetellGenerator();
+
+        // 前缀本身可能是"好像有人说"，再往句子里塞"好像"就成了"好像有人说好像……"。
+        for (int hops = 2; hops <= 4; hops++) {
+            for (String subject : List.of("安禾", "陆夏", "邮递员", "柯云")) {
+                String text = generator.retell(List.of(new TownRetellGenerator.Request(
+                    "k", "纪麦", "persona", List.of(), hops, subject + "今天在健身房待着"))).get(0).text();
+                assertThat(text).as("hops=%d subject=%s -> %s", hops, subject, text)
+                    .doesNotContain("好像有人说好像")
+                    .doesNotContain("好像好像");
+            }
+        }
+    }
 }

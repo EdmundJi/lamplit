@@ -86,7 +86,7 @@ public final class TemplateRetellGenerator implements TownRetellGenerator {
         base = stripReportingFrame(base);
 
         Set<String> quirks = request.quirks() == null ? Set.of() : Set.copyOf(request.quirks());
-        int hops = Math.max(1, request.hops());
+        int hops = Math.max(0, request.hops());
         int hash = stableHash(request);
 
         String subject = detectSubject(base);
@@ -132,15 +132,33 @@ public final class TemplateRetellGenerator implements TownRetellGenerator {
     }
 
     private String applyHopFraming(String base, int hops, int hash) {
+        // hops 0 是目击者本人：他就在场，看见了，不该说"听说"。这一手不加任何转述框。
+        if (hops <= 0) {
+            return base;
+        }
         if (hops == 1) {
             return pick(HOP1_PREFIXES, hash, 0x1B873593) + base;
         }
         if (hops == 2) {
-            return pick(HOP2_PREFIXES, hash, 0x27D4EB2F) + soften(base);
+            String prefix = pick(HOP2_PREFIXES, hash, 0x27D4EB2F);
+            return prefix + softenUnless(base, prefix);
         }
         String prefix = pick(HOP3_PREFIXES, hash, 0x85EBCA6B);
         String suffix = pick(HOP3_SUFFIXES, hash, 0xC2B2AE35);
-        return prefix + soften(base) + suffix;
+        return prefix + softenUnless(base, prefix) + suffix;
+    }
+
+    /**
+     * 前缀本身可能已经含糊过了（"好像有人说"），这时候再往句子里塞一个"好像"就成了
+     * "好像有人说好像……"。前缀已经带了含糊词就不再叠。
+     */
+    private String softenUnless(String text, String prefix) {
+        for (String hedgeWord : HEDGE_WORDS) {
+            if (prefix.contains(hedgeWord)) {
+                return text;
+            }
+        }
+        return soften(text);
     }
 
     /**
