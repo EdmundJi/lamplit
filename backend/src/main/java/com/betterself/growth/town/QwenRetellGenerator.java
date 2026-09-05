@@ -8,6 +8,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -30,6 +31,11 @@ public class QwenRetellGenerator implements TownRetellGenerator {
     private static final Logger log = LoggerFactory.getLogger(QwenRetellGenerator.class);
     private static final int BATCH_SIZE = 20;
     private static final int FAILURES_BEFORE_GIVING_UP = 2;
+    /**
+     * 一次调用里花在网关上的总时长上限。熔断只数"失败"，可网关还有另一种坏法：每次都成功，
+     * 但每次都很慢——实测一个小镇几十条转述能让夜间 job 跑上半小时。到点就把剩下的交给模板。
+     */
+    private static final Duration PROVIDER_BUDGET = Duration.ofSeconds(90);
     private static final int MAX_CHARS = 40;
     private static final Pattern DIGIT = Pattern.compile("\\d");
     private static final String SCHEMA = """
@@ -58,9 +64,10 @@ public class QwenRetellGenerator implements TownRetellGenerator {
         // 满一次超时（实测 60s），一个用户几十条转述就能把夜间 job 拖上好几分钟——而结果和
         // 直接用模板是一样的。这道闸让"网关挂了"退化成一次探测的代价，而不是线性放大。
         int consecutiveFailures = 0;
+        long deadline = System.nanoTime() + PROVIDER_BUDGET.toNanos();
         for (int start = 0; start < requests.size(); start += BATCH_SIZE) {
             List<Request> batch = requests.subList(start, Math.min(start + BATCH_SIZE, requests.size()));
-            if (consecutiveFailures >= FAILURES_BEFORE_GIVING_UP) {
+            if (consecutiveFailures >= FAILURES_BEFORE_GIVING_UP || System.nanoTime() > deadline) {
                 results.addAll(fallback.retell(batch));
                 continue;
             }

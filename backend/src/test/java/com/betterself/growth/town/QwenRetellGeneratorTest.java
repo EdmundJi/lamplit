@@ -281,4 +281,46 @@ class QwenRetellGeneratorTest {
         assertThat(result).hasSize(100);
         assertThat(calls.get()).isEqualTo(5);
     }
+
+    @Test
+    void stopsCallingASlowButHealthyProviderOnceTheTimeBudgetIsSpent() {
+        AtomicInteger calls = new AtomicInteger();
+        QwenProvider slowProvider = new QwenProvider() {
+            @Override
+            public StructuredResult generateStructured(StructuredPrompt prompt) {
+                calls.incrementAndGet();
+                // 每次都成功，只是很慢——熔断计数器永远不会涨，只有时间预算能拦住它。
+                try {
+                    Thread.sleep(100);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                }
+                return new StructuredResult("{\"items\":[]}", "m", "r", 1, 1, 1L);
+            }
+
+            @Override
+            public StreamMetadata stream(ChatPrompt prompt, Consumer<String> deltaConsumer) {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public Classification classify(ClassificationPrompt prompt) {
+                throw new UnsupportedOperationException();
+            }
+        };
+        QwenRetellGenerator generator = new QwenRetellGenerator(slowProvider, fallback, objectMapper);
+
+        List<TownRetellGenerator.Request> requests = new ArrayList<>();
+        for (int i = 0; i < 200; i++) {
+            requests.add(new TownRetellGenerator.Request("k" + i, "柯云", "p", List.of(), 1, "小吉最近挺常往健身房跑"));
+        }
+
+        List<TownRetellGenerator.Retold> result = generator.retell(requests);
+
+        // 每条都有文本；慢并不意味着丢件。
+        assertThat(result).hasSize(200);
+        assertThat(result).allSatisfy(retold -> assertThat(retold.text()).isNotBlank());
+        // 10 批全都调用过 provider（100ms 远没到 90s 预算），说明预算没有误伤正常速度的网关。
+        assertThat(calls.get()).isEqualTo(10);
+    }
 }
