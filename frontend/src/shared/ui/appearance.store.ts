@@ -13,7 +13,7 @@ export const themeOptions: { value: ThemeMode; label: string }[] = [
 ]
 
 export const accentOptions: { value: AccentTone; label: string; description: string; swatch: string; accent: string; surface: string }[] = [
-  { value: 'forest', label: '暖阳珊瑚', description: '温暖、明快、有行动感', swatch: '#c85f47', accent: '#4f856a', surface: '#fff7e8' },
+  { value: 'forest', label: '森林暖阳', description: '深绿与日光，慢慢长成自己的风景', swatch: '#255643', accent: '#ebc76b', surface: '#f5f3ec' },
   { value: 'ocean', label: '青瓷微风', description: '安静、自然、适合专注', swatch: '#39776d', accent: '#d26e50', surface: '#e8eee9' },
   { value: 'plum', label: '莓果晚霞', description: '柔和、充满生命力', swatch: '#a95468', accent: '#c9813f', surface: '#f3e4e3' },
   { value: 'amber', label: '纸页暖光', description: '朴素、松弛、像一本手账', swatch: '#9b663d', accent: '#64856a', surface: '#f1e6d3' },

@@ -1,43 +1,68 @@
 :root {
   color-scheme: light;
-  --canvas: #f8f4ee;
-  --surface: #fffdfa;
-  --surface-muted: #f2e9df;
+  --canvas: #f5f3ec;
+  --surface: #fffefa;
+  --surface-muted: #ecefe7;
   --surface-raised: #ffffff;
-  --ink: #3b312c;
-  --muted: #74675f;
-  --border: #e4d5c7;
-  --primary: #c85f47;
-  --primary-strong: #9f4635;
-  --primary-soft: #fde7de;
-  --accent: #4f856a;
-  --accent-strong: #35644f;
-  --amber: #bd8422;
+  --ink: #20372e;
+  --muted: #617069;
+  --border: #d7ded4;
+  --primary: #255643;
+  --primary-strong: #173d32;
+  --primary-soft: #e2ebde;
+  --accent: #698266;
+  --accent-strong: #405d40;
+  --amber: #916716;
   --danger: #b84248;
-  --focus: #b95641;
-  --radius: 8px;
-  --control: 40px;
-  --sidebar: 240px;
-  --shadow: 0 18px 48px rgb(91 60 43 / 14%);
-  --shadow-soft: 0 9px 24px rgb(91 60 43 / 9%);
+  --focus: #397758;
+  --radius: 10px;
+  --radius-panel: 18px;
+  --radius-scene: 24px;
+  --control: 44px;
+  --sidebar: 224px;
+  --forest: #173d32;
+  --forest-deep: #102c25;
+  --sun: #ebc76b;
+  --on-forest: #fffdf5;
+  /* Sidebar sits on the brand's inverse surface; kept as roles so themes can retune it. */
+  --nav-bg: #102c25;
+  --nav-ink: #bdcec3;
+  --nav-ink-strong: #ffffff;
+  --nav-muted: #91ad9e;
+  --nav-faint: #afc3b7;
+  --nav-hover: #244639;
+  --nav-active-bg: #e5eddf;
+  --nav-active-ink: #173d32;
+  --nav-line: #355043;
+  --nav-card: #203e31;
+  --nav-card-border: #385343;
+  --nav-card-ink: #e4eadd;
+  --nav-avatar: #49634c;
+  --nav-avatar-ink: #f5e8b5;
+  /* Five growth dimensions keep fixed chart colours so a hue always means the same thing. */
+  --dim-knowledge: #c85f47;
+  --dim-health: #4f856a;
+  --dim-career: #b67a22;
+  --dim-relationship: #3f7f8f;
+  --dim-wellbeing: #9b5f77;
+  /* Decorative tones for badges, title frames and quick links. */
+  --tone-blue: #2a6b80;
+  --tone-violet: #70517a;
+  --tone-gold: #bd8b26;
+  --tone-rose: #b45c73;
+  --tone-celebrate-ink: #6f470c;
+  --shadow: 0 24px 70px rgb(22 49 36 / 16%);
+  --shadow-soft: 0 4px 18px rgb(22 49 36 / 4%);
   --topline: linear-gradient(90deg, var(--primary) 0 34%, var(--amber) 34% 66%, var(--accent) 66% 100%);
   --motion-fast: 140ms;
   --motion-medium: 260ms;
   --motion-slow: 520ms;
 }
 
+/* Dark keeps the same roles on a green-black canvas; the values live in the dark block below. */
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --canvas: #1f1a18;
-  --surface: #29221f;
-  --surface-muted: #372e2a;
-  --surface-raised: #322925;
-  --ink: #fff4e8;
-  --muted: #c4b2a6;
-  --border: #56463e;
-  --primary-strong: #f0a18c;
-  --primary-soft: #4a2921;
-  --accent-strong: #91c4a8;
+  --tone-celebrate-ink: #e0b66c;
   --shadow: 0 18px 44px rgb(0 0 0 / 34%);
   --shadow-soft: 0 12px 30px rgb(0 0 0 / 25%);
 }
@@ -45,16 +70,7 @@
 @media (prefers-color-scheme: dark) {
   :root[data-theme='system'] {
     color-scheme: dark;
-    --canvas: #1f1a18;
-    --surface: #29221f;
-    --surface-muted: #372e2a;
-    --surface-raised: #322925;
-    --ink: #fff4e8;
-    --muted: #c4b2a6;
-    --border: #56463e;
-    --primary-strong: #f0a18c;
-    --primary-soft: #4a2921;
-    --accent-strong: #91c4a8;
+    --tone-celebrate-ink: #e0b66c;
     --shadow: 0 18px 44px rgb(0 0 0 / 34%);
     --shadow-soft: 0 12px 30px rgb(0 0 0 / 25%);
   }
@@ -116,14 +132,8 @@
   --amber: #ad782a;
 }
 
+/* Accent themes keep their own hue in dark; surfaces come from the shared dark block. */
 :root[data-theme='dark'][data-accent] {
-  --canvas: #1f1a18;
-  --surface: #29221f;
-  --surface-muted: #372e2a;
-  --surface-raised: #322925;
-  --ink: #fff4e8;
-  --muted: #c4b2a6;
-  --border: #56463e;
   --primary-strong: color-mix(in srgb, var(--primary) 44%, white);
   --primary-soft: color-mix(in srgb, var(--primary) 24%, var(--surface));
   --accent-strong: color-mix(in srgb, var(--accent) 44%, white);
@@ -131,13 +141,6 @@
 
 @media (prefers-color-scheme: dark) {
   :root[data-theme='system'][data-accent] {
-    --canvas: #1f1a18;
-    --surface: #29221f;
-    --surface-muted: #372e2a;
-    --surface-raised: #322925;
-    --ink: #fff4e8;
-    --muted: #c4b2a6;
-    --border: #56463e;
     --primary-strong: color-mix(in srgb, var(--primary) 44%, white);
     --primary-soft: color-mix(in srgb, var(--primary) 24%, var(--surface));
     --accent-strong: color-mix(in srgb, var(--accent) 44%, white);
@@ -151,10 +154,50 @@
 
 :root[data-radius='crisp'] {
   --radius: 4px;
+  --radius-panel: 8px;
+  --radius-scene: 12px;
 }
 
 :root[data-motion='reduced'] {
   --motion-fast: 90ms;
   --motion-medium: 140ms;
   --motion-slow: 220ms;
+}
+
+:root[data-theme='dark'] {
+  --canvas: #111e19;
+  --surface: #192a22;
+  --surface-muted: #24382d;
+  --surface-raised: #2a4034;
+  --ink: #f0f3e9;
+  --muted: #b1bfb2;
+  --border: #3d5143;
+  --primary-strong: #8cc2a0;
+  --primary-soft: #263f30;
+  --accent-strong: #b1c5a1;
+  --amber: #e4bd66;
+}
+:root[data-theme='dark'][data-accent] {
+  --canvas: #111e19;
+  --surface: #192a22;
+  --surface-muted: #24382d;
+  --surface-raised: #2a4034;
+  --ink: #f0f3e9;
+  --muted: #b1bfb2;
+  --border: #3d5143;
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-theme='system'], :root[data-theme='system'][data-accent] {
+    --canvas: #111e19;
+    --surface: #192a22;
+    --surface-muted: #24382d;
+    --surface-raised: #2a4034;
+    --ink: #f0f3e9;
+    --muted: #b1bfb2;
+    --border: #3d5143;
+    --primary-strong: #8cc2a0;
+    --primary-soft: #263f30;
+    --accent-strong: #b1c5a1;
+    --amber: #e4bd66;
+  }
 }

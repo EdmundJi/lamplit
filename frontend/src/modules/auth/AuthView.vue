@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { CheckCircle2, ShieldCheck, Sparkles, Sprout } from 'lucide-vue-next'
 import { useAuthStore } from './auth.store'
 import { api, type ApiError } from '../../shared/api/client'
+import GrowthScene from '../../shared/ui/GrowthScene.vue'
 
 const mode = ref<'login' | 'register' | 'forgot' | 'mfa'>('login')
 const busy = ref(false)
@@ -74,16 +75,17 @@ function backToLogin() {
   <main class="auth-page">
     <section class="auth-intro">
       <div class="brand-line">
-        <span class="seal">HI</span>
-        <span>Better Self</span>
+        <span class="seal"><Sprout :size="24" /></span>
+        <span>更好的自己 · Better Self</span>
       </div>
       <div class="intro-copy">
-        <p class="eyebrow">个人成长操作台</p>
+        <p class="eyebrow">一座由日常行动建成的小镇</p>
         <h1>更好的自己</h1>
-        <p class="intro-lead">今天不必完美，向前一点就很好。</p>
+        <p class="intro-lead">让每一步，<br>长成看得见的生活。</p>
         <p class="intro-detail">把长期目标放回今天，用一件可以完成的小事，慢慢建立属于你的节奏。</p>
       </div>
 
+      <GrowthScene class="auth-scene" />
       <div class="comfort-note">
         <span><Sprout :size="23" /></span>
         <p><strong>每一个被记录的小行动</strong>都在认真回应你的努力。</p>
@@ -246,5 +248,38 @@ fieldset label { font-size: 14px; }
   .journey { grid-template-columns: repeat(5, 1fr); gap: 2px; }
   .journey span { font-size: 10px; }
   .panel-card { padding: 20px; }
+}
+.auth-page { grid-template-columns: minmax(0, 1.12fr) minmax(390px, .88fr); }
+.auth-intro { padding: 44px 56px 30px; background: var(--forest); color: var(--on-forest); gap: 24px; justify-content: flex-start; }
+.auth-intro::before, .auth-intro::after, .panel-card::before { display: none; }
+.brand-line { color: #d3dfce; letter-spacing: .08em; font-weight: 500; font-size: 12px; }
+.seal { background: var(--sun); color: var(--forest); box-shadow: none; border-radius: 12px 12px 5px 5px; }
+.intro-copy { position: relative; z-index: 1; margin-top: 40px; }
+.auth-intro .eyebrow { color: #b1c3a7; font-size: 11px; }
+.intro-copy h1 { font-size: 17px; line-height: 1.5; font-weight: 500; margin: 10px 0 16px; }
+.intro-lead { font-size: clamp(34px, 3.6vw, 54px); font-weight: 650; line-height: 1.35; letter-spacing: -1px; color: var(--on-forest); margin-bottom: 20px; }
+.intro-detail { max-width: 360px; color: #b8cdbb; font-size: 13px; }
+.auth-scene { width: min(100%, 540px); align-self: center; margin-top: -30px; }
+.comfort-note { display: none; }
+.journey { width: 100%; margin-top: auto; padding-top: 8px; }
+.journey-track { top: 18px; background: #63806a; }
+.journey-track::after { background: var(--sun); animation: none; }
+.journey span { color: #c0d1bd; font-size: 10px; font-weight: 500; }
+.journey span::before { width: 8px; height: 8px; background: var(--sun); border-color: var(--sun); box-shadow: 0 0 0 4px #426047; animation: none; }
+.auth-panel { background: var(--canvas); padding: 48px; }
+.panel-card { border: 0; padding: 0; border-radius: 0; background: transparent; box-shadow: none; max-width: 360px; }
+.panel-head { margin-block: 32px 24px; }
+.panel-head h2 { font-size: 26px; line-height: 1.5; }
+.mode { background: transparent; border: 0; border-bottom: 1px solid var(--border); padding: 0; border-radius: 0; gap: 24px; }
+.mode button { border-radius: 0; padding-bottom: 14px; }
+.mode button[aria-selected=true] { background: transparent; box-shadow: 0 2px 0 var(--primary); }
+@media (max-width: 920px) {
+ .auth-page { grid-template-columns: 1fr; }
+ .auth-intro { min-height: auto; padding: 26px; gap: 14px; }
+ .intro-copy { margin-top: 10px; }
+ .intro-lead { font-size: 34px; }
+ .intro-detail, .journey, .auth-scene { display: none; }
+ .intro-copy h1 { margin-bottom: 8px; }
+ .auth-panel { padding: 32px 24px 48px; }
 }
 </style>
