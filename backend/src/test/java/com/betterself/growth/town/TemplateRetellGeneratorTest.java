@@ -162,4 +162,39 @@ class TemplateRetellGeneratorTest {
         }
         return false;
     }
+
+    @Test
+    void stripsThePreviousHandsReportingFrameInsteadOfStackingAnotherOneOnTop() {
+        TemplateRetellGenerator generator = new TemplateRetellGenerator();
+
+        // 上一手已经是"听说……"了；这一手不该在它前面再叠一层转述框。
+        String third = generator.retell(List.of(new TownRetellGenerator.Request(
+            "k", "纪麦", "persona", List.of(), 3, "听说小吉最近迷上健身了"))).get(0).text();
+
+        assertThat(third).doesNotContain("说好像听说").doesNotContain("说听说");
+        // 内容留着，框换成这一手自己的。
+        assertThat(third).contains("小吉").contains("健身");
+    }
+
+    @Test
+    void stripsSeveralStackedFramesNotJustTheOutermost() {
+        TemplateRetellGenerator generator = new TemplateRetellGenerator();
+
+        String text = generator.retell(List.of(new TownRetellGenerator.Request(
+            "k", "纪麦", "persona", List.of(), 2, "听说据说小吉最近迷上健身了"))).get(0).text();
+
+        assertThat(text).doesNotContain("听说据说");
+        assertThat(text).contains("小吉");
+    }
+
+    @Test
+    void leavesAFrameAloneWhenItIsTheWholeSentence() {
+        TemplateRetellGenerator generator = new TemplateRetellGenerator();
+
+        // 全句就是一个框时不能拆成空串。
+        String text = generator.retell(List.of(new TownRetellGenerator.Request(
+            "k", "纪麦", "persona", List.of(), 1, "听说"))).get(0).text();
+
+        assertThat(text).isNotBlank();
+    }
 }

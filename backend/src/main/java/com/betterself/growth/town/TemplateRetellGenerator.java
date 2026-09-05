@@ -36,6 +36,11 @@ public final class TemplateRetellGenerator implements TownRetellGenerator {
     private static final String[] HOP3_SUFFIXES = {"", "，越传越邪乎", "，反正是这么传的"};
     private static final String[] NOSTALGIC_PREFIXES = {"想当年，", "说起来也是老早以前的事了，", "想起以前啊，"};
     private static final String[] HEDGE_WORDS = {"好像", "可能", "似乎", "大概", "估计"};
+    // 句首的转述框，长的排前面，免得短的先匹配掉一半。见 stripReportingFrame()。
+    private static final String[] REPORTING_FRAMES = {
+        "也不知道从哪传出来的，说", "不知道谁传的，说是", "隐约听人讲起，好像", "好像听谁提过，说",
+        "传来传去都说", "好像有人说", "我听说", "听说啊，", "刚听说", "听说", "说是", "据说",
+    };
     // Confident-sounding quantifiers worth softening for hop 2+ — see soften(). Checked in order,
     // most specific first, so "挺常" isn't shadowed by a later, broader match.
     private static final String[] QUALIFIER_WORDS = {"挺常", "总", "挺", "都", "老", "经常", "几乎"};
@@ -75,6 +80,10 @@ public final class TemplateRetellGenerator implements TownRetellGenerator {
             base = "有点小事";
         }
         base = stripDigits(base);
+        // 上一手说的话是带着他自己的转述框的（"听说……"）。这一手要转述的是那件事，不是
+        // 上一手的说法，所以先把他的框拆掉再套自己的——否则传三手就会叠出
+        // "也不知道从哪传出来的，说好像听说……" 这种没人会讲的话。
+        base = stripReportingFrame(base);
 
         Set<String> quirks = request.quirks() == null ? Set.of() : Set.copyOf(request.quirks());
         int hops = Math.max(1, request.hops());
@@ -100,6 +109,26 @@ public final class TemplateRetellGenerator implements TownRetellGenerator {
 
         line = stripDigits(line);
         return clamp(line, MAX_CHARS);
+    }
+
+    /**
+     * 去掉句首的转述框。只拆开头，句中的"说"不动——"他说他不来"里的"说"是内容的一部分。
+     */
+    private String stripReportingFrame(String text) {
+        String result = text;
+        boolean stripped = true;
+        // 反复拆：一句已经传了几手的话可能叠了不止一层框。
+        while (stripped) {
+            stripped = false;
+            for (String frame : REPORTING_FRAMES) {
+                if (result.startsWith(frame) && result.length() > frame.length()) {
+                    result = result.substring(frame.length());
+                    stripped = true;
+                    break;
+                }
+            }
+        }
+        return result.isBlank() ? text : result;
     }
 
     private String applyHopFraming(String base, int hops, int hash) {
