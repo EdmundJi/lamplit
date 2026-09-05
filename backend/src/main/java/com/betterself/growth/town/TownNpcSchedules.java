@@ -1,0 +1,182 @@
+package com.betterself.growth.town;
+
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.random.RandomGenerator;
+
+/**
+ * 一个 NPC 一天去哪儿、在做什么——纯函数，只由 (npc_code, 日期) 决定。
+ *
+ * <p>刻意不落库：日程是可以重算的，存下来只会多一张需要和口径保持一致的表。夜间 job 用它推
+ * 相遇序列（同一时段同一地点 = 见了面），HTTP 接口用它告诉前端这一刻该把人画在哪儿——两边算
+ * 出来的必须是同一份，所以这里只有一个入口。
+ *
+ * <p>同一个 NPC 在同一天永远得到同一份日程（种子来自 npc_code 与日期），但换一天就会变；这样
+ * 小镇既有稳定的作息，又不会天天完全一样。
+ */
+final class TownNpcSchedules {
+
+    /** 一天切成 7 段，边界固定；地点和活动才是变的那部分。段与段之间不留空洞。 */
+    private static final int[] BOUNDARIES = {0, 6, 9, 12, 14, 18, 21, 24};
+
+    static final String HOME = "home";
+    static final String ACADEMY = "academy";
+    static final String GYM = "gym";
+    static final String CAFE = "cafe";
+    static final String PARK = "park";
+    static final String PLAZA = "plaza";
+    static final String STREET = "street";
+
+    private static final List<String> DAY_PLACES = List.of(ACADEMY, GYM, CAFE, PARK, PLAZA, STREET);
+
+    /** 五维度各自最"像"的去处；NPC 的兴趣权重会把他往这些地方推。 */
+    private static final Map<String, String> DIMENSION_PLACE = Map.of(
+        "KNOWLEDGE", ACADEMY,
+        "HEALTH", GYM,
+        "CAREER", PLAZA,
+        "RELATIONSHIP", CAFE,
+        "WELLBEING", PARK
+    );
+
+    private TownNpcSchedules() {
+    }
+
+    record Slot(int startHour, int endHour, String place, String activity) {
+    }
+
+    /**
+     * 生成覆盖 0~24 点、无空洞、按 startHour 升序的一天日程。
+     *
+     * @param interests 五维度权重，缺失按 0 处理
+     */
+    static List<Slot> forNpc(String npcCode, int layer, Map<String, Double> interests, LocalDate date) {
+        RandomGenerator rng = seededRng(npcCode, date);
+        Map<String, Double> weights = placeWeights(interests);
+        List<Slot> slots = new ArrayList<>(BOUNDARIES.length - 1);
+        for (int i = 0; i < BOUNDARIES.length - 1; i++) {
+            int start = BOUNDARIES[i];
+            int end = BOUNDARIES[i + 1];
+            String place = placeFor(start, weights, rng);
+            slots.add(new Slot(start, end, place, activityFor(place, layer, start, rng)));
+        }
+        return List.copyOf(slots);
+    }
+
+    /**
+     * 当日的相遇序列：同一时段落在同一地点的两个 NPC 就算见过面。
+     * 输出按 (时段, a, b) 稳定排序，好让整条传播链可复现。
+     */
+    static List<TownSocialSim.Encounter> encounters(Map<String, List<Slot>> schedulesByNpc) {
+        List<String> codes = new ArrayList<>(schedulesByNpc.keySet());
+        codes.sort(String::compareTo);
+        List<TownSocialSim.Encounter> encounters = new ArrayList<>();
+        for (int slotIndex = 0; slotIndex < BOUNDARIES.length - 1; slotIndex++) {
+            int startHour = BOUNDARIES[slotIndex];
+            for (int i = 0; i < codes.size(); i++) {
+                for (int j = i + 1; j < codes.size(); j++) {
+                    String a = codes.get(i);
+                    String b = codes.get(j);
+                    String placeA = placeAt(schedulesByNpc.get(a), slotIndex);
+                    String placeB = placeAt(schedulesByNpc.get(b), slotIndex);
+                    // 半夜各自在家不算见面，否则每晚都会凭空多出一轮全镇串门。
+                    if (placeA == null || !placeA.equals(placeB) || HOME.equals(placeA)) {
+                        continue;
+                    }
+                    encounters.add(new TownSocialSim.Encounter(a, b, placeA, startHour));
+                }
+            }
+        }
+        return List.copyOf(encounters);
+    }
+
+    /** 某一刻该把这个 NPC 画在哪个地点；hour 落在 [0,24) 之外时钳回来。 */
+    static Slot slotAt(List<Slot> schedule, int hour) {
+        int normalized = Math.floorMod(hour, 24);
+        for (Slot slot : schedule) {
+            if (normalized >= slot.startHour() && normalized < slot.endHour()) {
+                return slot;
+            }
+        }
+        return null;
+    }
+
+    private static String placeAt(List<Slot> schedule, int slotIndex) {
+        if (schedule == null || slotIndex >= schedule.size()) {
+            return null;
+        }
+        return schedule.get(slotIndex).place();
+    }
+
+    private static String placeFor(int startHour, Map<String, Double> weights, RandomGenerator rng) {
+        // 深夜与清早都在家；这是 §2.4 护栏 B 里"深夜 2~3 人"的来源。
+        if (startHour < 6 || startHour >= 21) {
+            return HOME;
+        }
+        // 午间是咖啡馆高峰，给它一次额外的抽签机会。
+        if (startHour == 12 && rng.nextDouble() < 0.45) {
+            return CAFE;
+        }
+        double total = weights.values().stream().mapToDouble(Double::doubleValue).sum();
+        double roll = rng.nextDouble() * total;
+        for (String place : DAY_PLACES) {
+            roll -= weights.getOrDefault(place, 0.0);
+            if (roll <= 0) {
+                return place;
+            }
+        }
+        return STREET;
+    }
+
+    private static String activityFor(String place, int layer, int startHour, RandomGenerator rng) {
+        if (HOME.equals(place)) {
+            return "idle";
+        }
+        return switch (place) {
+            case ACADEMY -> "reading";
+            case CAFE -> rng.nextDouble() < 0.3 ? "phone" : "sit";
+            case GYM -> "idle";
+            case PLAZA -> rng.nextDouble() < 0.5 ? "walking" : "phone";
+            case STREET -> "walking";
+            // 公园是唯一会出现劳作动画的地方——三层背景居民干活，一二层不干，
+            // 免得"你熟悉的面孔"整天在浇水（M2-3）。
+            case PARK -> layer == 3 ? labour(startHour, rng) : (rng.nextDouble() < 0.5 ? "sit" : "idle");
+            default -> "idle";
+        };
+    }
+
+    private static String labour(int startHour, RandomGenerator rng) {
+        List<String> pool = startHour >= 14
+            ? List.of("fishing", "watering", "harvesting")
+            : List.of("watering", "chopping", "digging");
+        return pool.get(rng.nextInt(pool.size()));
+    }
+
+    /** 把五维度兴趣摊到具体地点上，再给每个地点一个保底权重，免得有人一整天不出门。 */
+    private static Map<String, Double> placeWeights(Map<String, Double> interests) {
+        Map<String, Double> weights = new LinkedHashMap<>();
+        for (String place : DAY_PLACES) {
+            weights.put(place, 0.12);
+        }
+        if (interests != null) {
+            interests.forEach((dimension, weight) -> {
+                String place = DIMENSION_PLACE.get(dimension);
+                if (place != null && weight != null && weight > 0) {
+                    weights.merge(place, weight, Double::sum);
+                }
+            });
+        }
+        return weights;
+    }
+
+    private static RandomGenerator seededRng(String npcCode, LocalDate date) {
+        long seed = 1125899906842597L;
+        for (char c : npcCode.toCharArray()) {
+            seed = 31 * seed + c;
+        }
+        seed = 31 * seed + date.toEpochDay();
+        return new java.util.SplittableRandom(seed);
+    }
+}

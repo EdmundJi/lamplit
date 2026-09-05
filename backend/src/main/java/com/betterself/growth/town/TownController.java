@@ -30,6 +30,7 @@ public class TownController {
     private final TownNpcService npc;
     private final TownReflectionService reflections;
     private final TownPresenceService presence;
+    private final TownSocietyService society;
     private final Clock clock;
     private final Duration streamTimeout;
 
@@ -38,6 +39,7 @@ public class TownController {
         TownNpcService npc,
         TownReflectionService reflections,
         TownPresenceService presence,
+        TownSocietyService society,
         Clock clock,
         @Value("${app.town.chat-stream-timeout:PT130S}") Duration streamTimeout
     ) {
@@ -45,6 +47,7 @@ public class TownController {
         this.npc = npc;
         this.reflections = reflections;
         this.presence = presence;
+        this.society = society;
         this.clock = clock;
         this.streamTimeout = streamTimeout;
     }
@@ -81,6 +84,32 @@ public class TownController {
         HttpServletRequest request
     ) {
         return envelope(presence.report(user.id(), body), request);
+    }
+
+    /** 小镇名册：18 个 NPC 的档案、今日日程、以及每人今天能说的话。 */
+    @GetMapping("/npcs")
+    ApiEnvelope<TownSocietyService.RosterView> npcs(
+        @AuthenticationPrincipal CurrentUser user,
+        HttpServletRequest request
+    ) {
+        return envelope(society.roster(user.id()), request);
+    }
+
+    /**
+     * 某个 NPC 今天想说的话。返回的每一条都只来自他自己的 knowledge，
+     * 所以小助（全知但 no_relay）在这里永远是空的——这正是限知模型该有的样子。
+     */
+    @GetMapping("/npc/{npc}/talking-points")
+    ApiEnvelope<TownSocietyService.TalkingPointsView> talkingPoints(
+        @AuthenticationPrincipal CurrentUser user,
+        @PathVariable("npc") String npcCode,
+        HttpServletRequest request
+    ) {
+        TownSocietyService.TalkingPointsView view = society.talkingPoints(user.id(), npcCode);
+        if (view == null) {
+            throw new ApiException(HttpStatus.NOT_FOUND, "TOWN_NPC_NOT_FOUND", "镇上没有这个人");
+        }
+        return envelope(view, request);
     }
 
     @GetMapping("/reflection/latest")
