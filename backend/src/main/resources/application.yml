@@ -74,4 +74,5 @@ app:
     model: ${QWEN_MODEL:qwen-plus}
     timeout: ${QWEN_TIMEOUT:PT120S}
     stream-timeout: ${QWEN_STREAM_TIMEOUT:PT130S}
+    json-mode: ${QWEN_JSON_MODE:true}
     retention-days: ${AI_RETENTION_DAYS:30}

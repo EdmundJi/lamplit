@@ -3,6 +3,7 @@ package com.betterself.growth.ai;
 import com.betterself.growth.shared.api.ApiException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatus;
@@ -30,13 +31,32 @@ public class QwenHttpProvider implements QwenProvider {
     private final String apiKey;
     private final String model;
     private final Duration timeout;
+    private final Duration streamTimeout;
+    private final boolean jsonMode;
 
+    public QwenHttpProvider(
+        ObjectMapper objectMapper,
+        String baseUrl,
+        String apiKey,
+        String model,
+        Duration timeout
+    ) {
+        this(objectMapper, baseUrl, apiKey, model, timeout, timeout, true);
+    }
+
+    @Autowired
     public QwenHttpProvider(
         ObjectMapper objectMapper,
         @Value("${app.ai.base-url}") String baseUrl,
         @Value("${app.ai.api-key}") String apiKey,
         @Value("${app.ai.model}") String model,
-        @Value("${app.ai.timeout:PT120S}") Duration timeout
+        @Value("${app.ai.timeout:PT120S}") Duration timeout,
+        // Streaming replies can hold the connection open well past a single request:
+        // the model keeps generating the option/action tail after the prose is done.
+        @Value("${app.ai.stream-timeout:PT130S}") Duration streamTimeout,
+        // Not every OpenAI-compatible gateway implements response_format; some hang on it.
+        // Turning this off falls back to schema-in-the-prompt plus the repair pass below.
+        @Value("${app.ai.json-mode:true}") boolean jsonMode
     ) {
         String normalizedApiKey = apiKey == null ? "" : apiKey.trim();
         if (normalizedApiKey.isBlank() || isPlaceholder(normalizedApiKey)) {
@@ -61,6 +81,8 @@ public class QwenHttpProvider implements QwenProvider {
         this.apiKey = normalizedApiKey;
         this.model = model.trim();
         this.timeout = timeout;
+        this.streamTimeout = streamTimeout;
+        this.jsonMode = jsonMode;
     }
 
     @Override
@@ -201,7 +223,7 @@ public class QwenHttpProvider implements QwenProvider {
             body.put("messages", messages);
             body.put("temperature", 0.2);
             body.put("max_tokens", 2000);
-            if (jsonMode) {
+            if (jsonMode && this.jsonMode) {
                 body.put("response_format", Map.of("type", "json_object"));
             }
             if (stream) {
@@ -209,7 +231,7 @@ public class QwenHttpProvider implements QwenProvider {
                 body.put("stream_options", Map.of("include_usage", true));
             }
             return HttpRequest.newBuilder(endpoint)
-                .timeout(timeout)
+                .timeout(stream ? streamTimeout : timeout)
                 .header("Authorization", "Bearer " + apiKey)
                 .header("Content-Type", "application/json")
                 .header("Accept", stream ? "text/event-stream" : "application/json")

@@ -30,6 +30,17 @@ public class MockQwenProvider implements QwenProvider {
                 "qwen-mock", "mock-goal-template", 36, 92, 6
             );
         }
+        if ("TOWN_REFLECTION".equals(prompt.scene())) {
+            return new StructuredResult(
+                """
+                    {
+                      "greeting":"晚上好，今天也认真生活了一天。",
+                      "insights":["完成了一次专注练习，状态保持得不错。","有一件事推迟了，但你及时做了调整。"]
+                    }
+                    """,
+                "qwen-mock", "mock-town-reflection", 30, 48, 4
+            );
+        }
         return new StructuredResult(
             """
                 {"items":[

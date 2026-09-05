@@ -103,6 +103,27 @@ class QwenContractTest {
     }
 
     @Test
+    void dropsResponseFormatWhenTheGatewayCannotHandleJsonMode() throws Exception {
+        List<String> bodies = new ArrayList<>();
+        start(exchange -> {
+            bodies.add(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+            json(exchange, """
+                {"id":"provider-request","model":"qwen-contract","choices":[{"message":{"content":"{\\"items\\":[]}"}}],"usage":{"prompt_tokens":3,"completion_tokens":2}}
+                """);
+        });
+
+        QwenHttpProvider provider = new QwenHttpProvider(
+            new ObjectMapper(), "http://127.0.0.1:" + server.getAddress().getPort() + "/v1",
+            "unit-test-provider-key", "qwen-contract", Duration.ofSeconds(2), Duration.ofSeconds(2), false
+        );
+        provider.generateStructured(new QwenProvider.StructuredPrompt("STUDY", "create tasks", "{\"type\":\"object\"}"));
+
+        assertThat(bodies).hasSize(1);
+        assertThat(bodies.get(0)).doesNotContain("response_format");
+        assertThat(bodies.get(0)).contains("\"model\":\"qwen-contract\"");
+    }
+
+    @Test
     void rejectsPlaceholderApiKeyBeforeStartingRealProvider() {
         assertThatThrownBy(() -> new QwenHttpProvider(
             new ObjectMapper(), "http://127.0.0.1/v1", "replace-with-a-real-key", "qwen-plus", Duration.ofSeconds(2)
