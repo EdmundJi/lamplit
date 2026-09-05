@@ -374,4 +374,28 @@ class TownSocialSimTest {
         assertThat(matching).hasSize(1);
         assertThat(matching.get(0).hops()).isEqualTo(3);
     }
+
+    @Test
+    void aMeetingNeverLowersAffinityNoMatterTheSeed() {
+        // M1-5 的第一条验收就是「日程重合上升」。收益随 affinity 递减，到高位时会小于扰动幅度，
+        // 所以这条必须对整个取值范围和大量种子都成立，不能只在低位试一把。
+        Persona a = new Persona("A", 2, 0.5, 0.5,
+            Map.of("KNOWLEDGE", 0.6, "HEALTH", 0.1, "CAREER", 0.1, "RELATIONSHIP", 0.1, "WELLBEING", 0.1),
+            Set.of());
+        Persona b = new Persona("B", 2, 0.5, 0.5,
+            Map.of("KNOWLEDGE", 0.5, "HEALTH", 0.2, "CAREER", 0.1, "RELATIONSHIP", 0.1, "WELLBEING", 0.1),
+            Set.of());
+        LocalDate today = LocalDate.of(2026, 9, 6);
+
+        for (double affinity : new double[]{0.0, 0.1, 0.3, 0.6, 0.7, 0.9, 0.99, 1.0}) {
+            for (long seed = 0; seed < 500; seed++) {
+                Bond before = new Bond(affinity, 0.2, 3, today.minusDays(1));
+                Bond after = TownSocialSim.afterMeeting(before, a, b, today, new SplittableRandom(seed));
+                assertThat(after.affinity())
+                    .as("affinity=%s seed=%s must not go down after a meeting", affinity, seed)
+                    .isGreaterThanOrEqualTo(before.affinity());
+                assertThat(after.affinity()).isBetween(0.0, 1.0);
+            }
+        }
+    }
 }

@@ -56,9 +56,10 @@ class TownNpcSchedulesTest {
     }
 
     @Test
-    void leavesTwoOrThreePeopleOutAfterDarkRatherThanEmptyingTheStreet() {
-        // plan §2.4 护栏 B：深夜 2~3 人。全员回家会让凌晨的小镇变成一条空街——前端把在家的人
-        // 整个滤掉，densityCap 深夜返回 3 也就没人可选了。
+    void leavesSomeoneOutAfterDarkRatherThanEmptyingTheStreet() {
+        // plan §2.4 护栏 B 的深夜档是 2~3 人。这里按 15% 的夜猫子比例算，期望值 2.7 正落在
+        // 那个档上，但它是抽样不是配额，个别日子会到 5~6 个——所以断言写成"有人但仍然稀疏"，
+        // 而不是假装能精确卡在 2~3。真正保证同屏人数的是前端的 densityCap（深夜返回 3）。
         for (int hour : new int[]{0, 3, 5, 22, 23}) {
             long outside = TownNpcCatalog.all().stream()
                 .filter(archetype -> {

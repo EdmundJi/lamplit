@@ -132,7 +132,11 @@ public final class TownSocialSim {
         double base = AFFINITY_BASE_GAIN * (0.5 + 0.5 * overlap) * (0.5 + 0.5 * avgCuriosity);
         double jitter = (rng.nextDouble() * 2.0 - 1.0) * AFFINITY_MAX_JITTER;
 
-        double newAffinity = clamp01(bond.affinity() + (1.0 - bond.affinity()) * base + jitter);
+        // 见了一面之后不该反而生分。收益本身随 affinity 递减（(1-a) 那一项），到高位时会小于
+        // 扰动幅度，于是"见面"有可能算出一个更低的值——那是 M1-5「日程重合上升」的反例。扰动
+        // 只用来让涨幅有快有慢，不允许把符号翻过去，所以这里把增量夹在 0 以上。
+        double gain = Math.max(0.0, (1.0 - bond.affinity()) * base + jitter);
+        double newAffinity = clamp01(bond.affinity() + gain);
         double newResonance = clamp01(bond.resonance() + (overlap - bond.resonance()) * RESONANCE_SMOOTHING);
 
         return new Bond(newAffinity, newResonance, bond.meetCount() + 1, today);

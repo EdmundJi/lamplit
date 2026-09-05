@@ -888,17 +888,18 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
     }
 
     /**
-     * 两个 NPC 撞上了就按 affinity 分档说话（plan §3.3）：熟人多说两句，生人点头即过。
-     * 说什么完全取决于说话人自己 knowledge 里那几条——所以同一个镜头里两个人说的必然不一样。
+     * 两个 NPC 撞上了就各自说一句（plan §3.3）。
+     *
+     * <p>说什么完全取决于说话人自己 knowledge 里那几条——所以同一个镜头里两个人说的必然不一样。
+     * 这里刻意<b>不</b>按 affinityToPlayer 分档：那是"这个 NPC 和玩家多熟"，和两个 NPC 之间聊不聊
+     * 得起来没有关系。按亲密度分档属于玩家在场的那条路径（maybeInitiate），NPC 彼此之间该用的是
+     * 他们自己的 bond，而那条边目前不在名册接口里。
      */
     speakOnEncounter(a: Walker, b: Walker) {
       for (const walker of [a, b]) {
-        const npc = walker.npc
-        if (!npc) continue
-        const tier = bubbleTierFor(npc.affinityToPlayer)
-        const lines = pointsToPlay(tier, npc.talkingPoints)
-        if (lines.length === 0) continue
-        lines.slice(0, 2).forEach((point, index) => {
+        const points = walker.npc?.talkingPoints ?? []
+        if (points.length === 0) continue
+        points.slice(0, 2).forEach((point, index) => {
           this.time.delayedCall(index * 2400, () => this.saySomething(walker, point.text))
         })
       }

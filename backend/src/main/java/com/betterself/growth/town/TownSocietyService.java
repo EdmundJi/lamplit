@@ -72,25 +72,47 @@ public class TownSocietyService {
 
     // ---------------------------------------------------------------- 夜间流水线
 
-    /** plan §3.2 的七步（本轮实现 1~5；活动/信件/迁徙是 M4）。整晚一个事务，重跑幂等。 */
+    /**
+     * plan §3.2 的七步（本轮实现 1~5；活动/信件/迁徙是 M4）。
+     *
+     * <p>一天只跑一次，靠 {@code town_society_run} 的唯一键挡住重复触发。事实本身有唯一键、
+     * 重写不翻倍，但衰减、传播、亲密度这三步都是累积的：再跑一次不等于"这一天又发生了一遍"，
+     * 而是凭空多出一轮。所以幂等必须落在整晚这一层，不能只落在 town_fact 上。
+     *
+     * <p>转述特意留在事务外面：它要调 LLM，慢的时候能占满几十秒的网关预算，握着写锁等它是在
+     * 拿数据库的行锁换一个外部服务的响应时间。
+     */
     public void runNightly(long userId, LocalDate localDate) {
         provisioner.ensurePopulated(userId);
+        if (!claimRun(userId, localDate)) {
+            log.debug("town society already simulated for user {} on {}", userId, localDate);
+            return;
+        }
+        List<NpcRow> npcs = npcs(userId);
+        if (npcs.isEmpty()) {
+            return;
+        }
         tx.executeWithoutResult(status -> {
-            List<NpcRow> npcs = npcs(userId);
-            if (npcs.isEmpty()) {
-                return;
-            }
             ZoneId zone = zoneOf(userId);
             Map<String, List<TownNpcSchedules.Slot>> schedules = schedules(npcs, localDate);
 
             decaySalience(userId);
             List<Long> factIds = collectFacts(userId, zone, localDate, npcs, schedules);
-            witness(userId, localDate, npcs, schedules, factIds);
+            Set<Long> playerFacts = new HashSet<>(playerFactIds(userId, localDate));
+            witness(userId, localDate, npcs, schedules, factIds, playerFacts);
             List<TownSocialSim.Encounter> encounters = TownNpcSchedules.encounters(schedules);
-            propagate(userId, localDate, npcs, encounters);
-            updateBonds(userId, localDate, npcs, encounters);
-            generateRetellText(userId, npcs);
+            propagate(userId, localDate, npcs, encounters, playerFacts);
+            updateBonds(userId, localDate, npcs, encounters, presence(userId, localDate), schedules);
         });
+        generateRetellText(userId, npcs);
+    }
+
+    /** 抢占这一天的执行权；已经跑过就返回 false。 */
+    private boolean claimRun(long userId, LocalDate localDate) {
+        return jdbc.update(
+            "insert ignore into town_society_run (town_user_id, local_date, ran_at) values (?, ?, ?)",
+            userId, Date.valueOf(localDate), Timestamp.valueOf(LocalDateTime.now(clock))
+        ) > 0;
     }
 
     // ---------------------------------------------------------------- 1. 采集事实
@@ -171,10 +193,22 @@ public class TownSocietyService {
         return null;
     }
 
+    /**
+     * 落库前的最后一道闸。上游每一句都来自 {@link TownNpcPerception} 的固定文案，本来就不该带
+     * 数字——但整条隐私边界不能只靠"上游都很自觉"。这里硬拦一次：带阿拉伯数字的文本一律不写，
+     * 并记一条 warn，好让新增的事实类型如果漏了模糊化，是在日志里炸出来而不是悄悄进了传播网络。
+     */
+    private static final java.util.regex.Pattern FACT_DIGITS = java.util.regex.Pattern.compile("[0-9０-９]");
+
     /** 同一天同一主体同一 kind 只留一条（靠唯一键），所以夜间 job 重跑不会翻倍。 */
     private Long upsertFact(long userId, String subjectKind, String subjectRef, String kind, String dimension,
                             LocalDate localDate, String text) {
         if (text == null || text.isBlank()) {
+            return null;
+        }
+        if (FACT_DIGITS.matcher(text).find()) {
+            log.warn("refusing to store a town fact that still carries a raw number: kind={} subject={}",
+                kind, subjectRef);
             return null;
         }
         ObjectNode payload = mapper.createObjectNode();
@@ -211,12 +245,12 @@ public class TownSocietyService {
      * 于是只有小助知道，而小助的每一条 knowledge 都是 no_relay。
      */
     private void witness(long userId, LocalDate localDate, List<NpcRow> npcs,
-                         Map<String, List<TownNpcSchedules.Slot>> schedules, List<Long> factIds) {
+                         Map<String, List<TownNpcSchedules.Slot>> schedules, List<Long> factIds,
+                         Set<Long> playerFacts) {
         if (factIds.isEmpty()) {
             return;
         }
         Presence presence = presence(userId, localDate);
-        Set<Long> playerFacts = new HashSet<>(playerFactIds(userId, localDate));
 
         for (NpcRow npc : npcs) {
             boolean omniscient = GUIDE.equals(npc.npcCode());
@@ -226,6 +260,12 @@ public class TownSocietyService {
                 if (omniscient) {
                     from = "OMNISCIENT";
                 } else if (playerFact) {
+                    // §3.4 第 5 条：三层背景居民不持有本镇玩家的事实。他们是背景生命，不是
+                    // 你的观众——他们身上该带的是从别的镇搬过来的、已经走样过的传闻（M4 迁徙）。
+                    // 这条也顺带堵住了"深夜街上的夜猫子恰好看见你"这种漏法。
+                    if (npc.layer() >= 3) {
+                        continue;
+                    }
                     if (presence == null || !sawPlayer(schedules.get(npc.npcCode()), presence)) {
                         continue;
                     }
@@ -267,7 +307,7 @@ public class TownSocietyService {
     // ---------------------------------------------------------------- 3. 传播模拟
 
     private void propagate(long userId, LocalDate localDate, List<NpcRow> npcs,
-                           List<TownSocialSim.Encounter> encounters) {
+                           List<TownSocialSim.Encounter> encounters, Set<Long> playerFacts) {
         // 小助整个退出传播网络——不只是"它已知的那些不外传"，而是它连听都不参与。
         // 只过滤它已有的 knowledge 是不够的：它照样会在相遇里听到一条新的，然后成为下一手的
         // 消息源，于是"全知但不八卦"就破了。它是私人秘书，不是镇上的一张嘴。
@@ -279,6 +319,8 @@ public class TownSocietyService {
             .filter(npc -> !GUIDE.equals(npc.npcCode()))
             .forEach(npc -> personas.put(npc.npcCode(), persona(npc)));
 
+        Map<String, Integer> layerByCode = new HashMap<>();
+        npcs.forEach(npc -> layerByCode.put(npc.npcCode(), npc.layer()));
         Map<String, TownSocialSim.Bond> bonds = bondIndex(userId);
         Map<String, List<TownSocialSim.RelayCandidate>> known = candidatesByNpc(userId);
 
@@ -291,6 +333,12 @@ public class TownSocietyService {
         );
 
         for (TownSocialSim.RelayResult result : results) {
+            // 目击那一侧已经挡住了三层居民，但传闻还是能顺着链条传到他们耳朵里。§3.4 第 5 条
+            // 说的是"不持有"，所以听来的也一样要挡。
+            if (playerFacts.contains(result.factId())
+                && layerByCode.getOrDefault(result.listener(), 3) >= 3) {
+                continue;
+            }
             insertKnowledge(userId, result.listener(), result.factId(), localDate,
                 result.speaker(), result.hops(), result.salience(), false);
         }
@@ -305,6 +353,7 @@ public class TownSocietyService {
                        f.dimension, json_unquote(json_extract(f.payload, '$.text')) as text
                 from town_npc_knowledge k join town_fact f on f.id = k.fact_id
                 where k.town_user_id = ? and k.no_relay = 0 and f.no_relay = 0 and k.salience > 0.05
+                order by k.npc_code, k.fact_id
                 """,
             rs -> {
                 String npc = rs.getString("npc_code");
@@ -366,17 +415,32 @@ public class TownSocietyService {
 
     // ---------------------------------------------------------------- 5. 亲密度
 
+    /**
+     * 亲密度更新（plan §3.2 步骤 5）。
+     *
+     * <p>三件事，缺一不可：
+     * <ol>
+     *   <li>今天见过面的一对 —— 每天只算<b>一次</b>。同一对人一天里可能在七个时段都撞见，
+     *       按时段逐次累加会让 meet_count 和 affinity 以"被触发的次数"而不是"过了多少天"增长；</li>
+     *   <li>今天没见到的一对 —— 按半衰期衰减。这就是 M1-5 说的「久不见面衰减」，
+     *       靠 {@link TownSocialSim#decayedAffinity} 那个纯函数，而不是另写一份；</li>
+     *   <li><b>玩家</b>与看见过他的 NPC —— 玩家也是图上的节点。不更新这条边，
+     *       affinityToPlayer 会永远停在初始的 0.05~0.15，于是按亲密度分档的气泡和主动搭话
+     *       全都够不着阈值，整层行为等于没接。</li>
+     * </ol>
+     */
     private void updateBonds(long userId, LocalDate localDate, List<NpcRow> npcs,
-                             List<TownSocialSim.Encounter> encounters) {
+                             List<TownSocialSim.Encounter> encounters, Presence presence,
+                             Map<String, List<TownNpcSchedules.Slot>> schedules) {
         Map<String, TownSocialSim.Persona> personas = new LinkedHashMap<>();
         npcs.forEach(npc -> personas.put(npc.npcCode(), persona(npc)));
         Map<String, TownSocialSim.Bond> bonds = bondIndex(userId);
         RandomGenerator rng = new SplittableRandom(seedFor(userId, localDate) ^ 0x5DEECE66DL);
 
-        Set<String> touched = new HashSet<>();
+        Set<String> metToday = new HashSet<>();
         for (TownSocialSim.Encounter encounter : encounters) {
             String key = bondKey(encounter.a(), encounter.b());
-            if (!touched.add(key + "@" + encounter.slotHour())) {
+            if (!metToday.add(key)) {
                 continue;
             }
             TownSocialSim.Persona a = personas.get(encounter.a());
@@ -386,9 +450,63 @@ public class TownSocietyService {
             }
             TownSocialSim.Bond current = bonds.getOrDefault(key, new TownSocialSim.Bond(0.15, 0.0, 0, null));
             TownSocialSim.Bond next = TownSocialSim.afterMeeting(current, a, b, localDate, rng);
-            bonds.put(key, next);
             writeBond(userId, "NPC", encounter.a(), "NPC", encounter.b(), next, localDate);
             writeBond(userId, "NPC", encounter.b(), "NPC", encounter.a(), next, localDate);
+        }
+
+        decayUnmetBonds(userId, localDate, metToday);
+        updatePlayerBonds(userId, localDate, npcs, personas, presence, schedules, rng);
+    }
+
+    /** 今天没碰上的那些边按半衰期往下走——这条以前只有单测，生产里没人调。 */
+    private void decayUnmetBonds(long userId, LocalDate localDate, Set<String> metToday) {
+        for (BondRow row : npcBondRows(userId)) {
+            if (metToday.contains(bondKey(row.aRef(), row.bRef()))) {
+                continue;
+            }
+            double decayed = TownSocialSim.decayedAffinity(row.affinity(), row.lastMetOn(), localDate);
+            if (Math.abs(decayed - row.affinity()) < 1e-6) {
+                continue;
+            }
+            jdbc.update(
+                "update town_bond set affinity = ?, updated_at = ? where id = ?",
+                decayed, Timestamp.valueOf(LocalDateTime.now(clock)), row.id()
+            );
+        }
+    }
+
+    /**
+     * 玩家这条边。看见过他的一二层 NPC 今天算见过一面；其余的按时间衰减。
+     * 玩家没有性格档案，用一份中性人设参与同一个公式，免得再写第二套算法。
+     */
+    private void updatePlayerBonds(long userId, LocalDate localDate, List<NpcRow> npcs,
+                                   Map<String, TownSocialSim.Persona> personas, Presence presence,
+                                   Map<String, List<TownNpcSchedules.Slot>> schedules, RandomGenerator rng) {
+        TownSocialSim.Persona player = new TownSocialSim.Persona(
+            "PLAYER", 1, 0.5, 0.5,
+            Map.of("KNOWLEDGE", 0.2, "HEALTH", 0.2, "CAREER", 0.2, "RELATIONSHIP", 0.2, "WELLBEING", 0.2),
+            Set.of()
+        );
+        for (BondRow row : playerBondRows(userId)) {
+            NpcRow npc = npcs.stream().filter(item -> item.npcCode().equals(row.bRef())).findFirst().orElse(null);
+            TownSocialSim.Persona npcPersona = personas.get(row.bRef());
+            if (npc == null || npcPersona == null) {
+                continue;
+            }
+            // 小助天天见你（它就站在学院门口），其余人要真的在场才算。三层不参与——他们
+            // 本来就不持有你的事实，也不该因为"路过"就和你熟起来。
+            boolean met = GUIDE.equals(npc.npcCode())
+                || (npc.layer() <= 2 && presence != null && sawPlayer(schedules.get(npc.npcCode()), presence));
+
+            TownSocialSim.Bond current = new TownSocialSim.Bond(
+                row.affinity(), row.resonance(), row.meetCount(), row.lastMetOn());
+            TownSocialSim.Bond next = met
+                ? TownSocialSim.afterMeeting(current, player, npcPersona, localDate, rng)
+                : new TownSocialSim.Bond(
+                    TownSocialSim.decayedAffinity(row.affinity(), row.lastMetOn(), localDate),
+                    row.resonance(), row.meetCount(), row.lastMetOn());
+            writeBond(userId, "PLAYER", "PLAYER", "NPC", npc.npcCode(), next, met ? localDate : row.lastMetOn());
+            writeBond(userId, "NPC", npc.npcCode(), "PLAYER", "PLAYER", next, met ? localDate : row.lastMetOn());
         }
     }
 
@@ -406,7 +524,7 @@ public class TownSocietyService {
                     updated_at = values(updated_at)
                 """,
             ids.next(), userId, aKind, aRef, bKind, bRef, bond.affinity(), bond.resonance(), bond.meetCount(),
-            Timestamp.valueOf(localDate.atTime(12, 0)),
+            localDate == null ? null : Timestamp.valueOf(localDate.atTime(12, 0)),
             Timestamp.valueOf(LocalDateTime.now(clock)), Timestamp.valueOf(LocalDateTime.now(clock))
         );
     }
@@ -415,10 +533,9 @@ public class TownSocietyService {
         jdbc.update(
             """
                 update town_npc_knowledge
-                set salience = greatest(0, salience * case when hops >= 3 then 0.55
-                                                          when hops = 2 then 0.7
-                                                          when hops = 1 then 0.82
-                                                          else 0.9 end)
+                -- 和 TownSocialSim.dailySalienceDecay 是同一个公式：rate = min(1, 0.10 + hops*0.05)。
+                -- 之前这里另写了一组常数，于是"衰减"在单测里和在生产里是两回事。
+                set salience = greatest(0, salience * (1 - least(1, 0.10 + hops * 0.05)))
                 where town_user_id = ?
                 """,
             userId
@@ -499,6 +616,31 @@ public class TownSocietyService {
     }
 
     // ---------------------------------------------------------------- SQL 小工具
+
+    private record BondRow(long id, String aRef, String bRef, double affinity, double resonance,
+                           int meetCount, LocalDate lastMetOn) {
+    }
+
+    private List<BondRow> npcBondRows(long userId) {
+        return jdbc.query(
+            "select id, a_ref, b_ref, affinity, resonance, meet_count, last_met_at from town_bond "
+                + "where town_user_id = ? and a_kind = 'NPC' and b_kind = 'NPC' order by id",
+            (rs, row) -> toBondRow(rs), userId);
+    }
+
+    private List<BondRow> playerBondRows(long userId) {
+        return jdbc.query(
+            "select id, a_ref, b_ref, affinity, resonance, meet_count, last_met_at from town_bond "
+                + "where town_user_id = ? and a_kind = 'PLAYER' and b_kind = 'NPC' order by id",
+            (rs, row) -> toBondRow(rs), userId);
+    }
+
+    private static BondRow toBondRow(java.sql.ResultSet rs) throws java.sql.SQLException {
+        Timestamp met = rs.getTimestamp("last_met_at");
+        return new BondRow(rs.getLong("id"), rs.getString("a_ref"), rs.getString("b_ref"),
+            rs.getDouble("affinity"), rs.getDouble("resonance"), rs.getInt("meet_count"),
+            met == null ? null : met.toLocalDateTime().toLocalDate());
+    }
 
     private List<NpcRow> npcs(long userId) {
         return jdbc.query(

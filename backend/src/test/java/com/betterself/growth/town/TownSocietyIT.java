@@ -84,11 +84,12 @@ class TownSocietyIT {
 
         LocalDate today = LocalDate.now();
 
-        // 深夜：把玩家最后一次在场钉在凌晨三点。那个点全镇 NPC 的日程都在家，谁也没看见。
+        // 深夜独自在家完成任务：这就是 M1-4 说的「深夜无人时」。在家永远不构成目击（sawPlayer
+        // 把 HOME 整个排除），所以这个场景是确定的，不依赖当天恰好没有夜猫子在街上。
         jdbc.update("""
             insert into town_presence (user_id, x, y, facing, scene, updated_at)
-            values (?, 100, 100, 'down', 'town', ?)
-            on duplicate key update updated_at = values(updated_at)
+            values (?, 100, 100, 'down', 'home', ?)
+            on duplicate key update scene = values(scene), updated_at = values(updated_at)
             """, userId, Timestamp.valueOf(today.atTime(3, 0)));
 
         society.runNightly(userId, today);
@@ -128,10 +129,25 @@ class TownSocietyIT {
         mvc.perform(get("/api/v1/town/npc/NOBODY/talking-points").cookie(owner.access()))
             .andExpect(status().isNotFound());
 
-        // 重跑幂等：事实不翻倍。
+        // 重跑幂等，而且不只是事实不翻倍：衰减、传播、亲密度这三步都是累积的，再跑一次不等于
+        // 「这一天又发生了一遍」，而是凭空多出一轮。所以要连 knowledge 条数和 meet_count 一起钉。
         int factsBefore = countFacts(userId);
+        Integer knowledgeBefore = jdbc.queryForObject(
+            "select count(*) from town_npc_knowledge where town_user_id = ?", Integer.class, userId);
+        Integer meetsBefore = jdbc.queryForObject(
+            "select coalesce(max(meet_count), 0) from town_bond where town_user_id = ?", Integer.class, userId);
+
         society.runNightly(userId, today);
+        society.runNightly(userId, today);
+
         assertThat(countFacts(userId)).isEqualTo(factsBefore);
+        assertThat(jdbc.queryForObject(
+            "select count(*) from town_npc_knowledge where town_user_id = ?", Integer.class, userId))
+            .isEqualTo(knowledgeBefore);
+        assertThat(jdbc.queryForObject(
+            "select coalesce(max(meet_count), 0) from town_bond where town_user_id = ?", Integer.class, userId))
+            .as("meet_count must count days, not how many times the job was triggered")
+            .isEqualTo(meetsBefore);
     }
 
     @Test
@@ -168,6 +184,17 @@ class TownSocietyIT {
             String.class, userId)) {
             assertThat(DIGIT.matcher(text).find()).as("retold text leaked a number: %s", text).isFalse();
         }
+
+        // §3.4 第 5 条：三层背景居民不持有本镇玩家的事实——目击拿不到，顺着传闻也传不进来。
+        Integer layerThreeKnowers = jdbc.queryForObject("""
+            select count(*) from town_npc_knowledge k
+            join town_fact f on f.id = k.fact_id
+            join town_npc n on n.town_user_id = k.town_user_id and n.npc_code = k.npc_code
+            where k.town_user_id = ? and f.subject_kind = 'PLAYER' and n.layer >= 3
+            """, Integer.class, userId);
+        assertThat(layerThreeKnowers)
+            .as("background residents must not hold this town's player facts")
+            .isZero();
 
         // 小助全程不进传播网络：不只是"它知道的不外传"，而是没有任何一条 knowledge 是从它那儿
         // 听来的。只过滤它已有的 knowledge 不够——它会在相遇里听到新的一条然后成为下一手的
