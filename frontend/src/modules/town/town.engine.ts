@@ -24,6 +24,12 @@ import {
   createGroundDetails,
 } from './town-furniture'
 import type { FurnitureItem, VenueFurniture, GroundDetail } from './town-furniture'
+import type { TownNpcView, InitiativeBudget, NpcActivity } from './town-npc.types'
+import { placeFor, activeSlot, densityCap, selectVisible } from './npc-placement'
+import type { TownLayout } from './npc-placement'
+import { buildItinerary, nextLeg } from './observation-mode'
+import type { ObservationLeg } from './observation-mode'
+import { bubbleTierFor, pointsToPlay, canInitiate, consume } from './talking-bubbles'
 
 export type TownSelection = string | 'npc:assistant' | 'npc:postman' | 'academy' | null
 export type TownHandlers = {
@@ -38,6 +44,10 @@ export type TownHandlers = {
   onDistanceToGuide?: (distance: number) => void
 }
 export type TownGame = {
+  /** Hands the engine the town's NPC roster (GET /town/npcs). Safe to call repeatedly. */
+  applyNpcs: (npcs: TownNpcView[], budget: InitiativeBudget) => void
+  /** 观察模式: detaches the camera from the player and glides it between points of interest. */
+  setObservation: (on: boolean) => void
   setNight(night: boolean): void
   /** Turns the self avatar's run mode on/off; holding Shift runs regardless of this toggle. */
   setRun(running: boolean): void
@@ -144,6 +154,12 @@ type Walker = {
   teleporting: boolean
   /** Self avatar only: last time presence was reported (for throttling during movement). */
   lastReportTime: number
+  /** Set for the 16 society NPCs (layers 1-3); null for residents and the two legacy NPC sprites. */
+  npc: TownNpcView | null
+  /** Speech bubble currently floating above this walker's head, if any. */
+  speech: PhaserNs.GameObjects.Container | null
+  /** Society NPCs only: the activity their backend schedule says they're doing right now. */
+  npcActivity: NpcActivity | null
 }
 
 type Vehicle = { sprite: PhaserNs.GameObjects.Image; speed: number }
@@ -155,6 +171,11 @@ type SelfKeys = {
   keyW: PhaserNs.Input.Keyboard.Key | undefined
   keyS: PhaserNs.Input.Keyboard.Key | undefined
   shift: PhaserNs.Input.Keyboard.Key | undefined
+}
+
+/** Phaser's tween easings aren't reachable from a plain number, so the pan interpolation uses its own. */
+function easeInOutSine(t: number) {
+  return -(Math.cos(Math.PI * Math.min(1, Math.max(0, t))) - 1) / 2
 }
 
 function characterSheet(publicId: string) {
@@ -186,6 +207,10 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
   const residents = model.residents
   const width = worldWidth(residents.length)
   const academyDoorX = ACADEMY_X + SCHOOL_WIDTH / 2 + 8
+  // 一人一镇的 NPC 名册。挂在模块作用域而不是场景上，因为名册是异步到的，可能比场景先到也可能后到。
+  let townNpcRoster: TownNpcView[] = []
+  let initiativeBudget: InitiativeBudget = { limit: 3, used: 0 }
+  let observationOn = false
   const courtX = YARD_X + 220
   const parkX = academyDoorX - 60
   // The self avatar can only walk the paved street between the yard and the far edge of town.
@@ -233,6 +258,11 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
     /** HUD toggle: every self move runs until it is turned off. Shift always runs regardless. */
     runMode = false
     greetCooldowns: GreetCooldowns = new Map()
+    /** 观察模式的巡游路线；空数组表示没在观察模式。 */
+    observationItinerary: ObservationLeg[] = []
+    observationStartedAt = 0
+    /** 主动搭话的全镇节流：预算之外再加一层间隔，免得三次额度在同一秒里烧完。 */
+    nextInitiativeAt = 0
     /** Walkable ground + building obstacles the self avatar's free 8-directional movement is
      * checked against; rebuilt whenever a plot's height changes (level up adds a floor). */
     collisionWorld: CollisionWorld = { walkable: [], obstacles: [] }
@@ -259,7 +289,10 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
       this.load.spritesheet('emotes', `${ASSETS}/emotes.png`, { frameWidth: 32, frameHeight: 32 })
       this.load.spritesheet('npc_postman', `${ASSETS}/characters/postman.png`, { frameWidth: 32, frameHeight: 64 })
       this.load.spritesheet('npc_scout', `${ASSETS}/characters/scout.png`, { frameWidth: 32, frameHeight: 64 })
+      // 居民用到的表 + 全部 20 张预制表。多加载的十几张很小，换来的是名册后到时可以直接生成
+      // NPC，不必再跑一轮运行时加载（那会让人物凭空闪现）。
       const sheets = new Set(residents.map(item => characterSheet(item.publicId)))
+      for (let index = 1; index <= 20; index += 1) sheets.add(index)
       for (const index of sheets) {
         this.load.spritesheet(`char_${index}`, `${ASSETS}/characters/c${String(index).padStart(2, '0')}.png`, { frameWidth: 32, frameHeight: 64 })
       }
@@ -284,6 +317,8 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
       this.spawnVehicles()
       residents.forEach((resident, index) => this.spawnResident(resident, index))
       this.spawnNpcs()
+      // 名册可能比场景先到（store 已经拉过一次），那就在这里补生成，不必等下一次 applyNpcs。
+      if (townNpcRoster.length > 0) this.applyTownNpcs(townNpcRoster)
       this.atmosphere = new TownAtmosphere({ worldWidth: width, worldHeight: WORLD_HEIGHT, groundY: BASELINE })
       this.atmosphere.attach(this)
       for (let x = 180; x < width; x += 360) this.atmosphere.registerLight({ id: `lamp-${x}`, x, y: BASELINE + 22, kind: 'lamp', radius: 120 })
@@ -675,6 +710,7 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
         id: resident ? resident.publicId : String(selection),
         overrideUntil: 0, manualWalk: false, arriveSelect: null, travelEmote: null, frozenUntil: 0, keyDriven: false, running: false,
         facing: 'down', stuckMs: 0, lastPresence: null, teleporting: false, lastReportTime: 0,
+        npc: null, speech: null, npcActivity: null,
       }
       sprite.play(`${sheet}-idle-down`)
       this.walkers.push(walker)
@@ -728,6 +764,188 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
       postman.patrol = [ACADEMY_X - 100, width - 160]
       postman.targetX = width - 160
       postman.state = 'walk'
+    }
+
+    // ---------- 小镇社会: 18 个 NPC 的生成、日程与气泡 ----------
+
+    /** 引擎的真实几何交给纯函数 placeFor 用；坐标常量只在这里出现一次。 */
+    townLayout(): TownLayout {
+      return {
+        academyDoorX,
+        plotStartX: PLOT_START,
+        gymX: PLOT_START + PLOT_WIDTH / 2,
+        cafeX: PLOT_START + PLOT_PITCH + PLOT_WIDTH / 2,
+        parkX: ACADEMY_X - 100,
+        plazaMinX: YARD_X + 120,
+        plazaMaxX: YARD_X + 320,
+        worldWidth: width,
+      }
+    }
+
+    /**
+     * 名册到了（或变了）就重建这批 NPC。
+     *
+     * <p>同屏人数由 densityCap(小时) 决定——这是 plan §2.4 的护栏 B：早晨四五个、午间十来个、
+     * 深夜两三个，峰值封在 12。挑谁上场是 selectVisible 的确定性排序，所以同一小时反复调用不会
+     * 让街上的人闪来闪去。
+     */
+    applyTownNpcs(list: TownNpcView[]) {
+      for (const walker of this.walkers.filter(item => item.npc !== null)) this.despawnWalker(walker)
+      const hour = new Date(Date.now() + serverOffsetMs).getHours()
+      const visible = selectVisible(
+        list.map(npc => ({ code: npc.code, layer: npc.layer, schedule: npc.schedule, npc })),
+        hour,
+        densityCap(hour),
+      )
+      for (const entry of visible) this.spawnTownNpc(entry.npc, hour)
+    }
+
+    spawnTownNpc(npc: TownNpcView, hour: number) {
+      const sheet = npc.sprite.startsWith('c') && /^c\d+$/.test(npc.sprite)
+        ? `char_${Number(npc.sprite.slice(1))}`
+        : npc.sprite
+      if (!this.textures.exists(sheet)) return
+      const slot = activeSlot(npc.schedule, hour)
+      const x = slot ? placeFor(slot.place, this.townLayout()) : academyDoorX
+      const walker = this.spawnWalker(
+        sheet,
+        x + (hashString(npc.code) % 7) * 14 - 42,
+        npc.displayName,
+        npc.layer === 2 ? 'rgba(84,64,120,.86)' : 'rgba(40,30,26,.62)',
+        null,
+        'planned',
+        null,
+        // 三层背景居民不可对话（plan §2.4）；点击他们不该弹出任何东西。
+        npc.layer === 3 ? null : `npc:${npc.code}`,
+      )
+      walker.npc = npc
+      walker.id = npc.code
+      walker.homeX = x
+    }
+
+    despawnWalker(walker: Walker) {
+      walker.speech?.destroy()
+      walker.travelEmote?.destroy()
+      walker.emote?.destroy()
+      walker.label.destroy()
+      walker.sprite.destroy()
+      this.walkers = this.walkers.filter(item => item !== walker)
+    }
+
+    /** NPC 版的 evaluateSchedule：地点来自后端下发的日程，动作驱动贴图。 */
+    evaluateNpcSchedule(walker: Walker) {
+      const npc = walker.npc
+      if (!npc) return walker.homeX
+      const hour = new Date(Date.now() + serverOffsetMs).getHours()
+      const slot = activeSlot(npc.schedule, hour)
+      if (!slot) return walker.homeX
+      walker.action = slot.activity === 'reading' ? 'read' : slot.activity === 'phone' ? 'phone' : 'idle'
+      walker.npcActivity = slot.activity
+      const spread = (hashString(npc.code) % 7) * 14 - 42
+      return placeFor(slot.place, this.townLayout()) + spread
+    }
+
+    /**
+     * 头顶气泡。播的每一句都来自后端已经写好的 retold_text——前端不生成、不改写，
+     * 只是把这一手的走样版本取出来放出来（plan §2.2 D12）。
+     */
+    saySomething(walker: Walker, text: string, holdMs = 4200) {
+      walker.speech?.destroy()
+      const label = this.add.text(0, 0, text, {
+        fontFamily: FONT, fontSize: '11px', color: '#2a211c', wordWrap: { width: 168 }, align: 'center',
+      }).setOrigin(0.5, 1).setResolution(2)
+      const pad = 7
+      const bubble = this.add.graphics()
+      bubble.fillStyle(0xfdf8f0, 0.96)
+      bubble.fillRoundedRect(-label.width / 2 - pad, -label.height - pad * 2, label.width + pad * 2, label.height + pad * 2, 7)
+      const container = this.add.container(walker.sprite.x, walker.sprite.y - 74, [bubble, label]).setDepth(4100)
+      walker.speech = container
+      this.time.delayedCall(holdMs, () => {
+        if (walker.speech === container) walker.speech = null
+        container.destroy()
+      })
+    }
+
+    /**
+     * 两个 NPC 撞上了就按 affinity 分档说话（plan §3.3）：熟人多说两句，生人点头即过。
+     * 说什么完全取决于说话人自己 knowledge 里那几条——所以同一个镜头里两个人说的必然不一样。
+     */
+    speakOnEncounter(a: Walker, b: Walker) {
+      for (const walker of [a, b]) {
+        const npc = walker.npc
+        if (!npc) continue
+        const tier = bubbleTierFor(npc.affinityToPlayer)
+        const lines = pointsToPlay(tier, npc.talkingPoints)
+        if (lines.length === 0) continue
+        lines.slice(0, 2).forEach((point, index) => {
+          this.time.delayedCall(index * 2400, () => this.saySomething(walker, point.text))
+        })
+      }
+    }
+
+    /**
+     * 玩家靠近时的主动搭话，受护栏 A 的全镇每日预算约束（默认 3 次，小助优先）。
+     * 预算耗尽后没有任何 NPC 会再主动开口——这正是"招架不住"被机制封死的地方。
+     */
+    maybeInitiate(walker: Walker, now: number) {
+      const npc = walker.npc
+      if (!npc || !this.selfWalker) return
+      if (now < this.nextInitiativeAt) return
+      if (Math.abs(walker.sprite.x - this.selfWalker.sprite.x) > 90) return
+      if (!canInitiate(initiativeBudget, npc.code)) return
+      const lines = pointsToPlay(bubbleTierFor(npc.affinityToPlayer), npc.talkingPoints)
+      if (lines.length === 0) return
+      initiativeBudget = consume(initiativeBudget, npc.code)
+      this.nextInitiativeAt = now + 30_000
+      this.saySomething(walker, lines[0].text)
+    }
+
+    // ---------- 观察模式 (M2-6) ----------
+
+    /** 兴趣点：镇上真正有人聚集的几处，按从西到东排，镜头扫过去像一条街的横移。 */
+    observationPoints() {
+      const layout = this.townLayout()
+      return [
+        { x: layout.plazaMinX + 100, y: BASELINE - 120, zoom: 1.05 },
+        { x: layout.academyDoorX, y: BASELINE - 140, zoom: 1 },
+        { x: layout.parkX, y: BASELINE - 100, zoom: 1.1 },
+        { x: layout.cafeX, y: BASELINE - 120, zoom: 1.05 },
+        { x: layout.gymX, y: BASELINE - 120, zoom: 1 },
+      ]
+    }
+
+    setObservationMode(on: boolean) {
+      observationOn = on
+      const camera = this.cameras.main
+      if (on) {
+        this.releaseCameraFollow()
+        this.observationItinerary = buildItinerary(this.observationPoints())
+        this.observationStartedAt = this.time.now
+      } else {
+        this.observationItinerary = []
+        camera.pan(this.selfWalker?.sprite.x ?? academyDoorX, BASELINE - 120, 700, 'Sine.easeInOut')
+        camera.zoomTo(Math.min(1.2, Math.max(0.75, this.scale.height / 820)), 500)
+        this.startFollowingSelf()
+      }
+    }
+
+    /** 每帧把相机放到 nextLeg 算出来的位置上；所有算术都在纯函数里，这里只负责画。 */
+    updateObservation() {
+      if (!observationOn || this.observationItinerary.length === 0) return
+      const position = nextLeg(this.observationItinerary, this.time.now - this.observationStartedAt)
+      if (!position) return
+      const camera = this.cameras.main
+      const legs = this.observationItinerary
+      const previous = legs[(position.legIndex - 1 + legs.length) % legs.length]
+      const target = position.leg
+      if (position.phase === 'panning') {
+        const t = easeInOutSine(position.progress)
+        camera.centerOn(previous.x + (target.x - previous.x) * t, previous.y + (target.y - previous.y) * t)
+        camera.setZoom(previous.zoom + (target.zoom - previous.zoom) * t)
+      } else {
+        camera.centerOn(target.x, target.y)
+        camera.setZoom(target.zoom)
+      }
     }
 
     // ---------- behaviour ----------
@@ -883,6 +1101,7 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
         walker.travelEmote?.destroy()
         walker.travelEmote = this.add.sprite(walker.sprite.x, walker.sprite.y - 66, 'emotes', EMOTES.heart[0]).setOrigin(0.5, 1).setDepth(4002).play('emote-heart')
       }
+      this.speakOnEncounter(a, b)
     }
 
     update(_time: number, delta: number) {
@@ -890,12 +1109,14 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
       this.atmosphere?.update(delta)
       const now = this.time.now
       this.handleSelfKeys(now, delta)
+      this.updateObservation()
       this.detectGreetings(now)
       for (const walker of this.walkers) {
         if (walker.frozenUntil > now) {
           walker.label.setPosition(walker.sprite.x, walker.sprite.y + 4)
           walker.emote?.setPosition(walker.sprite.x + 14, walker.sprite.y - 62)
           walker.travelEmote?.setPosition(walker.sprite.x + 14, walker.sprite.y - 66)
+          walker.speech?.setPosition(walker.sprite.x, walker.sprite.y - 74)
           continue
         }
         if (walker.frozenUntil !== 0) {
@@ -989,7 +1210,8 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
           walker.timer -= delta
           if (walker.timer <= 0) {
             let next: number
-            if (walker.patrol) next = this.chooseNextTarget(walker)
+            if (walker.npc) next = this.evaluateNpcSchedule(walker)
+            else if (walker.patrol) next = this.chooseNextTarget(walker)
             else if (walker.resident?.isSelf && now < walker.overrideUntil) next = walker.sprite.x
             else next = this.evaluateSchedule(walker)
             if (Math.abs(next - walker.sprite.x) > 4) { walker.targetX = next; walker.state = 'walk' } else this.performActivity(walker)
@@ -998,6 +1220,8 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
         walker.label.setPosition(walker.sprite.x, walker.sprite.y + 4)
         walker.emote?.setPosition(walker.sprite.x + 14, walker.sprite.y - 62)
         walker.travelEmote?.setPosition(walker.sprite.x + 14, walker.sprite.y - 66)
+        walker.speech?.setPosition(walker.sprite.x, walker.sprite.y - 74)
+        if (walker.npc) this.maybeInitiate(walker, now)
       }
       for (const vehicle of this.vehicles) {
         vehicle.sprite.x += (vehicle.speed * delta) / 1000
@@ -1387,6 +1611,12 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
       sceneRef?.applyResidents(nextModel.residents)
     },
     celebrate: publicId => { celebrationQueue.push(publicId); runCelebrationQueue() },
+    applyNpcs: (npcs, budget) => {
+      townNpcRoster = npcs
+      initiativeBudget = budget
+      sceneRef?.applyTownNpcs(npcs)
+    },
+    setObservation: on => sceneRef?.setObservationMode(on),
     enterAcademy,
     exitAcademy,
     enterRoom,

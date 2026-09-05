@@ -1,19 +1,21 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onErrorCaptured, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
-import { Building2, Flame, Footprints, GraduationCap, HelpCircle, Mail, Maximize2, Moon, Rabbit, Sparkles, Sun, LocateFixed, RefreshCw, X } from 'lucide-vue-next'
+import { Building2, Film, Flame, Footprints, GraduationCap, HelpCircle, Mail, Maximize2, Moon, Rabbit, Sparkles, Sun, LocateFixed, RefreshCw, X } from 'lucide-vue-next'
 import { encouragement } from '../../shared/encouragement'
 import { useTownStore } from './town.store'
 import { activityFor, activityLabels, dimensionLabels, floorsForLevel } from './building-kit'
 import NpcDialogue from './NpcDialogue.vue'
 import TownOnboarding from './TownOnboarding.vue'
 import { useNpcChatStore } from './npc-chat'
+import { useTownNpcStore } from './town-npc.store'
 import { TownControls, type RunMode } from './town-controls'
 import type { TownGame, TownSelection } from './town.engine'
 import type { TownModel } from './town.types'
 
 const store = useTownStore()
 const npcChatStore = useNpcChatStore()
+const townNpcStore = useTownNpcStore()
 const router = useRouter()
 const canvas = ref<HTMLElement | null>(null)
 const onboardingRef = ref<InstanceType<typeof TownOnboarding> | null>(null)
@@ -23,6 +25,8 @@ const engineError = ref('')
 const insideAcademy = ref(false)
 const playerPosition = ref<{ x: number; y: number } | null>(null)
 const distanceToGuide = ref<number | null>(null)
+// 观察模式：镜头脱离玩家在兴趣点之间巡游（plan D4）。既是录 demo 的工具，也是一个真功能。
+const observing = ref(false)
 // A NpcDialogue that throws while mounting/streaming falls back to the old static card below,
 // instead of leaving the panel blank — reset whenever the selection changes so a fresh open retries.
 const npcDialogueError = ref(false)
@@ -80,9 +84,17 @@ async function mountGame() {
     game.setNight(night.value)
     game.setRun(running.value)
     residentSignature = residentKey(store.model)
+    // 名册单独拉：/town 的载荷保持原样，小镇社会是加在旁边的一层，拉不到也不该让画面起不来。
+    await townNpcStore.load()
+    if (sequence === mountSequence && game) game.applyNpcs(townNpcStore.npcs, townNpcStore.budget)
   } catch (error) {
     engineError.value = (error as Error).message || '小镇画面初始化失败'
   }
+}
+
+function toggleObservation() {
+  observing.value = !observing.value
+  game?.setObservation(observing.value)
 }
 
 function toggleNight() {
@@ -220,6 +232,9 @@ onBeforeUnmount(() => {
         </button>
         <button class="secondary run-toggle" type="button" :aria-pressed="runMode === 'run'" @click="toggleRun">
           <component :is="runMode === 'run' ? Rabbit : Footprints" :size="17" />{{ runMode === 'run' ? '奔跑中' : '开始奔跑' }}
+        </button>
+        <button class="secondary" type="button" :aria-pressed="observing" title="镜头脱离玩家，在小镇的几个热闹处之间缓慢巡游" @click="toggleObservation">
+          <Film :size="17" />{{ observing ? '退出观察' : '观察小镇' }}
         </button>
         <button class="secondary" type="button" @click="selection = 'npc:assistant'"><Sparkles :size="17" />找小助</button>
         <button class="secondary" type="button" @click="toggleAcademy"><GraduationCap :size="17" />{{ insideAcademy ? '回到小镇' : '去学院' }}</button>

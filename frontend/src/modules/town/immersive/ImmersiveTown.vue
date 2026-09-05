@@ -7,9 +7,10 @@
  */
 import { computed, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { Footprints, HelpCircle, Minimize2, Rabbit } from 'lucide-vue-next'
+import { Film, Footprints, HelpCircle, Minimize2, Rabbit } from 'lucide-vue-next'
 import { onDataChanged } from '../../../shared/data-sync'
 import { useTownStore } from '../town.store'
+import { useTownNpcStore } from '../town-npc.store'
 import TownOnboarding from '../TownOnboarding.vue'
 import { TownControls } from '../town-controls'
 import type { TownGame, TownSelection } from '../town.engine'
@@ -31,6 +32,8 @@ import WorldFeedback from './WorldFeedback.vue'
 
 const store = useTownStore()
 const immersive = useImmersiveStore()
+const townNpcStore = useTownNpcStore()
+const observing = ref(false)
 const router = useRouter()
 
 const root = ref<HTMLElement | null>(null)
@@ -105,6 +108,8 @@ async function mountGame() {
     if (sequence !== mountSequence) { created.destroy(); return }
     game = created
     game.setRun(immersive.runMode)
+    await townNpcStore.load()
+    if (game) game.applyNpcs(townNpcStore.npcs, townNpcStore.budget)
     game.setNight(night.value)
     residentSignature = residentKey(store.model)
   } catch (error) {
@@ -193,6 +198,11 @@ async function exitImmersive() {
   leavingImmersive = true
   if (document.fullscreenElement) { try { await document.exitFullscreen() } catch { /* 忽略 */ } }
   void router.push('/town')
+}
+
+function toggleObservation() {
+  observing.value = !observing.value
+  game?.setObservation(observing.value)
 }
 
 function showOnboarding() {
@@ -319,6 +329,7 @@ onBeforeUnmount(() => {
     <header class="immersive-topbar">
       <button class="icon-button" type="button" title="退出沉浸模式" aria-label="退出沉浸模式" @click="exitImmersive"><Minimize2 :size="18" /></button>
       <p class="immersive-title">成长小镇 · 沉浸模式<template v-if="!nativeFullscreen">（窗口内全屏）</template></p>
+      <button class="secondary" type="button" :aria-pressed="observing" title="观察小镇：镜头脱离玩家自动巡游" aria-label="观察小镇" @click="toggleObservation"><Film :size="16" /></button>
       <button class="secondary" type="button" title="重新打开新手引导" @click="showOnboarding"><HelpCircle :size="16" /></button>
       <button class="secondary run-toggle" type="button" :aria-pressed="immersive.runMode" @click="worldBridge.setRunMode(!immersive.runMode)">
         <component :is="immersive.runMode ? Rabbit : Footprints" :size="16" />{{ immersive.runMode ? '奔跑中（R）' : '开始奔跑（R）' }}
