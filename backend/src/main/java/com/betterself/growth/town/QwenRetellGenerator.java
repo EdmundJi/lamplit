@@ -29,6 +29,7 @@ public class QwenRetellGenerator implements TownRetellGenerator {
 
     private static final Logger log = LoggerFactory.getLogger(QwenRetellGenerator.class);
     private static final int BATCH_SIZE = 20;
+    private static final int FAILURES_BEFORE_GIVING_UP = 2;
     private static final int MAX_CHARS = 40;
     private static final Pattern DIGIT = Pattern.compile("\\d");
     private static final String SCHEMA = """
@@ -53,14 +54,28 @@ public class QwenRetellGenerator implements TownRetellGenerator {
             return List.of();
         }
         List<Retold> results = new ArrayList<>(requests.size());
+        // 一次调用里连续失败到这个数就不再试了，剩下的批直接走模板。网关不可用时每一批都要等
+        // 满一次超时（实测 60s），一个用户几十条转述就能把夜间 job 拖上好几分钟——而结果和
+        // 直接用模板是一样的。这道闸让"网关挂了"退化成一次探测的代价，而不是线性放大。
+        int consecutiveFailures = 0;
         for (int start = 0; start < requests.size(); start += BATCH_SIZE) {
             List<Request> batch = requests.subList(start, Math.min(start + BATCH_SIZE, requests.size()));
-            results.addAll(retellBatch(batch));
+            if (consecutiveFailures >= FAILURES_BEFORE_GIVING_UP) {
+                results.addAll(fallback.retell(batch));
+                continue;
+            }
+            BatchOutcome outcome = retellBatch(batch);
+            consecutiveFailures = outcome.providerFailed() ? consecutiveFailures + 1 : 0;
+            results.addAll(outcome.retold());
         }
         return results;
     }
 
-    private List<Retold> retellBatch(List<Request> batch) {
+    /** 一批的结果，外加"这一批是不是网关自己挂了"——校验不过而逐条回退不算网关挂。 */
+    private record BatchOutcome(List<Retold> retold, boolean providerFailed) {
+    }
+
+    private BatchOutcome retellBatch(List<Request> batch) {
         Map<String, String> templateByKey = new LinkedHashMap<>();
         for (Retold retold : fallback.retell(batch)) {
             templateByKey.put(retold.key(), retold.text());
@@ -76,14 +91,14 @@ public class QwenRetellGenerator implements TownRetellGenerator {
                 String text = isValid(modelText) ? modelText.strip() : templateByKey.get(request.key());
                 out.add(new Retold(request.key(), text));
             }
-            return out;
+            return new BatchOutcome(out, false);
         } catch (Exception exception) {
             log.warn("TOWN_RETELL generation failed for a batch of {} item(s); falling back to template", batch.size(), exception);
             List<Retold> out = new ArrayList<>(batch.size());
             for (Request request : batch) {
                 out.add(new Retold(request.key(), templateByKey.get(request.key())));
             }
-            return out;
+            return new BatchOutcome(out, true);
         }
     }
 

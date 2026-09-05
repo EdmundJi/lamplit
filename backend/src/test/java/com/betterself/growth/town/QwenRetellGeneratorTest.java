@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.Map;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -206,5 +207,78 @@ class QwenRetellGeneratorTest {
         public Classification classify(ClassificationPrompt prompt) {
             throw new UnsupportedOperationException();
         }
+    }
+
+    @Test
+    void stopsCallingTheProviderAfterRepeatedFailuresInsteadOfPayingEveryTimeout() {
+        AtomicInteger calls = new AtomicInteger();
+        QwenProvider downProvider = new QwenProvider() {
+            @Override
+            public StructuredResult generateStructured(StructuredPrompt prompt) {
+                calls.incrementAndGet();
+                throw new RuntimeException("gateway timed out");
+            }
+
+            @Override
+            public StreamMetadata stream(ChatPrompt prompt, Consumer<String> deltaConsumer) {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public Classification classify(ClassificationPrompt prompt) {
+                throw new UnsupportedOperationException();
+            }
+        };
+        QwenRetellGenerator generator = new QwenRetellGenerator(downProvider, fallback, objectMapper);
+
+        // 100 条 = 5 批。网关全挂时不该挨个批去等满超时。
+        List<TownRetellGenerator.Request> requests = new ArrayList<>();
+        for (int i = 0; i < 100; i++) {
+            requests.add(new TownRetellGenerator.Request("k" + i, "柯云", "p", List.of(), 1, "小吉最近挺常往健身房跑"));
+        }
+
+        List<TownRetellGenerator.Retold> result = generator.retell(requests);
+
+        // 每一条仍然有文本——降级只影响文本从哪来，不影响交付。
+        assertThat(result).hasSize(100);
+        assertThat(result).allSatisfy(retold -> assertThat(retold.text()).isNotBlank());
+        // 但探测最多两次就收手，剩下三批直接走模板。
+        assertThat(calls.get()).isEqualTo(2);
+    }
+
+    @Test
+    void aRecoveredBatchResetsTheFailureStreak() {
+        AtomicInteger calls = new AtomicInteger();
+        QwenProvider flakyProvider = new QwenProvider() {
+            @Override
+            public StructuredResult generateStructured(StructuredPrompt prompt) {
+                // 第一批失败，之后都成功：不该因为开头那一次就永久放弃。
+                if (calls.incrementAndGet() == 1) {
+                    throw new RuntimeException("one-off blip");
+                }
+                return new StructuredResult("{\"items\":[]}", "m", "r", 1, 1, 1L);
+            }
+
+            @Override
+            public StreamMetadata stream(ChatPrompt prompt, Consumer<String> deltaConsumer) {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public Classification classify(ClassificationPrompt prompt) {
+                throw new UnsupportedOperationException();
+            }
+        };
+        QwenRetellGenerator generator = new QwenRetellGenerator(flakyProvider, fallback, objectMapper);
+
+        List<TownRetellGenerator.Request> requests = new ArrayList<>();
+        for (int i = 0; i < 100; i++) {
+            requests.add(new TownRetellGenerator.Request("k" + i, "柯云", "p", List.of(), 1, "小吉最近挺常往健身房跑"));
+        }
+
+        List<TownRetellGenerator.Retold> result = generator.retell(requests);
+
+        assertThat(result).hasSize(100);
+        assertThat(calls.get()).isEqualTo(5);
     }
 }
