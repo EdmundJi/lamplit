@@ -9,7 +9,7 @@ class TownPresenceClampTest {
 
     @Test
     void passesThroughAMoveWithinTheAllowedBudget() {
-        // 100px in 1s is well under 132 * 1 * 1.5 = 198px.
+        // 100px in 1s is well under RUN_SPEED * 1 * 1.5.
         TownPresenceClamp.Point point = TownPresenceClamp.clamp(0, 0, 100, 0, 1.0);
 
         assertThat(point.x()).isEqualTo(100);

@@ -8,8 +8,8 @@ export type WalkDirection = 'left' | 'right'
 
 /** Self-avatar movement speeds in px/s. Running is a burst mode: hold Shift on desktop, or
  * flip the 「奔跑」 toggle in the town HUD on touch. */
-export const WALK_SPEED = 56
-export const RUN_SPEED = 132
+export const WALK_SPEED = 112
+export const RUN_SPEED = 264
 /** The walk cycle plays faster while running so the stride reads as a run, not a slide. */
 export const RUN_ANIM_SCALE = 1.6
 

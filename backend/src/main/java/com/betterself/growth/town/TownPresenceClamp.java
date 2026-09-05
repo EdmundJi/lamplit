@@ -8,7 +8,7 @@ package com.betterself.growth.town;
  */
 final class TownPresenceClamp {
 
-    static final double RUN_SPEED_PX_PER_SEC = 132.0;
+    static final double RUN_SPEED_PX_PER_SEC = 264.0;
     static final double SPEED_MARGIN = 1.5;
 
     private TownPresenceClamp() {

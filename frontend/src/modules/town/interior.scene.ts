@@ -268,7 +268,7 @@ export function createInteriorScene(Phaser: typeof PhaserNs, options: InteriorOp
 // ---------- default movement controller ----------
 
 /** px/s for the built-in controller; InteriorPlayer.speed is reserved for a future per-room override. */
-const DEFAULT_SPEED = 90
+const DEFAULT_SPEED = 180
 
 /** Keyboard (arrows/WASD) + click-to-walk, four-facing-direction animation, AABB collision via
  * map-loader.ts's `collidesAt`. Deliberately simple — a placeholder any richer controller (e.g.

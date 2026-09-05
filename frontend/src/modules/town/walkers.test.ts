@@ -124,8 +124,8 @@ describe('run speed', () => {
   })
 
   it('moves toward a target on either side', () => {
-    expect(stepToward(0, 100, WALK_SPEED, 500)).toBe(28)
-    expect(stepToward(0, -100, WALK_SPEED, 500)).toBe(-28)
+    expect(stepToward(0, 100, WALK_SPEED, 500)).toBe(WALK_SPEED / 2)
+    expect(stepToward(0, -100, WALK_SPEED, 500)).toBe(-WALK_SPEED / 2)
   })
 })
 
@@ -144,7 +144,7 @@ describe('stepTowardPoint', () => {
 
   it('moves partway along the straight line toward the target', () => {
     const result = stepTowardPoint({ x: 0, y: 0 }, { x: 100, y: 0 }, WALK_SPEED, 500)
-    expect(result.x).toBeCloseTo(28)
+    expect(result.x).toBeCloseTo(WALK_SPEED / 2)
     expect(result.y).toBeCloseTo(0)
   })
 
