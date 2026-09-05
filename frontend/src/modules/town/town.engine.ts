@@ -162,6 +162,20 @@ type Walker = {
   npcActivity: NpcActivity | null
 }
 
+/** Geometry of one labour spritesheet, as written by scripts/build-town-assets.py. */
+type LabourAnim = {
+  file: string
+  frameWidth: number
+  frameHeight: number
+  frames: number
+  framesPerDirection: number
+  /** Half-open range of the block that faces the camera — the only one the town plays. */
+  downStart: number
+  downEnd: number
+}
+
+const LABOUR_ACTIVITIES = new Set<NpcActivity>(['watering', 'chopping', 'fishing', 'harvesting', 'digging'])
+
 type Vehicle = { sprite: PhaserNs.GameObjects.Image; speed: number }
 
 type SelfKeys = {
@@ -261,6 +275,8 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
     /** 观察模式的巡游路线；空数组表示没在观察模式。 */
     observationItinerary: ObservationLeg[] = []
     observationStartedAt = 0
+    /** 劳作动画的几何；素材没生成时保持 null，NPC 就退回站着，不报错。 */
+    labourGeometry: Record<string, LabourAnim> | null = null
     /** 主动搭话的全镇节流：预算之外再加一层间隔，免得三次额度在同一秒里烧完。 */
     nextInitiativeAt = 0
     /** Walkable ground + building obstacles the self avatar's free 8-directional movement is
@@ -286,6 +302,8 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
 
     preload() {
       this.load.atlas('town', `${ASSETS}/town-atlas.png`, `${ASSETS}/town-atlas.json`)
+      // 劳作动画的几何（每张的帧宽高、朝向分块）写在 sidecar 里，先把它读进来。
+      this.load.json('labourAnims', `${ASSETS}/characters/labour-anims.json`)
       this.load.spritesheet('emotes', `${ASSETS}/emotes.png`, { frameWidth: 32, frameHeight: 32 })
       this.load.spritesheet('npc_postman', `${ASSETS}/characters/postman.png`, { frameWidth: 32, frameHeight: 64 })
       this.load.spritesheet('npc_scout', `${ASSETS}/characters/scout.png`, { frameWidth: 32, frameHeight: 64 })
@@ -319,6 +337,7 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
       this.spawnNpcs()
       // 名册可能比场景先到（store 已经拉过一次），那就在这里补生成，不必等下一次 applyNpcs。
       if (townNpcRoster.length > 0) this.applyTownNpcs(townNpcRoster)
+      this.loadLabourAnimations()
       this.atmosphere = new TownAtmosphere({ worldWidth: width, worldHeight: WORLD_HEIGHT, groundY: BASELINE })
       this.atmosphere.attach(this)
       for (let x = 180; x < width; x += 360) this.atmosphere.registerLight({ id: `lamp-${x}`, x, y: BASELINE + 22, kind: 'lamp', radius: 120 })
@@ -900,6 +919,53 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
       this.saySomething(walker, lines[0].text)
     }
 
+    // ---------- 劳作动画 (M2-3) ----------
+
+    /**
+     * 劳作图是独立的一张张 spritesheet，尺寸各不相同，几何只能从 sidecar 读，所以要等
+     * labour-anims.json 到齐之后再发起第二轮加载。没有素材就整段跳过——NPC 照常站着。
+     */
+    loadLabourAnimations() {
+      const manifest = this.cache.json.get('labourAnims') as Record<string, LabourAnim> | undefined
+      if (!manifest) return
+      this.labourGeometry = manifest
+      for (const [name, geometry] of Object.entries(manifest)) {
+        this.load.spritesheet(`labour_${name}`, `${ASSETS}/characters/${geometry.file}`,
+          { frameWidth: geometry.frameWidth, frameHeight: geometry.frameHeight })
+      }
+      this.load.once('complete', () => {
+        for (const [name, geometry] of Object.entries(manifest)) {
+          const key = `labour-${name}`
+          if (this.anims.exists(key) || !this.textures.exists(`labour_${name}`)) continue
+          // 每张图里四个朝向首尾相接，只播朝向镜头的那一段（钓鱼那张的正面不是第一段）。
+          const frames: number[] = []
+          for (let i = geometry.downStart; i < geometry.downEnd; i += 1) frames.push(i)
+          this.anims.create({
+            key,
+            frames: frames.map(frame => ({ key: `labour_${name}`, frame })),
+            frameRate: 10,
+            repeat: -1,
+          })
+        }
+      })
+      this.load.start()
+    }
+
+    /** 干活时整体换成劳作贴图，停下来再换回本人的角色表。 */
+    applyLabour(walker: Walker, activity: NpcActivity) {
+      const key = `labour-${activity}`
+      if (!this.anims.exists(key)) return false
+      walker.sprite.setTexture(`labour_${activity}`)
+      walker.sprite.play(key, true)
+      return true
+    }
+
+    restoreSheet(walker: Walker) {
+      if (walker.sprite.texture.key === walker.sheet) return
+      walker.sprite.setTexture(walker.sheet)
+      walker.sprite.play(`${walker.sheet}-idle-down`, true)
+    }
+
     // ---------- 观察模式 (M2-6) ----------
 
     /** 兴趣点：镇上真正有人聚集的几处，按从西到东排，镜头扫过去像一条街的横移。 */
@@ -978,6 +1044,13 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
     }
 
     performActivity(walker: Walker) {
+      // 三层背景居民在公园干活时换成劳作动画；一二层不干活，免得"你熟悉的面孔"整天在浇水。
+      if (walker.npc && walker.npc.layer === 3 && walker.npcActivity && LABOUR_ACTIVITIES.has(walker.npcActivity)
+        && this.applyLabour(walker, walker.npcActivity)) {
+        walker.timer = 3200 + (hashString(walker.id) % 2600)
+        return
+      }
+      if (walker.npc) this.restoreSheet(walker)
       const key = walker.action === 'read' ? `${walker.sheet}-read`
         : walker.action === 'phone' ? `${walker.sheet}-phone`
         : `${walker.sheet}-idle-down`

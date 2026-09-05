@@ -1,19 +1,30 @@
 #!/usr/bin/env python3
 """Build the 成长小镇 texture atlas from the purchased LimeZu asset packs.
 
-The Modern Exteriors / Modern Interiors packs are licensed for use in this
-project but may not be redistributed, so the raw packs and the generated
-atlas stay out of git. Run this script locally after downloading the packs:
+The Modern Exteriors / Modern Interiors / Modern Farm packs are licensed for use in
+this project but may not be redistributed, so the raw packs and the generated atlas
+stay out of git. Run this script locally after downloading the packs:
 
     python3 scripts/build-town-assets.py --exteriors tmp/modernexteriors-win.zip \
-        --interiors tmp/moderninteriors-win.zip
+        --interiors tmp/moderninteriors-win.zip --farm tmp/Modern_Farm_v1.2.zip
 
 Output goes to frontend/public/assets/town/ (gitignored):
-    town-atlas.png / town-atlas.json   Phaser JSON-hash atlas of buildings, terrain, props
+    town-atlas.png / town-atlas.json   Phaser JSON-hash atlas of buildings, terrain, props,
+                                        and (from the farm pack) small animal idle/walk frames
+                                        (dogs, doghouse, rabbits, chickens, ducks)
     characters/c01.png .. c20.png      LimeZu premade character sheets (32x64 frames)
+    characters/labour_*.png            Farm pack labour animation sheets (chopping / watering /
+                                        fishing / harvesting / digging), one Phaser spritesheet
+                                        per animation, geometry described by labour-anims.json
+    characters/labour-anims.json       {name: {file, frameWidth, frameHeight, frames, rows,
+                                        directions}} sidecar for the labour spritesheets above
     interior-atlas.png / .json         Interior furniture/tile atlas (academy + data-driven rooms)
     maps/*.json                        Room maps for map-loader.ts / interior.scene.ts (no zip
                                         needed — regenerated from generate_room_maps() alone).
+
+The farm pack (--farm) is optional: if the zip is missing, or a member inside it is
+missing, this script still succeeds and simply omits the frames/files it would have
+produced (same graceful-skip behaviour as the exteriors/interiors PIECES tables).
 
 Requires Pillow (pip install pillow).
 """
@@ -99,6 +110,103 @@ ANIMATED = [
 
 CHARACTERS = "2_Characters/Character_Generator/0_Premade_Characters/32x32/Premade_Character_32x32_{i:02d}.png"
 EMOTES = "4_User_Interface_Elements/UI_thinking_emotes_animation_32x32.png"
+
+# --- Modern Farm pack (M0-2 / M0-3): animal idle+walk frames added to the town atlas, plus
+# standalone labour-animation spritesheets for the character. None of these sheets ship pre-cut
+# singles or an official frame map, so every grid below was determined empirically (see the PR
+# description / git history for the analysis): load the sheet, inspect alpha bounding boxes per
+# candidate cell size, and confirm against the in-image "ROW:_ COL:_ FRAME:_x_px" legend most of
+# these sheets bake into their own top-left corner.
+#
+# Animals: every sheet is a documentation-style strip — a legend/preview band, then repeating
+# [ANIMATION NAME label][frame row] bands. Two empirically-confirmed shapes cover all of them:
+#   - "simple" (rabbits, chickens, roosters, ducks, ducklings): exactly 4 rows, no per-row labels.
+#     Row0 = legend/preview icons, row1 = an idle-ish loop, row2 = a walk/hop/run loop, row3 =
+#     another idle variant. Row height is `height // 4`. Column width is `width // 24` (COL:24 is
+#     a hard invariant printed in every one of these sheets' own legend) — cells are NOT always
+#     square: rabbits/ducks/chickens happen to have width == height (e.g. 1536x256 -> 64x64,
+#     768x128 -> 32x32), but Rooster_Brown_32x32.png is 768x256 -> a 32-wide x 64-tall cell (taller
+#     for the tail/comb, same width as the plain Chicken sheets); assuming a square `height // 4`
+#     cell for width too visibly merges two roosters into one "frame". The one sheet where even
+#     `width // 24` fails is Duck_White_32x32.png (1658x256): floor-dividing gives 69px, which cuts
+#     every duck in half, because the sheet has ~58px of unused trailing padding after the 24th
+#     real column rather than being an exact multiple of the cell size — confirmed by comparison
+#     against Duck_Brown/Duck_Green_Head_32x32.png (clean 1536x256, cell 64) and is special-cased
+#     below via FARM_CELL_WIDTH_OVERRIDE.
+#   - "dog" (dog breed sheets): a taller, explicitly-labelled sheet (each section has its own
+#     "IDLE"/"WALK"/"RUN"/... text banner). Row height is fixed at 64px regardless of breed; only
+#     the column width varies (COL:24 always, so `width // 24`: 96px for the Labrador/German
+#     Shepherd family at 2304x832, 64px for the smaller Basenji family at 1536x960). The IDLE frame
+#     row always starts at y=128 and the WALK frame row always starts at y=256 in both families
+#     (verified by cropping and visually inspecting both bands for several variants).
+#   - Dogs_Doghouse_Sleeping_32x32.png (512x858) is its own one-off grid: 64x96 cells, 8 columns x
+#     ~9 rows, one dog-color variant per row, one breathing-loop animation frame per column
+#     (confirmed distinct via per-cell MD5 hashes — frames only look identical at a glance).
+FARM = "32x32/Animals_32x32/"
+FARM_DOGHOUSE = "Dogs_32x32/Dogs_Doghouse_Sleeping_32x32.png"
+FARM_DOG_IDLE_Y = 128
+FARM_DOG_WALK_Y = 256
+FARM_DOG_FRAME_H = 64
+FARM_WALK_FRAMES = 4
+
+# Duck_White_32x32.png's canvas has trailing padding after its 24th real column (see comment
+# above), so `width // 24` misidentifies the cell width; override with the value confirmed against
+# its clean siblings (Duck_Brown/Duck_Green_Head_32x32.png, both exactly 1536x256, cell 64).
+FARM_CELL_WIDTH_OVERRIDE = {
+    "Ducks_32x32/Duck_White_32x32.png": 64,
+}
+
+# (frame prefix, kind, path within FARM) — kind "dog" uses the labelled multi-row layout,
+# "simple" uses the plain 4-row layout described above.
+FARM_ANIMALS = [
+    ("dog_basenji_brown", "dog", "Dogs_32x32/Dog_Basenji_Brown_32x32.png"),
+    ("dog_basenji_gray", "dog", "Dogs_32x32/Dog_Basenji_Gray_32x32.png"),
+    ("dog_basenji_orange", "dog", "Dogs_32x32/Dog_Basenji_Orange_32x32.png"),
+    ("dog_german_shepherd_brown", "dog", "Dogs_32x32/Dog_German_Shepherd_Brown_32x32.png"),
+    ("dog_german_shepherd_dark_brown", "dog", "Dogs_32x32/Dog_German_Shepherd_Dark_Brown_32x32.png"),
+    ("dog_german_shepherd_gray", "dog", "Dogs_32x32/Dog_German_Shepherd_Gray_32x32.png"),
+    ("dog_labrador_brown", "dog", "Dogs_32x32/Dog_Labrador_Brown_32x32.png"),
+    ("dog_labrador_dark_brown", "dog", "Dogs_32x32/Dog_Labrador_Dark_Brown_32x32.png"),
+    ("dog_labrador_white", "dog", "Dogs_32x32/Dog_Labrador_White_32x32.png"),
+    ("rabbit_baby_brown", "simple", "Rabbits_32x32/Rabbit_Baby_Brown_32x32.png"),
+    ("rabbit_baby_gray", "simple", "Rabbits_32x32/Rabbit_Baby_Gray_32x32.png"),
+    ("rabbit_baby_white", "simple", "Rabbits_32x32/Rabbit_Baby_White_32x32.png"),
+    ("rabbit_brown", "simple", "Rabbits_32x32/Rabbit_Brown_32x32.png"),
+    ("rabbit_brown_dark_ears", "simple", "Rabbits_32x32/Rabbit_Brown_Dark_Ears_32x32.png"),
+    ("rabbit_gray", "simple", "Rabbits_32x32/Rabbit_Gray_32x32.png"),
+    ("rabbit_gray_and_white", "simple", "Rabbits_32x32/Rabbit_Gray_and_White_32x32.png"),
+    ("rabbit_spotted", "simple", "Rabbits_32x32/Rabbit_Spotted_32x32.png"),
+    ("rabbit_white", "simple", "Rabbits_32x32/Rabbit_White_32x32.png"),
+    ("chicken_brown", "simple", "Chickens_and_Roosters_32x32/Chicken_Brown_32x32.png"),
+    ("chicken_white", "simple", "Chickens_and_Roosters_32x32/Chicken_White_32x32.png"),
+    ("chicken_golden", "simple", "Chickens_and_Roosters_32x32/Chicken_Golden_32x32.png"),
+    ("chicken_chick", "simple", "Chickens_and_Roosters_32x32/Chick_32x32.png"),
+    ("rooster_brown", "simple", "Chickens_and_Roosters_32x32/Rooster_Brown_32x32.png"),
+    ("duck_white", "simple", "Ducks_32x32/Duck_White_32x32.png"),
+    ("duck_brown", "simple", "Ducks_32x32/Duck_Brown_32x32.png"),
+    ("duck_green_head", "simple", "Ducks_32x32/Duck_Green_Head_32x32.png"),
+    ("duck_duckling_yellow", "simple", "Ducks_32x32/Duckling_Yellow_32x32.png"),
+]
+
+# Labour animations (M0-3): each Farmer_1_* sheet is a single row, single (facing-down) direction,
+# with the frame count baked into the filename. Frame size differs per animation because the tool
+# swing extends past the character's body — determined empirically by dividing the sheet's pixel
+# width by its filename-stated frame count and confirming every resulting cell's alpha bounding box
+# stays inside its own cell with no bleed into neighbours (see PR notes for the verification script).
+LABOUR_CHARACTERS = "32x32/Characters_32x32/"
+# Each labour strip is one row holding FOUR direction blocks back to back, not a single
+# facing: frames_per_direction = frame_count // 4. Which block faces the camera is not
+# consistent across the pack -- fishing starts facing away and only turns to camera in its
+# second block -- so the down-facing block index is recorded per animation rather than
+# assumed. Verified by rendering the first frames of all four blocks of every sheet.
+# (name, source filename, frame width, frame height, frame count, down-facing block index)
+LABOUR_ANIMATIONS = [
+    ("chopping", "Farmer_1_Chopping_40_frames_32x32.png", 64, 128, 40, 0),
+    ("watering", "Farmer_1_Watering_56_frames_32x32.png", 96, 192, 56, 0),
+    ("fishing", "Farmer_1_Fishing_128_frames_32x32.png", 96, 256, 128, 1),
+    ("harvesting", "Farmer_1_Harvesting_36_frames_32x32.png", 32, 64, 36, 0),
+    ("digging", "Farmer_1_Dig_36_frames_32x32.png", 64, 64, 36, 0),
+]
 
 # --- 成长学院 自习室 (task 7): a second, interior-only atlas built from a handful of
 # hand-picked singles cropped out of Modern Interiors' full theme sheets. Those sheets
@@ -237,6 +345,86 @@ def collect_interior(zf: zipfile.ZipFile) -> dict[str, Image.Image]:
             piece = piece.resize(size, Image.NEAREST)
         frames[name] = piece
     return frames
+
+
+def _dog_frames(sheet: Image.Image, prefix: str) -> dict[str, Image.Image]:
+    """One idle pose + a short walk cycle from a labelled dog animation sheet (see FARM_ANIMALS
+    comment for how the 96px-or-64px cell width and the fixed y=128/y=256 row offsets were found)."""
+    cell_w = sheet.width // 24
+    frames = {
+        f"{prefix}_idle_1": sheet.crop((0, FARM_DOG_IDLE_Y, cell_w, FARM_DOG_IDLE_Y + FARM_DOG_FRAME_H)),
+    }
+    for i in range(FARM_WALK_FRAMES):
+        x0 = i * cell_w
+        box = (x0, FARM_DOG_WALK_Y, x0 + cell_w, FARM_DOG_WALK_Y + FARM_DOG_FRAME_H)
+        frames[f"{prefix}_walk_{i + 1}"] = sheet.crop(box)
+    return frames
+
+
+def _simple_animal_frames(sheet: Image.Image, prefix: str, cell_w: int) -> dict[str, Image.Image]:
+    """One idle pose + a short walk cycle from a plain 4-row animal sheet (rabbits, chickens,
+    roosters, ducks, ducklings — see FARM_ANIMALS comment for how the `width // 24` column width
+    and `height // 4` row height were found and confirmed against each sheet's own "COL:24"
+    legend; cells are not always square, e.g. roosters are narrower than they are tall)."""
+    cell_h = sheet.height // 4
+    frames = {
+        f"{prefix}_idle_1": sheet.crop((0, cell_h, cell_w, cell_h * 2)),
+    }
+    for i in range(FARM_WALK_FRAMES):
+        x0 = i * cell_w
+        frames[f"{prefix}_walk_{i + 1}"] = sheet.crop((x0, cell_h * 2, x0 + cell_w, cell_h * 3))
+    return frames
+
+
+def collect_farm(zf: zipfile.ZipFile) -> dict[str, Image.Image]:
+    frames: dict[str, Image.Image] = {}
+    for prefix, kind, path in FARM_ANIMALS:
+        sheet = load(zf, f"{FARM}{path}")
+        if sheet is None:
+            continue
+        if kind == "dog":
+            frames.update(_dog_frames(sheet, prefix))
+        else:
+            cell_w = FARM_CELL_WIDTH_OVERRIDE.get(path, sheet.width // 24)
+            frames.update(_simple_animal_frames(sheet, prefix, cell_w))
+    doghouse = load(zf, f"{FARM}{FARM_DOGHOUSE}")
+    if doghouse is not None:
+        for i in range(FARM_WALK_FRAMES):
+            frames[f"doghouse_sleep_{i + 1}"] = doghouse.crop((i * 64, 0, (i + 1) * 64, 96))
+    return frames
+
+
+def collect_labour(zf: zipfile.ZipFile, out: Path) -> dict[str, dict]:
+    """Save each Farmer_1_* labour sheet as its own spritesheet PNG under characters/ and return
+    the {name: geometry} manifest that also gets written to characters/labour-anims.json, so the
+    frontend loads each with `this.load.spritesheet(key, path, {frameWidth, frameHeight})` without
+    hardcoding per-animation geometry."""
+    manifest: dict[str, dict] = {}
+    for name, filename, frame_w, frame_h, frame_count, down_block in LABOUR_ANIMATIONS:
+        sheet = load(zf, f"{LABOUR_CHARACTERS}{filename}")
+        if sheet is None:
+            continue
+        out_name = f"labour_{name}.png"
+        sheet.save(out / "characters" / out_name, optimize=True)
+        per_direction = frame_count // 4
+        manifest[name] = {
+            "file": out_name,
+            "frameWidth": frame_w,
+            "frameHeight": frame_h,
+            "frames": frame_count,
+            "rows": 1,
+            "directions": 4,
+            "framesPerDirection": per_direction,
+            # Half-open [downStart, downEnd) -- the only block the town actually plays, since
+            # NPCs doing chores are always drawn facing the camera.
+            "downStart": down_block * per_direction,
+            "downEnd": (down_block + 1) * per_direction,
+        }
+    if manifest:
+        (out / "characters" / "labour-anims.json").write_text(
+            json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        )
+    return manifest
 
 
 def pack(frames: dict[str, Image.Image], width: int = 2048, pad: int = 2) -> tuple[Image.Image, dict]:
@@ -532,6 +720,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--exteriors", default=str(ROOT / "tmp" / "modernexteriors-win.zip"))
     parser.add_argument("--interiors", default=str(ROOT / "tmp" / "moderninteriors-win.zip"))
+    parser.add_argument("--farm", default=str(ROOT / "tmp" / "Modern_Farm_v1.2.zip"))
     parser.add_argument("--out", default=str(OUT))
     args = parser.parse_args()
 
@@ -544,6 +733,22 @@ def main() -> int:
             image = load(zf, path)
             if image is not None:
                 image.save(out / "characters" / f"{name}.png", optimize=True)
+
+    # Modern Farm pack (M0-2 animals + M0-3 labour animations): optional — a missing zip, or a
+    # missing member inside an otherwise-present zip, must not fail the build (see module
+    # docstring). Animal frames merge straight into the main town atlas; labour sheets are saved
+    # standalone under characters/ since they're loaded as their own Phaser spritesheets.
+    farm_path = Path(args.farm)
+    labour_manifest: dict[str, dict] = {}
+    if farm_path.exists():
+        with zipfile.ZipFile(farm_path) as zf:
+            farm_frames = collect_farm(zf)
+            frames.update(farm_frames)
+            labour_manifest = collect_labour(zf, out)
+        print(f"farm pack: {len(farm_frames)} animal frames, {len(labour_manifest)} labour animations -> {farm_path}")
+    else:
+        print(f"farm pack not found at {farm_path}, skipping animal frames and labour animations")
+
     atlas, data = pack(frames)
     atlas.save(out / "town-atlas.png", optimize=True)
     (out / "town-atlas.json").write_text(json.dumps(data, separators=(",", ":")))
