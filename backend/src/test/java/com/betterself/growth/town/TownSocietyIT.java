@@ -169,6 +169,14 @@ class TownSocietyIT {
             assertThat(DIGIT.matcher(text).find()).as("retold text leaked a number: %s", text).isFalse();
         }
 
+        // 小助全程不进传播网络：不只是"它知道的不外传"，而是没有任何一条 knowledge 是从它那儿
+        // 听来的。只过滤它已有的 knowledge 不够——它会在相遇里听到新的一条然后成为下一手的
+        // 消息源，那样"全知但不八卦"就破了。
+        Integer fromGuide = jdbc.queryForObject(
+            "select count(*) from town_npc_knowledge where town_user_id = ? and learned_from = 'GUIDE'",
+            Integer.class, userId);
+        assertThat(fromGuide).as("nobody may ever learn anything from the guide").isZero();
+
         // 限知的可观测形态：不是所有人都知道同样的事。
         List<Integer> perNpc = jdbc.queryForList("""
             select count(*) from town_npc_knowledge where town_user_id = ? group by npc_code

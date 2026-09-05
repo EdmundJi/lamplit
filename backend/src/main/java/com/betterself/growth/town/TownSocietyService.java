@@ -268,14 +268,22 @@ public class TownSocietyService {
 
     private void propagate(long userId, LocalDate localDate, List<NpcRow> npcs,
                            List<TownSocialSim.Encounter> encounters) {
+        // 小助整个退出传播网络——不只是"它已知的那些不外传"，而是它连听都不参与。
+        // 只过滤它已有的 knowledge 是不够的：它照样会在相遇里听到一条新的，然后成为下一手的
+        // 消息源，于是"全知但不八卦"就破了。它是私人秘书，不是镇上的一张嘴。
+        List<TownSocialSim.Encounter> gossipable = encounters.stream()
+            .filter(encounter -> !GUIDE.equals(encounter.a()) && !GUIDE.equals(encounter.b()))
+            .toList();
         Map<String, TownSocialSim.Persona> personas = new LinkedHashMap<>();
-        npcs.forEach(npc -> personas.put(npc.npcCode(), persona(npc)));
+        npcs.stream()
+            .filter(npc -> !GUIDE.equals(npc.npcCode()))
+            .forEach(npc -> personas.put(npc.npcCode(), persona(npc)));
 
         Map<String, TownSocialSim.Bond> bonds = bondIndex(userId);
         Map<String, List<TownSocialSim.RelayCandidate>> known = candidatesByNpc(userId);
 
         List<TownSocialSim.RelayResult> results = TownSocialSim.simulate(
-            encounters,
+            gossipable,
             personas,
             (a, b) -> bonds.getOrDefault(bondKey(a, b), new TownSocialSim.Bond(0.15, 0.0, 0, null)),
             code -> known.getOrDefault(code, List.of()),

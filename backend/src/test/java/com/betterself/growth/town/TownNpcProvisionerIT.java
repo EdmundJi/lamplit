@@ -160,4 +160,29 @@ class TownNpcProvisionerIT {
         assertThat(access).isNotNull();
         return jdbc.queryForObject("select id from sys_user where email_normalized = ?", Long.class, email.toLowerCase());
     }
+
+    @Test
+    void aProvisionedTownIsReadOnlyOnEveryLaterCall() throws Exception {
+        long userId = register("town-npc-provisioner-noop@example.test");
+        provisioner.ensurePopulated(userId);
+
+        // ensurePopulated 挂在每次进小镇的路径上（GET /town/npcs 也调它），所以"已经建好之后
+        // 不再写"不是优化而是正确性：每次都重发那批 insert 会在 town_bond 上占行锁，夜间 job
+        // 和 HTTP 请求撞上时就会互相等。
+        Timestamp before = jdbc.queryForObject(
+            "select max(updated_at) from town_bond where town_user_id = ?", Timestamp.class, userId);
+        Integer bondsBefore = jdbc.queryForObject(
+            "select count(*) from town_bond where town_user_id = ?", Integer.class, userId);
+
+        provisioner.ensurePopulated(userId);
+        provisioner.ensurePopulated(userId);
+
+        Timestamp after = jdbc.queryForObject(
+            "select max(updated_at) from town_bond where town_user_id = ?", Timestamp.class, userId);
+        Integer bondsAfter = jdbc.queryForObject(
+            "select count(*) from town_bond where town_user_id = ?", Integer.class, userId);
+
+        assertThat(bondsAfter).isEqualTo(bondsBefore);
+        assertThat(after).isEqualTo(before);
+    }
 }

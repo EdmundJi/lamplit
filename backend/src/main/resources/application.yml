@@ -16,6 +16,13 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
+  task:
+    scheduling:
+      # 六个 @Scheduled 任务共用调度线程池，默认只有一根线程。夜间的小镇传播 job 会
+      # 调 LLM，网关慢的时候它一卡就把 outbox 发布（每 5s）和排期过期（每 60s）一起
+      # 饿死。给够线程，让慢任务只慢它自己。
+      pool:
+        size: 4
   jpa:
     open-in-view: false
     hibernate:

@@ -82,7 +82,9 @@ public class TownNpcProvisioner {
             if (!missing.isEmpty()) {
                 insertNpcs(userId, missing);
             }
-            ensurePlayerBonds(userId);
+            if (!playerBondsAlreadySeeded(userId)) {
+                ensurePlayerBonds(userId);
+            }
             if (!npcWebAlreadySeeded(userId)) {
                 seedNpcWeb(userId);
             }
@@ -108,6 +110,14 @@ public class TownNpcProvisioner {
                 """,
             batch
         );
+    }
+
+    private boolean playerBondsAlreadySeeded(long userId) {
+        Integer count = jdbc.queryForObject(
+            "select count(*) from town_bond where town_user_id = ? and (a_kind = 'PLAYER' or b_kind = 'PLAYER')",
+            Integer.class, userId
+        );
+        return count != null && count > 0;
     }
 
     /** One low-affinity, symmetric, regard-free edge PLAYER↔NPC for every archetype. */

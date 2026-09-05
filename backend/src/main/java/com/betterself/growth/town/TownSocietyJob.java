@@ -45,6 +45,9 @@ public class TownSocietyJob {
     @Scheduled(cron = "${app.town.society-cron:0 45 3 * * *}")
     public void run() {
         List<Long> candidates = activeUsers();
+        // 开工也记一笔：这个 job 要调 LLM，慢起来能跑很久，只在结尾记日志的话"还在跑"和
+        // "根本没触发"在日志里长得一模一样。
+        log.info("town society job starting for {} town(s)", candidates.size());
         int done = 0;
         for (long userId : candidates) {
             try {
