@@ -105,7 +105,7 @@ public final class TownNpcCatalog {
             interests(0.15, 0.35, 0.15, 0.15, 0.20), Set.of("NOSTALGIC", "LITERAL")),
         new Archetype("TOWNIE_07", "赵敏", 3, "c11", null, 0.30, 0.30,
             interests(0.30, 0.15, 0.15, 0.20, 0.20), Set.of("NAME_MIXUP")),
-        new Archetype("TOWNIE_08", "黄磊", 3, "c13", null, 0.25, 0.20,
+        new Archetype("TOWNIE_08", "黄岚", 3, "c13", null, 0.25, 0.20,
             interests(0.10, 0.20, 0.30, 0.10, 0.30), Set.of("TIGHT_LIPPED", "EXAGGERATE")),
         new Archetype("TOWNIE_09", "周雨", 3, "c14", null, 0.40, 0.45,
             interests(0.20, 0.10, 0.20, 0.25, 0.25), Set.of("LITERAL")),

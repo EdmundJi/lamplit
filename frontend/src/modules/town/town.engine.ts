@@ -99,6 +99,9 @@ const PLAZA_TOP = BASELINE - 380
  * into 'act' after this long stuck rather than animating in place forever. */
 const SELF_STUCK_MS = 350
 
+/** 观察模式跑完一圈的总时长——plan 的验收标准是"一段 30 秒长镜头"。 */
+const OBSERVATION_LOOP_MS = 30_000
+
 /** Frames inside emotes.png (10 x 10 grid of 32px bubbles). */
 const EMOTES: Record<ResidentActivity | 'mail' | 'question' | 'heart', [number, number]> = {
   done: [64, 65],
@@ -988,7 +991,15 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
       const camera = this.cameras.main
       if (on) {
         this.releaseCameraFollow()
-        this.observationItinerary = buildItinerary(this.observationPoints())
+        // 整圈按 30 秒排：plan 的验收标准就是"一段 30 秒长镜头"，而兴趣点有五个——用默认的
+        // 每处 6s 停 + 4s 移，一圈要 50 秒，录 30 秒只能扫到五处里的三处。把总时长固定成 30 秒
+        // 再按点数均分（六成停、四成移），无论以后兴趣点增减，一圈都还是一段 30 秒长镜头。
+        const points = this.observationPoints()
+        const perLeg = OBSERVATION_LOOP_MS / Math.max(1, points.length)
+        this.observationItinerary = buildItinerary(points, {
+          holdMs: Math.round(perLeg * 0.6),
+          panMs: Math.round(perLeg * 0.4),
+        })
         this.observationStartedAt = this.time.now
       } else {
         this.observationItinerary = []
@@ -1012,9 +1023,11 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
       if (now < this.nextAmbientLineAt) return
       const camera = this.cameras.main
       const centerX = camera.scrollX + camera.width / camera.zoom / 2
+      // 只挑靠近画面中央的人：站在边上的人说话，气泡会被镜头切掉一半。
+      const halfView = camera.width / camera.zoom / 2
       const candidates = this.walkers.filter(walker =>
         walker.npc?.talkingPoints?.length && !walker.speech
-        && Math.abs(walker.sprite.x - centerX) < camera.width / camera.zoom / 2)
+        && Math.abs(walker.sprite.x - centerX) < halfView * 0.6)
       if (candidates.length === 0) return
       const walker = candidates[Math.floor(this.time.now / 997) % candidates.length]
       const points = walker.npc?.talkingPoints ?? []
