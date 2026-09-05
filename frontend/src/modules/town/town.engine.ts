@@ -275,6 +275,8 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
     /** 观察模式的巡游路线；空数组表示没在观察模式。 */
     observationItinerary: ObservationLeg[] = []
     observationStartedAt = 0
+    /** 观察模式里下一次让镜头里的人开口的时间。 */
+    nextAmbientLineAt = 0
     /** 劳作动画的几何；素材没生成时保持 null，NPC 就退回站着，不报错。 */
     labourGeometry: Record<string, LabourAnim> | null = null
     /** 主动搭话的全镇节流：预算之外再加一层间隔，免得三次额度在同一秒里烧完。 */
@@ -995,11 +997,38 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
       }
     }
 
+    /**
+     * 观察模式下让镜头里的人自己开口。
+     *
+     * <p>没有这一步，观察模式就只是"把镜头挪来挪去"——街上的人是安静的，因为路遇气泡要靠两个人
+     * 恰好擦肩，而同一时段在同一地点的人本来就不多。验收标准要的是「镜头扫过小镇，NPC 各自活动、
+     * 彼此搭话，说的内容互不相同」，所以镜头停下来的时候，画面里的人该说话。
+     *
+     * <p>说的仍然只能是他自己 knowledge 里那几条，所以两个人说的必然不一样——限知在这里是看得见的。
+     * 这不占护栏 A 的主动性预算：那份预算管的是"NPC 跑来找玩家要回应"，而观察模式里玩家只是在看。
+     */
+    speakAmbientLine(now: number) {
+      if (now < this.nextAmbientLineAt) return
+      const camera = this.cameras.main
+      const centerX = camera.scrollX + camera.width / camera.zoom / 2
+      const candidates = this.walkers.filter(walker =>
+        walker.npc?.talkingPoints?.length && !walker.speech
+        && Math.abs(walker.sprite.x - centerX) < camera.width / camera.zoom / 2)
+      if (candidates.length === 0) return
+      const walker = candidates[Math.floor(this.time.now / 997) % candidates.length]
+      const points = walker.npc?.talkingPoints ?? []
+      const point = points[Math.floor(this.time.now / 1471) % points.length]
+      this.saySomething(walker, point.text, 4600)
+      this.nextAmbientLineAt = now + 2600
+    }
+
     /** 每帧把相机放到 nextLeg 算出来的位置上；所有算术都在纯函数里，这里只负责画。 */
     updateObservation() {
       if (!observationOn || this.observationItinerary.length === 0) return
       const position = nextLeg(this.observationItinerary, this.time.now - this.observationStartedAt)
       if (!position) return
+      // 停下来看的时候才让人说话；镜头还在移动时弹气泡看不清。
+      if (position.phase === 'holding') this.speakAmbientLine(this.time.now)
       const camera = this.cameras.main
       const legs = this.observationItinerary
       const previous = legs[(position.legIndex - 1 + legs.length) % legs.length]

@@ -32,6 +32,9 @@ final class TownNpcSchedules {
 
     private static final List<String> DAY_PLACES = List.of(ACADEMY, GYM, CAFE, PARK, PLAZA, STREET);
 
+    /** 深夜留在外面的比例。18 个人乘这个比例，正好落在护栏 B 说的"深夜 2~3 人"上。 */
+    private static final double NIGHT_OWL_SHARE = 0.15;
+
     /** 五维度各自最"像"的去处；NPC 的兴趣权重会把他往这些地方推。 */
     private static final Map<String, String> DIMENSION_PLACE = Map.of(
         "KNOWLEDGE", ACADEMY,
@@ -111,9 +114,11 @@ final class TownNpcSchedules {
     }
 
     private static String placeFor(int startHour, Map<String, Double> weights, RandomGenerator rng) {
-        // 深夜与清早都在家；这是 §2.4 护栏 B 里"深夜 2~3 人"的来源。
+        // 深夜绝大多数人在家，但不能一个不剩——plan §2.4 护栏 B 要的是"深夜 2~3 人"，
+        // 全员回家会让凌晨的小镇变成一条空街（前端会把在家的人整个滤掉）。留一小撮夜猫子
+        // 在外面：谁是夜猫子由种子决定，所以同一个人不会今晚在外面、明晚又在外面地乱跳。
         if (startHour < 6 || startHour >= 21) {
-            return HOME;
+            return rng.nextDouble() < NIGHT_OWL_SHARE ? nightSpot(rng) : HOME;
         }
         // 午间是咖啡馆高峰，给它一次额外的抽签机会。
         if (startHour == 12 && rng.nextDouble() < 0.45) {
@@ -128,6 +133,15 @@ final class TownNpcSchedules {
             }
         }
         return STREET;
+    }
+
+    /** 深夜还在外面的人只会在这几处：街上、广场、还开着的咖啡馆。 */
+    private static String nightSpot(RandomGenerator rng) {
+        double roll = rng.nextDouble();
+        if (roll < 0.45) {
+            return STREET;
+        }
+        return roll < 0.8 ? PLAZA : CAFE;
     }
 
     private static String activityFor(String place, int layer, int startHour, RandomGenerator rng) {
