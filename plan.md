@@ -523,7 +523,29 @@ M1 与 M3 技术栈几乎不重叠（后端建模 vs 前端接线），若有第
 5. **纯函数写了但生产没调用**（`decayedAffinity`）、**同一个概念两套常数**（salience 衰减 SQL 里另写了一组）——"有单测"不等于"在跑"。
 6. **LLM 调用不能放在数据库事务里**，网关慢的时候是拿行锁换外部服务的响应时间。慢网关还需要**总时长预算**，光有失败熔断挡不住"每次都成功但每次都很慢"。
 
-> 已知未做：护栏 A 的每日预算只在前端内存里（后端 `used` 恒为 0，刷新即重置）；第二层 NPC 点击后落到通用面板，没有专属对话。
+> 上面这两条「已知未做」现在的状态：**护栏 A 已补完**（见下方 M7 那一行）；**第二层 NPC 点击后仍落到通用面板，没有专属对话**——这条还欠着。
+
+### M3 / M4 / M5 / M7 已交付（同分支，多 agent 并行）
+
+| 里程碑 | 落地情况 |
+| --- | --- |
+| **M3** | `map-loader` 的 `RoomFurniture` 加交互字段并在 `parseRoomMap` 白名单里真的解析（原先未知字段被静默丢弃）；`interactableAt` 仿 `doorAt` 写成纯函数；书桌 / 成就墙 / 宠物窝三件可交互物走 `world-actions.ts` 注册表；狗 / 兔 / 鸟用 Farm 像素帧，猫 / 仓鼠 / 蛇 / 龟 / 狐走占位窝 + 点击弹 Rive 面板。走到自家门口 → 淡入 → `enterRoom('home')`，`player` / `metrics.homeAchievements` / `residents` / `pet` / `onInteract` 全部补齐 |
+| **M4** | 活动、请柬、三轨信件、树洞笔友、迁徙、路过的旅人；接口新开在 `TownSocialController`，**没有新建迁移**——V20 当初一次建全的十张表字段够用 |
+| **M5** | 今天 / 伙伴两个面板核查后确认已自洽（没有强制跳 `fullPage` 的路径）；AI 助手补上中断生成；9 个面板全部绑 `anchor`；dock 默认收起 |
+| **M7** | 节律 → `TownDayPlan`（`errands` + `legs` + `positionAt`）→ 当天偏离 → 三类相遇替换「同时段同地点」→ 传播权重；前端按 `positionAt` 插值行走、居民步速 55px/s、站位纵向散开 + `depth` 跟随 `y`、气泡夹回画面内并在重叠时上摞、路上插曲。**护栏 A 落库并接完前端**（`town_initiative_budget` + `POST /town/initiative/consume`） |
+
+**这一轮新踩的坑：**
+
+1. **「事件」这一步必须排在社会模拟之前。** 按 §3.2 的编号顺序（步骤 6 在步骤 3 之后）把 `TownEventService` 排在社会模拟后面是错的：它今晚建的 `town_event` 起始时间就在今天，而当天行程要把这场活动插成 `priority=2` 的安排。排在后面的话，夜里推出的相遇序列里没有这场活动、白天 `roster()` 却算得出有——§3.5「两边算出来的必须是同一份」当场失效。代价只是请柬排序用昨晚的亲密度，可以忽略。
+2. **迁徙是跨小镇的一次写，会让「同一天能重算出同一条链」依赖用户被扫到的先后顺序。** 解法是当天搬到的人不参与该镇当晚的模拟（他在名册里看得见，只是还没跟谁说上话）。判断依据必须是 `town_migration` 当天的记录——**用 `town_npc.settled_at` 会把开镇第一天的 18 个人整个滤空**，因为建号时就写了这个字段。
+3. **一个「不可能有」的 bug 藏在非玩家走位里**：除自己以外的所有人（好友、小助、邮递员）都在用玩家的 `WALK_SPEED`。M7 把居民步速拆出来时才暴露。
+4. **`atmosphere.update(delta)` 被调了两次**，天气与昼夜过渡一直以双倍速度在跑，没人发现。
+5. **`home-living-room.json` 是 `.gitignore` 掉的生成产物。** 直接改它，下次重跑 `build-town-assets.py` 就被静默抹掉——要改的是生成器 `_home_living_room()`。
+6. **多个 agent 在同一个 `backend/target` 里并发跑 `mvn test` 会产出一批假红**（class 找不到、连接被拒、ApplicationContext 加载失败）。全量验收必须串行跑一次才作数。
+
+> 已知未做：第二层 NPC 点击后落到通用面板，没有专属对话（M2 遗留）；`NOTE` 短笺只有读写通道、没有生产者；`town_npc_mood` 至今没人写，办活动的心情因子暂时是摆设（M1 遗留）；`isRainy()` 是按日期哈希的占位天气；`atmosphere.setWeather()` 全项目无人调用，所以雨天躲屋檐的路上插曲写好了但还不会触发。
+>
+> 已知预置缺陷（与本轮无关，在干净 HEAD 上同样复现）：`PrivacyFlowIT.exportsOwnedArchiveAndRunsDeletionLifecycle` 断言 201 实得 401。
 
 ### 移动速度翻倍
 
