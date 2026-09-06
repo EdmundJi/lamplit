@@ -103,6 +103,60 @@ test.afterEach(async ({ page }, info) => {
   expect(observedErrors, 'No hidden runtime or resource errors').toEqual([])
 })
 
+test('现有街角露台设施真实交互与留痕', async ({ page }, info) => {
+  await page.getByRole('button', { name: '街角露台', exact: true }).click()
+  await page.waitForFunction(() => (window as any).__townScene.travel?.place === 'terrace' && (window as any).__townScene.travel?.phase === 'arrived', null, { timeout: 30000 })
+  await page.waitForTimeout(1200)
+  await record(page, info, 'terrace-before')
+  for (const [id, key] of [['coffee', 'cup'], ['planter', 'watered'], ['records', 'music'], ['books', 'borrowed']]) {
+    const item = await page.evaluate(id => (window as any).__townScene.facilities.interactables().find((i: any) => i.id === id), id)
+    await clickWorld(page, item.x, item.y - 12)
+    await page.waitForFunction(id => (window as any).__townScene.facilities.snapshot().active.some((a: any) => a.id === id), id, { timeout: 15000 })
+    await page.waitForTimeout(1500)
+    await record(page, info, `using-${id}`)
+    await page.waitForFunction(key => (window as any).__townScene.facilities.snapshot().state[key] === true, key, { timeout: 10000 })
+    expect((await page.evaluate(() => (window as any).__town.snapshot())).player.onWalkable).toBe(true)
+  }
+  await page.getByRole('button', { name: '收起界面', exact: true }).click()
+  await record(page, info, 'terrace-scenic')
+  await page.keyboard.press('Escape')
+  await expect(page).toHaveURL(/town\/immersive/)
+  await expect(page.getByRole('button', { name: '街角露台', exact: true })).toBeVisible()
+  await page.getByRole('button', { name: '咖啡馆', exact: true }).click()
+  await expect(page.getByRole('button', { name: '回到街上', exact: true })).toBeVisible({ timeout: 15000 })
+  await page.getByRole('button', { name: '回到街上', exact: true }).click()
+  await page.waitForFunction(() => (window as any).__town.snapshot().activeScene === 'town')
+  expect(await page.evaluate(() => (window as any).__townScene.facilities.snapshot().state)).toEqual({ cup: true, watered: true, music: true, borrowed: true })
+})
+
+test('真实场景中的居民共享设施并沿路返回日程', async ({ page }, info) => {
+  const npcs = ['CAFE_READER', 'CAFE_NEIGHBOUR'].map((code, index) => ({
+    code, displayName: index ? '露台测试邻居' : '露台测试读者', layer: 2, sprite: `c0${index+2}`,
+    dimension: 'KNOWLEDGE', interests: {}, affinityToPlayer: .3, mood: { valence: .4, energy: .6 },
+    schedule: [{ startHour: 0, endHour: 24, place: 'cafe', activity: 'idle' }],
+    dayPlan: { date: '2026-09-06', errands: [{ startMinute: 0, endMinute: 1440, place: 'cafe', activity: 'idle', priority: 1, origin: 'RHYTHM' }], legs: [] }, talkingPoints: [],
+  }))
+  await page.route('**/api/v1/town/npcs', route => route.fulfill({ json: envelope({ npcs, initiativeBudget: { limit: 3, used: 3 } }) }))
+  await page.reload()
+  await page.waitForFunction(() => (window as any).__townScene?.facilities && (window as any).__townScene.walkers.some((w: any) => w.id === 'CAFE_READER'))
+  await page.getByRole('button', { name: '街角露台', exact: true }).click()
+  const samples = await page.evaluate(async () => {
+    const rows: { id: string; x: number; y: number; at: number }[][] = []
+    for (let i = 0; i < 180; i++) {
+      const scene = (window as any).__townScene
+      rows.push(scene.walkers.filter((w: any) => w.id.startsWith('CAFE_')).map((w: any) => ({ id: w.id, x: w.sprite.x, y: w.sprite.y, at: performance.now() })))
+      await new Promise(resolve => setTimeout(resolve, 100))
+    }
+    return rows
+  })
+  expect(await page.evaluate(() => (window as any).__townScene.facilities.snapshot().recentCompleted.filter((c: any) => c.actorId.startsWith('CAFE_')).length)).toBeGreaterThan(0)
+  for (let i = 1; i < samples.length; i++) for (const actor of samples[i]!) {
+    const before = samples[i-1]!.find(a => a.id === actor.id)
+    if (before) expect(Math.hypot(actor.x-before.x, actor.y-before.y)).toBeLessThan(55 * (actor.at-before.at) / 1000 + 6)
+  }
+  await record(page, info, 'residents-used-facilities')
+})
+
 test('可见世界、真实键盘、居民移动与观察镜头', async ({ page }, info) => {
   await record(page, info, 'street')
   const before = await page.evaluate(() => (window as any).__town.snapshot())
