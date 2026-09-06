@@ -72,7 +72,7 @@ describe('Town view', () => {
     await flushPromises()
     expect(wrapper.text()).toContain('阿强')
     expect(wrapper.text()).toContain('健康')
-    expect(wrapper.text()).toContain('今天还没开张')
+    expect(wrapper.text()).toContain('今天慢慢来，也可以歇一歇')
 
     engine.handlers.onSelect?.('academy')
     await flushPromises()

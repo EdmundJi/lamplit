@@ -65,6 +65,13 @@ describe('building kit', () => {
     expect(groundFloorFor(null, 1, true)).toBe('condo_5')
   })
 
+  it('keeps the player home open on a rest day without fabricating task progress', () => {
+    const self = resident({ isSelf: true })
+    expect(buildBlueprint(self).open).toBe(true)
+    expect(activityFor(self)).toBe('resting')
+    expect(buildBlueprint(resident()).open).toBe(false)
+  })
+
   it('unlocks roof props with streaks', () => {
     expect(roofPropsFor(0)).toEqual([])
     expect(roofPropsFor(7)).toEqual(['roofprop_3', 'roofprop_8'])

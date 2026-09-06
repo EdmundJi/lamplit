@@ -151,7 +151,7 @@ describe('builtinWorldActions', () => {
       'world.open-panel:today', 'world.open-panel:ai', 'world.open-panel:friends', 'world.open-panel:insights',
     ]))
     // M5-4 之后 9 个面板全部有 anchor，每个面板都会生成一个"打开 XX"的能力。
-    expect(ids.filter(id => id.startsWith('world.open-panel:'))).toHaveLength(9)
+    expect(ids.filter(id => id.startsWith('world.open-panel:'))).toHaveLength(10)
   })
 
   it('go-home is unavailable without a self resident, and available once there is one', () => {
@@ -215,10 +215,10 @@ describe('builtinWorldActions', () => {
     expect(result.events).toEqual([{ type: 'open', panel: 'today' }])
   })
 
-  it('the achievement wall opens the insights panel', async () => {
+  it('the achievement wall opens persisted mementos', async () => {
     const wall = builtinWorldActions().find(a => a.id === 'home.open-achievement-wall')!
     const result = await wall.run(stubContext())
-    expect(result.events).toEqual([{ type: 'open', panel: 'insights' }])
+    expect(result.events).toEqual([{ type: 'open', panel: 'mementos' }])
   })
 
   it('the pet house opens the partners panel (where the existing Rive pet UI lives)', async () => {

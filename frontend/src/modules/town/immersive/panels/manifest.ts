@@ -1,4 +1,5 @@
 import {
+  Award,
   Bot,
   CalendarCheck,
   MessageCircle,
@@ -25,6 +26,16 @@ export const worldPanels: WorldPanelDef[] = [
     size: 'compact',
     anchor: 'home',
     fullPage: '/today',
+  },
+  {
+    key: 'mementos',
+    title: '家的纪念墙',
+    subtitle: '留在这里的，是你走过的日子',
+    icon: Award,
+    loader: () => import('./MementosPanel.vue'),
+    size: 'wide',
+    anchor: 'home',
+    fullPage: '/insights',
   },
   {
     key: 'goals',

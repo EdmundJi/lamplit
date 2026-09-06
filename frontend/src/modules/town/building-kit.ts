@@ -29,7 +29,7 @@ export function activityFor(resident: Pick<TownResident, 'todayPlanned' | 'today
 /**
  * Ground floor by growth direction. Each LimeZu storefront ships in three palettes
  * with an "open" and a "shutters down" variant; the shutters come down when the
- * owner has not touched today's plan yet.
+ * neighbour has not touched today's plan yet. The player's home stays welcoming on rest days.
  */
 export function groundFloorFor(dimension: DimensionCode | null, palette: 0 | 1 | 2, open: boolean): string {
   const closed = open ? 0 : 1
@@ -56,7 +56,7 @@ export function buildBlueprint(resident: TownResident): Blueprint {
   const seed = hashString(`${resident.publicId}:floors`)
   const floors = floorsForLevel(resident.level)
   const activity = activityFor(resident)
-  const open = activity !== 'resting'
+  const open = resident.isSelf || activity !== 'resting'
   const middles = Array.from({ length: floors }, (_, index) => `middle_${palette * 6 + 1 + ((seed >>> (index * 3)) % 6)}`)
   const roofProps = roofPropsFor(resident.longestStreak)
   const flatRoof = roofProps.length > 0 || floors >= 3
@@ -73,7 +73,7 @@ export const dimensionLabels: Record<DimensionCode, string> = {
 }
 
 export const activityLabels: Record<ResidentActivity, string> = {
-  resting: '今天还没开张',
+  resting: '今天慢慢来，也可以歇一歇',
   planned: '今天有安排，还没开始',
   working: '正在进行中',
   done: '今天已经有收获',

@@ -5,7 +5,7 @@ describe('worldPanels manifest', () => {
   it('covers every feature exactly once with the fields the shell needs', () => {
     const keys = worldPanels.map(panel => panel.key)
     expect(new Set(keys).size).toBe(keys.length)
-    expect(keys.sort()).toEqual(['ai', 'attributes', 'friends', 'goals', 'insights', 'partners', 'profile', 'settings', 'today'])
+    expect(keys.sort()).toEqual(['ai', 'attributes', 'friends', 'goals', 'insights', 'mementos', 'partners', 'profile', 'settings', 'today'])
     for (const panel of worldPanels) {
       expect(panel.title.length).toBeGreaterThan(0)
       expect(panel.subtitle.length).toBeGreaterThan(0)

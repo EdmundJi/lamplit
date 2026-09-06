@@ -265,11 +265,11 @@ function openAchievementWallAction(): WorldAction {
   return {
     id: 'home.open-achievement-wall',
     label: '看看成就墙',
-    hint: '这段时间的成长，都挂在这面墙上',
+    hint: '看看留下的纪念，想起获得它的那一天',
     icon: TrendingUp,
     domain: 'world',
     anchors: ['home'],
-    run: () => ({ ok: true, events: [{ type: 'open', panel: 'insights' }] }),
+    run: () => ({ ok: true, events: [{ type: 'open', panel: 'mementos' }] }),
   }
 }
 

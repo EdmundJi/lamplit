@@ -6,7 +6,7 @@ import type { Component, InjectionKey } from 'vue'
  */
 
 export type WorldPanelKey =
-  | 'today' | 'goals' | 'ai' | 'friends' | 'insights' | 'attributes' | 'partners' | 'profile' | 'settings'
+  | 'today' | 'goals' | 'ai' | 'friends' | 'insights' | 'attributes' | 'partners' | 'profile' | 'settings' | 'mementos'
 
 /** 小镇里可以「走过去」的锚点，与 town.engine.ts 的 TownSelection 对齐。
  * plaza/street 目前引擎还产生不了这两个选中值（见 immersive.store.ts 的 anchorForSelection），
@@ -25,7 +25,7 @@ export type WorldPanelDef = {
   loader: () => Promise<{ default: Component }>
   /** 窗口宽度倾向，最终几何由外壳决定。 */
   size: 'compact' | 'wide'
-  /** 走到这个地点/NPC 时自动打开本面板。 */
+  /** 面板所属地点；通过家具、明确操作或功能栏打开。 */
   anchor?: WorldAnchor
   /** 用户要求「打开完整页面」时跳转的路由。 */
   fullPage: string
