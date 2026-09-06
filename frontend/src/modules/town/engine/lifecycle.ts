@@ -1,3 +1,5 @@
+import { createTownCompanion } from './companion'
+import { inCompanionPark } from '../companion-motion'
 import { RESIDENT_WALK_SPEED, RUN_ANIM_SCALE, dominantDirection, moveSpeed, stepToward, stepTowardPoint } from '../walkers'
 import { resolveMove } from '../collision'
 import type { Point } from '../collision'
@@ -55,6 +57,15 @@ export const lifecycleMethods = {
       this.spawnVehicles();
       runtime.residents.forEach((resident, index) => { if (resident.isSelf)
           this.spawnResident(resident, index); });
+      this.companion = createTownCompanion(this, {
+          player: () => this.selfWalker?.sprite ?? null,
+          world: () => this.collisionWorld,
+          park: () => runtime.garden.walkable[1]!,
+          onModeChange: mode => runtime.handlers.onCompanionModeChange?.(mode),
+          onInteract: () => runtime.handlers.onCompanionInteract?.(),
+          onApproach: point => { this.setObservationMode(false); this.walkSelfToGround(point.x, point.y, true); },
+      });
+      this.companion.setState(runtime.companionState);
       this.spawnNpcs();
       // 名册可能比场景先到（store 已经拉过一次），那就在这里补生成，不必等下一次 applyNpcs。
       if (runtime.townNpcRoster.length > 0)
@@ -87,6 +98,7 @@ export const lifecycleMethods = {
       for (const name of nativeEvents)
           this.game.canvas.addEventListener(name, syncInputBounds, { capture: true, passive: true });
       this.events.once('shutdown', () => {
+          this.companion?.destroy(); this.companion = null;
           this.facilities?.destroy();
           this.facilities = null;
           this.lifeStage?.destroy();
@@ -164,6 +176,9 @@ export const lifecycleMethods = {
 
   update(this: TownScene, _time: number, delta: number) {
       const runtime = this.runtime;
+      this.companion?.update(delta);
+      const inPark = this.selfWalker ? inCompanionPark(this.selfWalker.sprite, runtime.garden.walkable[1]!) : false;
+      if (runtime.companionPlace !== inPark) { runtime.companionPlace = inPark; runtime.handlers.onCompanionPlaceChange?.(inPark); }
       this.atmosphere?.update(delta);
       const environment = runtime.environmentTime();
       const intensity = paletteForTime(environment.minutes, seasonForMonth(environment.month)).lightIntensity;

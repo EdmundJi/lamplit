@@ -66,7 +66,10 @@ export function createRoomTransitions(runtime: TownRuntime) {
                   return npc.layer !== 1 && position.kind === 'AT' && position.place === 'academy';
               }).slice(0, 4).map(npc => ({ publicId: npc.code, displayName: npc.displayName, isSelf: false, characterSheet: Number(npc.sprite.replace('c', '')) || 1, state: 'reading' as const })) : [],
               player,
-              pet: extras.pet,
+              pet: roomId === 'home' && runtime.companionLoaded
+                ? (runtime.companionState.pet ? { id: runtime.companionState.pet.publicId, name: runtime.companionState.pet.name, species: runtime.companionState.pet.speciesCode as InteriorPet['species'], breed: runtime.companionState.pet.breed, furColor: runtime.companionState.pet.furColor } : undefined)
+                : extras.pet,
+              homeObjectState: () => ({ hasPet: runtime.companionLoaded ? !!runtime.companionState.pet : !!extras.pet, outing: runtime.companionState.mode !== 'home', unread: runtime.letterUnread }),
               onExit: target => { if (target === 'town')
                   runtime.exitRoom(); },
               // engine 自己不认识 home.open-desk 之类的动作 id，转给外壳去接 world-actions.ts。

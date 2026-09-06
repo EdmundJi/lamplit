@@ -1,3 +1,5 @@
+import type { CompanionPet } from '../companion-visual'
+import type { CompanionMode } from '../companion-motion'
 import type PhaserNs from 'phaser'
 import { townTime, weatherForDate } from '../world-life'
 import { TownSoundscape } from '../soundscape'
@@ -35,6 +37,9 @@ export class TownRuntime {
   observationOn = false
   scenicMode = false
   townEvents: TownEventView[] = []
+  companionState: { pet: CompanionPet | null; mode: CompanionMode } = { pet: null, mode: 'home' }
+  companionPlace = false
+  companionLoaded = false
   letterUnread = 0
   desiredNight: boolean | null = null
   soundEnabled = false

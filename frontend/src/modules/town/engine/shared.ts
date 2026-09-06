@@ -1,3 +1,5 @@
+import type { CompanionPet } from '../companion-visual'
+import type { CompanionMode } from '../companion-motion'
 /** Shared geometry, public contracts and pure helpers for the town renderer. */
 import type PhaserNs from 'phaser'
 import { activityFor, hashString } from '../building-kit'
@@ -23,6 +25,9 @@ export type TownSelection = string | 'npc:assistant' | 'npc:postman' | 'academy'
 export type TownTravel = { place: string; label: string; phase: 'walking' | 'arrived' | 'blocked' }
 export type TownNearby = { id: string; label: string; action: string }
 export type TownHandlers = {
+  onCompanionModeChange?: (mode: 'following' | 'roaming') => void
+  onCompanionPlaceChange?: (inPark: boolean) => void
+  onCompanionInteract?: () => void
   /** Actual rendered light state, including manual previews and the player timezone. */
   onTimeChange?: (night: boolean) => void
   onConversationChange?: (notice: ConversationNotice | null) => void
@@ -49,6 +54,9 @@ export type TownHandlers = {
   onInitiativeSpent?: (npcCode: string) => void
 }
 export type TownGame = {
+  setCompanionState?: (state: { pet: CompanionPet | null; mode: CompanionMode }) => void
+  interactCompanion?: () => void
+  interactHomeObject?: (id: 'journal' | 'mailbox' | 'leash') => void
   /** Hands the engine the town's NPC roster (GET /town/npcs). Safe to call repeatedly. */
   applyNpcs: (npcs: TownNpcView[], budget: InitiativeBudget) => void
   applyEvents?: (events: TownEventView[]) => void

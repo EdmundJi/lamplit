@@ -1,3 +1,4 @@
+import type { createTownCompanion } from './companion'
 import type PhaserNs from 'phaser'
 import type { GreetCooldowns } from '../walkers'
 import type { CollisionWorld, Point, FurnitureObstacle } from '../collision'
@@ -42,6 +43,7 @@ export function createTownScene(runtime: TownRuntime) {
     residentIndex = new Map<string, number>();
     plotObjects = new Map<string, PhaserNs.GameObjects.GameObject[]>();
     plotSignature = new Map<string, string>();
+    companion: ReturnType<typeof createTownCompanion> | null = null;
     selfWalker: Walker | null = null;
     selfPath: Point[] = [];
     travel: TownTravel | null = null;

@@ -307,6 +307,11 @@ export function builtinWorldActions(): WorldAction[] {
   return [
     toggleNightAction(), toggleRunAction(), goHomeAction(), toggleAcademyAction(), refreshAction(),
     openDeskAction(), openAchievementWallAction(), openPetHouseAction(),
+    { id: 'home.read-journal', label: '翻开手账', hint: '在桌边看看今天的安排', domain: 'world', anchors: ['home'], run: () => ({ ok: true, events: [{ type: 'open', panel: 'today' }] }) },
+    { id: 'home.open-mailbox', label: '取出信件', hint: '朋友的来信与镇上的请柬', domain: 'world', anchors: ['home'], run: () => ({ ok: true, events: [{ type: 'open', panel: 'friends' }] }) },
+    { id: 'home.take-leash', label: '带伙伴出门', hint: '拿起门边的牵引绳，出去走走', domain: 'world', anchors: ['home'], run: () => ({ ok: true, events: [{ type: 'companion', action: 'walk' }] }) },
+    { id: 'home.stow-leash', label: '收好牵引绳', domain: 'world', anchors: ['home'], run: () => ({ ok: true, events: [{ type: 'companion', action: 'stay' }] }) },
+    { id: 'pet.stroke', label: '摸摸它', domain: 'world', anchors: ['home', 'park'], run: () => ({ ok: true, events: [{ type: 'companion', action: 'stroke' }] }) },
     { id: 'gym.open-attributes', label: '看看健康与成长', domain: 'world', anchors: ['gym'], run: () => ({ ok: true, events: [{ type: 'open', panel: 'attributes' }] }) },
     { id: 'cafe.open-goals', label: '在桌边理理方向', domain: 'world', anchors: ['cafe'], run: () => ({ ok: true, events: [{ type: 'open', panel: 'goals' }] }) },
     { id: 'cafe.open-ai', label: '与小助聊聊', domain: 'world', anchors: ['cafe'], run: () => ({ ok: true, events: [{ type: 'open', panel: 'ai' }] }) },

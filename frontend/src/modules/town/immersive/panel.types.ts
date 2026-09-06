@@ -25,6 +25,9 @@ export type WorldPanelDef = {
   loader: () => Promise<{ default: Component }>
   /** 窗口宽度倾向，最终几何由外壳决定。 */
   size: 'compact' | 'wide'
+  /** A familiar object around the existing business content. */
+  objectSurface?: 'journal' | 'mailbox'
+  objectTitle?: string
   /** 面板所属地点；通过家具、明确操作或功能栏打开。 */
   anchor?: WorldAnchor
   /** 用户要求「打开完整页面」时跳转的路由。 */
@@ -33,6 +36,7 @@ export type WorldPanelDef = {
 
 /** 面板回传给世界的事件：数据变化要在画面里看得见。 */
 export type WorldEvent =
+  | { type: 'companion'; action: 'walk' | 'stay' | 'stroke' }
   | { type: 'celebrate'; publicId: string }
   | { type: 'focus'; publicId: string }
   | { type: 'travel'; place: string }

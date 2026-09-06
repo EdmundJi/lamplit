@@ -1,3 +1,6 @@
+import { createHomeObjects, type HomeObjectState } from './home-objects'
+import { createCompanionVisual, type CompanionPet } from './companion-visual'
+import { createInteriorCompanion } from './interior-home-life'
 /**
  * 通用室内场景: renders any `RoomMapData` (map-loader.ts) — floor/wall tile layers, static
  * furniture, data-driven slots, seated residents, and doors — instead of the one hand-built room
@@ -82,6 +85,7 @@ export type InteriorOptions = {
   room: RoomMapData
   /** Numeric facts the room's data slots read (see map-loader.ts's `evaluateSlots`). Defaults to `{}`. */
   metrics?: RoomMetrics
+  homeObjectState?: () => HomeObjectState
   /** Residents seated at `room.seats`, in order — same shape/semantics as academy.scene.ts's
    * `AcademyResident[]` (state drives which seated animation row plays). */
   residents?: RoomResident[]
@@ -127,10 +131,12 @@ export type InteriorPetSpecies = 'CAT' | 'DOG' | 'HAMSTER' | 'SNAKE' | 'RABBIT' 
  */
 export type InteriorPet = {
   id: string
+  name?: string
   species: InteriorPetSpecies
   /** Breed label (from partners/pet-options.ts); only used to pick a stable pixel variant, never
    * displayed — an unrecognised breed just hashes like any other string would. */
   breed?: string
+  furColor?: string
 }
 
 /** world-actions.ts action id the room's pet spot is wired to (M3-4). Exported so a room map (or a
@@ -198,6 +204,9 @@ export function createInteriorScene(Phaser: typeof PhaserNs, options: InteriorOp
     worldPress = false
     player: PhaserNs.GameObjects.Sprite | null = null
     controller: RoomController | null = null
+    homeObjects: ReturnType<typeof createHomeObjects> | null = null
+    disposePet: (() => void) | null = null
+    petIdentity = ''
     lastDoor: RoomDoor | null = null
     nearbyLabels: { piece: RoomMapData['furniture'][number]; text: PhaserNs.GameObjects.Text; rest: boolean }[] = []
 
@@ -240,6 +249,16 @@ export function createInteriorScene(Phaser: typeof PhaserNs, options: InteriorOp
       this.plate(worldWidth / 2, 8, room.title, '#fff4e8', '#35644f')
       this.setupCamera()
       this.setupInput()
+      if (room.id === 'home-living-room') {
+        this.homeObjects = createHomeObjects(this, {
+          room, player: () => this.player,
+          approach: (piece, action) => this.approach(piece, action),
+          onInteract: (actionId, id) => options.onInteract?.(actionId, id),
+          state: () => options.homeObjectState?.() ?? { hasPet: !!options.pet, outing: false, unread: 0 },
+          inputBlocked: roomInputBlocked,
+        })
+      }
+      this.events.once('shutdown', () => { this.homeObjects?.destroy(); this.homeObjects = null; this.disposePet?.(); this.disposePet = null })
       this.scale.on('resize', this.setupCamera, this)
       this.events.once('shutdown', () => this.scale.off('resize', this.setupCamera, this))
     }
@@ -266,7 +285,7 @@ export function createInteriorScene(Phaser: typeof PhaserNs, options: InteriorOp
     drawFurniture() {
       for (const piece of room.furniture) {
         this.placeFurniture(piece.frame, piece.x, piece.y, piece.originX, piece.originY, piece.depth, piece.displayWidth, piece.displayHeight)
-        if (piece.interactive) this.wireInteractive(piece)
+        if (piece.interactive && !(room.id === 'home-living-room' && piece.interactive.actionId === 'home.open-desk')) this.wireInteractive(piece)
       }
     }
 
@@ -350,75 +369,42 @@ export function createInteriorScene(Phaser: typeof PhaserNs, options: InteriorOp
      * hookup for every other species (§0.1's "宠物是 Rive 矢量动画" correction). Silently does
      * nothing if the room has no such furniture piece or the caller passed no `pet` — this keeps
      * every room that doesn't opt in exactly as it renders today. */
+    applyCompanionPet(pet: CompanionPet | null) {
+      if (room.id !== 'home-living-room') return
+      options.pet = pet ? { id: pet.publicId, name: pet.name, species: pet.speciesCode as InteriorPetSpecies, breed: pet.breed, furColor: pet.furColor } : undefined
+      if (this.sys.isActive()) this.drawPet()
+    }
+
     drawPet() {
       const pet = options.pet
+      const identity = pet ? JSON.stringify([pet.id, pet.species, pet.breed, pet.furColor, pet.name]) : ''
+      if (identity === this.petIdentity) return
+      this.disposePet?.(); this.disposePet = null; this.petIdentity = identity
       if (!pet) return
       const spot = room.furniture.find(item => item.interactive?.actionId === PET_HOUSE_ACTION_ID)
       if (!spot) return
-      const spec = petPixelSpecFor(pet.species, pet.breed ?? pet.id)
-      if (!spec) this.drawPlaceholderPet(spot)
-      else this.drawPixelPet(spec, spot)
-    }
-
-    drawPlaceholderPet(spot: RoomMapData['furniture'][number]) {
-      const sprite = this.add.image(spot.x, spot.y, 'town', 'doghouse_sleep_1').setOrigin(0.5, 1).setDepth(spot.y + 1)
-      sprite.setDisplaySize(40, 40)
+      const visual = createCompanionVisual(this, { publicId: pet.id, speciesCode: pet.species, name: pet.name ?? '小伙伴', breed: pet.breed ?? pet.id, furColor: pet.furColor ?? '' }, spot)
+      const { sprite, framePrefix } = visual
+      // Keep the existing agent's home greeting/resting behaviour; share only the visual identity.
+      const companion = createInteriorCompanion(this, {
+        room, sprite, framePrefix, home: spot,
+        player: () => this.player,
+        isResting: () => this.controller?.isResting?.() ?? false,
+      })
+      this.disposePet = () => { companion.destroy(); visual.destroy() }
       sprite.setInteractive({ useHandCursor: true })
-      sprite.on('pointerup', (pointer: PhaserNs.Input.Pointer) => { if (this.worldPress && pointer?.event?.target === this.game.canvas) options.onInteract?.(PET_HOUSE_ACTION_ID, spot.id) })
-    }
-
-    drawPixelPet(spec: PetPixelSpec, spot: RoomMapData['furniture'][number]) {
-      this.ensurePetAnimations(spec)
-      const sprite = this.add.sprite(spot.x, spot.y, 'town', `${spec.framePrefix}_idle_1`).setOrigin(0.5, 1).setDepth(spot.y + 1)
-      sprite.setInteractive({ useHandCursor: true })
-      sprite.on('pointerup', (pointer: PhaserNs.Input.Pointer) => { if (this.worldPress && pointer?.event?.target === this.game.canvas) options.onInteract?.(PET_HOUSE_ACTION_ID, spot.id) })
-      this.schedulePetWander(sprite, spec, spot)
-    }
-
-    ensurePetAnimations(spec: PetPixelSpec) {
-      if (this.anims.exists(`${spec.framePrefix}-walk`)) return
-      const walk = Array.from({ length: spec.walkFrames }, (_, i) => ({ key: 'town', frame: `${spec.framePrefix}_walk_${i + 1}` }))
-      this.anims.create({ key: `${spec.framePrefix}-walk`, frames: walk, frameRate: 6, repeat: -1 })
-      this.anims.create({ key: `${spec.framePrefix}-idle`, frames: [{ key: 'town', frame: `${spec.framePrefix}_idle_1` }], frameRate: 1 })
-      if (spec.canSleep && !this.anims.exists('doghouse-sleep')) {
-        const sleep = Array.from({ length: FARM_WALK_FRAMES }, (_, i) => ({ key: 'town', frame: `doghouse_sleep_${i + 1}` }))
-        this.anims.create({ key: 'doghouse-sleep', frames: sleep, frameRate: 3, repeat: -1 })
-      }
-    }
-
-    /** A short wander-then-rest loop, tween-driven rather than hooked into the per-frame `update`
-     * loop the player/controller use — the pet doesn't need input handling or collision, just
-     * something that reads as "alive" from across the room. Dogs occasionally walk back to their
-     * house and play the ready-made `doghouse_sleep_*` cycle ("能睡" — M3-5); other species have no
-     * sleeping pose to fall back on, so they just idle in place between wanders. */
-    schedulePetWander(sprite: PhaserNs.GameObjects.Sprite, spec: PetPixelSpec, spot: RoomMapData['furniture'][number]) {
-      const roam = () => {
-        const goingToSleep = spec.canSleep && Math.random() < 0.25
-        const targetX = goingToSleep ? spot.x : spot.x + Phaser.Math.Between(-24, 24)
-        const targetY = goingToSleep ? spot.y : spot.y + Phaser.Math.Between(-10, 6)
-        sprite.setFlipX(targetX < sprite.x)
-        sprite.play(`${spec.framePrefix}-walk`, true)
-        this.tweens.add({
-          targets: sprite,
-          x: targetX,
-          y: targetY,
-          duration: 1400,
-          onComplete: () => {
-            sprite.setDepth(sprite.y + 1)
-            if (goingToSleep) {
-              sprite.play('doghouse-sleep', true)
-              this.time.delayedCall(5000 + Math.random() * 3000, () => {
-                sprite.play(`${spec.framePrefix}-idle`, true)
-                this.time.delayedCall(1200, roam)
-              })
-            } else {
-              sprite.play(`${spec.framePrefix}-idle`, true)
-              this.time.delayedCall(1500 + Math.random() * 1500, roam)
-            }
-          },
+      sprite.on('pointerup', (pointer: PhaserNs.Input.Pointer) => {
+        if (!this.acceptPress(pointer)) return
+        this.homeObjects?.cancel()
+        companion.pause(10000)
+        const currentSpot = { ...spot, x: sprite.x, y: sprite.y, interactive: {
+          actionId: 'pet.stroke', hit: { x: sprite.x - 16, y: sprite.y - 24, w: 32, h: 28 },
+        } }
+        this.approach(currentSpot, () => {
+          companion.pause(2500)
+          options.onInteract?.('pet.stroke', pet.id)
         })
-      }
-      this.time.delayedCall(500 + Math.random() * 1000, roam)
+      })
     }
 
     drawSlots() {
@@ -527,7 +513,9 @@ export function createInteriorScene(Phaser: typeof PhaserNs, options: InteriorOp
       this.escHandler = (event: KeyboardEvent) => {
         if (event.defaultPrevented || roomInputBlocked()) return
         event.preventDefault()
-        if (this.controller?.cancel?.()) return
+        const objectCancelled = this.homeObjects?.cancel() ?? false
+        const moveCancelled = this.controller?.cancel?.() ?? false
+        if (objectCancelled || moveCancelled) return
         if (firstDoor) options.onExit(firstDoor.target, firstDoor.id)
       }
       this.input.keyboard?.on('keydown-ESC', this.escHandler)
@@ -550,7 +538,7 @@ const DEFAULT_SPEED = 180
  * true 8-direction movement/animation) can replace via `InteriorOptions.createController` without
  * this file changing. */
 function roomInputBlocked(): boolean {
-  return Boolean(document.querySelector('[role="dialog"], .resident-moment')
+  return Boolean(document.querySelector('[role="dialog"], .resident-moment, .town-panel.has-feature')
     || document.activeElement?.matches('input, textarea, select, [contenteditable="true"]'))
 }
 

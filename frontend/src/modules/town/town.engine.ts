@@ -1,6 +1,7 @@
 /** Public lazy-loading boundary for the town renderer. Scene responsibilities live in engine/. */
 import type { TownModel } from './town.types'
 import type { RoomController } from './interior.scene'
+import type { CompanionPet } from './companion-visual'
 import type { TownGame, TownHandlers } from './engine/shared'
 import { computeServerOffset } from './engine/shared'
 import { installTownProbe } from './town-probe'
@@ -41,6 +42,21 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
   document.addEventListener('visibilitychange', visibilityHandler);
   runtime.soundscape.setVisible(!document.hidden);
   return {
+      setCompanionState: state => {
+          runtime.companionLoaded = true;
+          runtime.companionState = state;
+          runtime.sceneRef?.companion?.setState(state);
+          if (runtime.activeRoomKey) {
+              const room = runtime.game.scene.getScene(runtime.activeRoomKey) as { applyCompanionPet?: (pet: CompanionPet | null) => void } | null;
+              room?.applyCompanionPet?.(state.pet);
+          }
+      },
+      interactCompanion: () => { runtime.sceneRef?.companion?.interact(); },
+      interactHomeObject: id => {
+          if (!runtime.activeRoomKey) return;
+          const room = runtime.game.scene.getScene(runtime.activeRoomKey) as { homeObjects?: { interact(id: string): boolean } | null } | null;
+          room?.homeObjects?.interact(id);
+      },
       setLetterUnread: count => { runtime.letterUnread = Math.max(0, count); runtime.sceneRef?.applyLetterUnread(); },
       setNight: night => { runtime.desiredNight = night; runtime.sceneRef?.setNight(night); runtime.soundscape.refresh(); },
       setAutomaticTime: () => { runtime.desiredNight = null; runtime.publishTime(); runtime.soundscape.refresh(); },
@@ -52,10 +68,10 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
       },
       setRun: running => { runtime.desiredRun = running; runtime.sceneRef?.setRunMode(running); },
       focus: publicId => runtime.sceneRef?.focusOn(publicId),
-      travelTo: place => runtime.sceneRef?.travelToPlace(place),
-      cancelTravel: () => runtime.sceneRef?.cancelTravel(),
+      travelTo: place => { runtime.sceneRef?.companion?.cancelInteraction(); runtime.sceneRef?.travelToPlace(place); },
+      cancelTravel: () => { runtime.sceneRef?.companion?.cancelInteraction(); runtime.sceneRef?.cancelTravel(); },
       interactNearby: () => runtime.sceneRef?.interactNearby(),
-      recover: runtime.recover,
+      recover: () => { const recovered = runtime.recover(); if (recovered) runtime.sceneRef?.companion?.resetPosition(); return recovered; },
       beginConversation: code => { runtime.requestedConversation = code; return runtime.sceneRef?.beginConversation(code) ?? false; },
       endConversation: code => { if (!code || runtime.requestedConversation === code)
           runtime.requestedConversation = null; runtime.sceneRef?.endConversation(code); },
@@ -83,8 +99,10 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
       exitRoom: runtime.exitRoom,
       cancelRoomAction: () => {
           if (!runtime.activeRoomKey) return false;
-          const room = runtime.game.scene.getScene(runtime.activeRoomKey) as { controller?: RoomController | null } | null;
-          return room?.controller?.cancel?.() ?? false;
+          const room = runtime.game.scene.getScene(runtime.activeRoomKey) as { controller?: RoomController | null; homeObjects?: { cancel(): boolean } | null } | null;
+          const objectCancelled = room?.homeObjects?.cancel() ?? false;
+          const movementCancelled = room?.controller?.cancel?.() ?? false;
+          return objectCancelled || movementCancelled;
       },
       destroy: () => {
           runtime.transitionGeneration++;
