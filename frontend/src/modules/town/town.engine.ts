@@ -24,7 +24,7 @@ import {
   createGroundDetails,
 } from './town-furniture'
 import type { FurnitureItem, VenueFurniture, GroundDetail } from './town-furniture'
-import type { TownNpcView, InitiativeBudget, NpcActivity } from './town-npc.types'
+import type { TownNpcView, InitiativeBudget, NpcActivity, NpcPlace } from './town-npc.types'
 import { placeFor, activeSlot, densityCap, selectVisible } from './npc-placement'
 import type { TownLayout } from './npc-placement'
 import { buildItinerary, nextLeg } from './observation-mode'
@@ -197,9 +197,23 @@ type SelfKeys = {
 }
 
 /** Phaser's tween easings aren't reachable from a plain number, so the pan interpolation uses its own. */
-/** 同一个地点可能站着好几个人，散开一点，免得名牌和气泡叠在一起。 */
-function venueSpread(npcCode: string) {
-  return (hashString(npcCode) % 11) * 38 - 190
+/**
+ * 同一个地点站着好几个人时，各自的偏移量。
+ *
+ * <p>横向散开只解决"挤在一起"，解决不了"一字排开"——所有人都钉在同一条基线上，看上去就是
+ * 一排合唱队。所以纵向也要散：人行道那条带子窄（只有几十像素），广场和公园则一直往北敞到
+ * 篮球场，可以拉出真正的纵深。有了纵向差异，深度排序（depth = y）也才有东西可排，人才会
+ * 互相遮挡，而不是像贴纸一样并排。
+ */
+function venueOffset(npcCode: string, place: NpcPlace): { dx: number; dy: number } {
+  const seed = hashString(npcCode)
+  const dx = (seed % 11) * 38 - 190
+  // 广场与公园是开阔地，往北能站得很深；其余地方只有店门前那条人行道。
+  const open = place === 'plaza' || place === 'park'
+  const dy = open
+    ? -((seed >>> 8) % 9) * 22 + 20
+    : -((seed >>> 8) % 5) * 15 + 24
+  return { dx, dy }
 }
 
 function easeInOutSine(t: number) {
@@ -842,9 +856,10 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
       if (!this.textures.exists(sheet)) return
       const slot = activeSlot(npc.schedule, hour)
       const x = slot ? placeFor(slot.place, this.townLayout()) : academyDoorX
+      const offset = venueOffset(npc.code, slot?.place ?? 'street')
       const walker = this.spawnWalker(
         sheet,
-        x + venueSpread(npc.code),
+        x + offset.dx,
         npc.displayName,
         npc.layer === 2 ? 'rgba(84,64,120,.86)' : 'rgba(40,30,26,.62)',
         null,
@@ -856,6 +871,9 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
       walker.npc = npc
       walker.id = npc.code
       walker.homeX = x
+      walker.sprite.y = STREET_Y + offset.dy
+      walker.targetY = walker.sprite.y
+      walker.sprite.setDepth(walker.sprite.y)
     }
 
     despawnWalker(walker: Walker) {
@@ -876,7 +894,9 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
       if (!slot) return walker.homeX
       walker.action = slot.activity === 'reading' ? 'read' : slot.activity === 'phone' ? 'phone' : 'idle'
       walker.npcActivity = slot.activity
-      return placeFor(slot.place, this.townLayout()) + venueSpread(npc.code)
+      const offset = venueOffset(npc.code, slot.place)
+      walker.targetY = STREET_Y + offset.dy
+      return placeFor(slot.place, this.townLayout()) + offset.dx
     }
 
     /**
