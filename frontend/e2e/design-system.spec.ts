@@ -78,7 +78,7 @@ test('all main pages render without overflow or runtime errors', async ({ page }
 test('today actions, more menu, rhythm and reversal remain usable', async ({ page }) => {
   await fixture(page)
   await page.goto('/today')
-  await expect(page.getByRole('button', { name: '专注这一步' })).toBeInViewport()
+  await expect(page.getByRole('textbox', { name: '新事项', exact: true })).toBeVisible()
   await page.getByRole('button', { name: '调整今日节奏' }).click()
   await expect(page.getByRole('heading', { name: '今天用哪种节奏开始？' })).toBeVisible()
   await page.locator('.task-row').first().getByRole('button', { name: '完成', exact: true }).click()
@@ -114,12 +114,13 @@ test('goal drawer and focus dialog support keyboard dismissal and focus return',
   await expect(drawer).toHaveCount(0)
   await expect(page.getByRole('button', { name: '新建目标', exact: true })).toBeFocused()
   await page.goto('/today')
-  await page.getByRole('button', { name: '专注这一步' }).click()
+  await page.locator('.task-row').first().locator('summary').click()
+  await page.getByRole('button', { name: '专注执行', exact: true }).first().click()
   await expect(page.locator('.focus-panel')).toBeVisible()
   await page.keyboard.press('Shift+Tab')
   await expect(page.locator('.focus-panel button').last()).toBeFocused()
   await page.keyboard.press('Escape')
-  await expect(page.getByRole('button', { name: '专注这一步' })).toBeFocused()
+  await expect(page.getByRole('button', { name: '专注执行', exact: true }).first()).toBeFocused()
 })
 
 test('small and tablet viewports keep navigation and content accessible', async ({ page }) => {
@@ -155,4 +156,52 @@ test('authentication and admin share the visual system', async ({ page }, info) 
   await expect(page.getByRole('heading', { name: '治理工作台' })).toBeVisible()
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   await page.screenshot({ path: info.outputPath('admin.png'), fullPage: true })
+})
+
+test('journal keyboard entry, editing and completion traces', async ({ page }, info) => {
+  await fixture(page)
+  const now = new Date()
+  const date = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+  const rows = [{ publicId: 'journal-s1', taskPublicId: 'journal-t1', taskTitle: '读十页书，留下一句喜欢的话', plannedStartAt: `${date}T09:00:00`, status: 'PLANNED', roleName: '学生', estimatedMinutes: 15 }]
+  let creation: Record<string, unknown> = {}
+  await page.route('**/api/v1/task-schedules?*', route => route.fulfill({ json: { data: rows } }))
+  await page.route('**/api/v1/tasks', route => {
+    if (route.request().method() !== 'POST') return route.fallback()
+    creation = route.request().postDataJSON()
+    rows.push({ ...rows[0], publicId: 'journal-s2', taskPublicId: 'journal-t2', taskTitle: String(creation.title) })
+    return route.fulfill({ json: { data: { publicId: 'journal-t2' } } })
+  })
+  await page.route('**/api/v1/tasks/journal-t2', route => {
+    rows[1].taskTitle = route.request().postDataJSON().title
+    return route.fulfill({ json: { data: {} } })
+  })
+  await page.route('**/api/v1/task-schedules/journal-s2/events', route => {
+    rows[1].status = 'DONE'
+    return route.fulfill({ json: { data: { scheduleStatus: 'DONE', eventPublicId: 'journal-event' } } })
+  })
+  await page.goto('/today')
+  await expect(page.locator('.task-row')).toHaveCount(1)
+  await page.screenshot({ path: info.outputPath('journal-one-item.png'), fullPage: true })
+  const entry = page.getByRole('textbox', { name: '新事项', exact: true })
+  const title = '给未来的自己写一封很长的信：记下今天看到的云、走过的路，以及还没有来得及说出口的那些想法。'.repeat(2)
+  await entry.fill(title)
+  await entry.press('Enter')
+  await expect(page.locator('.task-row')).toHaveCount(2)
+  await expect(entry).toHaveValue('')
+  await expect(entry).toBeFocused()
+  expect(creation.activeFrom).toBe(date)
+  const second = page.locator('[data-task-id="journal-s2"]')
+  await second.locator('summary').click()
+  await second.getByRole('button', { name: '编辑标题' }).click()
+  const edit = page.getByRole('textbox', { name: '修改事项标题' })
+  await expect(edit).toBeFocused()
+  await page.screenshot({ path: info.outputPath('journal-edit-long-title.png'), fullPage: true })
+  await edit.fill('重新读一遍，写下自己的理解')
+  await edit.press('Enter')
+  await expect(second.locator('h2')).toHaveText('重新读一遍，写下自己的理解')
+  await second.getByRole('button', { name: '完成', exact: true }).click()
+  await expect(page.locator('.is-done')).toContainText('重新读一遍，写下自己的理解')
+  await expect(page.locator('.task-check').first()).toBeFocused()
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  await page.screenshot({ path: info.outputPath('journal-recorded.png'), fullPage: true })
 })

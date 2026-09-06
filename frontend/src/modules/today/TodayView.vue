@@ -1,13 +1,21 @@
 <script setup lang="ts">
-import { nextTick } from 'vue'
-import { BatteryMedium, Check, Clock3, Gauge, Minimize2, Play, RotateCcw, SkipForward, Sparkles, TimerReset, Undo2, X } from 'lucide-vue-next'
-import GrowthScene from '../../shared/ui/GrowthScene.vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { api } from '../../shared/api/client'
+import { roles } from '../goals/goals.logic'
+import { notifyDataChanged } from '../../shared/data-sync'
+import { BatteryMedium, Check, Clock3, Gauge, Minimize2, Play, RotateCcw, SkipForward, TimerReset, Undo2, X } from 'lucide-vue-next'
+import TownPaperScene from '../../shared/ui/TownPaperScene.vue'
 import { taskStatusLabel } from '../../shared/task-status'
 import { useDialogFocus } from '../../shared/ui/use-dialog-focus'
-import { DAILY_COMPLETION_LIMIT, useTodayLogic } from './today.logic'
+import { DAILY_COMPLETION_LIMIT, localDate, useTodayLogic, type Task } from './today.logic'
+
+const pageDate = ref(localDate())
+const dateParts = computed(() => pageDate.value.split('-'))
+const dateLabel = computed(() => new Intl.DateTimeFormat('zh-CN', { weekday: 'long' }).format(new Date(`${pageDate.value}T12:00:00`)))
+const isToday = computed(() => pageDate.value === localDate())
 
 const {
-  tasks, goals, loading, error, feedback, last,
+  tasks, loading, error, feedback, last, load, pending,
   selected, completionPercent, deferredStart,
   checkMood, availableMinutes, checkSubmitted, showCheck, recoveryChoice,
   focusTask, focusRunning,
@@ -15,7 +23,91 @@ const {
   suggestedPlan, activeAdvice, recommendedTasks, recommendedPublicIds, dailyGuidance, focusMinutes, focusClock,
   prepare, canActOn, canComplete, applyCheck, applyRecovery, startFocus, toggleFocus, closeFocus,
   act, confirmAction, finishFocus, reverse,
-} = useTodayLogic()
+} = useTodayLogic({ date: pageDate })
+
+
+const draft = ref('')
+const draftGoal = ref('')
+const draftMinutes = ref(15)
+const draftRole = ref('STUDENT')
+const selectedRole = computed(() => roles.find(role => role.code === draftRole.value) ?? roles[0])
+const saving = ref(false)
+const input = ref<HTMLInputElement | null>(null)
+const editing = ref<Task | null>(null)
+const editTitle = ref('')
+const editInput = ref<HTMLTextAreaElement[]>([])
+const eligibleGoals = computed(() => activeGoals.value.filter(goal => goal.startDate <= pageDate.value && goal.endDate >= pageDate.value))
+watch(eligibleGoals, goals => { if (!goals.some(goal => goal.publicId === draftGoal.value)) draftGoal.value = goals[0]?.publicId ?? '' })
+let feedbackTimer: ReturnType<typeof setTimeout> | undefined
+watch(feedback, value => {
+  clearTimeout(feedbackTimer)
+  if (value) feedbackTimer = setTimeout(() => { feedback.value = null }, 4500)
+})
+onBeforeUnmount(() => clearTimeout(feedbackTimer))
+watch(pageDate, () => { editing.value = null })
+function changeDate(event: Event) {
+  const value = (event.target as HTMLInputElement).value
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) pageDate.value = value
+}
+async function addTask() {
+  if (saving.value || !draft.value.trim() || !draftGoal.value) return
+  saving.value = true
+  error.value = ''
+  try {
+    await api.post('/tasks', {
+      goalPublicId: draftGoal.value, title: draft.value.trim(), notes: '',
+      estimatedMinutes: draftMinutes.value, difficulty: 2, rrule: null,
+      plannedLocalTime: '09:00', activeFrom: pageDate.value, activeUntil: pageDate.value,
+      roleCode: selectedRole.value.code, dimensionWeights: { [selectedRole.value.dimension]: 10 },
+    })
+    draft.value = ''
+    await load(false)
+    feedback.value = { tone: 'support', text: '已写入这一天。完成后，勾一下就好。' }
+    notifyDataChanged(['tasks', 'goals', 'today'])
+  } catch { error.value = '事项未保存，文字已保留，请重试。' }
+  finally { saving.value = false; await nextTick(); input.value?.focus() }
+}
+async function beginEdit(task: Task) {
+  document.querySelector<HTMLDetailsElement>(`[data-task-id="${task.publicId}"] details`)?.removeAttribute('open')
+  editing.value = task
+  editTitle.value = task.taskTitle
+  await nextTick()
+  editInput.value[0]?.focus()
+}
+async function cancelEdit() {
+  const id = editing.value?.publicId
+  editing.value = null
+  await nextTick()
+  document.querySelector<HTMLElement>(`[data-task-id="${id}"] summary`)?.focus()
+}
+function editKeydown(event: KeyboardEvent) {
+  if (event.isComposing || event.keyCode === 229) return
+  event.preventDefault()
+  void saveEdit()
+}
+async function saveEdit() {
+  const task = editing.value
+  if (!task?.taskPublicId || !editTitle.value.trim() || saving.value) return
+  saving.value = true
+  error.value = ''
+  try {
+    await api.patch(`/tasks/${task.taskPublicId}`, { title: editTitle.value.trim() })
+    task.taskTitle = editTitle.value.trim()
+    editing.value = null
+    feedback.value = { tone: 'support', text: '修改已保存，记录仍在原来的位置。' }
+    notifyDataChanged(['tasks', 'goals', 'today'])
+    await nextTick()
+    document.querySelector<HTMLElement>(`[data-task-id="${task.publicId}"] summary`)?.focus()
+  } catch { error.value = '修改未保存，编辑内容已保留，请重试。' }
+  finally { saving.value = false }
+}
+async function completeTask(task: Task) {
+  await act(task, 'COMPLETED')
+  if (task.status === 'DONE' && feedback.value) feedback.value.text = '已完成，记录已经留在这一页。'
+  await nextTick()
+  const next = document.querySelector<HTMLButtonElement>('.task-check:not(:disabled)')
+  ;(next ?? input.value)?.focus()
+}
 
 useDialogFocus(() => Boolean(selected.value || focusTask.value), '.today-dialog', () => { selected.value = null; closeFocus() })
 
@@ -35,39 +127,23 @@ async function submitCheck() {
 
 <template>
   <section class="page today-page">
-    <header class="page-head">
-      <div>
-        <p class="eyebrow">{{ new Intl.DateTimeFormat('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' }).format(new Date()) }}</p>
-        <h1>今天，先向前一小步。</h1>
-      </div>
-      <button v-if="last" class="secondary" @click="reverse">
-        <Undo2 :size="17" />
-        撤销上次记录
-      </button>
+    <header class="page-head journal-heading">
+      <div><p class="eyebrow">THE DAILY JOURNAL / 日常，值得记下</p><h1>把日子，写成自己。</h1></div>
+      <span class="edition">一日一页<br>{{ dateParts[0] }} · {{ dateParts[1] }}</span>
     </header>
-
-    <p v-if="error" class="error" role="alert">{{ error }}</p>
-    <div v-if="feedback" class="feedback-banner" :data-tone="feedback.tone" role="status" aria-live="polite">
-      <Sparkles :size="19" />
-      <p>{{ feedback.text }}<strong v-if="feedback.experience">{{ feedback.experience }}</strong></p>
+    <div class="journal-spread">
+      <div class="date-block"><span class="date-month">{{ dateParts[0] }} / {{ dateParts[1] }}</span><strong class="date-number">{{ dateParts[2] }}</strong><span class="date-weekday">{{ dateLabel }}<i />{{ isToday ? '今天' : pageDate < localDate() ? '翻看与补记' : '提前安排' }}</span><label class="date-picker">翻到某一天<input aria-label="手账日期" type="date" :value="pageDate" :disabled="saving || pending.size > 0" @change="changeDate"></label><button v-if="!isToday" class="rhythm-toggle" @click="pageDate = localDate()">回到今天 ↗</button></div>
+      <div class="opening-note"><p class="eyebrow">{{ isToday ? '今日页' : '日常页' }} / {{ String(tasks.length).padStart(2, '0') }} 件小事</p><h2>{{ loading ? '翻开这一页…' : tasks.length && !recommendedTasks.length ? '做过的事，\n都有回响。' : '留一点空白，\n做一点喜欢的事。' }}</h2><p>不必把每一格填满。<br>写下，去做，然后留下一个完成的记号。</p><button v-if="isToday" class="rhythm-toggle" :aria-expanded="showCheck" aria-controls="daily-rhythm" @click="showCheck = !showCheck"><BatteryMedium :size="15" />调整今日节奏</button></div>
+      <RouterLink class="today-scene" to="/town"><TownPaperScene /><span class="scene-caption"><span><small>FIG. 01 / 生活在纸上生长</small><strong>去我的小镇走走 <span aria-hidden="true">↗</span></strong></span></span></RouterLink>
     </div>
-
-    <section class="today-hero" aria-label="今日起点">
-      <div class="next-step">
-        <div class="hero-label"><span class="live-dot" /> 今日起点 <span>先做这一件</span></div>
-        <template v-if="loading"><h2>正在整理你的下一步…</h2><p>给今天，留一点真实的空间。</p></template>
-        <template v-else-if="recommendedTasks[0]">
-          <p class="next-step-kicker">从这一件事开始</p>
-          <h2>{{ recommendedTasks[0].taskTitle }}</h2>
-          <p>{{ recommendedTasks[0].roleName || '属于你的成长行动' }}<span v-if="recommendedTasks[0].estimatedMinutes"> · 约 {{ recommendedTasks[0].estimatedMinutes }} 分钟</span></p>
-          <div class="hero-actions"><button class="primary" :disabled="!canActOn(recommendedTasks[0])" @click="startFocus(recommendedTasks[0])"><Play :size="16" />专注这一步</button><button class="rhythm-toggle" :aria-expanded="showCheck" aria-controls="daily-rhythm" @click="showCheck = !showCheck"><BatteryMedium :size="16" />调整今日节奏</button></div>
-        </template>
-        <template v-else><p class="next-step-kicker">每一步，都有它的意义</p><h2>{{ tasks.length ? '今天留下的努力，都在这里。' : '从一件做得到的小事开始。' }}</h2><p>{{ tasks.length ? '可以回望一下，也可以让自己休息片刻。' : '不用排满今天，先给一个想法留出位置。' }}</p><RouterLink class="button primary" :to="tasks.length ? '/insights' : '/goals'">{{ tasks.length ? '看看成长记录' : '安排一件小事' }}</RouterLink></template>
-      </div>
-      <RouterLink class="today-scene" to="/town"><GrowthScene /><span class="scene-caption"><span><strong>我的街角</strong><small>场景预览 · 去看看你的成长小镇</small></span><span class="scene-arrow">↗</span></span></RouterLink>
-    </section>
-    <button v-if="!recommendedTasks.length" class="rhythm-toggle standalone-rhythm" :aria-expanded="showCheck" aria-controls="daily-rhythm" @click="showCheck = !showCheck"><BatteryMedium :size="16" />调整今日节奏</button>
-    <section v-show="showCheck" id="daily-rhythm" class="daily-check band" aria-labelledby="daily-check-title">
+    <p v-if="error" class="error" role="alert">{{ error }}</p>
+    <div class="record-receipt" aria-live="polite"><div v-if="feedback" class="feedback-banner" :data-tone="feedback.tone" role="status"><Check :size="16"/><p>{{ feedback.text }}<strong v-if="feedback.experience">{{ feedback.experience }}</strong></p></div><button v-if="last" class="rhythm-toggle" @click="reverse"><Undo2 :size="15"/>撤销上次记录</button></div>
+    <div class="list-heading"><h2>这一日的清单<span> / DAILY NOTES</span></h2><span>{{ completedTaskCount }} 件已留下完成痕迹</span></div>
+    <form class="quick-entry" @submit.prevent="addTask">
+      <span class="entry-plus" aria-hidden="true">＋</span><input ref="input" v-model="draft" aria-label="新事项" placeholder="写下一件小事…" maxlength="200" :disabled="saving" @keydown.enter="($event.isComposing || $event.keyCode === 229) && $event.preventDefault()"><button type="submit" class="primary" :disabled="saving || !draft.trim() || !draftGoal">{{ saving ? '保存中…' : '记下 ↵' }}</button>
+      <div class="entry-options"><label>归于 <select v-model="draftGoal" aria-label="事项所属目标" :disabled="saving || !eligibleGoals.length"><option v-if="!eligibleGoals.length" value="">这一天还没有目标</option><option v-for="goal in eligibleGoals" :key="goal.publicId" :value="goal.publicId">{{ goal.title }}</option></select></label><label><select v-model="draftRole" aria-label="事项类别" :disabled="saving"><option v-for="role in roles" :key="role.code" :value="role.code">{{ role.name }}</option></select></label><label>预计 <select v-model="draftMinutes" aria-label="预计分钟" :disabled="saving"><option :value="5">5 分钟</option><option :value="15">15 分钟</option><option :value="25">25 分钟</option><option :value="45">45 分钟</option></select></label><span>Enter 记下 · 单次事项</span><RouterLink v-if="!eligibleGoals.length" to="/goals">先安排一个覆盖这天的目标 ↗</RouterLink></div>
+    </form>
+    <section v-show="isToday && showCheck" id="daily-rhythm" class="daily-check band" aria-labelledby="daily-check-title">
       <div class="check-copy">
         <p class="eyebrow">每日状态检查</p>
         <h2 id="daily-check-title">今天用哪种节奏开始？</h2>
@@ -95,36 +171,35 @@ async function submitCheck() {
 
     <section v-if="!loading && tasks.length" class="task-quota" :data-limit-reached="dailyLimitReached" aria-live="polite">
       <div class="quota-copy">
-        <span>今日完成额度</span>
+        <span>完成记录</span>
         <strong>{{ completedTaskCount }} / {{ DAILY_COMPLETION_LIMIT }}</strong>
       </div>
       <progress :value="Math.min(completedTaskCount, DAILY_COMPLETION_LIMIT)" :max="DAILY_COMPLETION_LIMIT" :aria-label="`今日已完成 ${completedTaskCount} 个任务，最多 ${DAILY_COMPLETION_LIMIT} 个`" />
-      <p>{{ dailyLimitReached ? '今日额度已用完，未完成的任务可以延期或留待明天。' : `还可以完成 ${remainingCompletions} 个任务。` }}</p>
+      <p>{{ dailyLimitReached ? '这一天的完成额度已用完，可以延期安排。' : `还可以完成 ${remainingCompletions} 个任务。` }}</p>
     </section>
 
     <p v-if="loading" class="empty">正在整理今天的安排…</p>
     <template v-else-if="tasks.length">
-      <div v-if="checkSubmitted && activeAdvice !== 'KEEP'" class="daily-guidance" :data-advice="activeAdvice" role="status" aria-live="polite">
+      <div v-if="isToday && checkSubmitted && activeAdvice !== 'KEEP'" v-show="showCheck" class="daily-guidance" :data-advice="activeAdvice" role="status" aria-live="polite">
         <BatteryMedium :size="17" />
         <span>{{ dailyGuidance }}</span>
       </div>
       <div class="task-list">
         <article v-for="task in recommendedTasks" :key="task.publicId" class="task-row" :class="{ recommended: recommendedPublicIds.has(task.publicId) }" :data-task-id="task.publicId">
-          <div>
+          <button class="task-check" :title="dailyLimitReached ? '今日完成额度已用完' : '完成'" aria-label="完成" :disabled="!canComplete(task)" @click="completeTask(task)"><span aria-hidden="true" /></button>
+          <div class="task-copy">
             <span class="status">{{ taskStatusLabel(task.status) }}<template v-if="task.roleName"> · {{ task.roleName }}</template>
               <template v-if="recommendedPublicIds.has(task.publicId)"><span class="recommended-badge">今天先做</span></template>
             </span>
-            <h2>{{ task.taskTitle }}</h2>
+            <form v-if="editing?.publicId === task.publicId" class="inline-edit" @submit.prevent="saveEdit"><textarea ref="editInput" v-model="editTitle" rows="3" aria-label="修改事项标题" maxlength="200" :disabled="saving" @keydown.esc="cancelEdit" @keydown.enter="editKeydown" /><div class="actions"><button class="primary" :disabled="saving || !editTitle.trim()">保存</button><button type="button" class="secondary" :disabled="saving" @click="cancelEdit">取消</button></div><small>修改任务标题；周期任务会同步更新。Esc 取消</small></form>
+            <h2 v-else>{{ task.taskTitle }}</h2>
             <time>{{ new Date(task.plannedStartAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) }}<template v-if="task.estimatedMinutes"> · 约 {{ task.estimatedMinutes }} 分钟<template v-if="task.difficulty"> · 难度 {{ task.difficulty }}</template></template></time>
           </div>
           <div class="actions">
             <button v-if="task.status === 'PLANNED'" class="secondary" title="开始" aria-label="开始" :disabled="!canActOn(task)" @click="act(task, 'STARTED')">
               <Play :size="16" />开始
             </button>
-            <button class="primary" :title="dailyLimitReached ? '今日完成额度已用完' : '完成'" aria-label="完成" :disabled="!canComplete(task)" @click="act(task, 'COMPLETED')">
-              <Check :size="16" />完成
-            </button>
-            <details class="task-more"><summary aria-label="更多任务操作">更多</summary><div>
+            <details class="task-more"><summary aria-label="更多任务操作">•••</summary><div><button v-if="task.taskPublicId" class="secondary edit-task" type="button" :disabled="saving" @click="beginEdit(task)">编辑标题</button>
             <button class="secondary" title="专注执行" aria-label="专注执行" :disabled="!canActOn(task)" @click="startFocus(task)">
               <TimerReset :size="16" />专注执行
             </button>
@@ -140,7 +215,7 @@ async function submitCheck() {
             </div></details>
           </div>
         </article>
-        <article v-for="task in tasks.filter(item => !['PLANNED', 'IN_PROGRESS'].includes(item.status))" :key="task.publicId" class="task-row">
+        <article v-for="task in tasks.filter(item => !['PLANNED', 'IN_PROGRESS'].includes(item.status))" :key="task.publicId" class="task-row recorded-row" :class="{ 'is-done': task.status === 'DONE' }"><span class="record-mark" aria-hidden="true">{{ task.status === 'DONE' ? '✓' : '—' }}</span>
           <div>
             <span class="status">{{ taskStatusLabel(task.status) }}<template v-if="task.roleName"> · {{ task.roleName }}</template></span>
             <h2>{{ task.taskTitle }}</h2>
@@ -150,8 +225,8 @@ async function submitCheck() {
       </div>
     </template>
     <div v-else-if="!loading" class="empty">
-      <h2>今天还没有任务</h2>
-      <p>{{ activeGoals.length ? '目标已在上方显示，可以为它添加一项覆盖今天的周期任务。' : '可以从目标页安排一项小行动。' }}</p>
+      <h2>这一页，留给接下来的你。</h2>
+      <p>{{ activeGoals.length ? '在上面写下一件小事，按 Enter，开始这一页。' : '先定下一个方向，再写下今天想做的小事。' }}</p>
       <RouterLink class="button primary" to="/goals">前往目标</RouterLink>
     </div>
 
@@ -159,7 +234,7 @@ async function submitCheck() {
       <div class="goal-summary-head">
         <div>
           <p class="eyebrow">进行中的目标</p>
-          <h2 id="today-goals-title">今天仍在这个方向里</h2>
+          <h2 id="today-goals-title">页边的方向</h2>
         </div>
         <RouterLink class="button secondary" to="/goals">管理目标</RouterLink>
       </div>
@@ -232,127 +307,136 @@ async function submitCheck() {
 </template>
 
 <style scoped>
-.today-page { display: flex; flex-direction: column; gap: 20px; }
-.today-page > .page-head { margin-bottom: 4px; }
-.today-hero { display: grid; grid-template-columns: 1.3fr 1fr; border: 1px solid var(--border); background: var(--surface); border-radius: var(--radius-scene); overflow: hidden; }
-.next-step { padding: 28px 32px; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; }
-.hero-label { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; letter-spacing: .04em; font-weight: 650; }
-.hero-label > span:last-child { margin-left: 8px; letter-spacing: 0; }
-.live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
-.next-step .next-step-kicker { margin: 26px 0 8px; font-size: 12px; color: var(--muted); }
-.next-step h2 { font-size: clamp(23px, 2.4vw, 32px); line-height: 1.4; letter-spacing: -.6px; margin: 0; }
-.next-step p { color: var(--muted); font-size: 13px; margin: 12px 0 20px; }
-.hero-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 16px; }
-.rhythm-toggle { display: inline-flex; align-items: center; gap: 6px; background: transparent; color: var(--muted); font-size: 12px; padding: 0; }
-.standalone-rhythm { align-self: flex-start; }
-.today-scene { position: relative; display: block; overflow: hidden; min-height: 280px; color: var(--on-forest); text-decoration: none; background: var(--forest); }
-.today-scene :deep(.growth-scene) { height: 100%; }
-.scene-caption { position: absolute; bottom: 0; left: 0; right: 0; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 22px; background: linear-gradient(transparent, #173d32e8); }
-.scene-caption strong, .scene-caption small { display: block; }
-.scene-caption strong { font-size: 15px; font-weight: 500; }
-.scene-caption small { font-size: 10px; opacity: .75; margin-top: 4px; }
-.scene-arrow { display: grid; place-items: center; border: 1px solid #a2b49370; border-radius: 50%; width: 34px; height: 34px; }
+.today-page { width: min(1200px, 100%); padding: 24px 40px 80px; display: flex; flex-direction: column; gap: 0; }
+.journal-heading { border-bottom: 1px solid var(--border); padding-bottom: 18px; margin-bottom: 0; }
+.journal-heading h1 { font-family: 'Songti SC', 'Noto Serif CJK SC', 'STSong', serif; font-size: clamp(30px, 3.3vw, 46px); font-weight: 900; letter-spacing: -.04em; }
+.eyebrow { color: var(--muted); font-size: 10px; letter-spacing: .16em; }
+.edition { font: 12px/1.8 'SFMono-Regular', Consolas, monospace; text-align: right; color: var(--muted); }
+.journal-spread { display: grid; grid-template-columns: 180px 1fr 300px; align-items: center; gap: 36px; min-height: 260px; padding: 12px 0; }
+.date-block { display: flex; align-items: flex-start; flex-direction: column; gap: 8px; }
+.date-month { font: 12px 'SFMono-Regular', Consolas, monospace; letter-spacing: .12em; }
+.date-number { font: 112px/.95 Georgia, 'Times New Roman', serif; letter-spacing: -.08em; margin-left: -5px; color: var(--primary); }
+.date-weekday { display: flex; align-items: center; gap: 9px; font-size: 12px; margin-top: 6px; }
+.date-weekday i { width: 3px; height: 3px; background: var(--primary); border-radius: 50%; }
+.date-picker { display: grid; gap: 4px; color: var(--muted); font-size: 10px; margin-top: 12px; }
+.date-picker input { width: 150px; min-height: 32px; padding: 0; border: 0; border-bottom: 1px solid var(--border); background: transparent; color: var(--ink); font: 12px 'SFMono-Regular', Consolas, monospace; }
+.opening-note h2 { white-space: pre-line; font-family: 'Songti SC', 'STSong', serif; font-size: clamp(23px, 2.5vw, 32px); line-height: 1.65; font-weight: 600; margin: 10px 0 14px; }
+.opening-note > p:not(.eyebrow) { font-size: 12px; line-height: 1.9; color: var(--muted); }
+.rhythm-toggle { display: inline-flex; align-items: center; gap: 6px; background: transparent; border: 0; padding: 0; color: var(--muted); font-size: 12px; min-height: 36px; font-weight: 500; }
+.rhythm-toggle:hover { color: var(--primary); }
+.today-scene { min-width: 0; color: var(--ink); text-decoration: none; display: block; }
+.today-scene :deep(svg) { height: 190px; transition: transform 180ms ease; }
+.today-scene:hover :deep(svg) { transform: translateY(-4px); }
+.scene-caption { display: block; border-top: 1px solid var(--border); padding: 10px 0; margin: -6px 25px 0; }
+.scene-caption small { color: var(--muted); font-size: 9px; letter-spacing: .1em; }
+.scene-caption strong { display: flex; justify-content: space-between; font-size: 13px; margin-top: 4px; font-weight: 500; }
+.record-receipt { display: flex; justify-content: space-between; gap: 16px; align-items: center; min-height: 28px; }
+.feedback-banner { padding: 4px 0; margin: 0; background: transparent; border: 0; color: var(--ink); gap: 6px; grid-template-columns: 18px 1fr; }
+.feedback-banner p { font-size: 12px; }
+.feedback-banner strong { color: var(--muted); display: inline; font-size: 11px; font-weight: 400; margin-left: 10px; }
+.feedback-banner svg { color: var(--primary); }
+.list-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; border-top: 2px solid var(--ink); padding: 16px 0; }
+.list-heading h2 { font-size: 17px; margin: 0; }
+.list-heading h2 span { margin-left: 10px; color: var(--muted); font: 10px 'SFMono-Regular', Consolas, monospace; letter-spacing: .06em; }
+.list-heading > span { font-size: 11px; color: var(--muted); }
+.quick-entry { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; align-items: center; gap: 6px 12px; padding: 12px 0 16px; border-bottom: 1px solid var(--ink); }
+.entry-plus { font-size: 25px; color: var(--primary); }
+.quick-entry > input { border: 0; min-width: 0; padding: 10px 0; background: transparent; color: var(--ink); font-size: 18px; }
+.quick-entry input::placeholder { color: #77756d; }
+.entry-options { grid-column: 2 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; color: var(--muted); font-size: 11px; }
+.entry-options label { display: flex; align-items: center; gap: 5px; max-width: 100%; }
+.entry-options select { min-width: 0; max-width: 240px; background: transparent; border: 0; border-bottom: 1px solid var(--border); color: var(--ink); padding: 5px 0; border-radius: 0; }
+.entry-options a { color: var(--primary); }
+.task-quota { order: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 14px; color: var(--muted); font-size: 11px; padding: 12px 0; }
+.quota-copy { display: flex; align-items: center; gap: 8px; }
+.quota-copy strong { font-family: 'SFMono-Regular', Consolas, monospace; font-weight: 500; }
+.task-quota progress { width: 50px; height: 3px; accent-color: var(--primary); }
+.task-quota p { margin: 0; }
+.task-list { display: grid; gap: 0; }
+.task-row { display: flex; align-items: center; gap: 16px; border-bottom: 1px solid var(--border); padding: 22px 0; min-width: 0; }
+.task-copy, .recorded-row > div { flex: 1; min-width: 0; }
+.task-row h2 { font-size: 19px; font-weight: 500; line-height: 1.65; margin: 4px 0; overflow-wrap: anywhere; }
+.task-row .status, .task-row time { font-size: 11px; color: var(--muted); font-weight: 400; }
+.task-row time { font-family: 'SFMono-Regular', Consolas, monospace; }
+.recommended-badge { color: var(--primary); margin-left: 12px; font-size: 10px; }
+.task-check { display: grid; place-items: center; width: 32px; flex: 0 0 32px; padding: 0; background: transparent; }
+.task-check span { display: block; width: 20px; height: 20px; border: 1px solid var(--ink); }
+.task-check:hover:not(:disabled) span { border-color: var(--primary); background: var(--primary-soft); }
+.task-check:active:not(:disabled) span { background: var(--primary); }
+.task-row > .actions { flex-wrap: nowrap; gap: 8px; }
+.task-row > .actions > .secondary { padding: 0 10px; border: 0; background: transparent; font-size: 12px; color: var(--muted); }
 .task-more { position: relative; }
-.task-more summary { display: grid; place-items: center; min-width: 66px; height: 44px; padding: 0 12px; border: 1px solid var(--border); border-radius: var(--radius); cursor: pointer; list-style: none; font-size: 14px; font-weight: 650; color: var(--muted); }
+.task-more summary { display: grid; place-items: center; width: 40px; min-height: 44px; cursor: pointer; color: var(--muted); list-style: none; letter-spacing: 2px; }
 .task-more summary::-webkit-details-marker { display: none; }
-.task-more summary::marker { content: ''; }
-.task-more > div { position: absolute; right: 0; top: 48px; z-index: 8; width: 168px; padding: 6px; display: grid; gap: 4px; background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow); border-radius: var(--radius); }
-.task-more > div button { justify-content: flex-start; border: 0; }
-.today-dialog { z-index: 51 !important; max-height: calc(100dvh - 40px); overflow-y: auto; }
-@media (max-width: 760px) {
-  .today-hero { grid-template-columns: 1fr; }
-  .today-scene { min-height: 108px; height: 108px; order: -1; }
-  .today-scene :deep(svg) { width: 240px; margin-left: auto; }
-  .scene-caption { top: 0; padding: 18px; background: linear-gradient(90deg, #173d32, transparent); }
-  .scene-arrow { display: none; }
-  .next-step { padding: 22px; }
-  .next-step .next-step-kicker { margin-top: 16px; }
-  .today-page { gap: 16px; }
-  .today-page .task-row .actions { display: flex; width: 100%; flex-wrap: wrap; justify-content: flex-end; }
-}
-.feedback-banner strong { display: block; margin-top: 3px; color: var(--amber); font: 700 13px Inter, "PingFang SC", sans-serif; }
-.daily-check { display: grid; grid-template-columns: minmax(260px, .52fr) minmax(0, 1fr); gap: 18px 26px; align-items: stretch; padding: 20px; border: 1px solid var(--border); border-radius: calc(var(--radius) + 4px); background: color-mix(in srgb, var(--surface) 88%, transparent); box-shadow: var(--shadow-soft); overflow: hidden; }
+.task-more > div { position: absolute; top: 44px; right: 0; z-index: 8; width: 170px; padding: 6px; display: grid; gap: 4px; background: var(--surface); border: 1px solid var(--border); box-shadow: 0 8px 24px #22221f12; }
+.task-more button { border: 0; justify-content: flex-start; font-size: 12px; }
+.record-mark { width: 32px; flex: 0 0 32px; color: var(--primary); font: 26px Georgia, serif; text-align: center; }
+.is-done h2 { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--primary); text-decoration-thickness: 1px; }
+.inline-edit { display: grid; gap: 8px; margin: 10px 0; }
+.inline-edit textarea { width: 100%; min-width: 0; border: 0; border-bottom: 1px solid var(--primary); background: var(--surface); color: var(--ink); font-size: 18px; padding: 8px 0; resize: vertical; line-height: 1.7; }
+.inline-edit small { color: var(--muted); }
+.empty { border: 0; border-bottom: 1px solid var(--border); border-radius: 0; text-align: left; background: transparent; padding: 38px 44px 48px; }
+.empty h2 { font-family: 'Songti SC', serif; font-size: 24px; font-weight: 500; }
+.empty p { font-size: 13px; }
+.empty .button { font-size: 12px; margin-top: 8px; }
+.goal-today { margin-top: 36px; padding: 20px 0; border-top: 1px solid var(--ink); }
+.goal-summary-head { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+.goal-summary-head h2 { font-family: 'Songti SC', serif; margin: 0; font-size: 22px; }
+.goal-summary-head .button { font-size: 12px; background: transparent; border: 0; }
+.goal-strip { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 20px; gap: 28px; }
+.goal-strip article { border-left: 1px solid var(--border); padding-left: 16px; min-width: 0; }
+.goal-strip h3 { font-size: 14px; font-weight: 600; margin: 6px 0; overflow-wrap: anywhere; }
+.goal-strip p, .goal-hint, .goal-strip .status { color: var(--muted); font-size: 11px; }
+.daily-check { background: var(--surface-muted); border: 0; padding: 20px; margin: 16px 0; display: grid; gap: 16px; }
 .check-copy h2, .recovery h2 { margin: 0; font-size: 18px; }
-.check-controls { min-width: 0; display: grid; grid-template-columns: minmax(220px, 320px) minmax(0, 1fr); gap: 16px; align-items: center; }
-.mood-control { min-width: 0; display: grid; grid-template-columns: repeat(3, 1fr); overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius); }
-.mood-control button { border: 0; border-right: 1px solid var(--border); border-radius: 0; background: var(--surface); color: var(--muted); }
-.mood-control button:last-child { border-right: 0; }
-.mood-control button[aria-pressed='true'] { background: linear-gradient(135deg, var(--primary), color-mix(in srgb, var(--primary) 72%, var(--accent))); color: white; font-weight: 800; }
-.minutes-control { min-width: 0; width: 100%; display: grid; grid-template-columns: max-content minmax(140px, 1fr); gap: 14px; align-items: center; color: var(--muted); font-size: 13px; }
-.minutes-control input { width: 100%; min-width: 0; max-width: 100%; }
-.check-result { grid-column: 1 / -1; display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 14px; border: 1px solid color-mix(in srgb, var(--primary) 18%, var(--border)); border-radius: var(--radius); background: color-mix(in srgb, var(--primary-soft) 48%, var(--surface)); }
-.check-result svg { color: var(--primary); }
-.check-result p { margin: 4px 0 0; color: var(--muted); line-height: 1.55; }
-.goal-today { display: grid; gap: 14px; }
-.goal-summary-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-.goal-summary-head h2 { margin: 0; font-size: 18px; }
-.goal-strip { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
-.goal-strip article { min-height: 136px; display: grid; align-content: start; gap: 8px; padding: 14px; border: 1px solid var(--border); border-radius: var(--radius); background: color-mix(in srgb, var(--surface) 88%, transparent); box-shadow: var(--shadow-soft); }
-.goal-strip h3 { margin: 0; font-size: 16px; line-height: 1.35; }
-.goal-strip p { margin: 0; color: var(--muted); line-height: 1.55; }
-.goal-hint { margin: 0; padding: 11px 12px; border: 1px solid color-mix(in srgb, var(--amber) 28%, var(--border)); border-radius: var(--radius); background: color-mix(in srgb, var(--amber) 8%, var(--surface)); color: var(--muted); line-height: 1.6; }
-.recovery { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding-inline: 4px; }
-.recovery .muted { margin-bottom: 0; }
-.recovery-actions { display: flex; flex-wrap: wrap; gap: 9px; justify-content: flex-end; }
-.recovery-actions button[aria-pressed='true'] { border-color: var(--primary); color: var(--primary); font-weight: 700; }
-.task-quota { display: grid; grid-template-columns: max-content minmax(140px, 220px) minmax(0, 1fr); gap: 14px; align-items: center; padding: 12px 16px; border: 1px solid var(--border); border-radius: var(--radius); background: color-mix(in srgb, var(--surface) 90%, transparent); }
-.task-quota[data-limit-reached='true'] { border-color: color-mix(in srgb, var(--amber) 34%, var(--border)); background: color-mix(in srgb, var(--amber) 7%, var(--surface)); }
-.quota-copy { display: flex; align-items: baseline; gap: 9px; white-space: nowrap; }
-.quota-copy span { color: var(--muted); font-size: 13px; }
-.quota-copy strong { font-size: 16px; }
-.task-quota progress { width: 100%; height: 7px; accent-color: var(--primary); }
-.task-quota[data-limit-reached='true'] progress { accent-color: var(--amber); }
-.task-quota p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
-.task-list { display: grid; gap: 10px; }
-.task-row { min-height: 92px; display: flex; align-items: center; justify-content: space-between; gap: 16px; border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; background: color-mix(in srgb, var(--surface) 88%, transparent); box-shadow: 0 1px 0 rgb(255 255 255 / 60%) inset; }
-.task-row:hover { background: var(--surface); border-color: color-mix(in srgb, var(--primary) 24%, var(--border)); box-shadow: var(--shadow-soft); }
-.task-row h2 { font-size: 16px; margin: 4px 0; }
-.task-row time { font-size: 13px; color: var(--muted); }
-.task-row.recommended { border-color: color-mix(in srgb, var(--primary) 44%, var(--border)); background: color-mix(in srgb, var(--primary-soft) 52%, var(--surface)); }
-.recommended-badge { margin-left: 8px; padding: 2px 8px; border-radius: 999px; background: var(--primary); color: white; font-size: 11px; font-weight: 800; }
-.daily-guidance { display: flex; align-items: center; gap: 9px; margin-bottom: 12px; padding: 12px 15px; border: 1px solid color-mix(in srgb, var(--primary) 32%, var(--border)); border-radius: var(--radius); background: color-mix(in srgb, var(--primary-soft) 55%, var(--surface)); color: var(--primary-strong); font-size: 13px; font-weight: 700; }
-.daily-guidance[data-advice='SHRINK'] { border-color: color-mix(in srgb, var(--amber) 40%, var(--border)); background: color-mix(in srgb, var(--amber) 10%, var(--surface)); color: var(--amber); }
-.task-row .actions { flex-wrap: nowrap; }
-.task-row .icon-button { border: 1px solid var(--border); }
-.focus-button { color: var(--primary); }
-.button { display: inline-flex; align-items: center; text-decoration: none; }
-.empty .button { margin-top: 10px; }
-.action-panel, .focus-panel { position: fixed; z-index: 20; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(420px, calc(100vw - 32px)); display: grid; gap: 16px; padding: 24px; border: 1px solid var(--border); border-radius: calc(var(--radius) + 6px); background: var(--surface); box-shadow: var(--shadow); }
-.action-panel input { width: 100%; }
+.check-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 24px; }
+.mood-control { display: flex; gap: 8px; }
+.mood-control button { padding: 0 18px; background: var(--surface); color: var(--ink); border: 1px solid var(--border); }
+.mood-control button[aria-pressed='true'] { background: var(--ink); color: var(--surface); }
+.minutes-control { display: flex; align-items: center; gap: 12px; font-size: 12px; }
+.check-result { display: flex; gap: 12px; align-items: center; }
+.check-result > div { flex: 1; }
+.check-result p { margin: 4px 0; font-size: 12px; color: var(--muted); }
+.daily-guidance { font-size: 12px; color: var(--muted); display: flex; gap: 8px; margin: 10px 0; }
+.recovery { display: flex; align-items: center; flex-wrap: wrap; gap: 16px; margin-top: 20px; }
+.recovery p { font-size: 12px; }
+.recovery-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.recovery-actions button { font-size: 12px; }
+.recovery-actions button[aria-pressed='true'] { border-color: var(--primary); color: var(--primary); }
+.today-dialog { --surface: #faf9f6; --ink: #22221f; --muted: #686761; --border: #d8d5cd; --primary: #bd422e; --radius: 3px; color-scheme: light; color: var(--ink); position: fixed; z-index: 51; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(440px, calc(100vw - 32px)); max-height: calc(100dvh - 40px); overflow-y: auto; display: grid; gap: 16px; padding: 30px; border: 1px solid var(--border); background: var(--surface); box-shadow: 0 24px 80px #2223; }
+.today-dialog input { width: 100%; color: var(--ink); background: var(--surface); min-height: 44px; }
+.today-dialog :focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
 .focus-panel { text-align: center; }
-.close-focus { position: absolute; top: 12px; right: 12px; border: 1px solid var(--border); }
-.focus-panel h2 { margin: 0; font-size: 20px; }
-.focus-clock { font-size: 48px; font-weight: 900; color: var(--primary); letter-spacing: 0; }
+.close-focus { position: absolute; right: 12px; top: 12px; }
+.focus-panel h2 { font-size: 20px; overflow-wrap: anywhere; }
+.focus-clock { font: 64px Georgia, serif; color: var(--primary); }
 .focus-actions { justify-content: center; }
 .focus-panel small { color: var(--muted); }
-@media (prefers-reduced-motion: no-preference) {
-  .daily-check, .goal-today, .recovery { animation: task-enter var(--motion-medium) ease-out both; }
-  .task-row { animation: task-enter var(--motion-medium) ease-out both; transition: background-color var(--motion-fast) ease, transform var(--motion-fast) ease; }
-  .task-row:hover { transform: translateX(3px); }
-  .task-row:nth-child(2) { animation-delay: 45ms; }
-  .task-row:nth-child(3) { animation-delay: 90ms; }
-  .task-row:nth-child(4) { animation-delay: 135ms; }
-  .action-panel, .focus-panel { animation: panel-pop var(--motion-medium) cubic-bezier(.2,.8,.2,1) both; }
-  .focus-clock { animation: clock-breathe 2.5s ease-in-out infinite; }
+@media (max-width: 1100px) {
+  .journal-spread { grid-template-columns: 140px 1fr 280px; gap: 22px; }
+  .date-number { font-size: 96px; }
 }
-@keyframes task-enter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes panel-pop { from { opacity: 0; transform: translate(-50%, -48%) scale(.98); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
-@keyframes clock-breathe { 0%, 100% { opacity: .86; } 50% { opacity: 1; } }
 @media (max-width: 760px) {
-  .daily-check, .check-controls, .recovery { grid-template-columns: 1fr; align-items: stretch; }
-  .goal-summary-head { align-items: flex-start; flex-direction: column; }
-  .goal-strip { grid-template-columns: 1fr; }
-  .recovery { flex-direction: column; align-items: flex-start; }
-  .recovery-actions { width: 100%; justify-content: flex-start; }
-  .check-result { grid-template-columns: 24px minmax(0, 1fr); }
-  .check-result button { grid-column: 1 / -1; }
+  .today-page { padding: 28px 22px 60px; }
+  .journal-spread { grid-template-columns: 120px 1fr; gap: 20px; padding: 24px 0 8px; }
+  .today-scene { grid-column: 1 / -1; display: grid; grid-template-columns: 190px 1fr; align-items: center; }
+  .scene-caption { margin: 0; }
+  .opening-note h2 { font-size: 24px; }
+  .edition { display: none; }
+  .list-heading { flex-wrap: wrap; gap: 6px; }
+  .list-heading h2 span { font-size: 9px; }
+  .entry-options { grid-column: 1 / -1; }
+  .entry-options select { max-width: 210px; }
+  .quick-entry > input { font-size: 16px; }
+  .quick-entry { column-gap: 8px; }
+  .task-row { gap: 8px; flex-wrap: wrap; padding: 18px 0; }
+  .task-row h2 { font-size: 17px; }
+  .task-row > .actions { margin-left: 40px; justify-content: flex-end; width: calc(100% - 40px); }
+  .task-row > .actions > .secondary { min-height: 32px; }
+  .goal-strip { grid-template-columns: 1fr; gap: 20px; }
+  .record-receipt { flex-wrap: wrap; gap: 0; }
+  .check-result { flex-wrap: wrap; }
+  .check-result > div { min-width: 180px; }
 }
-@media (max-width: 600px) {
-  .task-quota { grid-template-columns: 1fr; gap: 8px; }
-  .task-row { align-items: flex-start; flex-direction: column; }
-  .task-row .actions { width: 100%; display: flex; flex-wrap: wrap; gap: 8px; padding-top: 6px; justify-content: flex-start; }
-  .task-row .actions > button, .task-row .actions .task-more { flex: 1 1 auto; min-width: 96px; }
-  .task-row .actions .task-more summary { width: 100%; }
-  .minutes-control { grid-template-columns: 1fr; }
-}
+@media (prefers-reduced-motion: reduce) { .today-scene :deep(svg) { height: 190px; transition: none; transform: none !important; } }
 </style>
