@@ -1000,7 +1000,12 @@ public class TownSocietyService {
 
     private TownNpcRhythm.Rhythm readRhythm(String json) {
         try {
-            return mapper.readValue(json, TownNpcRhythm.Rhythm.class);
+            TownNpcRhythm.Rhythm rhythm = mapper.readValue(json, TownNpcRhythm.Rhythm.class);
+            // JSON null is a successful Jackson read, but cannot produce a day plan.
+            if (rhythm == null || rhythm.errands() == null) {
+                return new TownNpcRhythm.Rhythm(420, 1320, List.of());
+            }
+            return rhythm;
         } catch (Exception ex) {
             // 建号早于 M7 的账号理论上不该存在（迁移已经回填了所有旧行），但读坏一份不该拖垮
             // 整晚的流水线——退回到"没有常态行程"，当天就只剩早晚在家。

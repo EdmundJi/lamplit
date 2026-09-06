@@ -82,6 +82,7 @@ public class TownNpcProvisioner {
             if (!missing.isEmpty()) {
                 insertNpcs(userId, missing);
             }
+            new TownNpcRhythmRepair(jdbc, objectMapper, clock).repair(userId);
             if (!playerBondsAlreadySeeded(userId)) {
                 ensurePlayerBonds(userId);
             }
