@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { nextTick } from 'vue'
 import { BatteryMedium, Check, Clock3, Gauge, Minimize2, Play, RotateCcw, SkipForward, Sparkles, TimerReset, Undo2, X } from 'lucide-vue-next'
-import GrowthScene from '../../shared/ui/GrowthScene.vue'
+import TownPreview from '../../shared/ui/TownPreview.vue'
 import { taskStatusLabel } from '../../shared/task-status'
 import { useDialogFocus } from '../../shared/ui/use-dialog-focus'
 import { DAILY_COMPLETION_LIMIT, useTodayLogic } from './today.logic'
@@ -38,7 +38,7 @@ async function submitCheck() {
     <header class="page-head">
       <div>
         <p class="eyebrow">{{ new Intl.DateTimeFormat('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' }).format(new Date()) }}</p>
-        <h1>今天，先向前一小步。</h1>
+        <h1>把今天，过成喜欢的样子<span class="title-period">。</span></h1>
       </div>
       <button v-if="last" class="secondary" @click="reverse">
         <Undo2 :size="17" />
@@ -54,17 +54,17 @@ async function submitCheck() {
 
     <section class="today-hero" aria-label="今日起点">
       <div class="next-step">
-        <div class="hero-label"><span class="live-dot" /> 今日起点 <span>先做这一件</span></div>
+        <div class="hero-label"><span class="live-dot" /> 今日起点 <span>留一点时间，给自己</span></div>
         <template v-if="loading"><h2>正在整理你的下一步…</h2><p>给今天，留一点真实的空间。</p></template>
         <template v-else-if="recommendedTasks[0]">
-          <p class="next-step-kicker">从这一件事开始</p>
+          <p class="next-step-kicker">先做这一件</p>
           <h2>{{ recommendedTasks[0].taskTitle }}</h2>
           <p>{{ recommendedTasks[0].roleName || '属于你的成长行动' }}<span v-if="recommendedTasks[0].estimatedMinutes"> · 约 {{ recommendedTasks[0].estimatedMinutes }} 分钟</span></p>
           <div class="hero-actions"><button class="primary" :disabled="!canActOn(recommendedTasks[0])" @click="startFocus(recommendedTasks[0])"><Play :size="16" />专注这一步</button><button class="rhythm-toggle" :aria-expanded="showCheck" aria-controls="daily-rhythm" @click="showCheck = !showCheck"><BatteryMedium :size="16" />调整今日节奏</button></div>
         </template>
         <template v-else><p class="next-step-kicker">每一步，都有它的意义</p><h2>{{ tasks.length ? '今天留下的努力，都在这里。' : '从一件做得到的小事开始。' }}</h2><p>{{ tasks.length ? '可以回望一下，也可以让自己休息片刻。' : '不用排满今天，先给一个想法留出位置。' }}</p><RouterLink class="button primary" :to="tasks.length ? '/insights' : '/goals'">{{ tasks.length ? '看看成长记录' : '安排一件小事' }}</RouterLink></template>
       </div>
-      <RouterLink class="today-scene" to="/town"><GrowthScene /><span class="scene-caption"><span><strong>我的街角</strong><small>场景预览 · 去看看你的成长小镇</small></span><span class="scene-arrow">↗</span></span></RouterLink>
+      <RouterLink class="today-scene" to="/town"><TownPreview /><span class="scene-caption"><span><strong>生活，在这里慢慢生长</strong><small>街角场景预览 · 去我的小镇</small></span><span class="scene-arrow">↗</span></span></RouterLink>
     </section>
     <button v-if="!recommendedTasks.length" class="rhythm-toggle standalone-rhythm" :aria-expanded="showCheck" aria-controls="daily-rhythm" @click="showCheck = !showCheck"><BatteryMedium :size="16" />调整今日节奏</button>
     <section v-show="showCheck" id="daily-rhythm" class="daily-check band" aria-labelledby="daily-check-title">
@@ -108,6 +108,7 @@ async function submitCheck() {
         <BatteryMedium :size="17" />
         <span>{{ dailyGuidance }}</span>
       </div>
+      <div class="task-section-heading"><h2>今天的安排<span>{{ tasks.length }}</span></h2><span>每一步，都算数</span></div>
       <div class="task-list">
         <article v-for="task in recommendedTasks" :key="task.publicId" class="task-row" :class="{ recommended: recommendedPublicIds.has(task.publicId) }" :data-task-id="task.publicId">
           <div>
@@ -234,20 +235,20 @@ async function submitCheck() {
 <style scoped>
 .today-page { display: flex; flex-direction: column; gap: 20px; }
 .today-page > .page-head { margin-bottom: 4px; }
-.today-hero { display: grid; grid-template-columns: 1.3fr 1fr; border: 1px solid var(--border); background: var(--surface); border-radius: var(--radius-scene); overflow: hidden; }
-.next-step { padding: 28px 32px; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; }
-.hero-label { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; letter-spacing: .04em; font-weight: 650; }
+.today-hero { display: grid; grid-template-columns: 1fr 1.1fr; border: 0; background: #182f29; border-radius: var(--radius-scene); min-height: 370px; color: #fff9e9; overflow: hidden; }
+.next-step { padding: 38px 0 38px 38px; min-width: 0; position: relative; z-index: 1; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; }
+.hero-label { display: flex; align-items: center; gap: 8px; color: #d6c795; font-size: 11px; letter-spacing: .12em; font-weight: 500; }
 .hero-label > span:last-child { margin-left: 8px; letter-spacing: 0; }
-.live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
-.next-step .next-step-kicker { margin: 26px 0 8px; font-size: 12px; color: var(--muted); }
-.next-step h2 { font-size: clamp(23px, 2.4vw, 32px); line-height: 1.4; letter-spacing: -.6px; margin: 0; }
-.next-step p { color: var(--muted); font-size: 13px; margin: 12px 0 20px; }
+.live-dot { width: 6px; height: 6px; border-radius: 50%; background: #e6c875; box-shadow: 0 0 12px #e6c87550; }
+.next-step .next-step-kicker { margin: 32px 0 12px; font-size: 11px; color: #bac9bc; }
+.next-step h2 { font-size: clamp(26px, 2.7vw, 38px); line-height: 1.45; letter-spacing: -.8px; font-weight: 550; text-wrap: balance; margin: 0; }
+.next-step p { color: #bac9bc; font-size: 13px; margin: 14px 0 28px; }
 .hero-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 16px; }
 .rhythm-toggle { display: inline-flex; align-items: center; gap: 6px; background: transparent; color: var(--muted); font-size: 12px; padding: 0; }
 .standalone-rhythm { align-self: flex-start; }
-.today-scene { position: relative; display: block; overflow: hidden; min-height: 280px; color: var(--on-forest); text-decoration: none; background: var(--forest); }
-.today-scene :deep(.growth-scene) { height: 100%; }
-.scene-caption { position: absolute; bottom: 0; left: 0; right: 0; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 22px; background: linear-gradient(transparent, #173d32e8); }
+.today-scene { position: relative; display: block; overflow: hidden; min-height: 370px; color: var(--on-forest); text-decoration: none; background: var(--forest); }
+.today-scene :deep(.town-preview) { position: absolute; inset: 0; }
+.scene-caption { position: absolute; bottom: 0; left: 0; right: 0; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 44px 26px 25px; background: linear-gradient(transparent, #182f29e8); }
 .scene-caption strong, .scene-caption small { display: block; }
 .scene-caption strong { font-size: 15px; font-weight: 500; }
 .scene-caption small { font-size: 10px; opacity: .75; margin-top: 4px; }
@@ -261,9 +262,9 @@ async function submitCheck() {
 .today-dialog { z-index: 51 !important; max-height: calc(100dvh - 40px); overflow-y: auto; }
 @media (max-width: 760px) {
   .today-hero { grid-template-columns: 1fr; }
-  .today-scene { min-height: 108px; height: 108px; order: -1; }
-  .today-scene :deep(svg) { width: 240px; margin-left: auto; }
-  .scene-caption { top: 0; padding: 18px; background: linear-gradient(90deg, #173d32, transparent); }
+  .today-scene { min-height: 170px; height: 170px; order: -1; }
+  .today-scene :deep(canvas) { object-position: center 48%; }
+  .scene-caption { top: 0; padding: 18px; align-items: flex-end; padding-top: 70px; background: linear-gradient(transparent 30%, #182f29); }
   .scene-arrow { display: none; }
   .next-step { padding: 22px; }
   .next-step .next-step-kicker { margin-top: 16px; }
@@ -303,13 +304,13 @@ async function submitCheck() {
 .task-quota progress { width: 100%; height: 7px; accent-color: var(--primary); }
 .task-quota[data-limit-reached='true'] progress { accent-color: var(--amber); }
 .task-quota p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
-.task-list { display: grid; gap: 10px; }
-.task-row { min-height: 92px; display: flex; align-items: center; justify-content: space-between; gap: 16px; border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; background: color-mix(in srgb, var(--surface) 88%, transparent); box-shadow: 0 1px 0 rgb(255 255 255 / 60%) inset; }
+.task-list { display: grid; gap: 0; border-top: 1px solid var(--border); }
+.task-row { min-height: 100px; display: flex; align-items: center; justify-content: space-between; gap: 16px; border: 0; border-bottom: 1px solid var(--border); border-radius: 0; padding: 20px 8px; background: transparent; }
 .task-row:hover { background: var(--surface); border-color: color-mix(in srgb, var(--primary) 24%, var(--border)); box-shadow: var(--shadow-soft); }
 .task-row h2 { font-size: 16px; margin: 4px 0; }
 .task-row time { font-size: 13px; color: var(--muted); }
-.task-row.recommended { border-color: color-mix(in srgb, var(--primary) 44%, var(--border)); background: color-mix(in srgb, var(--primary-soft) 52%, var(--surface)); }
-.recommended-badge { margin-left: 8px; padding: 2px 8px; border-radius: 999px; background: var(--primary); color: white; font-size: 11px; font-weight: 800; }
+.task-row.recommended { background: transparent; }
+.recommended-badge { margin-left: 8px; padding: 2px 8px; border-radius: 999px; background: var(--primary-soft); color: var(--primary-strong); font-size: 10px; font-weight: 500; }
 .daily-guidance { display: flex; align-items: center; gap: 9px; margin-bottom: 12px; padding: 12px 15px; border: 1px solid color-mix(in srgb, var(--primary) 32%, var(--border)); border-radius: var(--radius); background: color-mix(in srgb, var(--primary-soft) 55%, var(--surface)); color: var(--primary-strong); font-size: 13px; font-weight: 700; }
 .daily-guidance[data-advice='SHRINK'] { border-color: color-mix(in srgb, var(--amber) 40%, var(--border)); background: color-mix(in srgb, var(--amber) 10%, var(--surface)); color: var(--amber); }
 .task-row .actions { flex-wrap: nowrap; }
@@ -328,7 +329,7 @@ async function submitCheck() {
 @media (prefers-reduced-motion: no-preference) {
   .daily-check, .goal-today, .recovery { animation: task-enter var(--motion-medium) ease-out both; }
   .task-row { animation: task-enter var(--motion-medium) ease-out both; transition: background-color var(--motion-fast) ease, transform var(--motion-fast) ease; }
-  .task-row:hover { transform: translateX(3px); }
+  .task-row:hover { transform: none; }
   .task-row:nth-child(2) { animation-delay: 45ms; }
   .task-row:nth-child(3) { animation-delay: 90ms; }
   .task-row:nth-child(4) { animation-delay: 135ms; }
@@ -355,4 +356,54 @@ async function submitCheck() {
   .task-row .actions .task-more summary { width: 100%; }
   .minutes-control { grid-template-columns: 1fr; }
 }
+
+/* The scene carries the expressive colour; daily controls stay quiet and legible. */
+.today-page { gap: 24px; }
+.today-page > .page-head { margin-bottom: 6px; }
+.today-page .page-head h1 { font-family: "Songti SC", "STSong", "Noto Serif CJK SC", serif; font-size: clamp(26px, 2.6vw, 36px); font-weight: 600; letter-spacing: .01em; }
+.title-period { color: var(--accent); }
+.next-step > .primary, .hero-actions > .primary { background: #e8cf92; color: #20372e; min-height: 46px; padding: 0 22px; border-radius: 8px; }
+.next-step > .primary:hover, .hero-actions > .primary:hover { background: #f2deb1; }
+.hero-actions .rhythm-toggle { color: #d0dbd0; }
+.hero-label > span:last-child { color: #b0c0b4; font-size: 10px; }
+.task-section-heading { display: flex; align-items: baseline; justify-content: space-between; margin-top: 8px; margin-bottom: -16px; gap: 12px; }
+.task-section-heading h2 { margin: 0; font-size: 18px; font-weight: 600; }
+.task-section-heading h2 span { margin-left: 10px; font: 400 13px Inter, sans-serif; color: var(--muted); }
+.task-section-heading > span { color: var(--muted); font-size: 11px; }
+.task-row > div:first-child { min-width: 0; }
+.task-row h2 { font-size: 16px; font-weight: 550; overflow-wrap: anywhere; }
+.task-row .status { font-size: 11px; font-weight: 500; color: var(--muted); }
+.task-row .primary { background: var(--primary-soft); color: var(--primary-strong); }
+.task-row .primary:hover { background: var(--primary); color: white; }
+.task-row .secondary, .task-more summary { background: transparent; border-color: transparent; font-size: 12px; }
+.task-quota { padding: 0 0 20px; border: 0; border-bottom: 1px solid var(--border); border-radius: 0; background: transparent; }
+.task-quota progress { height: 4px; }
+.quota-copy strong { font-variant-numeric: tabular-nums; font-weight: 500; }
+.goal-strip { gap: 20px; }
+.goal-strip article { background: transparent; box-shadow: none; border: 0; border-left: 2px solid var(--primary-soft); border-radius: 0; padding: 4px 18px; min-height: 100px; }
+.goal-strip p { font-size: 13px; }
+@media (min-width: 761px) and (max-width: 1100px) {
+  .today-hero { grid-template-columns: 1.05fr 1fr; }
+  .next-step { padding: 28px 0 28px 26px; }
+  .hero-label > span:last-child { display: none; }
+  .check-controls { grid-template-columns: 1fr; }
+}
+@media (max-width: 760px) {
+  .today-page { gap: 20px; }
+  .today-page .page-head h1 { font-size: 26px; }
+  .today-page .page-head .secondary { font-size: 11px; padding: 0 8px; }
+  .today-hero { min-height: 0; }
+  .next-step { padding: 8px 24px 28px; }
+  .next-step h2 { font-size: 27px; }
+  .hero-label { font-size: 10px; }
+  .next-step .next-step-kicker { margin: 20px 0 8px; }
+  .next-step p { margin-bottom: 20px; }
+  .scene-caption strong { font-size: 13px; }
+  .scene-caption small { font-size: 9px; }
+  .scene-caption { padding: 18px 24px; }
+  .hero-actions { gap: 12px; }
+  .task-row { padding-inline: 0; }
+  .task-row .actions > button, .task-row .actions .task-more { min-width: 70px; }
+}
+
 </style>

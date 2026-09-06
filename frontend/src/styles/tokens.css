@@ -1,12 +1,12 @@
 :root {
   color-scheme: light;
-  --canvas: #f5f3ec;
+  --canvas: #f7f6f2;
   --surface: #fffefa;
   --surface-muted: #ecefe7;
   --surface-raised: #ffffff;
-  --ink: #20372e;
-  --muted: #617069;
-  --border: #d7ded4;
+  --ink: #263d34;
+  --muted: #687064;
+  --border: #e0e3d9;
   --primary: #255643;
   --primary-strong: #173d32;
   --primary-soft: #e2ebde;
@@ -19,26 +19,26 @@
   --radius-panel: 18px;
   --radius-scene: 24px;
   --control: 44px;
-  --sidebar: 224px;
+  --sidebar: 208px;
   --forest: #173d32;
   --forest-deep: #102c25;
   --sun: #ebc76b;
   --on-forest: #fffdf5;
-  /* Sidebar sits on the brand's inverse surface; kept as roles so themes can retune it. */
-  --nav-bg: #102c25;
-  --nav-ink: #bdcec3;
-  --nav-ink-strong: #ffffff;
-  --nav-muted: #91ad9e;
-  --nav-faint: #afc3b7;
-  --nav-hover: #244639;
-  --nav-active-bg: #e5eddf;
-  --nav-active-ink: #173d32;
-  --nav-line: #355043;
-  --nav-card: #203e31;
-  --nav-card-border: #385343;
-  --nav-card-ink: #e4eadd;
-  --nav-avatar: #49634c;
-  --nav-avatar-ink: #f5e8b5;
+  /* Quiet navigation surfaces frame the scene; semantic roles support dark themes. */
+  --nav-bg: #efeee7;
+  --nav-ink: #686f63;
+  --nav-ink-strong: #243c31;
+  --nav-muted: #6b7266;
+  --nav-faint: #687060;
+  --nav-hover: #e5e7dc;
+  --nav-active-bg: #263f32;
+  --nav-active-ink: #fff9e9;
+  --nav-line: #d8dccf;
+  --nav-card: #e7e8dc;
+  --nav-card-border: #d8ddcb;
+  --nav-card-ink: #364d39;
+  --nav-avatar: #d8decb;
+  --nav-avatar-ink: #385039;
   /* Five growth dimensions keep fixed chart colours so a hue always means the same thing. */
   --dim-knowledge: #c85f47;
   --dim-health: #4f856a;
@@ -200,4 +200,39 @@
     --accent-strong: #b1c5a1;
     --amber: #e4bd66;
   }
+}
+
+:root[data-theme='dark'] {
+  --nav-bg: #13251d;
+  --nav-ink: #b2c1b5;
+  --nav-ink-strong: #f4f4e8;
+  --nav-muted: #9ba99d;
+  --nav-faint: #a6b6a8;
+  --nav-hover: #243b2d;
+  --nav-active-bg: #dce5cf;
+  --nav-active-ink: #243c31;
+  --nav-line: #324638;
+  --nav-card: #20382a;
+  --nav-card-border: #354b39;
+  --nav-card-ink: #d6e1cf;
+  --nav-avatar: #3d543d;
+  --nav-avatar-ink: #e8dab6;
+}
+@media (prefers-color-scheme: dark) {
+:root[data-theme='system'] {
+  --nav-bg: #13251d;
+  --nav-ink: #b2c1b5;
+  --nav-ink-strong: #f4f4e8;
+  --nav-muted: #9ba99d;
+  --nav-faint: #a6b6a8;
+  --nav-hover: #243b2d;
+  --nav-active-bg: #dce5cf;
+  --nav-active-ink: #243c31;
+  --nav-line: #324638;
+  --nav-card: #20382a;
+  --nav-card-border: #354b39;
+  --nav-card-ink: #d6e1cf;
+  --nav-avatar: #3d543d;
+  --nav-avatar-ink: #e8dab6;
+}
 }
