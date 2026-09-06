@@ -10,6 +10,8 @@ import TownOnboarding from './TownOnboarding.vue'
 import { useNpcChatStore } from './npc-chat'
 import { useTownNpcStore } from './town-npc.store'
 import { TownControls, type RunMode } from './town-controls'
+import { worldPanels } from './immersive/panels/manifest'
+import { runWorldAction } from './immersive/world-actions'
 import type { TownGame, TownSelection } from './town.engine'
 import type { TownModel } from './town.types'
 
@@ -78,6 +80,9 @@ async function mountGame() {
       onAcademyChange: inside => { insideAcademy.value = inside; if (!inside && selection.value === 'academy') selection.value = null },
       onPlayerMove: (x, y) => { playerPosition.value = { x, y } },
       onDistanceToGuide: distance => { distanceToGuide.value = distance },
+      // 护栏 A：把这一次主动搭话记到服务端，再用权威额度校正引擎的乐观值。
+      onInitiativeSpent: () => { void townNpcStore.consumeInitiative().then(budget => game?.setInitiativeBudget(budget)) },
+      onInteriorInteract: (actionId, id) => { void openInteriorTarget(actionId, id) },
     })
     if (sequence !== mountSequence) { created.destroy(); return }
     game = created
@@ -90,6 +95,25 @@ async function mountGame() {
   } catch (error) {
     engineError.value = (error as Error).message || '小镇画面初始化失败'
   }
+}
+
+/**
+ * 室内点了书桌/成就墙/宠物窝。走的是和沉浸外壳同一份世界能力注册表——这里只是把它产出的
+ * "开面板"事件翻译成跳整页，因为传统小镇页没有面板窗口这一层。
+ */
+async function openInteriorTarget(actionId: string, id: string) {
+  const result = await runWorldAction(actionId, {
+    bridge: { emit: () => {}, get runMode() { return running.value }, setRunMode: () => {}, run: async () => ({ ok: true }) },
+    anchor: 'home',
+    selfPublicId: self.value?.publicId ?? null,
+    night: night.value,
+    insideAcademy: insideAcademy.value,
+    refresh: () => store.load(),
+    payload: id,
+  })
+  const opened = result.events?.find(event => event.type === 'open')
+  const route = opened ? worldPanels.find(panel => panel.key === opened.panel)?.fullPage : null
+  if (route) router.push(route)
 }
 
 function toggleObservation() {

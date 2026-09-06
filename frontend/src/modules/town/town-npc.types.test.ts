@@ -2,6 +2,10 @@ import { describe, expect, it } from 'vitest'
 import type {
   InitiativeBudget,
   NpcActivity,
+  NpcDayPlan,
+  NpcErrand,
+  NpcErrandOrigin,
+  NpcLeg,
   NpcPlace,
   NpcScheduleSlot,
   NpcTalkingPoint,
@@ -94,5 +98,35 @@ describe('town-npc.types', () => {
     }
     expect(guide.dimension).toBeNull()
     expect(guide.talkingPoints).toHaveLength(0)
+  })
+
+  it('accepts a fully-formed dayPlan matching CONTRACT-M7.md §1\'s sample payload', () => {
+    const origins: NpcErrandOrigin[] = ['RHYTHM', 'DEVIATION', 'EVENT']
+    expect(origins).toHaveLength(3)
+
+    const errand: NpcErrand = { place: 'gym', activity: 'idle', startMinute: 420, endMinute: 480, priority: 2, origin: 'RHYTHM' }
+    const leg: NpcLeg = { fromPlace: 'home', toPlace: 'gym', departMinute: 405, arriveMinute: 420 }
+    const dayPlan: NpcDayPlan = { date: '2026-09-06', errands: [errand], legs: [leg] }
+
+    expect(dayPlan.errands[0].priority).toBeGreaterThanOrEqual(0)
+    expect(dayPlan.errands[0].priority).toBeLessThanOrEqual(2)
+    expect(dayPlan.legs[0].arriveMinute).toBe(dayPlan.errands[0].startMinute)
+  })
+
+  it('TownNpcView.dayPlan is optional — an M7-less backend payload still type-checks', () => {
+    const npc: TownNpcView = {
+      code: 'GUIDE',
+      displayName: '小助',
+      layer: 1,
+      sprite: 'npc_scout',
+      dimension: null,
+      interests: {},
+      affinityToPlayer: 0,
+      mood: { valence: 0, energy: 0 },
+      schedule: [{ startHour: 0, endHour: 24, place: 'academy', activity: 'idle' }],
+      talkingPoints: [],
+      // no `dayPlan` here on purpose
+    }
+    expect(npc.dayPlan).toBeUndefined()
   })
 })

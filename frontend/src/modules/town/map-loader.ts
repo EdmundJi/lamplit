@@ -31,6 +31,20 @@ export type RoomDoor = {
   spawn?: RoomPoint
 }
 
+/**
+ * A furniture piece that reacts to clicks (M3-3). `actionId` is a world-actions.ts registry id —
+ * the map data only says "clicking this means that capability", it never runs the capability
+ * itself, so a room JSON never needs to know what "打开书桌" actually does.
+ */
+export type RoomInteraction = {
+  actionId: string
+  /** Click hit-box; omit to use a `tileSize x tileSize` box anchored the same way the furniture
+   * sprite is (bottom-center at x,y) — the common case, since most interactive props are one tile. */
+  hit?: RoomRect
+  /** Hover/label text, e.g. "打开书桌". Omit for furniture that should stay silent until clicked. */
+  label?: string
+}
+
 /** Static decoration. Anchored like Phaser's `setOrigin` (default 0.5,1 — bottom-center, so `y`
  * is the character's/object's "feet" line) and depth-sorted by `y` unless `depth` is given. */
 export type RoomFurniture = {
@@ -43,6 +57,8 @@ export type RoomFurniture = {
   depth?: number
   displayWidth?: number
   displayHeight?: number
+  /** Present only for furniture the player can click (desk / achievement wall / pet house, ...). */
+  interactive?: RoomInteraction
 }
 
 /**
@@ -241,6 +257,25 @@ export function parseRoomMap(data: unknown): RoomMapData {
       if (!isNonEmptyString(piece.id)) { issues.push(`furniture[${index}].id must be a non-empty string`); return }
       if (!isNonEmptyString(piece.frame)) { issues.push(`furniture[${index}] ("${piece.id}").frame must be a non-empty string`); return }
       if (!isFiniteNumber(piece.x) || !isFiniteNumber(piece.y)) { issues.push(`furniture[${index}] ("${piece.id}") must have finite numeric x/y`); return }
+      let interactive: RoomInteraction | undefined
+      if (piece.interactive !== undefined) {
+        if (typeof piece.interactive !== 'object' || piece.interactive === null) {
+          issues.push(`furniture[${index}] ("${piece.id}").interactive must be an object when present`)
+        } else {
+          const interactiveRaw = piece.interactive as Record<string, unknown>
+          if (!isNonEmptyString(interactiveRaw.actionId)) {
+            issues.push(`furniture[${index}] ("${piece.id}").interactive.actionId must be a non-empty string`)
+          } else if (interactiveRaw.hit !== undefined && !isRect(interactiveRaw.hit)) {
+            issues.push(`furniture[${index}] ("${piece.id}").interactive.hit must be a {x,y,w,h} rect when present`)
+          } else {
+            interactive = {
+              actionId: interactiveRaw.actionId as string,
+              hit: interactiveRaw.hit as RoomRect | undefined,
+              label: typeof interactiveRaw.label === 'string' ? interactiveRaw.label : undefined,
+            }
+          }
+        }
+      }
       pushUnlessSeen(furnitureIds, issues, 'furniture', piece.id)
       furniture.push({
         id: piece.id, frame: piece.frame, x: piece.x, y: piece.y,
@@ -249,6 +284,7 @@ export function parseRoomMap(data: unknown): RoomMapData {
         depth: isFiniteNumber(piece.depth) ? piece.depth : undefined,
         displayWidth: isFiniteNumber(piece.displayWidth) ? piece.displayWidth : undefined,
         displayHeight: isFiniteNumber(piece.displayHeight) ? piece.displayHeight : undefined,
+        interactive,
       })
     })
   }
@@ -359,6 +395,27 @@ export function findDoor(room: Pick<RoomMapData, 'doors'>, doorId: string): Room
  * roaming player walking into a doorway. */
 export function doorAt(room: Pick<RoomMapData, 'doors'>, x: number, y: number): RoomDoor | undefined {
   return room.doors.find(door => x >= door.rect.x && x <= door.rect.x + door.rect.w && y >= door.rect.y && y <= door.rect.y + door.rect.h)
+}
+
+// ---------- interactable furniture (M3-3) ----------
+
+/** Default click hit-box for a piece of interactive furniture that doesn't specify its own `hit`:
+ * one tile, anchored the same way the sprite is drawn (bottom-center at x,y). Exported so
+ * interior.scene.ts can draw its click zone at exactly the box `interactableAt` tests against —
+ * one formula, so the visible click target and the hit-test can never drift apart. */
+export function defaultInteractionHit(piece: RoomFurniture, tileSize: number): RoomRect {
+  return { x: piece.x - tileSize / 2, y: piece.y - tileSize, w: tileSize, h: tileSize }
+}
+
+/** The interactive furniture piece (if any) whose hit-box contains the point — same shape as
+ * `doorAt`, so interior.scene.ts can hit-test a click against furniture the same way it already
+ * hit-tests one against doors. */
+export function interactableAt(room: Pick<RoomMapData, 'furniture' | 'tileSize'>, x: number, y: number): RoomFurniture | undefined {
+  return room.furniture.find(piece => {
+    if (!piece.interactive) return false
+    const box = piece.interactive.hit ?? defaultInteractionHit(piece, room.tileSize)
+    return x >= box.x && x <= box.x + box.w && y >= box.y && y <= box.y + box.h
+  })
 }
 
 /**

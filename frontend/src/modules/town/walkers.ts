@@ -17,6 +17,14 @@ export function moveSpeed(running: boolean): number {
   return running ? RUN_SPEED : WALK_SPEED
 }
 
+/** Resident (NPC) walk speed, px/s — deliberately kept separate from the two constants above
+ * (CONTRACT-M7.md §4 / plan.md M7-7): the player is fast so travel feels responsive under your
+ * own control, but residents amble at ~55 so a camera sweeping past the street actually reads
+ * as "someone is on their way somewhere" instead of a blur. Server-side presence clamping only
+ * checks the player's speed, never this one — but that's exactly why WALK_SPEED/RUN_SPEED above
+ * must never be repurposed for NPCs; they're validated against the player's real movement. */
+export const RESIDENT_WALK_SPEED = 55
+
 /** Advance toward a target at `speed`, never overshooting it. */
 export function stepToward(current: number, target: number, speed: number, deltaMs: number): number {
   const distance = target - current

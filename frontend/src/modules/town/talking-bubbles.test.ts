@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { GUIDE_CODE, bubbleTierFor, canInitiate, consume, pointsToPlay } from './talking-bubbles'
+import { GUIDE_CODE, bubbleTierFor, canInitiate, consume, layoutBubbles, pointsToPlay, type BubbleBox, type CameraRect } from './talking-bubbles'
 import type { InitiativeBudget, NpcTalkingPoint } from './town-npc.types'
 
 const POINTS: NpcTalkingPoint[] = [
@@ -104,5 +104,71 @@ describe('initiative budget (护栏 A)', () => {
     for (const code of ['KE_YUN', 'LU_XIA', 'WEN_QING', GUIDE_CODE, 'ANY_OTHER_NPC']) {
       expect(canInitiate(budget, code)).toBe(false)
     }
+  })
+})
+
+describe('layoutBubbles (M7-8 气泡排版兜底)', () => {
+  const CAMERA: CameraRect = { x: 0, y: 0, width: 800, height: 600 }
+
+  function box(id: string, x: number, y: number, width = 120, height = 40): BubbleBox {
+    return { id, x, y, width, height }
+  }
+
+  function overlaps(a: BubbleBox, b: BubbleBox): boolean {
+    return a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y
+  }
+
+  function withinCamera(b: BubbleBox, camera: CameraRect): boolean {
+    return b.x >= camera.x && b.y >= camera.y && b.x + b.width <= camera.x + camera.width && b.y + b.height <= camera.y + camera.height
+  }
+
+  it('leaves already-fine bubbles untouched (no conflict, already on-screen)', () => {
+    const bubbles = [box('a', 50, 50), box('b', 400, 300)]
+    const result = layoutBubbles(bubbles, CAMERA)
+    expect(result).toEqual(bubbles)
+  })
+
+  it('two overlapping bubbles no longer overlap after resolving', () => {
+    const bubbles = [box('a', 100, 100), box('b', 110, 105)] // same-ish spot, clearly overlapping
+    const [a, b] = layoutBubbles(bubbles, CAMERA)
+    expect(overlaps(a, b)).toBe(false)
+  })
+
+  it('stacks the later bubble upward rather than sideways when resolving overlap', () => {
+    const bubbles = [box('a', 100, 300), box('b', 100, 300)]
+    const [a, b] = layoutBubbles(bubbles, CAMERA)
+    expect(a.x).toBe(b.x) // still horizontally aligned...
+    expect(b.y).toBeLessThan(a.y) // ...but the second one moved up, not sideways
+  })
+
+  it('pulls a bubble poking off every edge fully back inside the camera', () => {
+    const bubbles = [
+      box('left', -50, 100),
+      box('right', 780, 100),
+      box('top', 300, -30),
+      box('bottom', 300, 590),
+    ]
+    const result = layoutBubbles(bubbles, CAMERA)
+    for (const b of result) {
+      expect(withinCamera(b, CAMERA)).toBe(true)
+    }
+  })
+
+  it('resolves a chain of three mutually overlapping bubbles into three non-overlapping ones', () => {
+    const bubbles = [box('a', 200, 200), box('b', 205, 205), box('c', 210, 210)]
+    const result = layoutBubbles(bubbles, CAMERA)
+    for (let i = 0; i < result.length; i++) {
+      for (let j = i + 1; j < result.length; j++) {
+        expect(overlaps(result[i], result[j])).toBe(false)
+      }
+      expect(withinCamera(result[i], CAMERA)).toBe(true)
+    }
+  })
+
+  it('never mutates the input array or its boxes', () => {
+    const bubbles = [box('a', 100, 100), box('b', 105, 105)]
+    const snapshot = JSON.parse(JSON.stringify(bubbles))
+    layoutBubbles(bubbles, CAMERA)
+    expect(bubbles).toEqual(snapshot)
   })
 })

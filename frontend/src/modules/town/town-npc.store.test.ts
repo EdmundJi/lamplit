@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useTownNpcStore } from './town-npc.store'
 import type { TownNpcsResponse, TownNpcView } from './town-npc.types'
 
-const api = vi.hoisted(() => ({ get: vi.fn() }))
+const api = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn() }))
 vi.mock('../../shared/api/client', () => ({ api }))
 
 const notFound = { status: 404, code: 'NOT_FOUND', message: 'not found' }
@@ -93,5 +93,30 @@ describe('town-npc store', () => {
     api.get.mockRejectedValue({ status: 500, code: 'BOOM', message: 'server exploded' })
     const store = useTownNpcStore()
     await expect(store.talkingPoints('KE_YUN')).rejects.toEqual({ status: 500, code: 'BOOM', message: 'server exploded' })
+  })
+})
+
+describe('consumeInitiative（护栏 A）', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    api.post.mockReset()
+  })
+
+  it('把服务端返回的权威额度写回 store', async () => {
+    api.post.mockResolvedValue({ limit: 3, used: 2 })
+    const store = useTownNpcStore()
+    const budget = await store.consumeInitiative()
+
+    expect(api.post).toHaveBeenCalledWith('/town/initiative/consume', {})
+    expect(budget).toEqual({ limit: 3, used: 2 })
+    expect(store.budget).toEqual({ limit: 3, used: 2 })
+  })
+
+  it('端点还没上线时保持本地额度不变——宁可放宽，也不要让 NPC 一句话都不说', async () => {
+    api.post.mockRejectedValue(notFound)
+    const store = useTownNpcStore()
+    store.budget = { limit: 3, used: 1 }
+
+    await expect(store.consumeInitiative()).resolves.toEqual({ limit: 3, used: 1 })
   })
 })

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { RUN_SPEED, WALK_SPEED, canGreet, clampWalkX, dominantDirection, isPassingPair, movementDelta, moveSpeed, pairKey, registerGreet, shouldGreet, stepToward, stepTowardPoint, type GreetCooldowns } from './walkers'
+import { RESIDENT_WALK_SPEED, RUN_SPEED, WALK_SPEED, canGreet, clampWalkX, dominantDirection, isPassingPair, movementDelta, moveSpeed, pairKey, registerGreet, shouldGreet, stepToward, stepTowardPoint, type GreetCooldowns } from './walkers'
 
 describe('clampWalkX', () => {
   it('passes values already inside the range through unchanged', () => {
@@ -108,6 +108,19 @@ describe('run speed', () => {
     expect(moveSpeed(false)).toBe(WALK_SPEED)
     expect(moveSpeed(true)).toBe(RUN_SPEED)
     expect(RUN_SPEED).toBeGreaterThan(WALK_SPEED)
+  })
+
+  // CONTRACT-M7.md §4 pins these exact numbers: the backend presence clamp validates the
+  // player against them, so an accidental edit here would get silently overridden server-side.
+  it('locks the player speed constants (server-validated — must never change)', () => {
+    expect(WALK_SPEED).toBe(112)
+    expect(RUN_SPEED).toBe(264)
+  })
+
+  it('resident walk speed is slower than the player and kept as its own constant', () => {
+    expect(RESIDENT_WALK_SPEED).toBe(55)
+    expect(RESIDENT_WALK_SPEED).toBeLessThan(WALK_SPEED)
+    expect(RESIDENT_WALK_SPEED).toBeLessThan(RUN_SPEED)
   })
 
   it('covers more ground per frame while running', () => {

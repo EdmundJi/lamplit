@@ -31,6 +31,47 @@ export type NpcScheduleSlot = {
   activity: NpcActivity
 }
 
+/** Where a day-plan errand came from (CONTRACT-M7.md §1). Purely informational for the
+ * frontend — it never branches rendering on `origin`, but keeps the field so a round-trip
+ * through this type doesn't silently drop backend data. */
+export type NpcErrandOrigin = 'RHYTHM' | 'DEVIATION' | 'EVENT'
+
+/** One thing an NPC is doing somewhere today (M7-2/M7-6). Minutes are local-time-of-day,
+ * `[0,1440)`, counted from 00:00 — NOT hours like `NpcScheduleSlot`. `errands` within a
+ * `NpcDayPlan` are ascending by `startMinute` and never overlap (CONTRACT-M7.md §1). */
+export type NpcErrand = {
+  place: NpcPlace
+  activity: NpcActivity
+  startMinute: number
+  endMinute: number
+  /** 0=可有可无 1=常态 2=要紧（活动/请柬插入的是 2）。 */
+  priority: 0 | 1 | 2
+  origin: NpcErrandOrigin
+}
+
+/** The commute between two consecutive errands. Derived, not separately authored:
+ * `legs[i].arriveMinute === errands[i+1].startMinute` (CONTRACT-M7.md §1). */
+export type NpcLeg = {
+  fromPlace: NpcPlace
+  toPlace: NpcPlace
+  departMinute: number
+  arriveMinute: number
+}
+
+/**
+ * A whole day's itinerary for one NPC (CONTRACT-M7.md §1). `errands ∪ legs` covers the full
+ * day with no holes (0 → 1440); `positionAt` (see `day-plan.ts`) is the pure function both
+ * frontend and backend use to turn this plus a minute-of-day into a place-or-in-transit result.
+ * Same `(npcCode, date)` is expected to always produce the same `NpcDayPlan` — this type itself
+ * carries no npcCode because the server already scopes one `dayPlan` per `TownNpcView`.
+ */
+export type NpcDayPlan = {
+  /** Local calendar date this plan is for, e.g. `"2026-09-06"`. */
+  date: string
+  errands: NpcErrand[]
+  legs: NpcLeg[]
+}
+
 /** A single thing an NPC can say today, already walked-through-the-grapevine text. */
 export type NpcTalkingPoint = {
   factId: string
@@ -50,8 +91,13 @@ export type TownNpcView = {
   interests: Partial<Record<DimensionCode, number>>
   affinityToPlayer: number
   mood: { valence: number; energy: number }
-  /** Covers 0-24h, no holes, ascending by `startHour`. */
+  /** Covers 0-24h, no holes, ascending by `startHour`. Kept alongside `dayPlan` for backwards
+   * compatibility (CONTRACT-M7.md §1: the backend sends both during the M7 rollout). */
   schedule: NpcScheduleSlot[]
+  /** M7: the richer errands+legs itinerary `positionAt` consumes. Optional because older
+   * backends (pre-M7) don't send it yet — callers must fall back to `dayPlanFallback(schedule)`
+   * (see `day-plan.ts`) rather than assume this is always present. */
+  dayPlan?: NpcDayPlan
   /** At most 3, salience descending. */
   talkingPoints: NpcTalkingPoint[]
 }

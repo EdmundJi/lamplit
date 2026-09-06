@@ -16,6 +16,7 @@ import {
   assignSeats,
   clampToRoom,
   collidesAt,
+  defaultInteractionHit,
   doorAt,
   evaluateSlots,
   type RoomDoor,
@@ -78,6 +79,21 @@ export type InteriorOptions = {
   /** Fired when the player leaves through a door (click, or walking into it): the door's `target`
    * and its `id`, so the orchestrator decides what "town" or another room id means. */
   onExit: (target: string, doorId: string) => void
+  /**
+   * Fired when the player clicks a piece of interactive furniture (M3-3/M3-4, e.g. the desk, the
+   * achievement wall, the pet house) or the pet itself: the furniture's `interactive.actionId`
+   * (a world-actions.ts registry id) and the furniture/pet's own `id`. This scene never runs the
+   * action itself — same "the map only says what, not how" split as `onExit` — the orchestrator is
+   * expected to call `runWorldAction(actionId, ctx)`. Omit to leave interactive furniture inert
+   * (clicking does nothing), which keeps this scene's default behaviour unchanged for callers that
+   * haven't wired it up yet.
+   */
+  onInteract?: (actionId: string, id: string) => void
+  /** The resident's pet, drawn at whichever furniture piece's `interactive.actionId` is
+   * `PET_HOUSE_ACTION_ID` (see map-loader.ts docs on `RoomInteraction`). No such furniture piece in
+   * the room, or no `pet` given at all, and nothing pet-shaped is drawn — same "optional, defaults
+   * to today's behaviour" shape as every other new field here. */
+  pet?: InteriorPet
   /** Replace the built-in keyboard/click mover. See `ControllerContext`. */
   createController?: (ctx: ControllerContext) => RoomController
 }
@@ -87,6 +103,73 @@ export type InteriorOptions = {
  * self-containment reason as academy.scene.ts. */
 export function characterSheetFor(publicId: string): number {
   return 1 + (hashString(`${publicId}:look`) % 20)
+}
+
+// ---------- pets (M3-5) ----------
+
+export type InteriorPetSpecies = 'CAT' | 'DOG' | 'HAMSTER' | 'SNAKE' | 'RABBIT' | 'BIRD' | 'TURTLE' | 'FOX'
+
+/**
+ * A resident's pet. Deliberately has no x/y of its own: where it lives in the room is authored
+ * data (whichever furniture piece's `interactive.actionId` is `PET_HOUSE_ACTION_ID`), not
+ * something the caller needs to compute — see `drawPet()`.
+ */
+export type InteriorPet = {
+  id: string
+  species: InteriorPetSpecies
+  /** Breed label (from partners/pet-options.ts); only used to pick a stable pixel variant, never
+   * displayed — an unrecognised breed just hashes like any other string would. */
+  breed?: string
+}
+
+/** world-actions.ts action id the room's pet spot is wired to (M3-4). Exported so a room map (or a
+ * test) can check a furniture piece's `interactive.actionId` against the same constant this file
+ * uses to find where to draw the pet. */
+export const PET_HOUSE_ACTION_ID = 'home.open-pet-house'
+
+/**
+ * town-atlas.json frame prefixes for the three species Modern Farm actually shipped pixel art for
+ * (grepped from the built atlas — see build-town-assets.py's `FARM_ANIMALS`, M0-2). Every other
+ * species (cat/hamster/snake/turtle/fox) has no pixel sprite at all: §0.1's correction is that
+ * pets are Rive vector animations, so those get a static placeholder instead of a fabricated walk
+ * cycle. There is no generic "bird" sheet in the pack either — a duck/chicken/rooster is the
+ * closest thing Modern Farm has to a small pet bird, so BIRD borrows from those.
+ */
+const DOG_FRAME_PREFIXES = [
+  'dog_basenji_brown', 'dog_basenji_gray', 'dog_basenji_orange',
+  'dog_german_shepherd_brown', 'dog_german_shepherd_dark_brown', 'dog_german_shepherd_gray',
+  'dog_labrador_brown', 'dog_labrador_dark_brown', 'dog_labrador_white',
+]
+const RABBIT_FRAME_PREFIXES = [
+  'rabbit_baby_brown', 'rabbit_baby_gray', 'rabbit_baby_white', 'rabbit_brown',
+  'rabbit_brown_dark_ears', 'rabbit_gray', 'rabbit_gray_and_white', 'rabbit_spotted', 'rabbit_white',
+]
+const BIRD_FRAME_PREFIXES = ['duck_white', 'duck_brown', 'duck_green_head', 'duck_duckling_yellow', 'chicken_brown', 'chicken_white', 'chicken_golden', 'rooster_brown']
+
+/** Matches build-town-assets.py's `FARM_WALK_FRAMES` — every animal sheet was cut into exactly
+ * this many walk-cycle frames plus one idle pose. */
+const FARM_WALK_FRAMES = 4
+
+export type PetPixelSpec = {
+  /** e.g. "dog_labrador_brown"; frames are `${framePrefix}_idle_1` / `_walk_1.._${walkFrames}`. */
+  framePrefix: string
+  walkFrames: number
+  /** Only dogs have a ready-made "asleep" pose (`doghouse_sleep_*`, from the Doghouse sheet) — other
+   * species fall back to standing still rather than a fabricated sleeping frame. */
+  canSleep: boolean
+}
+
+/**
+ * Pure species/breed -> pixel-asset lookup (no Phaser). Returns `null` for a species Modern Farm
+ * shipped no sprite for at all — the caller's cue to draw the placeholder-house-and-Rive-panel
+ * path (M3-5) instead. Otherwise picks one of that species' variants deterministically from
+ * `seed` (a pet's own id/breed), so the same pet always looks the same across renders.
+ */
+export function petPixelSpecFor(species: InteriorPetSpecies, seed: string): PetPixelSpec | null {
+  const table: Partial<Record<InteriorPetSpecies, string[]>> = { DOG: DOG_FRAME_PREFIXES, RABBIT: RABBIT_FRAME_PREFIXES, BIRD: BIRD_FRAME_PREFIXES }
+  const prefixes = table[species]
+  if (!prefixes) return null
+  return { framePrefix: prefixes[hashString(seed) % prefixes.length], walkFrames: FARM_WALK_FRAMES, canSleep: species === 'DOG' }
 }
 
 export function createInteriorScene(Phaser: typeof PhaserNs, options: InteriorOptions): typeof Phaser.Scene {
@@ -111,6 +194,13 @@ export function createInteriorScene(Phaser: typeof PhaserNs, options: InteriorOp
       if (!this.textures.exists('interior')) {
         this.load.atlas('interior', `${ASSETS}/interior-atlas.png`, `${ASSETS}/interior-atlas.json`)
       }
+      // The pet's pixel frames (and the placeholder doghouse frame) live in the outdoor town atlas
+      // (build-town-assets.py merges Farm frames into town-atlas, not interior-atlas) — town.engine.ts
+      // has almost certainly already loaded this under the same key by the time a room is entered, so
+      // `exists` makes this a no-op in the common case rather than a duplicate fetch.
+      if (options.pet && !this.textures.exists('town')) {
+        this.load.atlas('town', `${ASSETS}/town-atlas.png`, `${ASSETS}/town-atlas.json`)
+      }
       const sheets = new Set(residents.map(item => item.characterSheet))
       if (options.player) sheets.add(options.player.characterSheet)
       for (const index of sheets) {
@@ -125,6 +215,7 @@ export function createInteriorScene(Phaser: typeof PhaserNs, options: InteriorOp
       this.drawLayer(room.layers.floor, 0)
       this.drawLayer(room.layers.walls, 2)
       this.drawFurniture()
+      this.drawPet()
       this.drawSlots()
       this.drawSeats()
       this.drawDoors()
@@ -156,7 +247,100 @@ export function createInteriorScene(Phaser: typeof PhaserNs, options: InteriorOp
     drawFurniture() {
       for (const piece of room.furniture) {
         this.placeFurniture(piece.frame, piece.x, piece.y, piece.originX, piece.originY, piece.depth, piece.displayWidth, piece.displayHeight)
+        if (piece.interactive) this.wireInteractive(piece)
       }
+    }
+
+    /** M3-3/M3-4: a click zone over the furniture's hit-box, forwarding to `onInteract` — this
+     * scene never decides what "打开书桌" means, same split as `drawDoors`' `onExit`. Uses
+     * `defaultInteractionHit` (not a hand-rolled box) so the visible click target and map-loader's
+     * pure `interactableAt` can never disagree about where the piece is clickable. */
+    wireInteractive(piece: RoomMapData['furniture'][number]) {
+      const interaction = piece.interactive
+      if (!interaction) return
+      const box = interaction.hit ?? defaultInteractionHit(piece, room.tileSize)
+      if (interaction.label) this.plate(box.x + box.w / 2, box.y - 12, interaction.label, '#fff4e8', '#3b312c')
+      const zone = this.add.zone(box.x, box.y, box.w, box.h).setOrigin(0).setInteractive({ useHandCursor: true })
+      zone.on('pointerup', () => options.onInteract?.(interaction.actionId, piece.id))
+    }
+
+    // ---------- pet (M3-5) ----------
+
+    /** Finds the furniture piece that marks the pet's spot (its `interactive.actionId` is
+     * `PET_HOUSE_ACTION_ID` — see map-loader.ts's `RoomInteraction`) and draws the resident's pet
+     * there: an animated pixel critter for dog/rabbit/bird, or a static placeholder + Rive panel
+     * hookup for every other species (§0.1's "宠物是 Rive 矢量动画" correction). Silently does
+     * nothing if the room has no such furniture piece or the caller passed no `pet` — this keeps
+     * every room that doesn't opt in exactly as it renders today. */
+    drawPet() {
+      const pet = options.pet
+      if (!pet) return
+      const spot = room.furniture.find(item => item.interactive?.actionId === PET_HOUSE_ACTION_ID)
+      if (!spot) return
+      const spec = petPixelSpecFor(pet.species, pet.breed ?? pet.id)
+      if (!spec) this.drawPlaceholderPet(spot)
+      else this.drawPixelPet(spec, spot)
+    }
+
+    drawPlaceholderPet(spot: RoomMapData['furniture'][number]) {
+      const sprite = this.add.image(spot.x, spot.y, 'town', 'doghouse_sleep_1').setOrigin(0.5, 1).setDepth(spot.y + 1)
+      sprite.setDisplaySize(40, 40)
+      sprite.setInteractive({ useHandCursor: true })
+      sprite.on('pointerup', () => options.onInteract?.(PET_HOUSE_ACTION_ID, spot.id))
+    }
+
+    drawPixelPet(spec: PetPixelSpec, spot: RoomMapData['furniture'][number]) {
+      this.ensurePetAnimations(spec)
+      const sprite = this.add.sprite(spot.x, spot.y, 'town', `${spec.framePrefix}_idle_1`).setOrigin(0.5, 1).setDepth(spot.y + 1)
+      sprite.setInteractive({ useHandCursor: true })
+      sprite.on('pointerup', () => options.onInteract?.(PET_HOUSE_ACTION_ID, spot.id))
+      this.schedulePetWander(sprite, spec, spot)
+    }
+
+    ensurePetAnimations(spec: PetPixelSpec) {
+      if (this.anims.exists(`${spec.framePrefix}-walk`)) return
+      const walk = Array.from({ length: spec.walkFrames }, (_, i) => ({ key: 'town', frame: `${spec.framePrefix}_walk_${i + 1}` }))
+      this.anims.create({ key: `${spec.framePrefix}-walk`, frames: walk, frameRate: 6, repeat: -1 })
+      this.anims.create({ key: `${spec.framePrefix}-idle`, frames: [{ key: 'town', frame: `${spec.framePrefix}_idle_1` }], frameRate: 1 })
+      if (spec.canSleep && !this.anims.exists('doghouse-sleep')) {
+        const sleep = Array.from({ length: FARM_WALK_FRAMES }, (_, i) => ({ key: 'town', frame: `doghouse_sleep_${i + 1}` }))
+        this.anims.create({ key: 'doghouse-sleep', frames: sleep, frameRate: 3, repeat: -1 })
+      }
+    }
+
+    /** A short wander-then-rest loop, tween-driven rather than hooked into the per-frame `update`
+     * loop the player/controller use — the pet doesn't need input handling or collision, just
+     * something that reads as "alive" from across the room. Dogs occasionally walk back to their
+     * house and play the ready-made `doghouse_sleep_*` cycle ("能睡" — M3-5); other species have no
+     * sleeping pose to fall back on, so they just idle in place between wanders. */
+    schedulePetWander(sprite: PhaserNs.GameObjects.Sprite, spec: PetPixelSpec, spot: RoomMapData['furniture'][number]) {
+      const roam = () => {
+        const goingToSleep = spec.canSleep && Math.random() < 0.25
+        const targetX = goingToSleep ? spot.x : spot.x + Phaser.Math.Between(-24, 24)
+        const targetY = goingToSleep ? spot.y : spot.y + Phaser.Math.Between(-10, 6)
+        sprite.setFlipX(targetX < sprite.x)
+        sprite.play(`${spec.framePrefix}-walk`, true)
+        this.tweens.add({
+          targets: sprite,
+          x: targetX,
+          y: targetY,
+          duration: 1400,
+          onComplete: () => {
+            sprite.setDepth(sprite.y + 1)
+            if (goingToSleep) {
+              sprite.play('doghouse-sleep', true)
+              this.time.delayedCall(5000 + Math.random() * 3000, () => {
+                sprite.play(`${spec.framePrefix}-idle`, true)
+                this.time.delayedCall(1200, roam)
+              })
+            } else {
+              sprite.play(`${spec.framePrefix}-idle`, true)
+              this.time.delayedCall(1500 + Math.random() * 1500, roam)
+            }
+          },
+        })
+      }
+      this.time.delayedCall(500 + Math.random() * 1000, roam)
     }
 
     drawSlots() {

@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest'
-import { activeSlot, densityCap, placeFor, selectVisible, type PlaceableNpc, type TownLayout } from './npc-placement'
+import {
+  OPEN_GROUND_JITTER_PX,
+  SIDEWALK_JITTER_PX,
+  activeSlot,
+  densityCap,
+  depthForY,
+  placeFor,
+  selectVisible,
+  verticalJitter,
+  type PlaceableNpc,
+  type TownLayout,
+} from './npc-placement'
 import type { NpcScheduleSlot } from './town-npc.types'
 
 const LAYOUT: TownLayout = {
@@ -145,5 +156,46 @@ describe('selectVisible', () => {
   it('returns an empty array for a cap of 0', () => {
     const npcs = [makeNpc('A', 2, 'plaza')]
     expect(selectVisible(npcs, 10, 0)).toEqual([])
+  })
+})
+
+describe('verticalJitter', () => {
+  it('is stable: the same (npcCode, place) always gives the same offset', () => {
+    const first = verticalJitter('KE_YUN', 'cafe')
+    const second = verticalJitter('KE_YUN', 'cafe')
+    expect(second).toBe(first)
+  })
+
+  it('spreads different NPCs at the same place across different y offsets', () => {
+    const codes = ['KE_YUN', 'LU_XIA', 'WEN_QING', 'TOWNIE_01', 'TOWNIE_02']
+    const offsets = codes.map(code => verticalJitter(code, 'cafe'))
+    expect(new Set(offsets).size).toBe(codes.length) // no two coincide
+  })
+
+  it('stays within the sidewalk band for a street-side place', () => {
+    for (const code of ['A', 'B', 'C', 'D', 'E']) {
+      const y = verticalJitter(code, 'cafe')
+      expect(Math.abs(y)).toBeLessThanOrEqual(SIDEWALK_JITTER_PX)
+    }
+  })
+
+  it('allows a wider band for plaza and park (more depth to use)', () => {
+    for (const code of ['A', 'B', 'C', 'D', 'E']) {
+      expect(Math.abs(verticalJitter(code, 'plaza'))).toBeLessThanOrEqual(OPEN_GROUND_JITTER_PX)
+      expect(Math.abs(verticalJitter(code, 'park'))).toBeLessThanOrEqual(OPEN_GROUND_JITTER_PX)
+    }
+    expect(OPEN_GROUND_JITTER_PX).toBeGreaterThan(SIDEWALK_JITTER_PX)
+  })
+
+  it('gives the same NPC a different offset at a different place (not pinned everywhere)', () => {
+    expect(verticalJitter('KE_YUN', 'cafe')).not.toBe(verticalJitter('KE_YUN', 'plaza'))
+  })
+})
+
+describe('depthForY', () => {
+  it('is the identity — depth tracks y directly', () => {
+    expect(depthForY(120)).toBe(120)
+    expect(depthForY(-5)).toBe(-5)
+    expect(depthForY(0)).toBe(0)
   })
 })

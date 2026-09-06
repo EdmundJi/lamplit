@@ -6,13 +6,15 @@ import type PhaserNs from 'phaser'
 import { activityFor, buildBlueprint, hashString, whereShouldBe } from './building-kit'
 import type { TownVenue, VenueAction } from './building-kit'
 import { academyResidents, createAcademyScene } from './academy.scene'
-import { RUN_ANIM_SCALE, dominantDirection, movementDelta, moveSpeed, registerGreet, shouldGreet, stepToward, stepTowardPoint } from './walkers'
+import { RESIDENT_WALK_SPEED, RUN_ANIM_SCALE, dominantDirection, movementDelta, moveSpeed, registerGreet, shouldGreet, stepToward, stepTowardPoint } from './walkers'
 import type { Direction4, GreetCooldowns, WalkDirection } from './walkers'
 import { buildTownCollisionWorld, canStand, nearestStandable, resolveMove } from './collision'
 import type { CollisionWorld, Point, FurnitureObstacle } from './collision'
 import type { ResidentActivity, TownModel, TownResident } from './town.types'
 import { createInteriorScene, interiorSceneKey } from './interior.scene'
+import type { InteriorOptions, InteriorPet, InteriorPetSpecies, InteriorPlayer } from './interior.scene'
 import { parseRoomMap } from './map-loader'
+import type { RoomResident } from './map-loader'
 import { TownAtmosphere } from './atmosphere'
 import { presenceTarget, shouldTeleport, createPresenceReporter } from './presence'
 import type { PresencePayload } from './presence'
@@ -24,14 +26,20 @@ import {
   createGroundDetails,
 } from './town-furniture'
 import type { FurnitureItem, VenueFurniture, GroundDetail } from './town-furniture'
-import type { TownNpcView, InitiativeBudget, NpcActivity, NpcPlace } from './town-npc.types'
-import { placeFor, activeSlot, densityCap, selectVisible } from './npc-placement'
+import type { TownNpcView, InitiativeBudget, NpcActivity, NpcDayPlan, NpcPlace } from './town-npc.types'
+import { placeFor, densityCap, selectVisible, verticalJitter, depthForY } from './npc-placement'
 import type { TownLayout } from './npc-placement'
 import { buildItinerary, nextLeg } from './observation-mode'
 import type { ObservationLeg } from './observation-mode'
-import { bubbleTierFor, pointsToPlay, canInitiate, consume } from './talking-bubbles'
+import { bubbleTierFor, pointsToPlay, canInitiate, consume, layoutBubbles } from './talking-bubbles'
+import type { BubbleBox, CameraRect } from './talking-bubbles'
+import { positionAt, dayPlanFallback } from './day-plan'
+import { shouldPauseForGreeting, shouldSeekRoadsideShelter, PASSING_GREETING_PAUSE_MS } from './roadside-episodes'
+import { api } from '../../shared/api/client'
+import type { Achievement } from '../achievements/achievement.types'
+import type { PartnerProfile } from '../partners/partner.types'
 
-export type TownSelection = string | 'npc:assistant' | 'npc:postman' | 'academy' | null
+export type TownSelection = string | 'npc:assistant' | 'npc:postman' | 'academy' | 'home' | null
 export type TownHandlers = {
   onSelect?: (selection: TownSelection) => void
   /** Fired whenever the camera finishes transitioning into/out of the academy interior. */
@@ -42,12 +50,22 @@ export type TownHandlers = {
   onPlayerMove?: (x: number, y: number) => void
   /** Called to report distance to guide NPC (for onboarding tracking). */
   onDistanceToGuide?: (distance: number) => void
+  /** M3-3/M3-4: 玩家点击房间里的可交互家具（书桌/成就墙/宠物窝）。actionId 是
+   * world-actions.ts 的注册表 id——engine 自己不认识这些动作具体做什么，只管转发；调用方
+   * （TownView.vue / ImmersiveTown.vue）负责接上 runWorldAction(actionId, ctx)。 */
+  onInteriorInteract?: (actionId: string, id: string) => void
+  /** 护栏 A：某个 NPC 刚花掉了一格全镇每日主动搭话额度。引擎先在本地扣一格保证这一帧的判断
+   * 立刻生效，调用方负责把这一次消耗报给后端（`POST /town/initiative/consume`），再用返回的
+   * 权威值调 `setInitiativeBudget` 校正——否则刷新页面额度就归零，等于没有护栏。 */
+  onInitiativeSpent?: (npcCode: string) => void
 }
 export type TownGame = {
   /** Hands the engine the town's NPC roster (GET /town/npcs). Safe to call repeatedly. */
   applyNpcs: (npcs: TownNpcView[], budget: InitiativeBudget) => void
   /** 观察模式: detaches the camera from the player and glides it between points of interest. */
   setObservation: (on: boolean) => void
+  /** 用服务端返回的权威额度覆盖本地的乐观值。刻意不复用 `applyNpcs`——那会整批重建走位。 */
+  setInitiativeBudget: (budget: InitiativeBudget) => void
   setNight(night: boolean): void
   /** Turns the self avatar's run mode on/off; holding Shift runs regardless of this toggle. */
   setRun(running: boolean): void
@@ -169,6 +187,15 @@ type Walker = {
   speech: PhaserNs.GameObjects.Container | null
   /** Society NPCs only: the activity their backend schedule says they're doing right now. */
   npcActivity: NpcActivity | null
+  /** Society NPCs only (M7-6): cached dayPlan (either the backend's own, or dayPlanFallback of
+   * its legacy `schedule`) so `resolveNpcFrame` doesn't rebuild the fallback every frame. */
+  dayPlan: NpcDayPlan | null
+  /** Society NPCs only (M7-9): next time this walker is allowed to roll the roadside-episode
+   * dice again — throttled so "偶尔" doesn't collapse into "every frame near anyone". */
+  episodeCheckAt: number
+  /** Society NPCs only (M7-9): while now < this, nudge the walker's y toward the row of shops
+   * (雨天靠边躲雨) — purely cosmetic, never changes x or which errand/leg is active. */
+  shelterUntil: number
 }
 
 /** Geometry of one labour spritesheet, as written by scripts/build-town-assets.py. */
@@ -198,7 +225,9 @@ type SelfKeys = {
 
 /** Phaser's tween easings aren't reachable from a plain number, so the pan interpolation uses its own. */
 /**
- * 同一个地点站着好几个人时，各自的偏移量。
+ * 同一个地点站着好几个人时，横向的偏移量（纵向散开交给 npc-placement.ts 的 verticalJitter——
+ * 那是 M7-8 指定要用的纯函数，这里只管 x 轴，两者一起用才是"横纵都散开"而不是"贴在一条竖线
+ * 上"）。
  *
  * <p>横向散开只解决"挤在一起"，解决不了"一字排开"——所有人都钉在同一条基线上，看上去就是
  * 一排合唱队。所以纵向也要散：人行道那条带子窄（只有几十像素），广场和公园则一直往北敞到
@@ -218,6 +247,94 @@ function venueOffset(npcCode: string, place: NpcPlace): { dx: number; dy: number
 
 function easeInOutSine(t: number) {
   return -(Math.cos(Math.PI * Math.min(1, Math.max(0, t))) - 1) / 2
+}
+
+// ---------- M7-6/7/8: 18 人名册每帧该画在哪儿 (纯函数, 不碰 Phaser, 直接单测) ----------
+
+/** `resolveNpcFrame` 的结果：这一刻该把 NPC 的 sprite 摆在哪、朝哪、播哪个动作。 */
+export type NpcFrame = {
+  x: number
+  y: number
+  depth: number
+  activity: NpcActivity
+  walking: boolean
+  /** WALKING 时朝哪边走；AT（站定）时是 null——朝向由已经在播的待机动画决定，不需要改。 */
+  facing: WalkDirection | null
+  /** WALKING 时是终点 x；AT 时就是自己的 x。只用来给 detectGreetings 判断朝向的符号，不是
+   * 真的还有一个"目标点"要走过去——positionAt 的 progress 已经把位置算死了。 */
+  targetX: number
+}
+
+/**
+ * CONTRACT-M7.md §2 落地到画面的那一步：把 `positionAt` 的输出摊成"这一刻画在哪"。
+ * AT 用 verticalJitter 纵向散开、venueOffset 横向散开、depth 跟着 y 走（M7-8）；WALKING 在
+ * 起点终点之间按 `progress` 连续插值——`progress` 本身就是"当前分钟"的连续函数（不是整点才
+ * 跳一下），所以只要每帧都用当前的、带小数的分钟数调用这个函数，画出来的位置就永远和
+ * positionAt(dayPlan, 那一刻) 的结果对得上，不会出现"瞬移到目的地站着"。
+ *
+ * 纯函数：不碰 Phaser、不切动画、不管冻结/插曲——那些是 town.engine.ts 里 updateNpcWalker 的
+ * 事，这里只做算术，方便单测钉死。
+ */
+export function resolveNpcFrame(
+  dayPlan: NpcDayPlan,
+  minuteOfDay: number,
+  npcCode: string,
+  layout: TownLayout,
+  streetY: number,
+): NpcFrame {
+  const position = positionAt(dayPlan, minuteOfDay)
+  if (position.kind === 'AT') {
+    const spread = venueOffset(npcCode, position.place)
+    const x = placeFor(position.place, layout) + spread.dx
+    const y = streetY + verticalJitter(npcCode, position.place)
+    return { x, y, depth: depthForY(y), activity: position.activity, walking: false, facing: null, targetX: x }
+  }
+  const fromX = placeFor(position.fromPlace, layout)
+  const toX = placeFor(position.toPlace, layout)
+  const x = fromX + (toX - fromX) * position.progress
+  const y = streetY
+  return { x, y, depth: depthForY(y), activity: 'walking', walking: true, facing: toX >= fromX ? 'right' : 'left', targetX: toX }
+}
+
+/** 带小数的"当地时间自 00:00 起的分钟数"——带小数才能让 WALKING 的插值逐帧平滑，而不是整
+ * 分钟才挪一下。纯函数（只依赖传入的 epoch ms），方便单测，不用真的等挂钟走。 */
+export function minuteOfLocalDay(epochMs: number): number {
+  const date = new Date(epochMs)
+  return date.getHours() * 60 + date.getMinutes() + date.getSeconds() / 60 + date.getMilliseconds() / 60000
+}
+
+/** M7-9 路上插曲的节流与幅度——都是纯表现常量，调大调小不影响任何数据。 */
+const ROADSIDE_EPISODE_CHECK_MS = 4_000
+const ROADSIDE_PASSING_DISTANCE_PX = 70
+const ROADSIDE_SHELTER_MS = 6_000
+const ROADSIDE_SHELTER_OFFSET_PX = 14
+
+// ---------- M3-2: 自家客厅要用到的两份"旁支"数据 (宠物 / 成就墙) ----------
+
+const INTERIOR_PET_SPECIES = new Set<InteriorPetSpecies>(['CAT', 'DOG', 'HAMSTER', 'SNAKE', 'RABBIT', 'BIRD', 'TURTLE', 'FOX'])
+
+/** `partner.types.ts` 的 `Pet.speciesCode` 是普通 string，不是字面量联合——运行时校验一下，
+ * 校验不过就当"没有宠物"处理，不能让后端一个意外取值把"能进屋"这件事炸掉。 */
+export function isInteriorPetSpecies(value: string): value is InteriorPetSpecies {
+  return INTERIOR_PET_SPECIES.has(value as InteriorPetSpecies)
+}
+
+/**
+ * 自家客厅要用到的两份"旁支"数据：成就墙点亮数、当前选中的宠物。都是尽力而为——任何一个
+ * 请求失败都不能把"走到门口就能进屋"这件事卡住，拿不到就按"没有"处理（成就墙按 0 算，
+ * 宠物窝空着）。这两份数据都不在 TownModel/TownResident 上，只能各自问一次接口。
+ */
+async function fetchHomeExtras(): Promise<{ homeAchievements: number; pet?: InteriorPet }> {
+  const [achievements, profile] = await Promise.all([
+    api.get<Achievement[]>('/achievements').catch(() => [] as Achievement[]),
+    api.get<PartnerProfile>('/partners/profile').catch(() => null),
+  ])
+  const homeAchievements = achievements.filter(item => item.earned).length
+  const selected = profile?.selectedPet
+  const pet: InteriorPet | undefined = selected && isInteriorPetSpecies(selected.speciesCode)
+    ? { id: selected.publicId, species: selected.speciesCode, breed: selected.breed }
+    : undefined
+  return { homeAchievements, pet }
 }
 
 function characterSheet(publicId: string) {
@@ -267,6 +384,11 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
   let latestModel = model
   let academyEntered = false
   let academyBusy = false
+  /** 通用房间（目前是"我的家"）的过渡状态——和 academyEntered/academyBusy 分开一套，因为
+   * enterRoom 支持任意 roomId，不止 home 一种；两套状态互相校验，免得学院和普通房间的淡入
+   * 淡出撞在一起。 */
+  let activeRoomKey: string | null = null
+  let roomBusy = false
 
   // Presence reporter: throttles self position updates to backend
   const presenceReporter = createPresenceReporter(
@@ -515,7 +637,12 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
       const subtitle = resident.title ? ` · ${resident.title}` : ''
       objects.push(this.plate(x + PLOT_WIDTH / 2, top - 14, `${title} · LV.${resident.level}${subtitle}`, resident.isSelf ? '#fff4e8' : '#3b312c', resident.isSelf ? '#c85f47' : '#fffdfa'))
       this.buildingCenters.set(resident.publicId, { x: x + PLOT_WIDTH / 2, y: (top + BASELINE) / 2 })
-      objects.push(this.hitZone(x, top, PLOT_WIDTH, BASELINE - top, resident.publicId))
+      if (resident.isSelf) {
+        // M3-1: 自己的房子多一扇"门"——楼上照旧点开信息卡，楼下这一小条改成"走过去敲门进屋"。
+        objects.push(...this.drawHomeDoor(x, top, resident.publicId))
+      } else {
+        objects.push(this.hitZone(x, top, PLOT_WIDTH, BASELINE - top, resident.publicId))
+      }
       if (blueprint.open) {
         objects.push(this.glow(x + PLOT_WIDTH / 2, BASELINE - 60, PLOT_WIDTH + 120, 220))
       }
@@ -715,6 +842,32 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
       return zone
     }
 
+    /**
+     * M3-1: 自己家的门。楼上（从屋顶到门楣）还是普通的建筑点选——点一下弹信息卡，跟邻居家一样；
+     * 一楼门口这一小条单独切出来，点了就是"走过去敲门"：先让自己走到门前（复用
+     * walkSelfToAndSelect，和点学院/点 NPC 是同一条路），真的走到了才 dispatchArrival('home')
+     * 去 enterRoom——这正是"走到自家门口 → 门开 → 淡入"，不是点一下就瞬间切场景。
+     *
+     * <p>目标落点故意选在 BASELINE 往南一点：building 的碰撞矩形边界正好卡在 BASELINE 那一整
+     * 行（buildTownCollisionWorld 里 obstacle 的下边界就是 baselineY），站在 BASELINE 上还
+     * 算"在房子里"，会被 nearestStandable 推开；往南几像素才是真正空出来的人行道。
+     */
+    drawHomeDoor(x: number, top: number, publicId: string): PhaserNs.GameObjects.GameObject[] {
+      const doorWidth = 64
+      const doorHeight = 44
+      const doorTop = BASELINE - doorHeight
+      const doorLeft = x + PLOT_WIDTH / 2 - doorWidth / 2
+      const objects: PhaserNs.GameObjects.GameObject[] = []
+      if (doorTop > top) objects.push(this.hitZone(x, top, PLOT_WIDTH, doorTop - top, publicId))
+      const doorZone = this.add.zone(doorLeft, doorTop, doorWidth, doorHeight).setOrigin(0).setInteractive({ useHandCursor: true })
+      doorZone.on('pointerup', () => {
+        if (this.dragged) return
+        this.walkSelfToAndSelect(doorLeft + doorWidth / 2, BASELINE + 8, 'home')
+      })
+      objects.push(doorZone)
+      return objects
+    }
+
     createSharedAnimations() {
       const frames = (prefix: string, count: number) => Array.from({ length: count }, (_, i) => ({ key: 'town', frame: `${prefix}_${i + 1}` }))
       this.anims.create({ key: 'crow-idle', frames: frames('crow', 6), frameRate: 4, repeat: -1 })
@@ -759,7 +912,7 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
         id: resident ? resident.publicId : String(selection),
         overrideUntil: 0, manualWalk: false, arriveSelect: null, travelEmote: null, frozenUntil: 0, keyDriven: false, running: false,
         facing: 'down', stuckMs: 0, lastPresence: null, teleporting: false, lastReportTime: 0,
-        npc: null, speech: null, npcActivity: null,
+        npc: null, speech: null, npcActivity: null, dayPlan: null, episodeCheckAt: 0, shelterUntil: 0,
       }
       sprite.play(`${sheet}-idle-down`)
       this.walkers.push(walker)
@@ -846,20 +999,22 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
         hour,
         densityCap(hour),
       )
-      for (const entry of visible) this.spawnTownNpc(entry.npc, hour)
+      for (const entry of visible) this.spawnTownNpc(entry.npc)
     }
 
-    spawnTownNpc(npc: TownNpcView, hour: number) {
+    /** 生成一个 18-人名册的 walker。初始坐标直接用 resolveNpcFrame（M7-6）算——和每帧的
+     * updateNpcWalker 是同一套算法，所以刚生成的这一帧就已经站对地方，不会有"先出现在别处，
+     * 下一帧才跳过去"的闪烁。 */
+    spawnTownNpc(npc: TownNpcView) {
       const sheet = npc.sprite.startsWith('c') && /^c\d+$/.test(npc.sprite)
         ? `char_${Number(npc.sprite.slice(1))}`
         : npc.sprite
       if (!this.textures.exists(sheet)) return
-      const slot = activeSlot(npc.schedule, hour)
-      const x = slot ? placeFor(slot.place, this.townLayout()) : academyDoorX
-      const offset = venueOffset(npc.code, slot?.place ?? 'street')
+      const dayPlan = npc.dayPlan ?? dayPlanFallback(npc.schedule)
+      const frame = resolveNpcFrame(dayPlan, this.npcMinuteOfDay(), npc.code, this.townLayout(), STREET_Y)
       const walker = this.spawnWalker(
         sheet,
-        x + offset.dx,
+        frame.x,
         npc.displayName,
         npc.layer === 2 ? 'rgba(84,64,120,.86)' : 'rgba(40,30,26,.62)',
         null,
@@ -870,10 +1025,13 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
       )
       walker.npc = npc
       walker.id = npc.code
-      walker.homeX = x
-      walker.sprite.y = STREET_Y + offset.dy
-      walker.targetY = walker.sprite.y
-      walker.sprite.setDepth(walker.sprite.y)
+      walker.homeX = frame.x
+      walker.dayPlan = dayPlan
+      walker.sprite.y = frame.y
+      walker.targetY = frame.y
+      walker.sprite.setDepth(frame.depth)
+      walker.npcActivity = frame.activity
+      if (!frame.walking) walker.action = frame.activity === 'reading' ? 'read' : frame.activity === 'phone' ? 'phone' : 'idle'
     }
 
     despawnWalker(walker: Walker) {
@@ -885,18 +1043,83 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
       this.walkers = this.walkers.filter(item => item !== walker)
     }
 
-    /** NPC 版的 evaluateSchedule：地点来自后端下发的日程，动作驱动贴图。 */
-    evaluateNpcSchedule(walker: Walker) {
+    /** 带小数的当地分钟数，供 resolveNpcFrame 用；serverOffsetMs 校准到服务器时钟（同
+     * evaluateSchedule 等既有代码对 Date.now() 的用法），算术部分留在纯函数 minuteOfLocalDay 里。 */
+    npcMinuteOfDay() {
+      return minuteOfLocalDay(Date.now() + serverOffsetMs)
+    }
+
+    /**
+     * M7-6/7: 18 人名册每帧的位置——不再是"整点判定 + 直线走到底"的粗粒度状态机，直接用
+     * resolveNpcFrame(dayPlan, 当前分钟) 求出这一刻该在哪：AT 就站定、播到达后的动作动画；
+     * WALKING 就按 progress 连续插值，镜头随时扫过都能看到人卡在半路上，不会"瞬移到目的地
+     * 站着"。dayPlan 缺省（旧后端还没发）时退回 dayPlanFallback(schedule)——引擎永远只有这一
+     * 条渲染路径，不必分叉判断。
+     */
+    updateNpcWalker(walker: Walker, now: number) {
       const npc = walker.npc
-      if (!npc) return walker.homeX
-      const hour = new Date(Date.now() + serverOffsetMs).getHours()
-      const slot = activeSlot(npc.schedule, hour)
-      if (!slot) return walker.homeX
-      walker.action = slot.activity === 'reading' ? 'read' : slot.activity === 'phone' ? 'phone' : 'idle'
-      walker.npcActivity = slot.activity
-      const offset = venueOffset(npc.code, slot.place)
-      walker.targetY = STREET_Y + offset.dy
-      return placeFor(slot.place, this.townLayout()) + offset.dx
+      if (!npc) return
+      // 冻结中（既有的擦肩打招呼、或 M7-9 的路上插曲）：原地不动，等冻结过去再继续渲染。这几
+      // 秒会让画面"跳过" positionAt 本该给出的中间位置，是刻意的取舍（见 roadside-episodes.ts
+      // 头部的硬约束）——冻结只改这一帧画在哪儿，绝不回头去改 positionAt 的输入或输出。
+      if (walker.frozenUntil > now) return
+      if (walker.frozenUntil !== 0) {
+        walker.frozenUntil = 0
+        walker.travelEmote?.destroy()
+        walker.travelEmote = null
+      }
+      if (!walker.dayPlan) walker.dayPlan = npc.dayPlan ?? dayPlanFallback(npc.schedule)
+      const frame = resolveNpcFrame(walker.dayPlan, this.npcMinuteOfDay(), npc.code, this.townLayout(), STREET_Y)
+      const shelterActive = frame.walking && walker.shelterUntil > now
+      const y = shelterActive ? frame.y - ROADSIDE_SHELTER_OFFSET_PX : frame.y
+      walker.sprite.setPosition(frame.x, y)
+      walker.sprite.setDepth(frame.depth)
+      walker.targetX = frame.targetX
+      walker.targetY = y
+      walker.state = frame.walking ? 'walk' : 'act'
+
+      if (frame.walking) {
+        // 在路上：朝向跟着走，动作永远是走路——劳作/读书/打电话那些动作只在"到达后"才播
+        // （下面的 AT 分支），这正是 M7-7 要的"到达后再播活动动画"。
+        if (walker.npcActivity !== 'walking' || walker.facing !== frame.facing) {
+          walker.npcActivity = 'walking'
+          if (frame.facing) walker.facing = frame.facing
+          this.restoreSheet(walker)
+          walker.sprite.play(`${walker.sheet}-walk-${walker.facing}`, true)
+        }
+        this.maybeRoadsideEpisode(walker, now)
+        return
+      }
+
+      // AT：真的到了，才切一次到这个 errand 的动作动画——只在 activity 变化时才 play，不然
+      // 每帧都重播会把已经在播的动画打断成卡顿。
+      if (walker.npcActivity !== frame.activity) {
+        walker.npcActivity = frame.activity
+        walker.action = frame.activity === 'reading' ? 'read' : frame.activity === 'phone' ? 'phone' : 'idle'
+        this.performActivity(walker)
+      }
+    }
+
+    /**
+     * M7-9 路上插曲：纯本地表现，不写库、不碰相遇序列。默认随机源就是 roadside-episodes.ts
+     * 自带的 Math.random——绝不传任何按 (npc, date) 派生的种子，这样"演不演"每次都可能不
+     * 一样，关掉这个方法（或者不调用它）夜间 job 的传播结果完全不受影响。
+     */
+    maybeRoadsideEpisode(walker: Walker, now: number) {
+      if (now < walker.episodeCheckAt) return
+      walker.episodeCheckAt = now + ROADSIDE_EPISODE_CHECK_MS // 节流：不必每帧都掷一次骰子
+      // 擦肩打招呼：身边真有人（没在冻结中）才判定，免得空无一人的路上也频繁掷骰子。
+      const passerby = this.walkers.some(other =>
+        other !== walker && other.frozenUntil <= now && Math.abs(other.sprite.x - walker.sprite.x) < ROADSIDE_PASSING_DISTANCE_PX)
+      if (passerby && shouldPauseForGreeting()) {
+        walker.frozenUntil = now + PASSING_GREETING_PAUSE_MS
+        walker.travelEmote?.destroy()
+        walker.travelEmote = this.add.sprite(walker.sprite.x, walker.sprite.y - 66, 'emotes', EMOTES.heart[0]).setOrigin(0.5, 1).setDepth(4002).play('emote-heart')
+        return
+      }
+      // 雨天躲屋檐：只是视觉上往店面那侧靠一靠，x 和 activity 都不变。
+      const weather = this.atmosphere?.getWeather() ?? 'clear'
+      if (shouldSeekRoadsideShelter(weather)) walker.shelterUntil = now + ROADSIDE_SHELTER_MS
     }
 
     /**
@@ -921,27 +1144,42 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
       bubble.strokeRoundedRect(-label.width / 2 - padX, -label.height - padY,
         label.width + padX * 2, label.height + padY * 2, 8)
       const container = this.add.container(walker.sprite.x, walker.sprite.y - 74, [bubble, label]).setDepth(4100)
-      // 说话的人可能正站在画面边缘，气泡比人宽得多，直接跟着他就会被镜头切掉半句。
-      // 记下半宽，定位时把气泡按视野边界夹回来——人还在原地，只是话框往里挪一点。
+      // 说话的人可能正站在画面边缘，气泡比人宽得多，直接跟着他就会被镜头切掉半句；同屏还
+      // 可能不止一个人在说话，两个气泡会叠在一起。半宽 + 整体高度记下来，交给
+      // layoutSpeechBubbles（M7-8）统一夹回镜头、互相避让——这里只管把气泡"生"出来。
       container.setData('halfWidth', label.width / 2 + padX)
+      container.setData('bubbleHeight', label.height + padY * 2)
       walker.speech = container
-      this.positionSpeech(walker)
+      this.layoutSpeechBubbles()
       this.time.delayedCall(holdMs, () => {
         if (walker.speech === container) walker.speech = null
         container.destroy()
       })
     }
 
-    /** 把气泡放在说话人头顶，但整体不许超出镜头左右边界。 */
-    positionSpeech(walker: Walker) {
-      const container = walker.speech
-      if (!container) return
+    /**
+     * M7-8 气泡排版兜底：所有正在说话的人一次性摆位，而不是各摆各的——talking-bubbles.ts 的
+     * `layoutBubbles` 是纯函数（超出镜头夹回来，互相重叠就摞起来），这里只负责把每个人的气泡
+     * 换算成它要的 BubbleBox、算完再写回 Phaser 容器的位置。取代了原来只夹左右边界、不管
+     * 重叠的 positionSpeech。
+     */
+    layoutSpeechBubbles() {
+      const speakers = this.walkers.filter(walker => walker.speech !== null)
+      if (speakers.length === 0) return
       const camera = this.cameras.main
-      const halfWidth = (container.getData('halfWidth') as number) ?? 0
-      const left = camera.scrollX + halfWidth + 8
-      const right = camera.scrollX + camera.width / camera.zoom - halfWidth - 8
-      const x = right > left ? Math.min(Math.max(walker.sprite.x, left), right) : walker.sprite.x
-      container.setPosition(x, walker.sprite.y - 74)
+      const cameraRect: CameraRect = { x: camera.scrollX, y: camera.scrollY, width: camera.width / camera.zoom, height: camera.height / camera.zoom }
+      const boxes: BubbleBox[] = speakers.map(walker => {
+        const container = walker.speech as PhaserNs.GameObjects.Container
+        const halfWidth = (container.getData('halfWidth') as number) ?? 0
+        const height = (container.getData('bubbleHeight') as number) ?? 0
+        const bottomY = walker.sprite.y - 74 // 气泡的锚点(容器 y=0 处)就是它自己的底边
+        return { id: walker.id, x: walker.sprite.x - halfWidth, y: bottomY - height, width: halfWidth * 2, height }
+      })
+      const placed = layoutBubbles(boxes, cameraRect)
+      speakers.forEach((walker, index) => {
+        const box = placed[index]
+        ;(walker.speech as PhaserNs.GameObjects.Container).setPosition(box.x + box.width / 2, box.y + box.height)
+      })
     }
 
     /**
@@ -975,6 +1213,7 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
       const lines = pointsToPlay(bubbleTierFor(npc.affinityToPlayer), npc.talkingPoints)
       if (lines.length === 0) return
       initiativeBudget = consume(initiativeBudget, npc.code)
+      handlers.onInitiativeSpent?.(npc.code)
       this.nextInitiativeAt = now + 30_000
       this.saySomething(walker, lines[0].text)
     }
@@ -1208,6 +1447,8 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
 
     dispatchArrival(selection: TownSelection) {
       if (selection === 'academy') enterAcademy()
+      // M3-1: 走到自家门口 = 敲门进屋，而不是像其他建筑那样弹一张信息卡。
+      else if (selection === 'home') void enterRoom('home')
       else handlers.onSelect?.(selection)
     }
 
@@ -1284,17 +1525,26 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
 
     update(_time: number, delta: number) {
       this.atmosphere?.update(delta)
-      this.atmosphere?.update(delta)
       const now = this.time.now
       this.handleSelfKeys(now, delta)
       this.updateObservation()
       this.detectGreetings(now)
       for (const walker of this.walkers) {
+        if (walker.npc) {
+          // 18 人名册全部走 dayPlan 驱动的独立路径（M7-6/7/8/9）——不再进入下面这套给玩家/
+          // 邻居/巡逻 NPC 用的"整点判定 + 直线走"状态机。标签/表情仍然统一跟随，气泡摆位则交
+          // 给循环之后的 layoutSpeechBubbles 一次性处理（要看到所有正在说话的人才能互相避让）。
+          this.updateNpcWalker(walker, now)
+          walker.label.setPosition(walker.sprite.x, walker.sprite.y + 4)
+          walker.emote?.setPosition(walker.sprite.x + 14, walker.sprite.y - 62)
+          walker.travelEmote?.setPosition(walker.sprite.x + 14, walker.sprite.y - 66)
+          this.maybeInitiate(walker, now)
+          continue
+        }
         if (walker.frozenUntil > now) {
           walker.label.setPosition(walker.sprite.x, walker.sprite.y + 4)
           walker.emote?.setPosition(walker.sprite.x + 14, walker.sprite.y - 62)
           walker.travelEmote?.setPosition(walker.sprite.x + 14, walker.sprite.y - 66)
-          this.positionSpeech(walker)
           continue
         }
         if (walker.frozenUntil !== 0) {
@@ -1361,9 +1611,11 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
             this.reportSelfPresence()
           }
         } else if (walker.state === 'walk') {
+          // 玩家以外的人一律用居民步速（CONTRACT-M7.md §4）：慢一档，镜头扫过才看得出"正在
+          // 走去哪儿"，而不是和玩家一样快得像一闪而过。
           const distance = walker.targetX - walker.sprite.x
-          walker.sprite.x = stepToward(walker.sprite.x, walker.targetX, moveSpeed(false), delta)
-          if (!walker.resident?.isSelf) walker.sprite.y = stepToward(walker.sprite.y, walker.targetY, moveSpeed(false), delta)
+          walker.sprite.x = stepToward(walker.sprite.x, walker.targetX, RESIDENT_WALK_SPEED, delta)
+          if (!walker.resident?.isSelf) walker.sprite.y = stepToward(walker.sprite.y, walker.targetY, RESIDENT_WALK_SPEED, delta)
           const direction: Direction = distance < 0 ? 'left' : 'right'
           walker.sprite.play(`${walker.sheet}-walk-${direction}`, true)
           if (Math.abs(distance) < 1) {
@@ -1387,9 +1639,9 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
         } else {
           walker.timer -= delta
           if (walker.timer <= 0) {
+            // walker.npc 已经在循环最上面 continue 掉了，这里只剩玩家/邻居/巡逻 NPC 三种。
             let next: number
-            if (walker.npc) next = this.evaluateNpcSchedule(walker)
-            else if (walker.patrol) next = this.chooseNextTarget(walker)
+            if (walker.patrol) next = this.chooseNextTarget(walker)
             else if (walker.resident?.isSelf && now < walker.overrideUntil) next = walker.sprite.x
             else next = this.evaluateSchedule(walker)
             if (Math.abs(next - walker.sprite.x) > 4) { walker.targetX = next; walker.state = 'walk' } else this.performActivity(walker)
@@ -1398,9 +1650,9 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
         walker.label.setPosition(walker.sprite.x, walker.sprite.y + 4)
         walker.emote?.setPosition(walker.sprite.x + 14, walker.sprite.y - 62)
         walker.travelEmote?.setPosition(walker.sprite.x + 14, walker.sprite.y - 66)
-        this.positionSpeech(walker)
-        if (walker.npc) this.maybeInitiate(walker, now)
       }
+      // M7-8: 所有正在说话的人（含上面 continue 掉的 18 人名册）一次摆完，互相夹回镜头、避让重叠。
+      this.layoutSpeechBubbles()
       for (const vehicle of this.vehicles) {
         vehicle.sprite.x += (vehicle.speed * delta) / 1000
         if (vehicle.speed > 0 && vehicle.sprite.x > width + 40) vehicle.sprite.x = -vehicle.sprite.width - 40
@@ -1700,7 +1952,7 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
 
   /** Fades to the 成长学院 interior (task 7 wiring): town scene sleeps, academy scene takes over. */
   function enterAcademy() {
-    if (!sceneRef || academyEntered || academyBusy) return
+    if (!sceneRef || academyEntered || academyBusy || roomBusy || activeRoomKey) return
     academyBusy = true
     const town = sceneRef
     const cam = town.cameras.main
@@ -1719,21 +1971,84 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
     })
   }
 
+  /**
+   * M3-1/M3-2: 走到自家门口（或任意有地图数据的房间）→ 门开 → 淡入。仿 enterAcademy 的选择：
+   * 相机 fadeOut → 挂新场景 → town 场景 sleep → 新场景 create 后 fadeIn。跟学院不同的地方是
+   * 这里的房间是数据驱动的通用 interior.scene.ts，不是专门手搭的场景类，所以 InteriorOptions
+   * 要在这里把 player/residents/metrics/onInteract 都填好——这正是 M3-2 要补的那几个入参。
+   */
   async function enterRoom(roomId: string) {
-    if (!sceneRef || academyBusy) return
+    if (!sceneRef || academyBusy || roomBusy || activeRoomKey) return
     const paths: Record<string, string> = { home: 'home-living-room', academy: 'academy-study', gym: 'public-gym' }
     const file = paths[roomId]
     if (!file) return
-    const response = await fetch(`${ASSETS}/maps/${file}.json`)
-    const room = parseRoomMap(await response.json())
-    const game = sceneRef.sys.game
-    const key = interiorSceneKey(room.id)
-    if (game.scene.getScene(key)) game.scene.remove(key)
-    game.scene.add(key, createInteriorScene(Phaser, { room, onExit: target => target === 'town' && exitRoom() }), true)
-    sceneRef.scene.sleep()
+    roomBusy = true
+    const town = sceneRef
+    const cam = town.cameras.main
+    try {
+      const fadeOutDone = new Promise<void>(resolve => {
+        cam.fadeOut(SCENE_FADE_MS, 8, 10, 8)
+        cam.once('camerafadeoutcomplete', () => resolve())
+      })
+      const [room, , extras] = await Promise.all([
+        fetch(`${ASSETS}/maps/${file}.json`).then(response => response.json()).then(parseRoomMap),
+        fadeOutDone,
+        roomId === 'home' ? fetchHomeExtras() : Promise.resolve({ homeAchievements: 0, pet: undefined as InteriorPet | undefined }),
+      ])
+      const game = town.sys.game
+      const key = interiorSceneKey(room.id)
+      if (game.scene.getScene(key)) game.scene.remove(key)
+      const self = latestModel.residents.find(item => item.isSelf) ?? null
+      const residentsForRoom: RoomResident[] = self
+        ? [{ publicId: self.publicId, displayName: self.displayName, isSelf: true, characterSheet: characterSheet(self.publicId), state: 'idle' }]
+        : []
+      const player: InteriorPlayer | undefined = self ? { characterSheet: characterSheet(self.publicId) } : undefined
+      const options: InteriorOptions = {
+        room,
+        metrics: { homeAchievements: extras.homeAchievements },
+        residents: residentsForRoom,
+        player,
+        pet: extras.pet,
+        onExit: target => { if (target === 'town') exitRoom() },
+        // engine 自己不认识 home.open-desk 之类的动作 id，转给外壳去接 world-actions.ts。
+        onInteract: (actionId, id) => handlers.onInteriorInteract?.(actionId, id),
+      }
+      const interiorScene = game.scene.add(key, createInteriorScene(Phaser, options), true, options)
+      town.scene.sleep()
+      activeRoomKey = key
+      interiorScene?.events.once('create', () => { interiorScene.cameras.main.fadeIn(SCENE_FADE_MS, 8, 10, 8) })
+    } catch (error) {
+      cam.fadeIn(SCENE_FADE_MS, 8, 10, 8) // 加载失败也要把镜头亮回来，不能留一片黑屏
+      throw error
+    } finally {
+      roomBusy = false
+    }
   }
 
-  function exitRoom() { sceneRef?.scene.wake('town') }
+  /** Reverses enterRoom(): fades the interior out, wakes the street back up. Mirrors exitAcademy. */
+  function exitRoom() {
+    if (!sceneRef || !activeRoomKey || roomBusy) return
+    roomBusy = true
+    const key = activeRoomKey
+    const phaserGame = sceneRef.sys.game
+    const roomScene = phaserGame.scene.getScene(key)
+    const finish = () => {
+      phaserGame.scene.stop(key)
+      if (sceneRef) {
+        sceneRef.scene.wake('town')
+        sceneRef.cameras.main.fadeIn(SCENE_FADE_MS, 8, 10, 8)
+      }
+      activeRoomKey = null
+      roomBusy = false
+    }
+    const cam = roomScene?.cameras.main
+    if (cam) {
+      cam.fadeOut(SCENE_FADE_MS, 8, 10, 8)
+      cam.once('camerafadeoutcomplete', finish)
+    } else {
+      finish()
+    }
+  }
 
   /** Reverses enterAcademy(): fades the interior out, wakes the street back up. */
   function exitAcademy() {
@@ -1795,6 +2110,7 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
       sceneRef?.applyTownNpcs(npcs)
     },
     setObservation: on => sceneRef?.setObservationMode(on),
+    setInitiativeBudget: budget => { initiativeBudget = budget },
     enterAcademy,
     exitAcademy,
     enterRoom,

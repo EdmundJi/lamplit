@@ -7,7 +7,19 @@ import {
   particleBudget,
   seasonForMonth,
   seasonTint,
+  TownAtmosphere,
 } from './atmosphere'
+
+describe('TownAtmosphere weather getter (M7-9 依赖它判断该不该躲雨)', () => {
+  it('defaults to clear and reflects setWeather without needing attach()', () => {
+    const atmosphere = new TownAtmosphere({ worldWidth: 100, worldHeight: 100, groundY: 50 })
+    expect(atmosphere.getWeather()).toBe('clear')
+    atmosphere.setWeather('rain')
+    expect(atmosphere.getWeather()).toBe('rain')
+    atmosphere.setWeather('snow')
+    expect(atmosphere.getWeather()).toBe('snow')
+  })
+})
 
 describe('minutesOfDay', () => {
   it('converts a Date to minutes since midnight', () => {

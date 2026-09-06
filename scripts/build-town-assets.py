@@ -559,6 +559,18 @@ def _home_living_room() -> dict:
             {"id": "plant-corner", "frame": "plant_2", "x": 560, "y": 295},
             # 门口地毯
             {"id": "doormat", "frame": "doormat_1", "x": door_x, "y": height - 6, "displayWidth": 96, "depth": 1},
+            # M3-3/M3-4：三件可交互家具，interactive.actionId 对应 world-actions.ts 里注册的能力，
+            # 点开的效果由那边的 run() 决定——这里只标"点这里能干嘛"。位置都挑了本图里原本空着的地板。
+            {"id": "desk", "frame": "desk_1", "x": 480, "y": 320,
+             "interactive": {"actionId": "home.open-desk", "label": "打开书桌"}},
+            {"id": "achievement-board", "frame": "board_2", "x": 315, "y": wall_bottom,
+             "interactive": {"actionId": "home.open-achievement-wall", "label": "看看成就墙"}},
+            # 宠物窝：M3-5 的宠物（有像素素材的狗/兔/鸟，或占位窝）就画在这件家具的位置上，
+            # 见 interior.scene.ts 的 drawPet()——它按 interactive.actionId 找这个点，不需要
+            # 房间数据再单独描述一次宠物的坐标。
+            {"id": "pet-bed", "frame": "rug_pattern_2", "x": 195, "y": 320,
+             "displayWidth": 40, "displayHeight": 40, "depth": 1,
+             "interactive": {"actionId": "home.open-pet-house", "label": "宠物窝"}},
         ],
         "slots": [
             # 照片墙：成就进度决定挂几张照片（最多 4 张，循环 4 种画框）

@@ -125,3 +125,50 @@ export function selectVisible<T extends PlaceableNpc>(npcs: T[], hour: number, c
   })
   return sorted.slice(0, Math.max(0, cap))
 }
+
+/**
+ * M7-8 站位纵向散开: how far an NPC's y may drift from `place`'s baseline. The sidewalk is a
+ * narrow band (a big jitter would walk someone into the street or into a shopfront wall), while
+ * the plaza and park are open ground with real depth to use — plan.md §3.5: "广场与公园允许更大
+ * 的纵深".
+ */
+export const SIDEWALK_JITTER_PX = 10
+export const OPEN_GROUND_JITTER_PX = 28
+
+const OPEN_GROUND_PLACES: ReadonlySet<NpcPlace> = new Set(['plaza', 'park'])
+
+/** FNV-1a, 32-bit — small, dependency-free, and good enough to spread a couple dozen npcCodes
+ * without visibly clustering. Not used anywhere security-sensitive, just as a stable hash. */
+function hashString(input: string): number {
+  let hash = 0x811c9dc5
+  for (let i = 0; i < input.length; i++) {
+    hash ^= input.charCodeAt(i)
+    hash = Math.imul(hash, 0x01000193)
+  }
+  return hash >>> 0
+}
+
+/**
+ * Deterministic y offset from `place`'s baseline for one NPC (M7-8). Pure function of
+ * `(npcCode, place)` — same inputs always give the same offset, so re-rendering a frame (or
+ * reloading the roster) never reshuffles who stands where. Different NPCs at the same place
+ * land at different offsets because their codes hash differently; the same NPC gets a different
+ * offset at a different place, so it doesn't look pinned to one exact spot as it moves around
+ * town over the day.
+ */
+export function verticalJitter(npcCode: string, place: NpcPlace): number {
+  const amplitude = OPEN_GROUND_PLACES.has(place) ? OPEN_GROUND_JITTER_PX : SIDEWALK_JITTER_PX
+  const unit = hashString(`${npcCode}|${place}`) / 0xffffffff // hash spread over [0,1]
+  return (unit * 2 - 1) * amplitude // -> [-amplitude, +amplitude]
+}
+
+/**
+ * The convention `town.engine.ts` should follow when placing a sprite: `depth` tracks `y`
+ * directly, so someone standing further "down" the screen draws in front of someone further
+ * "up" instead of every jittered NPC drawing in whatever order the roster array happens to be
+ * in. Written as a function (not just a comment) so the convention has one place to change if
+ * the engine ever needs a constant offset between the two.
+ */
+export function depthForY(y: number): number {
+  return y
+}

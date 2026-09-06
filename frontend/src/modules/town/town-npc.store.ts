@@ -43,6 +43,22 @@ export const useTownNpcStore = defineStore('townNpc', {
       }
     },
 
+    /**
+     * 护栏 A：报告一次 NPC 主动搭话，把全镇每日额度扣在服务端。plan.md 记过这个坑——额度只
+     * 存在前端内存里的话，刷新一次就重置，护栏形同虚设。
+     *
+     * <p>返回的是服务端的权威值，调用方应当拿它去覆盖引擎里的乐观值。端点没上线（404）时
+     * 保持本地值不动：宁可放宽，也不要因为后端还没部署就让 NPC 一句话都不说。
+     */
+    async consumeInitiative(): Promise<InitiativeBudget> {
+      try {
+        this.budget = await api.post<InitiativeBudget>('/town/initiative/consume', {})
+      } catch (error) {
+        if (!isNotFound(error)) throw error
+      }
+      return this.budget
+    },
+
     /** Fetches `GET /town/npc/{code}/talking-points`. Tolerates a missing NPC or a
      * not-yet-deployed endpoint (both surface as 404) by returning an empty list. */
     async talkingPoints(code: string): Promise<NpcTalkingPoint[]> {
