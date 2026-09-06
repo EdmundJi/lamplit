@@ -12,7 +12,7 @@ import { useTownEventsStore } from '../town-events'
  */
 import { computed, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { ChevronDown, ChevronUp, Film, Footprints, Grid3x3, HelpCircle, Minimize2, Rabbit } from 'lucide-vue-next'
+import { ChevronDown, ChevronUp, Film, Footprints, Grid3x3, HelpCircle, Minimize2, Rabbit, Volume2, VolumeX } from 'lucide-vue-next'
 import { onDataChanged } from '../../../shared/data-sync'
 import { useTownStore } from '../town.store'
 import { useTownNpcStore } from '../town-npc.store'
@@ -43,7 +43,33 @@ const immersive = useImmersiveStore()
 const townNpcStore = useTownNpcStore()
 const observing = ref(false)
 const scenic = ref(false)
-function toggleScenic() { scenic.value = !scenic.value; game?.setScenic?.(scenic.value) }
+const hudActionsOpen = ref(false)
+function toggleScenic() {
+  scenic.value = !scenic.value
+  if (scenic.value) hudActionsOpen.value = false
+  game?.setScenic?.(scenic.value)
+}
+/** 场景模式只收起导航与操作提示；退出、声音和恢复入口始终保持可见。 */
+function recoverScenicHud() {
+  if (!scenic.value) return
+  scenic.value = false
+  game?.setScenic?.(false)
+}
+function recoverScenicFromPointer(event: PointerEvent) {
+  if (!scenic.value) return
+  // 恢复按钮自己会在 click 中切换；此处抢先恢复会让 click 又把界面收回去。
+  if ((event.target as HTMLElement | null)?.closest('.scenic-restore, .scenic-toggle')) return
+  recoverScenicHud()
+}
+function recoverScenicFromFocus(event: FocusEvent) {
+  if ((event.target as HTMLElement | null)?.closest('.scenic-toggle')) return
+  recoverScenicHud()
+}
+const soundEnabled = ref(false)
+function toggleSound() {
+  soundEnabled.value = !soundEnabled.value
+  game?.setSoundEnabled(soundEnabled.value)
+}
 const activeRoom = ref<string | null>(null)
 const eventsStore = useTownEventsStore()
 const showEvents = ref(false)
@@ -51,6 +77,16 @@ const travel = ref<TownTravel | null>(null)
 const nearby = ref<TownNearby | null>(null)
 const clockText = ref('')
 let clockTimer: ReturnType<typeof setInterval> | null = null
+/** 与服务端时钟的偏移：HUD 用它显示与引擎世界一致的“现在”。 */
+let serverClockOffsetMs = 0
+function syncServerClock(model: TownModel | null) {
+  const parsed = model?.serverTime ? new Date(model.serverTime).getTime() : Number.NaN
+  serverClockOffsetMs = Number.isFinite(parsed) ? parsed - Date.now() : 0
+  refreshClockText()
+}
+function refreshClockText() {
+  clockText.value = new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit', timeZone: self.value?.timezone ?? 'Asia/Shanghai' }).format(new Date(Date.now() + serverClockOffsetMs))
+}
 const destinations = [{ id: 'home', label: '我的家' }, { id: 'academy', label: '学院' }, { id: 'gym', label: '健身房' }, { id: 'cafe', label: '咖啡馆' }, { id: 'terrace', label: '街角露台' }, { id: 'park', label: '公园' }, { id: 'plaza', label: '广场' }]
 function visitPlace(id: string) {
   if (observing.value) { observing.value = false; game?.setObservation(false) }
@@ -98,9 +134,14 @@ function onConversationChange(notice: ConversationNotice | null) {
 const feedback = ref<InstanceType<typeof WorldFeedback> | null>(null)
 const playerPosition = ref<{ x: number; y: number } | null>(null)
 const distanceToGuide = ref<number | null>(null)
-// TownGame 只有 setNight/enterAcademy/exitAcademy 这几个 setter，没有对应的查询方法，
-// 这两个状态由外壳自己记着，能力调用时读它们、改了它们再驱动引擎。
+// 当前渲染的昼夜状态由引擎同步；动作菜单只读取它来给“切到晨/昏”命名。
 const night = ref(new Date().getHours() >= 18 || new Date().getHours() < 6)
+/** 仅“切到夜晚/白天”是临时预览；正常情况下引擎按用户时区连续推进。 */
+const manualTimeOverride = ref(false)
+function restoreAutomaticTime() {
+  manualTimeOverride.value = false
+  game?.setAutomaticTime()
+}
 const insideAcademy = ref(false)
 /** 玩家手动关掉了当前锚点的动作菜单：在下一次锚点变化之前不再弹出。 */
 const menuDismissed = ref(true)
@@ -154,6 +195,7 @@ async function mountGame() {
     game = null
     const created = await createTownGame(canvas.value, store.model, {
       onConversationChange,
+      onTimeChange: isNight => { night.value = isNight },
       onSelect: value => { selection.value = value },
       onObservationChange: enabled => { observing.value = enabled },
       onTravelChange: value => { travel.value = value },
@@ -172,10 +214,13 @@ async function mountGame() {
     game = created
     game.setLetterUnread?.(mailSignal.unreadCount)
     game.setRun(immersive.runMode)
+    // 初次进入默认静音；模型重建时保留玩家已选声音和手动晨昏预览。
+    game.setSoundEnabled(soundEnabled.value)
+    if (manualTimeOverride.value) game.setNight(night.value)
+    else game.setAutomaticTime()
     await townNpcStore.load()
     if (sequence !== mountSequence) return
     if (game) game.applyNpcs(townNpcStore.npcs, townNpcStore.budget)
-    game?.setNight(night.value)
     game?.applyEvents?.(eventsStore.events)
     if (conversationCode.value) game?.beginConversation?.(conversationCode.value)
     residentSignature = residentKey(store.model)
@@ -193,7 +238,11 @@ function handleWorldEvent(event: WorldEvent) {
   else if (event.type === 'toast') feedback.value?.handle(event)
   else if (event.type === 'open') immersive.openPanel(event.panel)
   else if (event.type === 'close') immersive.closeTopmost()
-  else if (event.type === 'night') { night.value = event.value; game?.setNight(event.value) }
+  else if (event.type === 'night') {
+    manualTimeOverride.value = true
+    night.value = event.value
+    game?.setNight(event.value)
+  }
   else if (event.type === 'academy') {
     insideAcademy.value = event.value
     if (event.value) game?.enterAcademy()
@@ -291,7 +340,7 @@ function onKeydown(event: KeyboardEvent) {
     else if (observing.value) { event.preventDefault(); toggleObservation() }
     else if (menuActions.value.length) { event.preventDefault(); dismissMenu() }
     else if (immersive.topmost) { event.preventDefault(); immersive.closeTopmost() }
-    else if (activeRoom.value) { event.preventDefault(); leaveRoom() }
+    else if (activeRoom.value) { event.preventDefault(); if (!game?.cancelRoomAction?.()) leaveRoom() }
     else void exitImmersive()
     return
   }
@@ -318,9 +367,9 @@ onMounted(async () => {
     void eventsStore.load()
     void townNpcStore.load().then(() => game?.applyNpcs(townNpcStore.npcs, townNpcStore.budget))
   }, 60_000)
-  const tickClock = () => { clockText.value = new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit', timeZone: self.value?.timezone ?? 'Asia/Shanghai' }).format(new Date()) }
-  tickClock()
-  clockTimer = setInterval(tickClock, 30_000)
+  syncServerClock(store.model)
+  refreshClockText()
+  clockTimer = setInterval(refreshClockText, 30_000)
   void eventsStore.load()
   immersive.hydrate(worldPanels)
   registerBuiltinWorldActions()
@@ -351,7 +400,9 @@ watch(() => eventsStore.events, events => game?.applyEvents?.(events))
 watch(selection, sel => {
   const anchor = anchorForSelection(sel, self.value?.publicId ?? null)
   menuDismissed.value = true
-  immersive.openForAnchor(anchor, worldPanels)
+  // 到家、学院或普通地点先进入空间本身。业务面板只在明确的 NPC 交谈入口自动打开，
+  // 其他功能仍可通过 dock 或“更多地点操作”主动进入。
+  if (anchor === 'npc:assistant' || anchor === 'npc:postman') immersive.openForAnchor(anchor, worldPanels)
 })
 
 // 面板里做的事要在小镇里看得见：任务/目标等数据一变，就静默刷新一次小镇模型。
@@ -359,6 +410,7 @@ const stopDataSync = onDataChanged(['tasks', 'today', 'goals', 'attributes', 'ac
 
 watch(() => store.model, async model => {
   if (!model) return
+  syncServerClock(model)
   if (game && residentKey(model) === residentSignature) game.applyModel(model)
   else await mountGame()
 })
@@ -382,7 +434,7 @@ const stopProbeUi = import.meta.env.DEV
 watch(() => mailSignal.unreadCount, count => game?.setLetterUnread?.(count))
 
 watch(() => Boolean(activeRoom.value) || openWindows.value.length > 0 || Boolean(selectedNpc.value) || showEvents.value, opened => {
-  if (opened && scenic.value) toggleScenic()
+  if (opened) recoverScenicHud()
 })
 
 onBeforeUnmount(() => {
@@ -403,8 +455,8 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section ref="root" class="immersive-town" :class="{ 'is-scenic': scenic }">
-    <button v-if="scenic" class="scenic-restore" @click="toggleScenic">显示界面 · Esc</button>
+  <section ref="root" class="immersive-town" :class="{ 'is-scenic': scenic }" @focusin="recoverScenicFromFocus" @pointerdown.capture="recoverScenicFromPointer">
+    <button v-if="scenic" class="scenic-restore" type="button" @click="recoverScenicHud">显示导航与提示 · Esc</button>
     <TownOnboarding
       v-if="self"
       ref="onboardingRef"
@@ -427,12 +479,12 @@ onBeforeUnmount(() => {
     <div v-else-if="travel?.phase === 'blocked'" class="travel-status" role="status">暂时走不到{{ travel.label }}<button type="button" @click="stopTravel">知道了</button></div>
     <button v-if="nearby && !activeRoom && !observing && !selectedNpc && !openWindows.length && travel?.phase !== 'walking'" class="nearby-action" type="button" @click="interactNearby">{{ nearby.action }}{{ nearby.label }} · E</button>
     <div v-if="townNpcStore.error" class="town-roster-error" role="alert">{{ townNpcStore.error }} <button type="button" @click="mountGame">重新连接</button></div>
-    <nav v-if="!observing && !activeRoom" class="town-wayfinder" aria-label="小镇地点">
+    <nav v-if="!observing && !activeRoom && !scenic" class="town-wayfinder" aria-label="小镇地点">
       <span>去哪里走走</span>
       <button v-for="place in destinations" :key="place.id" type="button" @click="visitPlace(place.id)">{{ place.label }}</button>
     </nav>
     <button v-if="activeRoom" class="town-leave-room" type="button" @click="leaveRoom">回到街上</button>
-    <p v-if="!observing && !activeRoom" class="town-controls-hint">方向键 / WASD 行走 · Shift 奔跑 · 滚轮缩放 · 拖动看风景</p>
+    <p v-if="!observing && !activeRoom && !scenic" class="town-controls-hint">方向键 / WASD 行走 · Shift 奔跑 · 滚轮缩放 · 拖动看风景</p>
     <div v-if="selectedNpc" class="immersive-moment"><ResidentMoment :npc="selectedNpc" :conversation-state="conversationNotice?.phase" :leaving-reason="conversationNotice?.phase === 'leaving' ? conversationNotice.reason : undefined" @close="selection = null" /></div>
     <div v-if="observing" class="observation-caption">
       <span>小镇正在过它的一天</span>
@@ -460,20 +512,27 @@ onBeforeUnmount(() => {
       @close="dismissMenu"
     />
 
-    <header class="immersive-topbar">
+    <header class="immersive-topbar" :class="{ 'is-actions-open': hudActionsOpen }">
       <button class="icon-button" type="button" title="退出沉浸模式" aria-label="退出沉浸模式" @click="exitImmersive"><Minimize2 :size="18" /></button>
       <div class="immersive-title"><strong>成长小镇</strong><span>{{ activeRoom ? '屋内时光' : '慢慢走，生活正在发生' }} · {{ clockText }}</span></div>
-      <button class="secondary" type="button" aria-label="返回安全位置" title="卡住时直接回到家门口，任务数据不变" @click="recoverPosition">脱困</button>
-      <button class="secondary" type="button" @click="immersive.openPanel('friends')">信箱<span v-if="mailSignal.unreadCount"> · {{ mailSignal.unreadCount }}</span></button>
-      <button v-if="currentAnchor" class="secondary" type="button" aria-label="更多地点操作" @click="menuDismissed = !menuDismissed">更多</button>
-      <button class="secondary" type="button" aria-label="小镇活动" @click="showEvents = !showEvents">活动</button>
-      <button v-if="!nativeFullscreen" class="secondary fullscreen-button" type="button" title="全屏显示" @click="enterFullscreen">全屏</button>
-      <button class="secondary" type="button" :disabled="Boolean(activeRoom) || openWindows.length > 0 || Boolean(selectedNpc)" @click="toggleScenic">收起界面</button>
-      <button class="secondary" type="button" :aria-pressed="observing" title="观察小镇：镜头脱离玩家自动巡游" aria-label="观察小镇" @click="toggleObservation"><Film :size="16" /></button>
-      <button class="secondary" type="button" title="重新打开新手引导" @click="showOnboarding"><HelpCircle :size="16" /></button>
-      <button class="secondary run-toggle" type="button" :aria-pressed="immersive.runMode" @click="worldBridge.setRunMode(!immersive.runMode)">
-        <component :is="immersive.runMode ? Rabbit : Footprints" :size="16" />{{ immersive.runMode ? '奔跑中（R）' : '开始奔跑（R）' }}
+      <button class="secondary sound-toggle" type="button" :aria-pressed="soundEnabled" :title="soundEnabled ? '关闭环境声' : '打开环境声'" @click="toggleSound">
+        <component :is="soundEnabled ? Volume2 : VolumeX" :size="16" />{{ soundEnabled ? '环境声开' : '环境声关' }}
       </button>
+      <button v-if="manualTimeOverride" class="secondary" type="button" title="恢复按当前时区推进的晨昏" @click="restoreAutomaticTime">恢复随时间</button>
+      <button class="secondary hud-actions-toggle" type="button" :aria-expanded="hudActionsOpen" aria-controls="immersive-secondary-actions" @click="hudActionsOpen = !hudActionsOpen">操作</button>
+      <div id="immersive-secondary-actions" class="immersive-secondary-actions">
+        <button class="secondary" type="button" aria-label="返回安全位置" title="卡住时直接回到家门口，任务数据不变" @click="recoverPosition">脱困</button>
+        <button class="secondary" type="button" @click="immersive.openPanel('friends')">信箱<span v-if="mailSignal.unreadCount"> · {{ mailSignal.unreadCount }}</span></button>
+        <button v-if="currentAnchor" class="secondary" type="button" aria-label="更多地点操作" @click="menuDismissed = !menuDismissed">更多</button>
+        <button class="secondary" type="button" aria-label="小镇活动" @click="showEvents = !showEvents">活动</button>
+        <button v-if="!nativeFullscreen" class="secondary fullscreen-button" type="button" title="全屏显示" @click="enterFullscreen">全屏</button>
+        <button class="secondary scenic-toggle" type="button" :disabled="Boolean(activeRoom) || openWindows.length > 0 || Boolean(selectedNpc) || showEvents" @click="toggleScenic">{{ scenic ? '显示提示' : '收起界面' }}</button>
+        <button class="secondary" type="button" :aria-pressed="observing" title="观察小镇：镜头脱离玩家自动巡游" aria-label="观察小镇" @click="toggleObservation"><Film :size="16" /></button>
+        <button class="secondary" type="button" title="重新打开新手引导" @click="showOnboarding"><HelpCircle :size="16" /></button>
+        <button class="secondary run-toggle" type="button" :aria-pressed="immersive.runMode" @click="worldBridge.setRunMode(!immersive.runMode)">
+          <component :is="immersive.runMode ? Rabbit : Footprints" :size="16" />{{ immersive.runMode ? '奔跑中（R）' : '开始奔跑（R）' }}
+        </button>
+      </div>
     </header>
 
     <div v-if="minimizedWindows.length" class="immersive-minimized" aria-label="最小化的窗口">
@@ -483,7 +542,7 @@ onBeforeUnmount(() => {
     </div>
 
     <!-- dock 默认收起（M5-4），所以这个把手必须常驻可见——否则收起后就再也打不开了。 -->
-    <div class="immersive-dock-handle">
+    <div v-if="!scenic" class="immersive-dock-handle">
       <button
         type="button"
         class="secondary"
@@ -498,7 +557,7 @@ onBeforeUnmount(() => {
       </button>
     </div>
 
-    <nav v-if="!immersive.dockCollapsed" id="immersive-dock" class="immersive-dock" aria-label="小镇功能">
+    <nav v-if="!scenic && !immersive.dockCollapsed" id="immersive-dock" class="immersive-dock" aria-label="小镇功能">
       <button
         v-for="panel in worldPanels"
         :key="panel.key"
@@ -532,6 +591,8 @@ onBeforeUnmount(() => {
 .immersive-status--error { background: color-mix(in srgb, var(--danger) 70%, black); }
 .immersive-topbar { position: relative; z-index: 6; display: flex; align-items: center; gap: 14px; padding: 10px 16px; background: color-mix(in srgb, var(--forest-deep) 82%, transparent); backdrop-filter: blur(10px); }
 .immersive-topbar .icon-button { background: color-mix(in srgb, #fff 12%, transparent); color: var(--on-forest); }
+.immersive-secondary-actions { display: flex; align-items: center; gap: 14px; }
+.hud-actions-toggle { display: none; }
 .immersive-title { flex: 1; margin: 0; font-size: 13px; font-weight: 650; color: var(--on-forest); opacity: .9; }
 .immersive-title strong { display: block; font-size: 15px; letter-spacing: .12em; }
 .immersive-title span { display: block; font-size: 11px; margin-top: 4px; opacity: .65; }
@@ -555,7 +616,7 @@ onBeforeUnmount(() => {
 .dock-button[aria-pressed='true'] { background: color-mix(in srgb, var(--sun) 22%, transparent); color: var(--sun); border-color: color-mix(in srgb, var(--sun) 40%, transparent); }
 @media (max-width: 760px) {
   .immersive-topbar { gap: 6px; padding: 8px; }
-  .immersive-topbar > .secondary { min-width: 36px; padding: 0 8px; }
+  .immersive-topbar .secondary { min-width: 36px; padding: 0 8px; }
   .immersive-topbar .run-toggle { font-size: 0; gap: 0; width: 40px; flex: none; }
   .immersive-topbar button[title="重新打开新手引导"] { display: none; }
   .immersive-title, .fullscreen-button { display: none; }
@@ -565,8 +626,15 @@ onBeforeUnmount(() => {
   .immersive-dock { justify-content: flex-start; overflow-x: auto; flex-wrap: nowrap; }
   .dock-button { min-width: 56px; flex: none; }
 }
+@media (max-width: 520px) {
+  .immersive-title { display: none; }
+  .hud-actions-toggle { display: inline-flex; }
+  .immersive-secondary-actions { display: none; position: absolute; right: 8px; top: calc(100% + 6px); z-index: 12; width: min(252px, calc(100vw - 16px)); padding: 8px; border: 1px solid #ffffff35; border-radius: 12px; background: #18352bf2; box-shadow: var(--shadow); flex-wrap: wrap; justify-content: flex-end; }
+  .immersive-topbar.is-actions-open .immersive-secondary-actions { display: flex; }
+  .immersive-secondary-actions .secondary { min-width: 72px; }
+  .sound-toggle { font-size: 0; gap: 0; width: 40px; flex: none; }
+  .immersive-topbar > button[title="恢复按当前时区推进的晨昏"] { font-size: 11px; }
+}
 @media (prefers-reduced-motion: reduce) { .immersive-town * { transition: none !important; animation: none !important; } }
-.immersive-town.is-scenic > :not(.immersive-canvas):not(.scenic-restore) { visibility: hidden; pointer-events: none; }
-.scenic-restore { position: absolute; right: 18px; bottom: 16px; z-index: 60; background: #24372ccb; color: #f8efda; padding: 8px 12px; min-height: 32px; font-size: 11px; opacity: .2; }
-.scenic-restore:hover,.scenic-restore:focus-visible { opacity: 1; }
+.scenic-restore { position: absolute; right: 18px; bottom: 16px; z-index: 60; border: 1px solid #ffffff4d; background: #24372ce8; color: #f8efda; padding: 8px 12px; min-height: 34px; font-size: 11px; box-shadow: 0 4px 16px #142d2266; }
 </style>

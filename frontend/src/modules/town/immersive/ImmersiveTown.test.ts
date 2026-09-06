@@ -10,8 +10,8 @@ const api = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn() }))
 const routerMock = vi.hoisted(() => ({ push: vi.fn() }))
 const engine = vi.hoisted(() => ({
   game: {
-    setRun: vi.fn(), focus: vi.fn(), destroy: vi.fn(), applyModel: vi.fn(), celebrate: vi.fn(),
-    travelTo: vi.fn(), setObservation: vi.fn(), setNight: vi.fn(), enterAcademy: vi.fn(), exitAcademy: vi.fn(),
+    cancelRoomAction: vi.fn(), exitRoom: vi.fn(), setRun: vi.fn(), focus: vi.fn(), destroy: vi.fn(), applyModel: vi.fn(), celebrate: vi.fn(),
+    travelTo: vi.fn(), setObservation: vi.fn(), setNight: vi.fn(), setAutomaticTime: vi.fn(), setSoundEnabled: vi.fn(), enterAcademy: vi.fn(), exitAcademy: vi.fn(),
   },
   handlers: {
     onSelect: undefined as undefined | ((id: string | null) => void),
@@ -121,12 +121,16 @@ describe('ImmersiveTown', () => {
     wrapper.unmount()
   })
 
-  it('walking up to an anchor auto-opens the panel the manifest maps to it', async () => {
+  it('walking into a place keeps the player in its space; only explicit NPC service entrances open panels', async () => {
     const wrapper = await mountShell()
 
     engine.handlers.onSelect?.('academy')
     await flushPromises()
-    expect(wrapper.text()).toContain('洞察')
+    expect(wrapper.find('.world-panel').exists()).toBe(false)
+
+    engine.handlers.onSelect?.('me')
+    await flushPromises()
+    expect(wrapper.find('.world-panel').exists()).toBe(false)
 
     engine.handlers.onSelect?.('npc:assistant')
     await flushPromises()
@@ -142,10 +146,35 @@ describe('ImmersiveTown', () => {
     await flushPromises()
     expect(wrapper.findAll('.world-panel')).toHaveLength(before)
 
-    // Walking home (the self resident) opens "today", which is anchored to 'home'.
-    engine.handlers.onSelect?.('me')
-    await flushPromises()
-    expect(wrapper.text()).toContain('今天')
+    wrapper.unmount()
+  })
+
+  it('starts muted with automatic local time, and does not overwrite the engine with a static night value', async () => {
+    const wrapper = await mountShell()
+    expect(engine.game.setSoundEnabled).toHaveBeenLastCalledWith(false)
+    expect(engine.game.setAutomaticTime).toHaveBeenCalledTimes(1)
+    expect(engine.game.setNight).not.toHaveBeenCalled()
+    expect(wrapper.get('.sound-toggle').text()).toContain('环境声关')
+
+    await wrapper.get('.sound-toggle').trigger('click')
+    expect(engine.game.setSoundEnabled).toHaveBeenLastCalledWith(true)
+    wrapper.unmount()
+  })
+
+  it('scenic mode quietly removes navigation and restores it with a visible control', async () => {
+    const wrapper = await mountShell()
+    const scenicButton = wrapper.findAll('button').find(button => button.text() === '收起界面')
+    if (!scenicButton) throw new Error('no scenic HUD button')
+    await scenicButton.trigger('click')
+    expect(wrapper.find('.town-wayfinder').exists()).toBe(false)
+    expect(wrapper.find('.town-controls-hint').exists()).toBe(false)
+    expect(wrapper.get('.scenic-restore').text()).toContain('显示导航与提示')
+    // Exit and sound stay available while the scene is quiet.
+    expect(wrapper.get('[aria-label="退出沉浸模式"]').isVisible()).toBe(true)
+    expect(wrapper.get('.sound-toggle').isVisible()).toBe(true)
+
+    await wrapper.get('.scenic-restore').trigger('click')
+    expect(wrapper.find('.town-wayfinder').exists()).toBe(true)
     wrapper.unmount()
   })
 
@@ -184,6 +213,21 @@ describe('ImmersiveTown', () => {
     expect(style).toContain('left: 77px')
     expect(style).toContain('top: 88px')
     expect(engine.game.setRun).toHaveBeenLastCalledWith(true)
+    wrapper.unmount()
+  })
+
+  it('Escape cancels a room action before exiting, and only the next idle Escape leaves', async () => {
+    const wrapper = await mountShell()
+    engine.handlers.onAcademyChange?.(true)
+    await flushPromises()
+    engine.game.cancelRoomAction.mockReturnValueOnce(true).mockReturnValue(false)
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', cancelable: true }))
+    expect(engine.game.cancelRoomAction).toHaveBeenCalledOnce()
+    expect(engine.game.exitRoom).not.toHaveBeenCalled()
+    expect(routerMock.push).not.toHaveBeenCalled()
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', cancelable: true }))
+    expect(engine.game.exitRoom).toHaveBeenCalledOnce()
+    expect(routerMock.push).not.toHaveBeenCalled()
     wrapper.unmount()
   })
 

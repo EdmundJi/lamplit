@@ -6,7 +6,7 @@ import TownEventsBoard from './TownEventsBoard.vue'
 import { useTownEventsStore } from './town-events'
 import { computed, defineAsyncComponent, h, provide, onBeforeUnmount, onErrorCaptured, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
-import { Building2, Film, Flame, Footprints, GraduationCap, HelpCircle, Mail, Maximize2, Moon, Rabbit, Sparkles, Sun, RefreshCw, X } from 'lucide-vue-next'
+import { Building2, Film, Flame, Footprints, GraduationCap, HelpCircle, Mail, Maximize2, Moon, Rabbit, Sparkles, Sun, RefreshCw, Volume2, VolumeX, X } from 'lucide-vue-next'
 import { encouragement } from '../../shared/encouragement'
 import { useTownStore } from './town.store'
 import { activityFor, activityLabels, dimensionLabels, floorsForLevel } from './building-kit'
@@ -33,6 +33,10 @@ const router = useRouter()
 const canvas = ref<HTMLElement | null>(null)
 const onboardingRef = ref<InstanceType<typeof TownOnboarding> | null>(null)
 const night = ref(new Date().getHours() >= 18 || new Date().getHours() < 6)
+const manualTimeOverride = ref(false)
+const soundEnabled = ref(false)
+function restoreAutomaticTime() { manualTimeOverride.value = false; game?.setAutomaticTime?.() }
+function toggleSound() { soundEnabled.value = !soundEnabled.value; game?.setSoundEnabled?.(soundEnabled.value) }
 const selection = ref<TownSelection>(null)
 const panelVisible = ref(true)
 const activePanel = ref<WorldPanelKey | null>(null)
@@ -78,7 +82,7 @@ function select(value: TownSelection) {
   activePanel.value = null
   panelVisible.value = true
   const target = worldPanels.find(def => def.anchor === value)
-  if (target && ['park', 'plaza', 'street', 'npc:postman'].includes(value)) openPanel(target.key)
+  if (target && value === 'npc:postman') openPanel(target.key)
 }
 function travelTo(place: string) {
   observing.value = false
@@ -145,8 +149,8 @@ const assistantLine = computed(() => {
   const activity = activityFor(self.value)
   if (activity === 'done') return encouragement('taskCompleted')
   if (activity === 'working') return encouragement('taskStarted')
-  if (activity === 'planned') return '今天的安排已经排好了，先挑最小的那一件开始，房子就会亮灯。'
-  return '还没有今天的安排。要不要让我帮你把目标拆成今天能做的一小步？'
+  if (activity === 'planned') return '今天的安排已经排好了，可以从最小的那一件开始，也可以先坐一会儿。'
+  return '今天还没有安排。先在镇上走走吧，需要的时候我都在。'
 })
 const nextFloorLevel = computed(() => (selected.value ? (floorsForLevel(selected.value.level) + 1) * 2 + 1 : 0))
 const postmanLine = computed(() => (unread.value > 0 ? `有 ${unread.value} 封新信在等你，是朋友们捎来的话。` : '今天没有新的信，朋友们都在各忙各的。'))
@@ -169,7 +173,8 @@ async function mountGame() {
       onObservationChange: enabled => { observing.value = enabled },
       onTravelChange: status => { travelStatus.value = status },
       onNearbyChange: value => { nearby.value = value },
-      onRoomChange: room => { activeRoom.value = room; insideAcademy.value = room === 'academy' },
+      onRoomChange: room => { activeRoom.value = room; insideAcademy.value = room === 'academy'; if (room) { selection.value = null; activePanel.value = null; closePanel() } },
+      onTimeChange: value => { night.value = value },
       onAcademyChange: inside => { insideAcademy.value = inside },
       onPresenceReport: payload => { void store.reportPresence(payload) },
       onPlayerMove: (x, y) => { playerPosition.value = { x, y } },
@@ -183,7 +188,9 @@ async function mountGame() {
     game.setLetterUnread?.(mailSignal.unreadCount)
     game.applyEvents?.(eventsStore.events)
     if (conversationCode.value) game?.beginConversation?.(conversationCode.value)
-    game.setNight(night.value)
+    if (manualTimeOverride.value) game.setNight(night.value)
+    else game.setAutomaticTime?.()
+    game.setSoundEnabled?.(soundEnabled.value)
     game.setRun(running.value)
     residentSignature = residentKey(store.model)
     // 名册单独拉：/town 的载荷保持原样，小镇社会是加在旁边的一层，拉不到也不该让画面起不来。
@@ -205,7 +212,7 @@ const worldBridge: WorldBridge = {
     else if (event.type === 'toast') feedback.value = event.text
     else if (event.type === 'focus') game?.focus(event.publicId)
     else if (event.type === 'travel') travelTo(event.place)
-    else if (event.type === 'night') { night.value = event.value; game?.setNight(event.value) }
+    else if (event.type === 'night') { manualTimeOverride.value = true; night.value = event.value; game?.setNight(event.value) }
     else if (event.type === 'academy') { if (event.value) travelTo('academy'); else exitRoom() }
   },
   get runMode() { return running.value },
@@ -235,6 +242,7 @@ function toggleObservation() {
 }
 
 function toggleNight() {
+  manualTimeOverride.value = true
   night.value = !night.value
   game?.setNight(night.value)
 }
@@ -381,6 +389,8 @@ onBeforeUnmount(() => {
         <button class="secondary" type="button" @click="toggleNight">
           <component :is="night ? Sun : Moon" :size="17" />{{ night ? '切到白天' : '切到夜晚' }}
         </button>
+        <button v-if="manualTimeOverride" class="secondary" type="button" @click="restoreAutomaticTime">恢复随时间</button>
+        <button class="secondary" type="button" :aria-pressed="soundEnabled" :aria-label="soundEnabled ? '关闭环境声' : '打开环境声'" @click="toggleSound"><component :is="soundEnabled ? Volume2 : VolumeX" :size="17" />环境声{{ soundEnabled ? '开' : '关' }}</button>
         <button class="secondary run-toggle" type="button" :aria-pressed="runMode === 'run'" @click="toggleRun">
           <component :is="runMode === 'run' ? Rabbit : Footprints" :size="17" />{{ runMode === 'run' ? '奔跑中' : '开始奔跑' }}
         </button>
