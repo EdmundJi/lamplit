@@ -389,6 +389,7 @@ onBeforeUnmount(() => {
         </button>
         <button class="secondary" type="button" @click="select('npc:assistant')"><Sparkles :size="17" />找小助</button>
         <button class="secondary" type="button" title="重新打开新手引导" @click="showOnboarding"><HelpCircle :size="17" />帮助</button>
+        <button class="secondary" type="button" title="走到咖啡馆外的互动露台" @click="travelTo('terrace')"><Film :size="17" />街角露台</button>
         <button class="secondary" type="button" title="进入沉浸模式" @click="router.push('/town/immersive')"><Maximize2 :size="17" />沉浸模式</button>
         <button class="icon-button" type="button" title="刷新" aria-label="刷新" :disabled="store.loading" @click="reload"><RefreshCw :size="17" /></button>
       </div>

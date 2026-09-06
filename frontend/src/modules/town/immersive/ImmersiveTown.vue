@@ -42,6 +42,8 @@ let socialTicker: ReturnType<typeof setInterval> | null = null
 const immersive = useImmersiveStore()
 const townNpcStore = useTownNpcStore()
 const observing = ref(false)
+const scenic = ref(false)
+function toggleScenic() { scenic.value = !scenic.value; game?.setScenic?.(scenic.value) }
 const activeRoom = ref<string | null>(null)
 const eventsStore = useTownEventsStore()
 const showEvents = ref(false)
@@ -49,7 +51,7 @@ const travel = ref<TownTravel | null>(null)
 const nearby = ref<TownNearby | null>(null)
 const clockText = ref('')
 let clockTimer: ReturnType<typeof setInterval> | null = null
-const destinations = [{ id: 'home', label: '我的家' }, { id: 'academy', label: '学院' }, { id: 'gym', label: '健身房' }, { id: 'cafe', label: '咖啡馆' }, { id: 'park', label: '公园' }, { id: 'plaza', label: '广场' }]
+const destinations = [{ id: 'home', label: '我的家' }, { id: 'academy', label: '学院' }, { id: 'gym', label: '健身房' }, { id: 'cafe', label: '咖啡馆' }, { id: 'terrace', label: '街角露台' }, { id: 'park', label: '公园' }, { id: 'plaza', label: '广场' }]
 function visitPlace(id: string) {
   if (observing.value) { observing.value = false; game?.setObservation(false) }
   selection.value = null
@@ -281,6 +283,7 @@ function onKeydown(event: KeyboardEvent) {
   const target = event.target as HTMLElement | null
   const typing = Boolean(target && ['INPUT', 'TEXTAREA'].includes(target.tagName))
   if (event.key === 'Escape') {
+    if (scenic.value) { event.preventDefault(); toggleScenic(); return }
     // Esc 依次关：动作菜单 > 最上层窗口 > 退出沉浸模式。
     if (showEvents.value) { event.preventDefault(); showEvents.value = false }
     else if (travel.value?.phase === 'walking') { event.preventDefault(); game?.cancelTravel?.() }
@@ -378,6 +381,10 @@ const stopProbeUi = import.meta.env.DEV
 
 watch(() => mailSignal.unreadCount, count => game?.setLetterUnread?.(count))
 
+watch(() => Boolean(activeRoom.value) || openWindows.value.length > 0 || Boolean(selectedNpc.value) || showEvents.value, opened => {
+  if (opened && scenic.value) toggleScenic()
+})
+
 onBeforeUnmount(() => {
   if (socialTicker) clearInterval(socialTicker)
   mountSequence++
@@ -396,7 +403,8 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section ref="root" class="immersive-town">
+  <section ref="root" class="immersive-town" :class="{ 'is-scenic': scenic }">
+    <button v-if="scenic" class="scenic-restore" @click="toggleScenic">显示界面 · Esc</button>
     <TownOnboarding
       v-if="self"
       ref="onboardingRef"
@@ -460,6 +468,7 @@ onBeforeUnmount(() => {
       <button v-if="currentAnchor" class="secondary" type="button" aria-label="更多地点操作" @click="menuDismissed = !menuDismissed">更多</button>
       <button class="secondary" type="button" aria-label="小镇活动" @click="showEvents = !showEvents">活动</button>
       <button v-if="!nativeFullscreen" class="secondary fullscreen-button" type="button" title="全屏显示" @click="enterFullscreen">全屏</button>
+      <button class="secondary" type="button" :disabled="Boolean(activeRoom) || openWindows.length > 0 || Boolean(selectedNpc)" @click="toggleScenic">收起界面</button>
       <button class="secondary" type="button" :aria-pressed="observing" title="观察小镇：镜头脱离玩家自动巡游" aria-label="观察小镇" @click="toggleObservation"><Film :size="16" /></button>
       <button class="secondary" type="button" title="重新打开新手引导" @click="showOnboarding"><HelpCircle :size="16" /></button>
       <button class="secondary run-toggle" type="button" :aria-pressed="immersive.runMode" @click="worldBridge.setRunMode(!immersive.runMode)">
@@ -557,4 +566,7 @@ onBeforeUnmount(() => {
   .dock-button { min-width: 56px; flex: none; }
 }
 @media (prefers-reduced-motion: reduce) { .immersive-town * { transition: none !important; animation: none !important; } }
+.immersive-town.is-scenic > :not(.immersive-canvas):not(.scenic-restore) { visibility: hidden; pointer-events: none; }
+.scenic-restore { position: absolute; right: 18px; bottom: 16px; z-index: 60; background: #24372ccb; color: #f8efda; padding: 8px 12px; min-height: 32px; font-size: 11px; opacity: .2; }
+.scenic-restore:hover,.scenic-restore:focus-visible { opacity: 1; }
 </style>
