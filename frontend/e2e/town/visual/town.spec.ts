@@ -658,3 +658,116 @@ test('M8 窄屏安静界面的声音、退出与恢复入口可达', async ({ pa
   await expect(page.getByRole('navigation', { name: '小镇地点' })).toBeVisible()
   await record(page, info, 'm8-mobile-restored')
 })
+
+
+async function homeObject(page: Page, id: string) {
+  const hit = await page.evaluate(id => (window as any).__townScene.sys.game.scene.getScenes(true).at(-1).homeObjects.snapshot().objects.find((item: any) => item.id === id).hit, id)
+  await clickWorld(page, hit.x + hit.w / 2, hit.y + hit.h / 2)
+}
+async function waitForHome(page: Page) {
+  await page.waitForFunction(() => (window as any).__town.snapshot().activeScene === 'interior:home-living-room', null, { timeout: 35000 })
+  await page.waitForFunction(() => !(window as any).__townScene.sys.game.scene.getScenes(true).at(-1).cameras.main.fadeEffect.isRunning)
+}
+
+test('M9 手账取信到带同一只伙伴去公园再回家', async ({ page }, info) => {
+  test.setTimeout(120000)
+  const petWrites: string[] = []
+  page.on('request', request => { if (request.method() === 'POST' && request.url().includes('/partners/')) petWrites.push(request.url()) })
+  await page.getByRole('button', { name: '我的家', exact: true }).click()
+  await waitForHome(page)
+  await record(page, info, 'm9-home-objects')
+  await homeObject(page, 'journal')
+  await expect(page.getByRole('dialog', { name: '今天', exact: true })).toBeVisible()
+  await expect(page.getByRole('dialog', { name: '今天', exact: true })).toContainText('晚间复盘')
+  await record(page, info, 'm9-open-journal')
+  await page.getByRole('button', { name: '关闭', exact: true }).click()
+  await homeObject(page, 'mailbox')
+  await expect(page.getByRole('dialog', { name: '信箱与好友', exact: true })).toBeVisible()
+  await record(page, info, 'm9-read-mail')
+  await page.getByRole('button', { name: '关闭', exact: true }).click()
+  await homeObject(page, 'leash')
+  await page.waitForFunction(() => (window as any).__town.snapshot().activeScene === 'town' && (window as any).__townScene.companion?.snapshot().position)
+  expect(await page.evaluate(() => (window as any).__townScene.companion.snapshot().petId)).toBe('pet-1')
+  await record(page, info, 'm9-out-the-door')
+  await page.locator('.run-toggle').click()
+  await page.getByRole('button', { name: '公园', exact: true }).click()
+  const samples = await page.evaluate(async () => {
+    const samples: any[] = []
+    for (let i = 0; i < 32; i++) {
+      const scene = (window as any).__townScene, pet = scene.companion.snapshot(), world = scene.collisionWorld
+      const p = pet.position
+      const inRect = (r: any) => p && p.x >= r.x && p.x <= r.x + r.width && p.y >= r.y && p.y <= r.y + r.height
+      samples.push({ ...pet, at: performance.now(), onWalkable: world.walkable.some(inRect) && !world.obstacles.some(inRect) })
+      await new Promise(resolve => setTimeout(resolve, 250))
+    }
+    return samples
+  })
+  writeFileSync(info.outputPath('m9-companion-route.json'), JSON.stringify(samples, null, 2))
+  expect(samples.every(s => s.petId === 'pet-1' && s.onWalkable)).toBe(true)
+  for (let i = 1; i < samples.length; i++) {
+    const before = samples[i - 1], after = samples[i]
+    expect(Math.hypot(after.position.x - before.position.x, after.position.y - before.position.y)).toBeLessThanOrEqual((after.at - before.at) / 1000 * 330 + 4)
+  }
+  await expect(page.getByRole('button', { name: '放开活动', exact: true })).toBeVisible({ timeout: 30000 })
+  await page.getByRole('button', { name: '放开活动', exact: true }).click()
+  await page.waitForFunction(() => (window as any).__townScene.companion.snapshot().mode === 'roaming')
+  await page.waitForTimeout(2000)
+  await record(page, info, 'm9-park-roaming')
+  await page.getByRole('button', { name: '叫回身边', exact: true }).click()
+  await page.waitForFunction(() => (window as any).__townScene.companion.snapshot().mode === 'following')
+  expect(petWrites).toEqual([])
+  await page.getByRole('button', { name: '摸摸', exact: true }).click()
+  await expect.poll(() => petWrites.length).toBe(1)
+  await page.getByRole('button', { name: '带它回家', exact: true }).click()
+  await waitForHome(page)
+  await page.waitForFunction(() => (window as any).__townScene.runtime.companionState.mode === 'home')
+  expect(await page.evaluate(() => (window as any).__townScene.companion.snapshot().position)).toBeNull()
+  await record(page, info, 'm9-home-together')
+})
+
+test('M9 伙伴刷新恢复、手机回家与无伙伴入口', async ({ page }, info) => {
+  await page.getByRole('button', { name: '我的家', exact: true }).click()
+  await waitForHome(page)
+  await page.getByRole('button', { name: '拿牵引绳', exact: true }).click()
+  await page.waitForFunction(() => (window as any).__townScene.companion?.snapshot().position)
+  await page.reload()
+  await page.waitForFunction(() => (window as any).__townScene?.companion?.snapshot().petId === 'pet-1' && (window as any).__townScene.companion.snapshot().position)
+  await page.setViewportSize({ width: 390, height: 844 })
+  const box = await page.getByRole('region', { name: '伙伴出游' }).boundingBox()
+  expect(box!.x).toBeGreaterThanOrEqual(0)
+  expect(box!.x + box!.width).toBeLessThanOrEqual(390)
+  await record(page, info, 'm9-mobile-walking')
+  await page.getByRole('button', { name: '带它回家', exact: true }).click()
+  await waitForHome(page)
+  await page.route('**/api/v1/partners/profile', route => route.fulfill({ json: envelope({ pets: [], selectedPet: null, wallet: { coinBalance: 0, lifetimeCoins: 0 }, shopItems: [] }) }))
+  await page.reload()
+  await page.waitForFunction(() => (window as any).__town?.snapshot().player?.controllable)
+  await page.getByRole('button', { name: '我的家', exact: true }).click()
+  await waitForHome(page)
+  await page.getByRole('button', { name: '选择伙伴', exact: true }).click()
+  await expect(page.getByRole('dialog', { name: '伙伴', exact: true })).toBeVisible()
+  expect(await page.evaluate(() => (window as any).__townScene.companion.snapshot().petId)).toBeNull()
+  await record(page, info, 'm9-no-companion')
+})
+
+
+test('M9 普通页物品操作与切换伙伴清理旧外出状态', async ({ page }, info) => {
+  await page.goto('/town')
+  await page.waitForFunction(() => (window as any).__town?.snapshot().player?.controllable)
+  await page.getByRole('button', { name: '我的家', exact: true }).click()
+  await waitForHome(page)
+  await page.getByRole('button', { name: '翻手账', exact: true }).click()
+  await expect(page.locator('#town-info-panel')).toContainText('晚间复盘')
+  await page.getByRole('button', { name: '关闭面板', exact: true }).click()
+  await page.getByRole('button', { name: '拿牵引绳', exact: true }).click()
+  await page.waitForFunction(() => (window as any).__townScene.companion?.snapshot().position)
+  await page.getByRole('button', { name: '伙伴', exact: true }).click()
+  await page.getByRole('button', { name: '切换到 花花', exact: true }).click()
+  await page.waitForFunction(() => (window as any).__townScene.runtime.companionState.pet?.publicId === 'pet-2')
+  expect(await page.evaluate(() => (window as any).__townScene.companion.snapshot().position)).toBeNull()
+  await page.getByRole('button', { name: '关闭面板', exact: true }).click()
+  await page.getByRole('button', { name: '我的家', exact: true }).click()
+  await waitForHome(page)
+  expect(await page.evaluate(() => (window as any).__townScene.sys.game.scene.getScenes(true).at(-1).petIdentity)).toContain('pet-2')
+  await record(page, info, 'm9-normal-new-companion')
+})
