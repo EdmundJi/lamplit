@@ -13,7 +13,7 @@ function drawable() {
   return object
 }
 const anchors = Object.fromEntries(['coffee', 'planter', 'records', 'books'].map(id => [id, { x: 100, y: 100, actionPoint: { x: 100, y: 132 } }])) as TownFacilityAnchors
-const scene = { add: { graphics: drawable, zone: drawable, text: drawable } } as unknown as Phaser.Scene
+const scene = { add: { graphics: drawable, zone: drawable, text: drawable, image: drawable } } as unknown as Phaser.Scene
 const actor = () => drawable() as unknown as Phaser.GameObjects.Sprite
 
 describe('town interactive facilities', () => {
@@ -27,6 +27,14 @@ describe('town interactive facilities', () => {
     a.x = 100
     expect(f.activate('coffee', a, 'self')).toBe(false)
     expect(f.activate('coffee', a, 'npc')).toBe(true)
+    f.destroy()
+  })
+  it('does not drink from across the table using the old 52px activation allowance', () => {
+    const f = createTownFacilities(scene, anchors), a = actor()
+    a.x = 125
+    expect(f.activate('coffee', a, 'self')).toBe(false)
+    a.x = 107
+    expect(f.activate('coffee', a, 'self')).toBe(true)
     f.destroy()
   })
   it('commits and persists only a completed activity, without changing other facilities', () => {

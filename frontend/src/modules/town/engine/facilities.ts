@@ -18,7 +18,7 @@ export const facilitiesMethods = {
       this.entrances.set('terrace', a.playerSpawn);
       this.buildingCenters.set('terrace', { x: runtime.terraceOrigin.x, y: runtime.terraceOrigin.y + 80 });
       this.facilities = createTownFacilities(this, {
-          coffee: { ...a.table, actionPoint: { x: runtime.terraceOrigin.x - 27, y: runtime.terraceOrigin.y + 122 } },
+          coffee: a.coffee,
           planter: { ...a.plant, actionPoint: a.gardener },
           records: { ...a.records, actionPoint: { x: a.records.x, y: a.records.y + 21 } },
           books: { ...a.bookshelf, actionPoint: { x: a.bookshelf.x, y: a.bookshelf.y + 20 } },

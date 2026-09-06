@@ -226,6 +226,8 @@ INTERIOR_SHEETS = {
 
 # (frame name, sheet key, pixel box)
 INTERIOR_PIECES = [
+    # Kitchen_Singles_32x32_394: actual cup pixels, kept separate from actor identity.
+    ("coffee_cup", "kitchen", (72, 738, 89, 755)),
     ("chair_1", "classroom", (2, 24, 29, 69)),
     ("chair_2", "classroom", (98, 98, 121, 139)),
     ("desk_1", "classroom", (70, 98, 95, 141)),

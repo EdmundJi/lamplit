@@ -18,7 +18,7 @@ export function createTownLifeStage(scene: Phaser.Scene, origin: Point) {
     readingTable: p(112, 119), reader: p(150, 132), plant: p(-225, 92), gardener: p(-247, 116),
     entry: p(-285, 149), passerPause: p(-10, 148), exit: p(290, 149),
     records: { ...p(245, 70), actionPoint: p(245,91) },
-    coffee: { ...p(-65,88), actionPoint: p(-27,122) },
+    coffee: { ...p(-65,88), actionPoint: p(-24,85) },
     planter: { ...p(-225,92), actionPoint: p(-247,116) },
     books: { ...p(162,66), actionPoint: p(162,86) },
     bookshelf: p(162, 66), playerSpawn: p(-175, 160),
@@ -115,7 +115,7 @@ export function createTownLifeStage(scene: Phaser.Scene, origin: Point) {
     objects.push(labelObject)
   }
   const facilities: TownLifeFacility[] = [
-    {id:'coffee',label:'坐下喝咖啡',point:p(-27,122)},
+    {id:'coffee',label:'喝杯咖啡',point:p(-24,85)},
     {id:'reading',label:'借一本书',point:p(162,86)},
     {id:'watering',label:'照料花草',point:p(-247,116)},
     {id:'records',label:'听一张唱片',point:p(245,91)},

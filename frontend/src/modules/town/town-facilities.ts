@@ -1,11 +1,12 @@
 import type Phaser from 'phaser'
+import { COFFEE_CONTACT_RADIUS, COFFEE_DURATION, coffeeHandCup, createCoffeeMotion } from './coffee-motion'
 
 export type TownFacilityId = 'coffee' | 'planter' | 'records' | 'books'
 export type TownFacilityPoint = { x: number; y: number }
 export type TownFacilityAnchors = Record<TownFacilityId, TownFacilityPoint & { actionPoint: TownFacilityPoint }>
 export type TownFacilityState = { cup: boolean; watered: boolean; music: boolean; borrowed: boolean }
 type Actor = Phaser.GameObjects.Sprite
-type Action = { id: TownFacilityId; actorId: string; sprite: Actor; start: number; duration: number; x: number; y: number; angle: number; props: Phaser.GameObjects.Graphics }
+type Action = { id: TownFacilityId; actorId: string; sprite: Actor; start: number; duration: number; x: number; y: number; angle: number; props: Phaser.GameObjects.Graphics; coffee?: ReturnType<typeof createCoffeeMotion> }
 export type TownFacilityOptions = {
   onSelect?: (id: TownFacilityId, pointer: Phaser.Input.Pointer) => void
   onComplete?: (id: TownFacilityId, actorId: string) => void
@@ -14,7 +15,7 @@ export type TownFacilityOptions = {
   playerId?: string
 }
 const labels: Record<TownFacilityId, string> = { coffee: '喝杯咖啡', planter: '给花浇水', records: '播放街角唱片', books: '借一本书看看' }
-const durations: Record<TownFacilityId, number> = { coffee: 5400, planter: 5200, records: 1800, books: 6000 }
+const durations: Record<TownFacilityId, number> = { coffee: COFFEE_DURATION, planter: 5200, records: 1800, books: 6000 }
 const clamp = (n: number) => Math.max(0, Math.min(1, n))
 
 /** User/NPC initiated facilities inside the production town; no scripted citizens or growth awards. */
@@ -34,6 +35,8 @@ export function createTownFacilities(scene: Phaser.Scene, anchors: TownFacilityA
   const owned: Phaser.GameObjects.GameObject[] = []
   const keep = <T extends Phaser.GameObjects.GameObject>(o: T) => { owned.push(o); return o }
   const layers = {} as Record<TownFacilityId, Phaser.GameObjects.Graphics>
+  const coffeeRest = coffeeHandCup(anchors.coffee.actionPoint, 4, 1, anchors.coffee.actionPoint.x >= anchors.coffee.x)
+  const tableCup = keep(scene.add.image(coffeeRest.x, coffeeRest.y, 'interior', 'coffee_cup').setOrigin(.5).setScale(.5).setDepth(anchors.coffee.y + 4))
   let now = 0
   let destroyed = false
   let hovered: TownFacilityId | null = null
@@ -94,12 +97,6 @@ export function createTownFacilities(scene: Phaser.Scene, anchors: TownFacilityA
     zone.on('pointerout', () => { hovered = null; hint.setVisible(false) })
     zone.on('pointerup', (pointer: Phaser.Input.Pointer) => { hint.setVisible(false); options.onSelect?.(id, pointer) })
   }
-  function cup(g: Phaser.GameObjects.Graphics, x: number, y: number, steam = false) {
-    g.fillStyle(0xf0dfb4).fillEllipse(x, y + 4, 17, 5).fillRoundedRect(x - 5, y - 7, 10, 11, 2)
-    g.lineStyle(2, 0xf0dfb4).strokeCircle(x + 7, y - 2, 3)
-    g.fillStyle(0x66412b).fillEllipse(x, y - 6, 8, 3)
-    if (steam) for (let i = 0; i < 2; i++) { const rise = (now / 110 + i * 7) % 18; g.lineStyle(1, 0xffedc6, .5).lineBetween(x + i * 4, y - 11 - rise, x - 2 + i * 4, y - 15 - rise) }
-  }
   function book(g: Phaser.GameObjects.Graphics, x: number, y: number, open: boolean) {
     g.fillStyle(0x795f45).fillRect(x - 12, y - 7, 24, 15)
     g.fillStyle(0xf7e7ba).fillRect(x - 10, y - 5, 20, 11)
@@ -109,8 +106,8 @@ export function createTownFacilities(scene: Phaser.Scene, anchors: TownFacilityA
   function draw() {
     for (const layer of Object.values(layers)) layer.clear()
     if (hovered) { const h = anchors[hovered]; layers[hovered].lineStyle(1, 0xf0d79b, .65).strokeEllipse(h.x, h.y, 66, 23) }
-    const c = anchors.coffee
-    if (state.cup && ![...active.values()].some(a => a.id === 'coffee')) cup(layers.coffee, c.x + 8, c.y - 15, true)
+    const held = [...active.values()].some(a => a.coffee?.holdsCup())
+    tableCup.setVisible(!held).setTint(state.cup ? 0xe5d8bd : 0xffffff)
     const p = anchors.planter, pg = layers.planter
     if (state.watered) {
       pg.fillStyle(0x48372b, .8).fillEllipse(p.x, p.y - 7, 34, 9)
@@ -138,7 +135,7 @@ export function createTownFacilities(scene: Phaser.Scene, anchors: TownFacilityA
   function cancel(actorId?: string) {
     for (const [key, action] of active) if (actorId === undefined || key === actorId) {
       if (action.sprite.active) action.sprite.setAngle(action.angle)
-      action.props.destroy(); active.delete(key)
+      action.coffee?.destroy(); action.props.destroy(); active.delete(key)
     }
     for (const [id, reservation] of reserved) if (actorId === undefined || reservation.actorId === actorId) reserved.delete(id)
     if (!destroyed) draw()
@@ -146,8 +143,8 @@ export function createTownFacilities(scene: Phaser.Scene, anchors: TownFacilityA
   function activate(id: TownFacilityId, sprite: Actor, actorId = 'self') {
     if (destroyed || !sprite.active || active.has(actorId) || !anchors[id]) return false
     const point = anchors[id].actionPoint
-    if (Math.hypot(sprite.x - point.x, sprite.y - point.y) > 52 || !reserve(id, actorId)) return false
-    active.set(actorId, { id, actorId, sprite, start: now, duration: durations[id], x: sprite.x, y: sprite.y, angle: sprite.angle, props: scene.add.graphics().setDepth(sprite.y + 4) })
+    if (Math.hypot(sprite.x - point.x, sprite.y - point.y) > (id === 'coffee' ? COFFEE_CONTACT_RADIUS : 52) || !reserve(id, actorId)) return false
+    active.set(actorId, { id, actorId, sprite, start: now, duration: durations[id], x: sprite.x, y: sprite.y, angle: sprite.angle, props: scene.add.graphics().setDepth(sprite.y + 4), coffee: id === 'coffee' ? createCoffeeMotion(scene, sprite, anchors.coffee) : undefined })
     return true
   }
   function update(deltaMs: number) {
@@ -160,11 +157,7 @@ export function createTownFacilities(scene: Phaser.Scene, anchors: TownFacilityA
       g.clear().setDepth(a.sprite.y + 4)
       const hand = { x: a.sprite.x + (p.x < a.sprite.x ? -9 : 9), y: a.sprite.y - 28 }
       if (a.id === 'coffee') {
-        const sip = progress < .25 ? progress / .25 : progress < .72 ? 1 : (1 - progress) / .28
-        const x = p.x + 8 + (hand.x - p.x - 8) * sip, y = p.y - 15 + (hand.y - 7 - p.y + 15) * sip
-        g.lineStyle(4, 0xd4a682).lineBetween(a.sprite.x + 5, a.sprite.y - 27, x - 3, y + 2)
-        cup(g, x, y, true)
-        a.sprite.setAngle(a.angle + (progress > .3 && progress < .7 ? -3 : 0))
+        a.coffee?.update(elapsed)
       } else if (a.id === 'planter') {
         a.sprite.setAngle(a.angle + (progress < .85 ? 5 : 0))
         g.fillStyle(0x7e9f98).fillRoundedRect(hand.x - 6, hand.y - 7, 16, 13, 3)
@@ -199,7 +192,7 @@ export function createTownFacilities(scene: Phaser.Scene, anchors: TownFacilityA
     activate, reserve, cancel, update, unlockAudio, setMuted,
     isBusy: (actorId: string) => active.has(actorId),
     interactables: () => (Object.keys(anchors) as TownFacilityId[]).map(id => ({ id, ...anchors[id], label: id === 'records' && state.music ? '关闭唱片' : id === 'books' && state.borrowed ? '归还借阅的书' : labels[id] })),
-    snapshot: () => ({ state: { ...state }, recentCompleted: recentCompleted.map(item => ({ ...item })), active: [...active.values()].map(a => ({ id: a.id, actorId: a.actorId, elapsed: now-a.start, duration: a.duration })), reserved: [...reserved].map(([id,r]) => ({ id, actorId:r.actorId })) }),
+    snapshot: () => ({ state: { ...state }, recentCompleted: recentCompleted.map(item => ({ ...item })), active: [...active.values()].map(a => ({ id: a.id, actorId: a.actorId, elapsed: now-a.start, duration: a.duration, ...(a.coffee ? { motion: a.coffee.snapshot() } : {}) })), reserved: [...reserved].map(([id,r]) => ({ id, actorId:r.actorId })) }),
     destroy: () => { destroyed = true; cancel(); silenceAudio(); audioCapture?.stream.getTracks().forEach(track => track.stop()); audioCapture?.disconnect(); audioGain?.disconnect(); if (audio) void audio.close().catch(() => {}); audio = undefined; owned.forEach(o => o.destroy()) },
   }
 }
