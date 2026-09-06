@@ -7,7 +7,7 @@ import { api } from '../../shared/api/client'
 import { minuteInZone, npcWhereabouts } from './world-life'
 import { useTownStore } from './town.store'
 
-const props = defineProps<{ npc: TownNpcView }>()
+const props = defineProps<{ npc: TownNpcView; conversationState?: 'talking' | 'leaving' | 'ended'; leavingReason?: string }>()
 const emit = defineEmits<{ close: [] }>()
 const store = useTownNpcStore()
 const townStore = useTownStore()
@@ -86,9 +86,10 @@ watch(() => props.npc.code, () => { void listen() }, { immediate: true })
       <div><span class="moment-kicker">偶遇 · 镇上的熟面孔</span><h2><MessageCircle :size="18" />{{ npc.displayName }}</h2></div>
       <button type="button" aria-label="结束闲聊" @click="emit('close')"><X :size="18" /></button>
     </header>
-    <p class="moment-where">{{ whereabouts }}</p>
+    <p class="moment-where">{{ conversationState === 'talking' ? '停下脚步，正听你说话' : whereabouts }}</p>
     <div class="moment-words" aria-live="polite" aria-atomic="true">
-      <p v-if="loading">{{ npc.displayName }}转过身来，想了想…</p>
+      <p v-if="leavingReason">{{ leavingReason }}</p>
+      <p v-else-if="loading">{{ npc.displayName }}转过身来，想了想…</p>
       <p v-else-if="error">{{ error }}</p>
       <template v-else-if="point">
         <p>“{{ point.text }}”</p>
@@ -96,7 +97,7 @@ watch(() => props.npc.code, () => { void listen() }, { immediate: true })
       </template>
       <p v-else>“这会儿没什么新鲜事。你慢慢逛，我也继续忙啦。”</p>
     </div>
-    <div v-if="npc.layer === 2" class="moment-tell">
+    <div v-if="npc.layer === 2 && !leavingReason" class="moment-tell">
       <button type="button" :aria-expanded="tellExpanded" @click="tellExpanded = !tellExpanded">{{ tellExpanded ? '收起近况分享' : '主动聊聊我的近况' }}</button>
       <form v-if="tellExpanded" :aria-busy="tellBusy" @submit.prevent="tell">
         <p class="tell-notice">自愿分享：这类近况可能被转述给其他居民。只会分享大致情况，不包含具体任务标题、数字或私人原文。</p>
@@ -110,7 +111,7 @@ watch(() => props.npc.code, () => { void listen() }, { immediate: true })
         <p v-if="tellSuccess" role="status">{{ tellSuccess }}</p>
       </form>
     </div>
-    <footer>
+    <footer v-if="!leavingReason">
       <button v-if="error" type="button" @click="listen">再听一次</button>
       <button v-else-if="index + 1 < points.length" type="button" @click="index++">再聊一句</button>
       <span v-else>短短相遇，也算打过照面。</span>

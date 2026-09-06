@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { ConversationNotice } from '../npc-conversation'
 import { useTownMailSignal } from '../town-mail-signal'
 import ResidentMoment from '../ResidentMoment.vue'
 import TownEventsBoard from '../TownEventsBoard.vue'
@@ -55,6 +56,12 @@ function visitPlace(id: string) {
   showEvents.value = false
   game?.travelTo?.(id)
 }
+function recoverPosition() {
+  selection.value = null
+  showEvents.value = false
+  if (game?.recover?.()) feedback.value?.result(true, '已回到家门口的安全位置。')
+  else void mountGame()
+}
 function stopTravel() { game?.cancelTravel?.() }
 function interactNearby() { game?.interactNearby?.() }
 function leaveRoom() { game?.exitRoom(); game?.exitAcademy() }
@@ -71,6 +78,21 @@ const selectedNpc = computed(() => {
   const npc = townNpcStore.byCode(code)
   return npc?.layer === 2 ? npc : null
 })
+const conversationCode = computed(() => {
+  if (selectedNpc.value) return selectedNpc.value.code
+  if (selection.value === 'npc:assistant' && immersive.windows.some(w => w.key === 'ai' && !w.minimized)) return 'GUIDE'
+  if (selection.value === 'npc:postman' && immersive.windows.some(w => w.key === 'friends' && !w.minimized)) return 'POSTMAN'
+  return null
+})
+const conversationNotice = ref<ConversationNotice | null>(null)
+function onConversationChange(notice: ConversationNotice | null) {
+  conversationNotice.value = notice
+  if (notice?.phase === 'ended' && conversationCode.value === notice.npcCode) {
+    selection.value = null
+    if (notice.npcInitiated) feedback.value?.result(true, `${notice.name}先去忙了。${notice.reason ?? ''}`)
+  }
+}
+
 const feedback = ref<InstanceType<typeof WorldFeedback> | null>(null)
 const playerPosition = ref<{ x: number; y: number } | null>(null)
 const distanceToGuide = ref<number | null>(null)
@@ -129,6 +151,7 @@ async function mountGame() {
     game?.destroy()
     game = null
     const created = await createTownGame(canvas.value, store.model, {
+      onConversationChange,
       onSelect: value => { selection.value = value },
       onObservationChange: enabled => { observing.value = enabled },
       onTravelChange: value => { travel.value = value },
@@ -152,6 +175,7 @@ async function mountGame() {
     if (game) game.applyNpcs(townNpcStore.npcs, townNpcStore.budget)
     game?.setNight(night.value)
     game?.applyEvents?.(eventsStore.events)
+    if (conversationCode.value) game?.beginConversation?.(conversationCode.value)
     residentSignature = residentKey(store.model)
   } catch (error) {
     // Phaser 加载失败时不影响 dock/面板：HUD 照常可用，只是画面暂时空着。
@@ -279,6 +303,11 @@ function onKeyup(event: KeyboardEvent) {
   }
 }
 
+watch(conversationCode, (code, previous) => {
+  if (previous) game?.endConversation?.(previous)
+  if (code) game?.beginConversation?.(code)
+})
+
 onMounted(async () => {
   void mailSignal.load()
   socialTicker = setInterval(() => {
@@ -384,6 +413,7 @@ onBeforeUnmount(() => {
     <p v-else-if="engineError" class="immersive-status immersive-status--error" role="alert">画面暂时加载不出来，下面的功能仍然能用。</p>
 
     <WorldFeedback ref="feedback" />
+    <div v-if="conversationNotice?.phase === 'leaving'" class="travel-status" role="status">{{ conversationNotice.name }}：{{ conversationNotice.reason }}</div>
     <div v-if="showEvents" class="immersive-events"><TownEventsBoard @close="showEvents = false" @visit="visitPlace" /></div>
     <div v-if="travel?.phase === 'walking'" class="travel-status" role="status">正在走向{{ travel.label }}<button type="button" @click="stopTravel">停下 · Esc</button></div>
     <div v-else-if="travel?.phase === 'blocked'" class="travel-status" role="status">暂时走不到{{ travel.label }}<button type="button" @click="stopTravel">知道了</button></div>
@@ -395,7 +425,7 @@ onBeforeUnmount(() => {
     </nav>
     <button v-if="activeRoom" class="town-leave-room" type="button" @click="leaveRoom">回到街上</button>
     <p v-if="!observing && !activeRoom" class="town-controls-hint">方向键 / WASD 行走 · Shift 奔跑 · 滚轮缩放 · 拖动看风景</p>
-    <div v-if="selectedNpc" class="immersive-moment"><ResidentMoment :npc="selectedNpc" @close="selection = null" /></div>
+    <div v-if="selectedNpc" class="immersive-moment"><ResidentMoment :npc="selectedNpc" :conversation-state="conversationNotice?.phase" :leaving-reason="conversationNotice?.phase === 'leaving' ? conversationNotice.reason : undefined" @close="selection = null" /></div>
     <div v-if="observing" class="observation-caption">
       <span>小镇正在过它的一天</span>
       <p>看居民散步、相遇，听几句路边闲谈。</p>
@@ -425,6 +455,7 @@ onBeforeUnmount(() => {
     <header class="immersive-topbar">
       <button class="icon-button" type="button" title="退出沉浸模式" aria-label="退出沉浸模式" @click="exitImmersive"><Minimize2 :size="18" /></button>
       <div class="immersive-title"><strong>成长小镇</strong><span>{{ activeRoom ? '屋内时光' : '慢慢走，生活正在发生' }} · {{ clockText }}</span></div>
+      <button class="secondary" type="button" aria-label="返回安全位置" title="卡住时直接回到家门口，任务数据不变" @click="recoverPosition">脱困</button>
       <button class="secondary" type="button" @click="immersive.openPanel('friends')">信箱<span v-if="mailSignal.unreadCount"> · {{ mailSignal.unreadCount }}</span></button>
       <button v-if="currentAnchor" class="secondary" type="button" aria-label="更多地点操作" @click="menuDismissed = !menuDismissed">更多</button>
       <button class="secondary" type="button" aria-label="小镇活动" @click="showEvents = !showEvents">活动</button>

@@ -1,6 +1,7 @@
 package com.betterself.growth.town;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.util.ArrayList;
@@ -15,6 +16,7 @@ import java.util.Set;
 public final class NpcReplyParser {
 
     public static final String MARKER = "§§";
+    public static final int MAX_CONTROL_REASON_LENGTH = 200;
     static final Set<String> TASK_ACTIONS = Set.of("START_TASK", "COMPLETE_TASK", "DEFER_TASK", "SKIP_TASK");
     static final Set<String> NAV_ACTIONS = Set.of("OPEN_TODAY", "OPEN_GOALS", "OPEN_AI", "OPEN_FRIENDS");
     private static final ObjectMapper JSON = new ObjectMapper();
@@ -38,6 +40,16 @@ public final class NpcReplyParser {
         List<Action> actions = new ArrayList<>();
         if (marker >= 0) {
             String tail = full.substring(marker + MARKER.length()).strip();
+            // Controls require the entire tail to be one JSON object, unlike legacy chips.
+            try {
+                JsonNode root = JSON.reader().with(DeserializationFeature.FAIL_ON_TRAILING_TOKENS).readTree(tail);
+                Control control = root != null && root.isObject() ? validateControl(root.path("control")) : null;
+                if (control != null) {
+                    return new Parsed(text, List.of(), List.of(), control);
+                }
+            } catch (Exception ignored) {
+                // Invalid control never becomes an executable action.
+            }
             int start = tail.indexOf('{');
             int end = tail.lastIndexOf('}');
             if (start >= 0 && end > start) {
@@ -61,6 +73,20 @@ public final class NpcReplyParser {
             }
         }
         return new Parsed(text, options, actions);
+    }
+
+    private static Control validateControl(JsonNode node) {
+        if (!node.isObject() || !node.path("type").isTextual()
+            || !"/interrupt".equals(node.path("type").textValue()) || !node.path("reason").isTextual()) {
+            return null;
+        }
+        String reason = node.path("reason").textValue().strip();
+        int length = reason.codePointCount(0, reason.length());
+        if (reason.isBlank() || length > MAX_CONTROL_REASON_LENGTH
+            || reason.codePoints().anyMatch(Character::isISOControl)) {
+            return null;
+        }
+        return new Control("/interrupt", reason);
     }
 
     private static Action validate(JsonNode node, List<TownService.ScheduleItem> schedules) {
@@ -105,7 +131,13 @@ public final class NpcReplyParser {
         };
     }
 
-    public record Parsed(String text, List<Option> options, List<Action> actions) {
+    public record Parsed(String text, List<Option> options, List<Action> actions, Control control) {
+        public Parsed(String text, List<Option> options, List<Action> actions) {
+            this(text, options, actions, null);
+        }
+    }
+
+    public record Control(String type, String reason) {
     }
 
     public record Option(String label) {

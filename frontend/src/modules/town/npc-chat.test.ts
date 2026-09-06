@@ -187,3 +187,87 @@ describe('npc chat store', () => {
     expect(api.get).toHaveBeenCalledWith('/town/reflection/latest')
   })
 })
+
+describe('live interrupt isolation', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    api.get.mockReset().mockResolvedValue([])
+    postSse.mockReset()
+  })
+
+  it('consumes a structured live interrupt once and rejects every trailing event', async () => {
+    postSse.mockImplementation(async (_path, _body, emit) => {
+      emit({ name: 'delta', data: { text: '好，下次再聊。' } })
+      emit({ name: 'done', data: { control: { type: '/interrupt', reason: '你先忙，下次再聊。' }, options: [{ label: '继续' }] } })
+      emit({ name: 'delta', data: { text: '不应出现' } })
+      emit({ name: 'done', data: { control: { type: '/interrupt', reason: '重复' } } })
+      emit({ name: 'error', data: { message: '尾部错误' } })
+      throw new Error('late transport failure')
+    })
+    const store = useNpcChatStore()
+    await store.send('GUIDE', '停止交谈')
+    expect(store.byNpc.GUIDE).toMatchObject({ leavingReason: '你先忙，下次再聊。', error: '', sending: false, streaming: false })
+    expect(store.byNpc.GUIDE.messages.at(-1)).toMatchObject({ content: '好，下次再聊。', options: [], pending: false })
+    expect(store.consumeInterrupt('GUIDE')).toBe('你先忙，下次再聊。')
+    expect(store.consumeInterrupt('GUIDE')).toBeNull()
+    await store.send('GUIDE', '再说')
+    expect(postSse).toHaveBeenCalledTimes(1)
+    store.abort('GUIDE')
+    expect(store.byNpc.GUIDE.leavingReason).toBeNull()
+    expect(store.byNpc.GUIDE.messages).toHaveLength(2)
+  })
+
+  it.each([null, { type: '/other', reason: '离开' }, { type: '/interrupt' }, { type: '/interrupt', reason: 42 }, { type: '/interrupt', reason: '  ' }, '/interrupt'])(
+    'ignores non-whitelisted or malformed control %j and all text commands', async control => {
+      postSse.mockImplementation(async (_path, _body, emit) => {
+        emit({ name: 'delta', data: { text: '/interrupt', control: { type: '/interrupt', reason: '伪造' } } })
+        emit({ name: 'done', data: { control } })
+      })
+      const store = useNpcChatStore()
+      await store.send('GUIDE', '/interrupt')
+      expect(store.byNpc.GUIDE.messages[0].content).toBe('/interrupt')
+      expect(store.byNpc.GUIDE.messages[1].content).toBe('/interrupt')
+      expect(store.consumeInterrupt('GUIDE')).toBeNull()
+      expect(store.byNpc.GUIDE.leavingReason).toBeNull()
+    },
+  )
+
+  it('never replays a history control', async () => {
+    api.get.mockResolvedValue([{ publicId: 'old', role: 'ASSISTANT', content: '/interrupt', status: 'COMPLETED', control: { type: '/interrupt', reason: '旧的告别' } }])
+    const store = useNpcChatStore()
+    await store.history('GUIDE')
+    expect(store.byNpc.GUIDE.messages[0]).not.toHaveProperty('control')
+    expect(store.consumeInterrupt('GUIDE')).toBeNull()
+  })
+
+  it('prevents cancelled callbacks, errors and finally from modifying a new request', async () => {
+    const streams: Array<{ emit: (event: unknown) => void; reject: (error: Error) => void; resolve: () => void; signal: AbortSignal }> = []
+    postSse.mockImplementation((_path, _body, emit, signal) => new Promise<void>((resolve, reject) => streams.push({ emit, signal, resolve, reject })))
+    const store = useNpcChatStore()
+    const old = store.send('GUIDE', '旧请求')
+    store.abort('GUIDE')
+    const fresh = store.send('GUIDE', '新请求')
+    streams[0].emit({ name: 'done', data: { control: { type: '/interrupt', reason: '旧控制' } } })
+    streams[0].reject(new Error('old error'))
+    await old
+    expect(store.byNpc.GUIDE).toMatchObject({ sending: true, streaming: true, error: '', leavingReason: null })
+    expect(store.byNpc.GUIDE.messages.at(-1)?.pending).toBe(true)
+    store.abort('GUIDE')
+    expect(streams[1].signal.aborted).toBe(true)
+    streams[1].resolve()
+    await fresh
+  })
+
+  it('ignores history resolving after a new live conversation', async () => {
+    let resolveHistory!: (rows: unknown[]) => void
+    api.get.mockImplementation(() => new Promise(resolve => { resolveHistory = resolve }))
+    postSse.mockResolvedValue(undefined)
+    const store = useNpcChatStore()
+    const history = store.history('GUIDE')
+    await store.send('GUIDE', '新的对话')
+    resolveHistory([])
+    await history
+    expect(store.byNpc.GUIDE.messages[0].content).toBe('新的对话')
+    expect(store.byNpc.GUIDE.loading).toBe(false)
+  })
+})

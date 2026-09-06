@@ -11,6 +11,8 @@ import { RESIDENT_WALK_SPEED, RUN_ANIM_SCALE, dominantDirection, movementDelta, 
 import type { Direction4, GreetCooldowns, WalkDirection } from './walkers'
 import { buildTownCollisionWorld, canStand, nearestStandable, resolveMove } from './collision'
 import { findPath } from './pathfinding'
+import { safeTownPoint } from './town-recovery'
+import { conversationDeparture, type ConversationNotice } from './npc-conversation'
 import { gardenDistrict, pointAlongRoute } from './town-spaces'
 import { eventTitle, type TownEventView } from './town-events'
 import type { CollisionWorld, Point, FurnitureObstacle } from './collision'
@@ -47,6 +49,7 @@ export type TownSelection = string | 'npc:assistant' | 'npc:postman' | 'academy'
 export type TownTravel = { place: string; label: string; phase: 'walking' | 'arrived' | 'blocked' }
 export type TownNearby = { id: string; label: string; action: string }
 export type TownHandlers = {
+  onConversationChange?: (notice: ConversationNotice | null) => void
   onObservationChange?: (enabled: boolean) => void
   onTravelChange?: (travel: TownTravel | null) => void
   onNearbyChange?: (nearby: TownNearby | null) => void
@@ -85,6 +88,10 @@ export type TownGame = {
   travelTo?(place: string): void
   cancelTravel?(): void
   interactNearby?(): void
+  recover?(): boolean
+  beginConversation?(npcCode: string): boolean
+  endConversation?(npcCode?: string): void
+  interruptConversation?(npcCode: string, reason: string): void
   /** Updates residents' schedules/activity in place; rebuilds only the plots whose blueprint changed. */
   applyModel(model: TownModel): void
   /** Camera pan + roof-prop drop + particle burst + a brief "done" bubble over the resident. Queued, one at a time. */
@@ -421,6 +428,10 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
   let activeRoomKey: string | null = null
   let roomBusy = false
   let queuedDestination: string | null = null
+  let requestedConversation: string | null = null
+  let exteriorReturn: Point | null = null
+  let transitionGeneration = 0
+  let roomRequest: AbortController | null = null
 
   // Presence reporter: throttles self position updates to backend
   const presenceReporter = createPresenceReporter(
@@ -457,6 +468,7 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
     selfPath: Point[] = []
     travel: TownTravel | null = null
     nearby: TownNearby | null = null
+    conversation: { walker: Walker; code: string; since: number; initialPlace: string; phase: 'talking' | 'leaving'; reason?: string; until?: number; state: Walker['state']; timer: number } | null = null
     clockFrameAt = -1
     clockMinute = 0
     nextPresenceAt = 0
@@ -575,6 +587,7 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
         }
       })
       this.setupPresenceListeners()
+      if (requestedConversation) this.beginConversation(requestedConversation)
       this.events.once('shutdown', () => {
         this.atmosphere?.destroy()
         this.atmosphere = null
@@ -1087,6 +1100,9 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
         spawnY = resident.presence.y
       }
 
+      const safe = safeTownPoint(this.collisionWorld, { x: spawnX, y: spawnY }, { x: homeX, y: STREET_Y })
+      spawnX = safe?.x ?? homeX
+      spawnY = safe?.y ?? STREET_Y
       const walker = this.spawnWalker(
         `char_${characterSheet(resident.publicId)}`,
         spawnX,
@@ -1104,7 +1120,7 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
       }
 
       // Adjust spawn y for self avatar (spawnWalker always uses STREET_Y for initial position)
-      if (resident.isSelf && resident.presence && (resident.presence.scene === 'town' || resident.presence.scene.startsWith('town:'))) {
+      if (resident.isSelf) {
         walker.sprite.y = spawnY
         walker.targetY = spawnY
         walker.sprite.setDepth(spawnY)
@@ -1169,7 +1185,7 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
       const visible = candidates.slice(0, Math.max(0, densityCap(minute / 60) - 2))
       const codes = new Set(visible.map(npc => npc.code))
       for (const walker of [...this.walkers]) {
-        if (walker.npc && !codes.has(walker.npc.code)) this.despawnWalker(walker)
+        if (walker.npc && !codes.has(walker.npc.code) && this.conversation?.walker !== walker) this.despawnWalker(walker)
       }
       for (const npc of visible) {
         const existing = this.walkers.find(walker => walker.npc?.code === npc.code)
@@ -1407,7 +1423,7 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
         const points = pointsToPlay(tier, walker.npc?.talkingPoints ?? [])
         points.forEach((point, index) => {
           this.time.delayedCall(index * BUBBLE_HOLD_MS, () => {
-            if (walker.sprite.active) this.saySomething(walker, point.text)
+            if (walker.sprite.active && this.conversation?.walker !== walker) this.saySomething(walker, point.text)
           })
         })
       }
@@ -1543,7 +1559,7 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
       const halfView = camera.width / camera.zoom / 2
       const centerY = camera.getWorldPoint(camera.width / 2, camera.height / 2).y
       const candidates = this.walkers.filter(walker =>
-        walker.npc?.talkingPoints?.length && !walker.speech
+        this.conversation?.walker !== walker && walker.npc?.talkingPoints?.length && !walker.speech
         && Math.abs(walker.sprite.y - centerY) < camera.height / camera.zoom / 2 - 35
         && Math.abs(walker.sprite.x - centerX) < halfView * 0.6)
       if (candidates.length === 0) return
@@ -1649,6 +1665,57 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
       return true
     }
 
+    beginConversation(code: string) {
+      if (this.conversation?.code === code) return true
+      this.endConversation()
+      const id = code === 'GUIDE' ? 'npc:assistant' : code === 'POSTMAN' ? 'npc:postman' : code
+      const walker = this.walkers.find(w => w.id === id || w.npc?.code === code)
+      if (!walker?.sprite.active || walker.npc?.layer === 3) return false
+      const npc = walker.npc
+      const position = npc ? positionAt(npc.dayPlan ?? dayPlanFallback(npc.schedule), this.npcMinuteOfDay()) : null
+      const initialPlace = position?.kind === 'WALKING' ? position.toPlace : position?.place ?? 'street'
+      this.conversation = { walker, code, since: Date.now(), initialPlace, phase: 'talking', state: walker.state, timer: walker.timer }
+      walker.state = 'act'
+      walker.frozenUntil = 0
+      walker.speech?.destroy(); walker.speech = null
+      walker.travelEmote?.destroy(); walker.travelEmote = null
+      this.restoreSheet(walker)
+      walker.facing = dominantDirection((this.selfWalker?.sprite.x ?? walker.sprite.x) - walker.sprite.x, (this.selfWalker?.sprite.y ?? walker.sprite.y + 10) - walker.sprite.y, 'down')
+      walker.sprite.play(`${walker.sheet}-idle-${walker.facing}`, true)
+      handlers.onConversationChange?.({ npcCode: code, name: npc?.displayName ?? (code === 'GUIDE' ? '小助' : '邮递员'), phase: 'talking' })
+      return true
+    }
+
+    interruptConversation(code: string, reason: string) {
+      const c = this.conversation
+      const text = reason.trim()
+      if (!c || c.code !== code || c.phase === 'leaving' || !text || text.length > 200) return
+      c.phase = 'leaving'; c.reason = text; c.until = Date.now() + 4000
+      this.saySomething(c.walker, text, 4500)
+      handlers.onConversationChange?.({ npcCode: code, name: c.walker.npc?.displayName ?? (code === 'GUIDE' ? '小助' : '邮递员'), phase: 'leaving', reason: text, npcInitiated: true })
+    }
+
+    endConversation(code?: string) {
+      const c = this.conversation
+      if (!c || (code && code !== c.code)) return
+      this.conversation = null
+      if (c.walker.sprite.active) {
+        c.walker.state = c.state
+        c.walker.timer = c.timer
+        c.walker.frozenUntil = this.time.now // catch up along the itinerary at normal walking speed
+        c.walker.npcActivity = null
+      }
+      handlers.onConversationChange?.({ npcCode: c.code, name: c.walker.npc?.displayName ?? (c.code === 'GUIDE' ? '小助' : '邮递员'), phase: 'ended', reason: c.reason, npcInitiated: c.phase === 'leaving' })
+    }
+
+    updateConversation() {
+      const c = this.conversation
+      if (!c) return
+      if (c.phase === 'leaving') { if (Date.now() >= (c.until ?? Infinity)) this.endConversation(c.code); return }
+      const reason = conversationDeparture(c.walker.npc, this.npcMinuteOfDay(), Date.now() - c.since, c.initialPlace)
+      if (reason) this.interruptConversation(c.code, reason)
+    }
+
     travelLabel(place: string) {
       return ({ home: '我的家', academy: '成长学院', gym: '活力健身房', cafe: '街角咖啡馆', park: '树荫公园', plaza: '日光广场', street: '街角' } as Record<string, string>)[place]
         ?? this.walkers.find(w => w.id === place || `npc:${w.id}` === place)?.npc?.displayName ?? '这里'
@@ -1672,6 +1739,7 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
     }
 
     travelToPlace(place: string) {
+      this.endConversation()
       if (activeRoomKey || academyEntered) {
         queuedDestination = place
         if (activeRoomKey) exitRoom(); else exitAcademy()
@@ -1713,6 +1781,7 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
     interactNearby() { if (this.nearby) this.travelToPlace(this.nearby.id) }
 
     walkSelfToGround(worldX: number, worldY: number, run = this.runMode) {
+      this.endConversation()
       const self = this.selfWalker
       if (!self) return
       const target = nearestStandable({ x: worldX, y: worldY }, this.collisionWorld)
@@ -1810,7 +1879,7 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
 
     /** Two walkers passing within greeting distance, walking toward each other, pause and wave a heart. */
     detectGreetings(now: number) {
-      const moving = this.walkers.filter(walker => walker.state === 'walk' && walker.frozenUntil <= now)
+      const moving = this.walkers.filter(walker => this.conversation?.walker !== walker && walker.state === 'walk' && walker.frozenUntil <= now)
       for (let i = 0; i < moving.length; i += 1) {
         for (let j = i + 1; j < moving.length; j += 1) {
           const a = moving[i]
@@ -1848,11 +1917,17 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
         this.drawTownEvents()
       }
       if (now >= this.nextPresenceAt) { this.nextPresenceAt = now + 3000; this.reportSelfPresence() }
+      this.updateConversation()
       this.updateNearby()
       this.handleSelfKeys(now, delta)
       this.updateObservation()
       this.detectGreetings(now)
       for (const walker of this.walkers) {
+        if (this.conversation?.walker === walker) {
+          walker.label.setPosition(walker.sprite.x, walker.sprite.y + 4)
+          walker.emote?.setPosition(walker.sprite.x + 14, walker.sprite.y - 62)
+          continue
+        }
         if (walker.npc) {
           // 18 人名册全部走 dayPlan 驱动的独立路径（M7-6/7/8/9）——不再进入下面这套给玩家/
           // 邻居/巡逻 NPC 用的"整点判定 + 直线走"状态机。标签/表情仍然统一跟随，气泡摆位则交
@@ -2218,15 +2293,8 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
           }
         }
 
-        // Self avatar: only sync if not manually controlled
-        if (resident.isSelf && remote && !resident.presence?.stale && !walker.manualWalk && walker.state === 'act') {
-          walker.sprite.setPosition(remote.x, remote.y)
-          walker.sprite.setDepth(remote.y)
-          walker.targetX = remote.x
-          walker.targetY = remote.y
-          walker.facing = (remote.facing as Direction) || walker.facing
-        }
-
+        // Own presence is a reconnect seed only. A polling response can be old, or
+        // contain room-local coordinates; never apply it to the live street avatar.
         const activity = activityFor(resident)
         if (walker.activity !== activity) {
           walker.activity = activity
@@ -2310,18 +2378,27 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
     const file = paths[roomId]
     if (!file) return
     roomBusy = true
+    const generation = ++transitionGeneration
+    roomRequest?.abort()
+    const request = new AbortController()
+    roomRequest = request
+    const requestTimeout = setTimeout(() => request.abort(), 12_000)
     const town = sceneRef
+    town.endConversation()
+    if (town.selfWalker) exteriorReturn = { x: town.selfWalker.sprite.x, y: town.selfWalker.sprite.y }
     const cam = town.cameras.main
     try {
       const fadeOutDone = new Promise<void>(resolve => {
         cam.fadeEffect.start(true, SCENE_FADE_MS, 8, 10, 8, true)
         cam.once('camerafadeoutcomplete', () => resolve())
+        request.signal.addEventListener('abort', () => resolve(), { once: true })
       })
       const [room, , extras] = await Promise.all([
-        fetch(`${ASSETS}/maps/${file}.json`).then(response => { if (!response.ok) throw new Error(`房间地图加载失败 (${response.status})`); return response.json() }).then(parseRoomMap),
+        fetch(`${ASSETS}/maps/${file}.json`, { signal: request.signal }).then(response => { if (!response.ok) throw new Error(`房间地图加载失败 (${response.status})`); return response.json() }).then(parseRoomMap),
         fadeOutDone,
         roomId === 'home' ? fetchHomeExtras() : Promise.resolve({ homeAchievements: 0, pet: undefined as InteriorPet | undefined }),
       ])
+      if (generation !== transitionGeneration || sceneRef !== town || request.signal.aborted) return
       const game = town.sys.game
       const key = interiorSceneKey(room.id)
       if (game.scene.getScene(key)) game.scene.remove(key)
@@ -2339,7 +2416,7 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
         onExit: target => { if (target === 'town') exitRoom() },
         // engine 自己不认识 home.open-desk 之类的动作 id，转给外壳去接 world-actions.ts。
         onInteract: (actionId, id) => handlers.onInteriorInteract?.(actionId, id),
-        onPosition: (x, y, facing) => presenceReporter.update({ x: Math.round(x), y: Math.round(y), facing, scene: key }),
+        onPosition: (x, y, facing) => { if (generation === transitionGeneration && activeRoomKey === key) presenceReporter.update({ x: Math.round(x), y: Math.round(y), facing, scene: key }) },
       }
       const interiorScene = game.scene.add(key, createInteriorScene(Phaser, options), true, options)
       town.scene.sleep()
@@ -2353,32 +2430,97 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
       presenceReporter.flush()
       interiorScene?.events.once('create', () => { interiorScene.cameras.main.fadeIn(SCENE_FADE_MS, 8, 10, 8) })
     } catch (error) {
+      if (generation !== transitionGeneration) return
       cam.fadeIn(SCENE_FADE_MS, 8, 10, 8) // 加载失败也要把镜头亮回来，不能留一片黑屏
       throw error
     } finally {
-      roomBusy = false
+      clearTimeout(requestTimeout)
+      if (generation === transitionGeneration) { roomBusy = false; roomRequest = null }
     }
+  }
+
+  function restoreStreet(preferred: Point | null): boolean {
+    const town = sceneRef, self = town?.selfWalker
+    if (!town || !self) return false
+    const home = town.entrances.get('home') ?? { x: academyDoorX, y: STREET_Y }
+    const point = safeTownPoint(town.collisionWorld, preferred, home)
+    if (!point) return false
+    town.endConversation()
+    town.cancelTravel()
+    town.endFurnitureInteraction()
+    town.setObservationMode(false)
+    town.input.keyboard?.resetKeys()
+    self.frozenUntil = 0
+    self.keyDriven = false
+    self.running = false
+    self.sprite.setPosition(point.x, point.y).setDepth(point.y)
+    self.targetX = point.x; self.targetY = point.y
+    self.facing = 'down'
+    self.sprite.anims.timeScale = 1
+    self.sprite.play(`${self.sheet}-idle-down`, true)
+    self.label.setPosition(point.x, point.y + 4)
+    const camera = town.cameras.main
+    camera.stopFollow()
+    camera.panEffect.reset(); camera.zoomEffect.reset(); camera.fadeEffect.reset()
+    camera.setZoom(Math.min(1.2, Math.max(.75, town.scale.height / 820)))
+    camera.centerOn(point.x, point.y - 110)
+    town.followingCamera = false
+    town.cameraFollowPausedUntil = 0
+    town.startFollowingSelf()
+    presenceReporter.clear()
+    town.reportSelfPresence()
+    presenceReporter.flush()
+    handlers.onPlayerMove?.(point.x, point.y)
+    return true
+  }
+
+  function recover(): boolean {
+    if (!sceneRef?.selfWalker) return false
+    transitionGeneration++
+    requestedConversation = null
+    sceneRef.endConversation()
+    roomRequest?.abort(); roomRequest = null
+    roomBusy = false; academyBusy = false
+    queuedDestination = null
+    activeRoomKey = null
+    academyEntered = false
+    for (const scene of game.scene.getScenes(false)) {
+      if (scene.sys.settings.key.startsWith('interior:')) game.scene.stop(scene.sys.settings.key)
+    }
+    game.scene.wake('town')
+    const restored = restoreStreet(null)
+    handlers.onRoomChange?.(null)
+    handlers.onAcademyChange?.(false)
+    handlers.onNearbyChange?.(null)
+    handlers.onSelect?.(null)
+    return restored
   }
 
   /** Reverses enterRoom(): fades the interior out, wakes the street back up. Mirrors exitAcademy. */
   function exitRoom() {
     if (!sceneRef || !activeRoomKey || roomBusy) return
     roomBusy = true
+    const generation = ++transitionGeneration
     const key = activeRoomKey
     const phaserGame = sceneRef.sys.game
     const roomScene = phaserGame.scene.getScene(key)
     const finish = () => {
+      if (generation !== transitionGeneration) return
       phaserGame.scene.stop(key)
-      if (sceneRef) {
-        sceneRef.scene.wake('town')
-        sceneRef.cameras.main.fadeIn(SCENE_FADE_MS, 8, 10, 8)
-      }
       activeRoomKey = null
       if (academyEntered) handlers.onAcademyChange?.(false)
       academyEntered = false
-      handlers.onRoomChange?.(null)
       roomBusy = false
-      if (queuedDestination && sceneRef) { const place = queuedDestination; queuedDestination = null; sceneRef.events.once('wake', () => sceneRef?.travelToPlace(place)) }
+      if (sceneRef) {
+        phaserGame.scene.wake('town')
+        restoreStreet(exteriorReturn)
+        sceneRef.cameras.main.fadeIn(SCENE_FADE_MS, 8, 10, 8)
+      }
+      handlers.onRoomChange?.(null)
+      if (queuedDestination && sceneRef) {
+        const place = queuedDestination; queuedDestination = null
+        sceneRef.travelToPlace(place)
+      }
     }
     const cam = roomScene?.cameras.main
     if (cam) {
@@ -2420,6 +2562,10 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
     travelTo: place => sceneRef?.travelToPlace(place),
     cancelTravel: () => sceneRef?.cancelTravel(),
     interactNearby: () => sceneRef?.interactNearby(),
+    recover,
+    beginConversation: code => { requestedConversation = code; return sceneRef?.beginConversation(code) ?? false },
+    endConversation: code => { if (!code || requestedConversation === code) requestedConversation = null; sceneRef?.endConversation(code) },
+    interruptConversation: (code, reason) => sceneRef?.interruptConversation(code, reason),
     applyModel: nextModel => {
       latestModel = nextModel
       serverOffsetMs = computeServerOffset(nextModel.serverTime)
@@ -2440,7 +2586,9 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
     enterRoom,
     exitRoom,
     destroy: () => {
-      presenceReporter.flush()
+      transitionGeneration++
+      roomRequest?.abort()
+      presenceReporter.clear()
       document.removeEventListener('visibilitychange', visibilityHandler)
       sceneRef?.atmosphere?.destroy()
       if (import.meta.env.DEV && (window as any).__townScene === sceneRef) delete (window as any).__townScene

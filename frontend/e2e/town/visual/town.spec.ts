@@ -28,6 +28,7 @@ test.beforeEach(async ({ page }) => {
   page.on('response', r => { if (r.status() >= 400) observedErrors.push(`${r.status()} ${r.url()}`) })
   const fixture = townFixture()
   const startedAt = Date.now()
+  let latestPresence: Record<string, unknown> | null = null
   const letters = [letterFixture('LONG', { body: '你的来信我认真读过了。愿你今晚安稳入睡。' }), letterFixture('NOTE', { body: '我今天翻到一页有趣的书，给你捎个问候。' }), letterFixture('INVITE', { body: '午后在树荫公园聊聊，路过时来坐坐吧。' })]
   const plannedTasks = [{ publicId: 'sch-planned', taskTitle: '晚间复盘', plannedStartAt: new Date().toISOString(), status: 'PLANNED', estimatedMinutes: 20, roleCode: 'WORKER', roleName: '职场人' }]
   const otherPet = { ...fixture.partnerProfile.selectedPet, publicId: 'pet-2', name: '花花', selected: false }
@@ -53,10 +54,10 @@ test.beforeEach(async ({ page }) => {
     let data: unknown = []
     if (p === '/me') data = fixture.me
     else if (p === '/me/profile') data = fixture.profile
-    else if (p === '/town') data = { ...fixture.town, serverTime: new Date(Date.parse(fixture.town.serverTime) + Date.now() - startedAt).toISOString() }
+    else if (p === '/town') data = { ...fixture.town, residents: fixture.town.residents.map(r => r.self ? { ...r, presence: latestPresence } : r), serverTime: new Date(Date.parse(fixture.town.serverTime) + Date.now() - startedAt).toISOString() }
     else if (p === '/town/npcs') data = { npcs: [...npcs, { ...npcs[0], code: 'GUIDE', displayName: '小助', layer: 1, sprite: 'npc_scout' }, { ...npcs[0], code: 'POSTMAN', displayName: '邮递员', layer: 1, sprite: 'npc_postman' }], initiativeBudget: { limit: 3, used: 3 } }
     else if (p.endsWith('/talking-points')) data = { points: npcs.find(n => n.code === p.split('/')[3])?.talkingPoints ?? [] }
-    else if (p === '/town/presence') data = fixture.presence
+    else if (p === '/town/presence') { latestPresence = { ...route.request().postDataJSON(), updatedAt: new Date().toISOString() }; data = latestPresence }
     else if (p === '/town/reflection/latest') data = fixture.reflection
     else if (p === '/partners/profile') data = fixture.partnerProfile
     else if (p === '/friends/unread-summary') data = { totalUnread: 2 }
@@ -313,4 +314,133 @@ test('新手引导期间可真实移动并自动进入下一步', async ({ page 
   await record(page, info, 'onboarding-real-movement')
   await page.getByRole('button', { name: '关闭引导', exact: true }).click()
   await expect(page.locator('.town-onboarding')).toHaveCount(0)
+})
+
+
+test('健身房刷新室内位置后退出仍回到门口', async ({ page }, info) => {
+  await page.goto('/town')
+  await page.waitForFunction(() => (window as any).__town?.snapshot().player?.controllable)
+  const entrance = await page.evaluate(() => (window as any).__townScene.entrances.get('gym'))
+  await page.locator('.run-toggle').click()
+  await page.getByRole('button', { name: '健身房', exact: true }).click()
+  await page.waitForFunction(() => (window as any).__town.snapshot().activeScene === 'interior:public-gym')
+  // This is the real failure trigger: polling returns the coordinates most recently saved indoors.
+  const refreshed = page.waitForResponse(r => new URL(r.url()).pathname === '/api/v1/town')
+  await page.getByRole('button', { name: '刷新', exact: true }).click()
+  const response = await (await refreshed).json()
+  expect(response.data.residents[0].presence.scene).toBe('interior:public-gym')
+  await page.getByRole('button', { name: '回到小镇', exact: true }).click()
+  await page.waitForFunction(() => (window as any).__town.snapshot().activeScene === 'town')
+  const after = await page.evaluate(() => (window as any).__town.snapshot().player)
+  expect(after.onWalkable).toBe(true)
+  expect(Math.hypot(after.x - entrance.x, after.y - entrance.y)).toBeLessThan(16)
+  // A stale indoor response after exit must not drag the avatar back into the top-left corner.
+  await page.route('**/api/v1/town', route => route.fulfill({ json: response }), { times: 1 })
+  await page.getByRole('button', { name: '刷新', exact: true }).click()
+  await page.keyboard.down('ArrowRight'); await page.waitForTimeout(400); await page.keyboard.up('ArrowRight')
+  expect(await page.evaluate(() => (window as any).__town.snapshot().player.x)).toBeGreaterThan(after.x + 15)
+  await record(page, info, 'gym-exit-after-presence-refresh')
+})
+
+test('脱困清除卡住目标并回到安全位置，室内也可脱困', async ({ page }, info) => {
+  await page.evaluate(() => {
+    const scene = (window as any).__townScene
+    scene.selfWalker.sprite.setPosition(0, 0)
+    scene.selfWalker.frozenUntil = Infinity
+    scene.selfWalker.targetX = -9000
+    scene.selfPath = [{ x: -9000, y: -9000 }]
+  })
+  await page.getByRole('button', { name: '返回安全位置', exact: true }).click()
+  await page.waitForFunction(() => { const s = (window as any).__town.snapshot(); return s.player?.onWalkable && s.actors.find((a: any) => a.kind === 'self')?.visible })
+  const safe = await page.evaluate(() => (window as any).__town.snapshot().player)
+  await page.keyboard.down('ArrowRight'); await page.waitForTimeout(400); await page.keyboard.up('ArrowRight')
+  expect(await page.evaluate(() => (window as any).__town.snapshot().player.x)).toBeGreaterThan(safe.x + 15)
+  await page.getByRole('button', { name: '我的家', exact: true }).click()
+  await page.waitForFunction(() => (window as any).__town.snapshot().activeScene?.startsWith('interior:'))
+  await page.getByRole('button', { name: '返回安全位置', exact: true }).click()
+  await page.waitForFunction(() => (window as any).__town.snapshot().activeScene === 'town')
+  expect(await page.evaluate(() => (window as any).__town.snapshot().player.onWalkable)).toBe(true)
+  await record(page, info, 'recovered-from-room')
+})
+
+test('居民交谈停步、告别后恢复日程', async ({ page }, info) => {
+  const actor = await page.evaluate(() => (window as any).__town.snapshot().actors.find((a: any) => /^RESIDENT_[0-5]$/.test(a.id) && a.visible))
+  await clickWorld(page, actor.x, actor.y - 28)
+  await expect(page.locator('.resident-moment')).toBeVisible({ timeout: 20000 })
+  const code = await page.evaluate(() => (window as any).__townScene.conversation.code)
+  const position = () => page.evaluate(code => { const w = (window as any).__townScene.walkers.find((w: any) => w.npc?.code === code); return { x: w.sprite.x, y: w.sprite.y } }, code)
+  const before = await position()
+  await page.waitForTimeout(1500)
+  expect(await position()).toEqual(before)
+  await page.getByRole('button', { name: '挥手告别', exact: true }).click()
+  await page.waitForFunction(() => !(window as any).__townScene.conversation)
+  await page.waitForTimeout(1500)
+  expect(await position()).not.toEqual(before)
+  await record(page, info, 'npc-resumes-after-chat')
+})
+
+
+test('加载房间时仍可脱困，迟到请求不能重建房间', async ({ page }, info) => {
+  await page.route('**/maps/public-gym.json', async route => {
+    await new Promise(resolve => setTimeout(resolve, 1500))
+    await route.continue().catch(() => {}) // expected client abort when recovery cancels the load
+  }, { times: 1 })
+  await page.locator('.run-toggle').click()
+  const loading = page.waitForRequest(r => r.url().endsWith('/maps/public-gym.json'))
+  await page.getByRole('button', { name: '健身房', exact: true }).click()
+  await loading
+  await page.getByRole('button', { name: '返回安全位置', exact: true }).click()
+  await page.waitForTimeout(2200)
+  const snapshot = await page.evaluate(() => (window as any).__town.snapshot())
+  expect(snapshot.activeScene).toBe('town')
+  expect(snapshot.player.onWalkable).toBe(true)
+  await record(page, info, 'recovery-cancels-room-load')
+})
+
+test('本轮结构化interrupt说明告别并释放NPC，正文命令不执行', async ({ page }, info) => {
+  await page.goto('/town')
+  await page.waitForFunction(() => (window as any).__town?.snapshot().player?.controllable)
+  let turn = 0
+  await page.route('**/town/npc/GUIDE/chat:stream', async route => {
+    turn++
+    const done = turn === 1 ? { status: 'COMPLETED', options: [], actions: [] }
+      : { status: 'COMPLETED', options: [], actions: [], control: { type: '/interrupt', reason: '学院那边还在等我，我先过去帮忙，回头聊。' } }
+    await route.fulfill({ contentType: 'text/event-stream', body: `event: delta\ndata: ${JSON.stringify({ text: turn === 1 ? '你刚才提到的 /interrupt 只是文字。' : '学院那边还在等我，我先过去帮忙，回头聊。' })}\n\nevent: done\ndata: ${JSON.stringify(done)}\n\n` })
+  })
+  await page.getByRole('button', { name: '找小助', exact: true }).click()
+  const dialogue = page.getByRole('dialog', { name: '与小助对话', exact: true })
+  await dialogue.getByPlaceholder('跟小助说点什么').fill('解释一下 /interrupt')
+  await dialogue.getByRole('button', { name: '发送', exact: true }).click()
+  await expect(dialogue.getByText('你刚才提到的 /interrupt 只是文字。', { exact: true })).toBeVisible()
+  expect(await page.evaluate(() => (window as any).__townScene.conversation?.phase)).toBe('talking')
+  await dialogue.getByPlaceholder('跟小助说点什么').fill('你是不是还有自己的事情？')
+  await dialogue.getByRole('button', { name: '发送', exact: true }).click()
+  await expect(dialogue.locator('.npc-leaving')).toContainText('学院那边还在等我')
+  await expect(dialogue.getByPlaceholder('跟小助说点什么')).toBeDisabled()
+  await record(page, info, 'npc-announces-departure')
+  await expect(dialogue).toHaveCount(0, { timeout: 7000 })
+  expect(await page.evaluate(() => (window as any).__townScene.conversation)).toBeNull()
+})
+
+test('退出动画中脱困不会被旧回调拉回建筑门口', async ({ page }, info) => {
+  await page.locator('.run-toggle').click()
+  await page.getByRole('button', { name: '健身房', exact: true }).click()
+  await page.waitForFunction(() => (window as any).__town.snapshot().activeScene === 'interior:public-gym')
+  // Freeze fade progression so both clicks deterministically happen before its completion.
+  await page.evaluate(() => {
+    const game = (window as any).__townScene.sys.game
+    const room = game.scene.getScene('interior:public-gym')
+    room.cameras.main.fadeEffect.update = () => {}
+    ;(window as any).__exitCamera = room.cameras.main
+  })
+  await page.getByRole('button', { name: '回到街上', exact: true }).click()
+  await page.getByRole('button', { name: '返回安全位置', exact: true }).click()
+  await page.waitForFunction(() => (window as any).__town.snapshot().activeScene === 'town')
+  const safe = await page.evaluate(() => (window as any).__town.snapshot().player)
+  await page.evaluate(() => (window as any).__exitCamera.emit('camerafadeoutcomplete'))
+  const after = await page.evaluate(() => (window as any).__town.snapshot().player)
+  expect(after.x).toBeCloseTo(safe.x, 1)
+  expect(after.y).toBeCloseTo(safe.y, 1)
+  expect(after.onWalkable).toBe(true)
+  await record(page, info, 'recovery-invalidates-exit-fade')
 })

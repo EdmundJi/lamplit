@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { Send, X } from 'lucide-vue-next'
 import { useNpcChatStore, type NpcAction, type NpcActionResult, type NpcCode, type NpcOption } from './npc-chat'
 
@@ -8,18 +8,29 @@ const props = defineProps<{
   displayName: string
   /** First line to show before any history exists — e.g. a reflection greeting the parent already fetched. */
   opener?: string
+  leavingReason?: string
 }>()
-const emit = defineEmits<{ close: []; action: [result: NpcActionResult] }>()
+const emit = defineEmits<{ close: []; action: [result: NpcActionResult]; interrupt: [reason: string] }>()
 
 const store = useNpcChatStore()
-const draft = ref('')
+const draft = computed({
+  get: () => store.byNpc[props.npc].draft,
+  set: (value: string) => { store.byNpc[props.npc].draft = value },
+})
 const showEarlier = ref(false)
 const confirmingKey = ref<string | null>(null)
 const actionBusy = ref(false)
 const actionFeedback = ref('')
+let interrupted = false
+let actionGeneration = 0
 let confirmTimer: ReturnType<typeof setTimeout> | undefined
 
 const state = computed(() => store.byNpc[props.npc])
+const leavingReason = computed(() => {
+  const reason = props.leavingReason ?? state.value.leavingReason
+  return reason == null ? null : reason.replaceAll('/interrupt', '').trim() || '这次先聊到这里，下次再见。'
+})
+const leaving = computed(() => leavingReason.value !== null)
 const messages = computed(() => state.value.messages)
 const loading = computed(() => state.value.loading)
 const sending = computed(() => state.value.sending)
@@ -45,7 +56,7 @@ const portraitLabel = computed(() => (props.npc === 'GUIDE' ? '学院向导' : '
 // Once the prose has landed the reply is readable, so the composer reopens even
 // though the stream is still waiting on the option tail.
 const proseReady = computed(() => Boolean(latestAssistant.value?.pending && latestAssistant.value?.content))
-const composerBusy = computed(() => sending.value && !proseReady.value)
+const composerBusy = computed(() => leaving.value || (sending.value && !proseReady.value))
 
 // The model writes its option/action tail after the prose, which can take a few
 // seconds of silence; say so instead of leaving a blinking caret on a finished line.
@@ -74,6 +85,10 @@ async function send(text?: string) {
 }
 
 async function trigger(action: NpcAction, index: number) {
+  if (leaving.value || actionBusy.value) return
+  const npc = props.npc
+  const revision = state.value.revision
+  const generation = actionGeneration
   const key = actionKey(action, index)
   if (confirmingKey.value !== key) {
     confirmingKey.value = key
@@ -86,22 +101,63 @@ async function trigger(action: NpcAction, index: number) {
   actionBusy.value = true
   actionFeedback.value = ''
   const result = await store.runAction(action)
-  actionFeedback.value = result.message
+  if (generation !== actionGeneration) return
   actionBusy.value = false
+  if (props.npc !== npc || state.value.revision !== revision || leaving.value) return
+  actionFeedback.value = result.message
   emit('action', result)
 }
 
-onMounted(() => { void store.history(props.npc) })
-onBeforeUnmount(() => {
-  store.abort(props.npc)
+function cleanup(npc: NpcCode) {
+  // Store-backed drafts survive an interrupt followed by automatic unmount.
+  if (!interrupted && store.byNpc[npc].leavingReason === null && props.leavingReason == null) store.byNpc[npc].draft = ''
+  store.abort(npc)
+  ++actionGeneration
   clearTimeout(confirmTimer)
   clearTimeout(tailTimer)
+  tailPending.value = false
+  confirmingKey.value = null
+  actionBusy.value = false
+  actionFeedback.value = ''
+  showEarlier.value = false
+}
+
+let closed = false
+function close() {
+  cleanup(props.npc)
+  closed = true
+  emit('close')
+}
+
+watch(() => props.npc, (npc, previous) => {
+  if (previous) cleanup(previous)
+  closed = false
+  interrupted = false
+  void store.history(npc)
+}, { immediate: true })
+watch(() => state.value.interruptPending, pending => {
+  if (!pending) return
+  const reason = store.consumeInterrupt(props.npc)
+  if (reason !== null) {
+    interrupted = true
+    emit('interrupt', reason)
+  }
+}, { flush: 'sync' })
+watch(leaving, value => {
+  if (!value) return
+  clearTimeout(confirmTimer)
+  clearTimeout(tailTimer)
+  tailPending.value = false
+  confirmingKey.value = null
+  // External schedule departures also cancel the live request, without losing the draft.
+  if (props.leavingReason != null) store.abort(props.npc)
 })
+onBeforeUnmount(() => { if (!closed) cleanup(props.npc) })
 </script>
 
 <template>
   <section class="npc-dialogue" role="dialog" :aria-label="`与${displayName}对话`">
-    <button class="npc-close" type="button" aria-label="关闭对话" @click="emit('close')"><X :size="15" /></button>
+    <button class="npc-close" type="button" aria-label="关闭对话" @click="close"><X :size="15" /></button>
 
     <header class="npc-head">
       <span class="npc-portrait" :data-npc="npc" role="img" :aria-label="displayName"></span>
@@ -125,7 +181,9 @@ onBeforeUnmount(() => {
       </p>
     </div>
 
-    <p v-if="tailPending" class="npc-tail-hint" role="status">{{ displayName }}正在挑下一步…</p>
+    <p v-if="leaving" class="npc-leaving" role="status">{{ leavingReason }} 已告别，暂时不能继续对话。</p>
+
+    <p v-if="tailPending && !leaving" class="npc-tail-hint" role="status">{{ displayName }}正在挑下一步…</p>
 
     <div v-if="options.length" class="npc-options">
       <button v-for="(option, index) in options" :key="index" type="button" class="npc-chip" :disabled="composerBusy" @click="send(option.label)">
@@ -140,7 +198,7 @@ onBeforeUnmount(() => {
         type="button"
         class="npc-action-button"
         :class="{ confirming: confirmingKey === actionKey(action, index) }"
-        :disabled="actionBusy"
+        :disabled="actionBusy || leaving"
         @click="trigger(action, index)"
       >
         {{ confirmingKey === actionKey(action, index) ? '再点一次确认' : action.label }}

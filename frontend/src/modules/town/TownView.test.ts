@@ -79,7 +79,7 @@ describe('Town view', () => {
     expect(wrapper.text()).toContain('1 位邻居完成了任务')
 
     const before = engine.game.setNight.mock.calls.length
-    await wrapper.find('button.secondary').trigger('click')
+    await wrapper.findAll('button').find(button => /切到白天|切到夜晚/.test(button.text()))!.trigger('click')
     expect(engine.game.setNight.mock.calls.length).toBe(before + 1)
     wrapper.unmount()
     expect(engine.game.destroy).toHaveBeenCalled()

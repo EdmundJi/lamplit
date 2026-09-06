@@ -65,6 +65,7 @@ export function createPresenceReporter(
 ): {
   update: (payload: PresencePayload) => void
   flush: () => void
+  clear: () => void
 } {
   let pending: PresencePayload | null = null
   let lastReportTime = 0
@@ -81,6 +82,12 @@ export function createPresenceReporter(
   }
 
   return {
+    clear() {
+      if (timerId !== null) clearTimeout(timerId)
+      timerId = null
+      pending = null
+      lastReportTime = 0
+    },
     update(payload: PresencePayload) {
       const now = Date.now()
       const elapsed = now - lastReportTime

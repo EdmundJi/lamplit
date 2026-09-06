@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { ConversationNotice } from './npc-conversation'
 import { useTownMailSignal } from './town-mail-signal'
 import ResidentMoment from './ResidentMoment.vue'
 import TownEventsBoard from './TownEventsBoard.vue'
@@ -44,6 +45,12 @@ const travelMessage = computed(() => {
   if (!status) return ''
   return status.phase === 'walking' ? `正在走向${status.label}…` : status.phase === 'arrived' ? `已到达${status.label}` : `去${status.label}的路被挡住了，请换条路或重试。`
 })
+function recoverPosition() {
+  selection.value = null
+  if (!activePanel.value) closePanel()
+  if (game?.recover?.()) feedback.value = '已回到家门口的安全位置。'
+  else void mountGame()
+}
 function cancelTravel() { game?.cancelTravel?.(); travelStatus.value = null }
 function interactNearby() { game?.interactNearby?.() }
 
@@ -86,6 +93,24 @@ const selectedNpc = computed(() => {
   const npc = townNpcStore.byCode(code)
   return npc?.layer === 2 ? npc : null
 })
+const conversationCode = computed(() => {
+  if (!panelVisible.value || eventsOpen.value) return null
+  if (!activePanel.value && selectedNpc.value) return selectedNpc.value.code
+  if (!activePanel.value && selection.value === 'npc:assistant') return 'GUIDE'
+  if ((!activePanel.value && selection.value === 'npc:postman-chat') || (activePanel.value === 'friends' && selection.value === 'npc:postman')) return 'POSTMAN'
+  return null
+})
+const conversationNotice = ref<ConversationNotice | null>(null)
+function onConversationChange(notice: ConversationNotice | null) {
+  conversationNotice.value = notice
+  if (notice?.phase === 'ended' && conversationCode.value === notice.npcCode) {
+    selection.value = null
+    if (!activePanel.value) closePanel()
+    if (notice.npcInitiated) feedback.value = `${notice.name}先去忙了。${notice.reason ?? ''}`
+  }
+}
+function interruptNpc(code: string, reason: string) { game?.interruptConversation?.(code, reason) }
+
 const engineError = ref('')
 const insideAcademy = ref(false)
 const playerPosition = ref<{ x: number; y: number } | null>(null)
@@ -139,6 +164,7 @@ async function mountGame() {
     game?.destroy()
     game = null
     const created = await createTownGame(canvas.value, store.model, {
+      onConversationChange,
       onSelect: select,
       onObservationChange: enabled => { observing.value = enabled },
       onTravelChange: status => { travelStatus.value = status },
@@ -156,6 +182,7 @@ async function mountGame() {
     game = created
     game.setLetterUnread?.(mailSignal.unreadCount)
     game.applyEvents?.(eventsStore.events)
+    if (conversationCode.value) game?.beginConversation?.(conversationCode.value)
     game.setNight(night.value)
     game.setRun(running.value)
     residentSignature = residentKey(store.model)
@@ -251,6 +278,11 @@ function onKeyUp(event: KeyboardEvent) {
   }
 }
 
+watch(conversationCode, (code, previous) => {
+  if (previous) game?.endConversation?.(previous)
+  if (code) game?.beginConversation?.(code)
+})
+
 onMounted(async () => {
   void mailSignal.load()
   socialTicker = setInterval(() => {
@@ -345,6 +377,7 @@ onBeforeUnmount(() => {
         <h1>成长小镇</h1>
       </div>
       <div class="actions">
+        <button class="secondary" type="button" aria-label="返回安全位置" title="卡住时直接回到家门口，任务数据不变" @click="recoverPosition">脱困</button>
         <button class="secondary" type="button" @click="toggleNight">
           <component :is="night ? Sun : Moon" :size="17" />{{ night ? '切到白天' : '切到夜晚' }}
         </button>
@@ -379,6 +412,7 @@ onBeforeUnmount(() => {
       <button v-if="travelStatus?.phase === 'walking'" class="secondary" type="button" @click="cancelTravel">取消前往</button>
       <button v-if="nearby" class="secondary" type="button" @click="interactNearby">{{ nearby.action }} · {{ nearby.label }}（E）</button>
     </div>
+    <p v-if="conversationNotice?.phase === 'leaving'" class="town-conversation-departure" role="status">{{ conversationNotice.name }}：{{ conversationNotice.reason }}</p>
     <p v-if="feedback" class="muted" role="status">{{ feedback }}</p>
     <div class="town-stage">
       <div ref="canvas" class="town-canvas" data-testid="town-canvas" />
@@ -404,9 +438,9 @@ onBeforeUnmount(() => {
           <RouterLink v-else class="button secondary" :to="`/friends/${selected.publicId}`">看看 TA 的成长</RouterLink>
         </template>
 
-        <ResidentMoment v-else-if="selectedNpc" :npc="selectedNpc" @close="closePanel" />
+        <ResidentMoment v-else-if="selectedNpc" :npc="selectedNpc" :conversation-state="conversationNotice?.phase" :leaving-reason="conversationNotice?.phase === 'leaving' ? conversationNotice.reason : undefined" @close="closePanel" />
         <template v-else-if="selection === 'npc:assistant'">
-          <NpcDialogue v-if="!npcDialogueError" npc="GUIDE" display-name="小助" :opener="guideOpener" @close="closePanel" @action="onNpcAction" />
+          <NpcDialogue v-if="!npcDialogueError" npc="GUIDE" display-name="小助" :leaving-reason="conversationNotice?.phase === 'leaving' ? conversationNotice.reason : undefined" @interrupt="reason => interruptNpc('GUIDE', reason)" :opener="guideOpener" @close="closePanel" @action="onNpcAction" />
           <template v-else>
             <p class="eyebrow">学院门口的向导</p>
             <h2><Sparkles :size="20" /> 小助</h2>
@@ -416,7 +450,7 @@ onBeforeUnmount(() => {
         </template>
 
         <template v-else-if="(selection === 'npc:postman' || selection === 'npc:postman-chat')">
-          <NpcDialogue v-if="!npcDialogueError" npc="POSTMAN" display-name="邮递员" :opener="postmanLine" @close="closePanel" @action="onNpcAction" />
+          <NpcDialogue v-if="!npcDialogueError" npc="POSTMAN" display-name="邮递员" :leaving-reason="conversationNotice?.phase === 'leaving' ? conversationNotice.reason : undefined" @interrupt="reason => interruptNpc('POSTMAN', reason)" :opener="postmanLine" @close="closePanel" @action="onNpcAction" />
           <template v-else>
             <p class="eyebrow">街上的邮递员</p>
             <h2><Mail :size="20" /> 邮递员</h2>
