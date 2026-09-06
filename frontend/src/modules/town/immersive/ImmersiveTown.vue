@@ -90,7 +90,7 @@ function syncServerClock(model: TownModel | null) {
 function refreshClockText() {
   clockText.value = new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit', timeZone: self.value?.timezone ?? 'Asia/Shanghai' }).format(new Date(Date.now() + serverClockOffsetMs))
 }
-const destinations = [{ id: 'home', label: '我的家' }, { id: 'academy', label: '学院' }, { id: 'gym', label: '健身房' }, { id: 'cafe', label: '咖啡馆' }, { id: 'terrace', label: '街角露台' }, { id: 'park', label: '公园' }, { id: 'plaza', label: '广场' }]
+const destinations = [{ id: 'neighbourhood', label: '邻里住宅区' }, { id: 'home', label: '我的家' }, { id: 'academy', label: '学院' }, { id: 'gym', label: '健身房' }, { id: 'cafe', label: '咖啡馆' }, { id: 'terrace', label: '街角露台' }, { id: 'park', label: '公园' }, { id: 'plaza', label: '广场' }]
 function visitPlace(id: string) {
   if (observing.value) { observing.value = false; game?.setObservation(false) }
   selection.value = null
@@ -534,7 +534,7 @@ onBeforeUnmount(() => {
     <header class="immersive-topbar" :class="{ 'is-actions-open': hudActionsOpen }">
       <button class="icon-button" type="button" title="退出沉浸模式" aria-label="退出沉浸模式" @click="exitImmersive"><Minimize2 :size="18" /></button>
       <div class="immersive-title"><strong>成长小镇</strong><span>{{ activeRoom ? '屋内时光' : '慢慢走，生活正在发生' }} · {{ clockText }}</span></div>
-      <NeighbourSchedule :npcs="townNpcStore.npcs" :time="clockText" />
+      <NeighbourSchedule :npcs="townNpcStore.npcs" :time="clockText" @visit="visitPlace" />
       <button class="secondary sound-toggle" type="button" :aria-pressed="soundEnabled" :title="soundEnabled ? '关闭环境声' : '打开环境声'" @click="toggleSound">
         <component :is="soundEnabled ? Volume2 : VolumeX" :size="16" />{{ soundEnabled ? '环境声开' : '环境声关' }}
       </button>

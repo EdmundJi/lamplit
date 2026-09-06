@@ -3,6 +3,11 @@ import { computed } from 'vue'
 import { positionAt, dayPlanFallback } from '../day-plan'
 import type { TownNpcView } from '../town-npc.types'
 
+const emit = defineEmits<{ visit: [place: string] }>()
+function visit(event: Event, place: string) {
+  (event.target as HTMLElement).closest('details')?.removeAttribute('open')
+  emit('visit', place)
+}
 const props = defineProps<{ npcs: TownNpcView[]; time: string }>()
 const places: Record<string, string> = { home: '家里', academy: '学院', gym: '健身房', cafe: '咖啡馆', park: '公园', plaza: '广场' }
 const minute = computed(() => {
@@ -28,7 +33,7 @@ const awayCount = computed(() => neighbours.value.filter(n => n.away).length)
     <div class="schedule-card">
       <strong>{{ time }} · 小镇日程</strong>
       <p>小助和邮递员在街上陪你。在家的邻居会按自己的日程出门。</p>
-      <ul><li v-for="n in neighbours" :key="n.code"><strong>{{ n.name }}</strong><span>{{ n.where }}</span><small>{{ n.next }}</small></li></ul>
+      <ul><li v-for="n in neighbours" :key="n.code"><strong>{{ n.name }}</strong><span>{{ n.where }}</span><small>{{ n.next }}</small><div class="actions"><button type="button" @click="visit($event, `neighbour:${n.code}`)">去他家门口</button></div></li></ul>
     </div>
   </details>
 </template>
@@ -40,5 +45,6 @@ summary { cursor: pointer; padding: 8px 10px; border-radius: 8px; background: va
 p, small { color: var(--muted); line-height: 1.5; }
 ul { list-style: none; padding: 0; margin: 0; max-height: 48vh; overflow: auto; }
 li { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.actions { grid-column:1 / -1;display:flex;gap:8px; } .actions button { cursor:pointer;padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--ink); }
 small { grid-column: 1 / -1; }
 </style>

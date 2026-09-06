@@ -1,3 +1,5 @@
+import { neighbourHouse } from '../neighbourhood-layout'
+import { neighbourCommute } from '../neighbour-commute'
 import { freshSocialLine } from '../social-pacing'
 import { resolveMove } from '../collision'
 import type PhaserNs from 'phaser'
@@ -25,15 +27,28 @@ export const npcsMethods = {
       const minute = this.npcMinuteOfDay()
       const position = positionAt(plan, minute)
       const usesCafe = position.kind === 'AT' ? position.place === 'cafe' : position.fromPlace === 'cafe' || position.toPlace === 'cafe'
-      if (!usesCafe) return resolveNpcFrame(plan, minute, code, this.townLayout(), STREET_Y)
+      const home = neighbourHouse(code)?.door
+      const placements: Partial<Record<import('../town-npc.types').NpcPlace, import('../collision').Point>> = home ? { home } : {}
+      if (usesCafe) {
       const peers = this.runtime.townNpcRoster.filter(npc => {
           if (npc.layer === 1) return false
           const p = positionAt(npc.dayPlan ?? dayPlanFallback(npc.schedule), minute)
           return p.kind === 'AT' ? p.place === 'cafe' : p.fromPlace === 'cafe' || p.toPlace === 'cafe'
       }).map(npc => npc.code)
       const standing = cafeStandingPoint(code, peers, this.runtime.terraceOrigin.x, STREET_Y)
-      const point = safeTownPoint(this.collisionWorld, standing, standing) ?? standing
-      return resolveNpcFrame(plan, minute, code, this.townLayout(), STREET_Y, { cafe: point })
+      placements.cafe = safeTownPoint(this.collisionWorld, standing, standing) ?? standing
+
+      }
+      if (home && position.kind === 'WALKING' && (position.fromPlace === 'home' || position.toPlace === 'home')) {
+          const endpoint = (place: typeof position.fromPlace) => {
+              const fake = { ...plan, legs: [], errands: [{ place, activity: 'idle' as const, startMinute: 0, endMinute: 1440, priority: 1 as const, origin: 'RHYTHM' as const }] }
+              return resolveNpcFrame(fake, minute, code, this.townLayout(), STREET_Y, placements)
+          }
+          const from = endpoint(position.fromPlace), to = endpoint(position.toPlace)
+          const { point, ahead } = neighbourCommute(this.collisionWorld, from, to, position.progress)
+          return { ...point, depth: point.y, activity: 'walking', walking: true, facing: dominantDirection(ahead.x-point.x, ahead.y-point.y, 'down'), targetX: to.x }
+      }
+      return resolveNpcFrame(plan, minute, code, this.townLayout(), STREET_Y, placements)
   },
   createSharedAnimations(this: TownScene) {
       const runtime = this.runtime;

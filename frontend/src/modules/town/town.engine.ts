@@ -1,3 +1,4 @@
+import { refreshNeighbourLabels } from './engine/neighbourhood'
 /** Public lazy-loading boundary for the town renderer. Scene responsibilities live in engine/. */
 import type { TownModel } from './town.types'
 import type { RoomController } from './interior.scene'
@@ -88,6 +89,7 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
           runtime.townNpcRoster = npcs;
           runtime.initiativeBudget = budget;
           runtime.sceneRef?.applyTownNpcs(npcs);
+          if (runtime.sceneRef) refreshNeighbourLabels(runtime.sceneRef);
       },
       setObservation: on => runtime.sceneRef?.setObservationMode(on),
       setScenic: on => { runtime.scenicMode = on; runtime.sceneRef?.setScenicMode(on); },

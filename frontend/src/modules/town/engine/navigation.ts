@@ -1,3 +1,4 @@
+import { neighbourHouse } from '../neighbourhood-layout'
 import type PhaserNs from 'phaser'
 import { RUN_ANIM_SCALE, dominantDirection, movementDelta, moveSpeed } from '../walkers'
 import { nearestStandable, resolveMove } from '../collision'
@@ -38,9 +39,14 @@ export const navigationMethods = {
 
   travelLabel(this: TownScene, place: string): string {
       const runtime = this.runtime;
+      if (place.startsWith('neighbour:')) {
+          const code = place.slice(10), house = neighbourHouse(code);
+          if (['GUIDE', 'POSTMAN', 'TRAVELER'].includes(code)) return house?.label ?? '邻里住宅区';
+          return `${runtime.townNpcRoster.find(n => n.code === code)?.displayName ?? house?.name ?? '邻居'}的家`;
+      }
       if (place.startsWith('facility:'))
           return this.facilities?.interactables().find(i => i.id === place.slice(9))?.label ?? '露台设施';
-      return ({ home: '我的家', academy: '成长学院', gym: '活力健身房', cafe: '街角咖啡馆', terrace: '街角露台', park: '树荫公园', plaza: '日光广场', street: '街角' } as Record<string, string>)[place]
+      return ({ neighbourhood: '邻里住宅区', home: '我的家', academy: '成长学院', gym: '活力健身房', cafe: '街角咖啡馆', terrace: '街角露台', park: '树荫公园', plaza: '日光广场', street: '街角' } as Record<string, string>)[place]
           ?? this.walkers.find(w => w.id === place || `npc:${w.id}` === place)?.npc?.displayName ?? '这里';
   },
 
@@ -125,7 +131,7 @@ export const navigationMethods = {
       for (const [id, point] of this.entrances) {
           const distance = Math.hypot(self.sprite.x - point.x, self.sprite.y - point.y);
           if (distance < 88)
-              candidates.push({ id, label: this.travelLabel(id), action: ['home', 'academy', 'gym', 'cafe'].includes(id) ? '进入' : '看看', distance });
+              candidates.push({ id, label: this.travelLabel(id), action: id.startsWith('neighbour:') ? '走到' : ['home', 'academy', 'gym', 'cafe'].includes(id) ? '进入' : '看看', distance });
       }
       for (const walker of this.walkers) {
           if (walker === self || walker.npc?.layer === 3)
@@ -243,6 +249,10 @@ export const navigationMethods = {
           const item = [...this.streetFurnitureItems, ...this.venueFurniture.flatMap(v => v.items)].find(item => item.id === selection.slice(10));
           if (item)
               this.executeFurnitureInteraction(item);
+      }
+      else if (selection?.startsWith('neighbour:')) {
+          if (this.selfWalker) this.saySomething(this.selfWalker, `${this.travelLabel(selection)}就在这里。`, 2500);
+          runtime.handlers.onSelect?.(null);
       }
       else if (selection === 'academy')
           runtime.enterAcademy();
