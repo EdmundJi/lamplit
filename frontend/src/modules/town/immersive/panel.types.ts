@@ -35,6 +35,8 @@ export type WorldPanelDef = {
 export type WorldEvent =
   | { type: 'celebrate'; publicId: string }
   | { type: 'focus'; publicId: string }
+  | { type: 'travel'; place: string }
+  | { type: 'mail-count'; count: number }
   | { type: 'toast'; text: string }
   | { type: 'open'; panel: WorldPanelKey }
   | { type: 'close' }

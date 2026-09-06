@@ -4,10 +4,7 @@ import { BatteryMedium, Check, Clock3, Gauge, Play, RefreshCw, SkipForward, Spar
 import { taskStatusLabel } from '../../../../shared/task-status'
 import { useDialogFocus } from '../../../../shared/ui/use-dialog-focus'
 import { worldBridgeKey } from '../panel.types'
-import { openFullPage } from './shared'
 import { DAILY_COMPLETION_LIMIT, useTodayLogic } from '../../../today/today.logic'
-
-const FULL_PAGE = '/today'
 
 const bridge = inject(worldBridgeKey, undefined)
 
@@ -99,7 +96,6 @@ useDialogFocus(() => Boolean(selected.value || focusTask.value), '.today-panel-d
 
     <footer class="panel-footer">
       <button class="icon-button" type="button" aria-label="刷新" @click="load(false)"><RefreshCw :size="15" /></button>
-      <button class="secondary" type="button" @click="openFullPage(bridge, FULL_PAGE)">打开完整页面</button>
     </footer>
 
     <Teleport to="body">

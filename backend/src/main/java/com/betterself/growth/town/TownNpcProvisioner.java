@@ -195,7 +195,9 @@ public class TownNpcProvisioner {
         List<Object[]> batch, long userId, String admirerCode, String targetCode,
         double affinity, double resonance, double regard, String regardKind, Timestamp now
     ) {
-        batch.add(bondRow(userId, "NPC", admirerCode, "NPC", targetCode, affinity, resonance, regard, regardKind, now));
+        // Regard must precede the sparse affinity inserts: INSERT IGNORE otherwise silently
+        // discards hidden edges whenever the same pair already exists in this seed batch.
+        batch.add(0, bondRow(userId, "NPC", admirerCode, "NPC", targetCode, affinity, resonance, regard, regardKind, now));
         batch.add(bondRow(userId, "NPC", targetCode, "NPC", admirerCode, affinity, resonance, 0, null, now));
     }
 

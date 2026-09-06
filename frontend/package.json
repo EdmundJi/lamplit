@@ -18,7 +18,10 @@
     "cy:open": "cypress open --e2e",
     "cy:run": "cypress run --spec \"cypress/e2e/town/town-model.cy.ts,cypress/e2e/town/town-hud.cy.ts,cypress/e2e/town/town-engine.cy.ts,cypress/e2e/town/immersive-shell.cy.ts\"",
     "cy:gaps": "cypress run --spec cypress/e2e/town/town-gaps.cy.ts",
-    "test:cy": "start-server-and-test dev http://localhost:5173 cy:run"
+    "test:cy": "start-server-and-test dev http://localhost:5173 cy:run",
+    "test:town:visual": "playwright test --config playwright.town.config.ts",
+    "test:town:visual:ui": "playwright test --config playwright.town.config.ts --ui",
+    "town:assets": "python3 ../scripts/build-town-assets.py"
   },
   "dependencies": {
     "@rive-app/canvas": "^2.39.1",

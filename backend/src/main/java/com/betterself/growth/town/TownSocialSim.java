@@ -233,14 +233,21 @@ public final class TownSocialSim {
                                        BiFunction<String, String, Bond> bonds,
                                        Function<String, List<RelayCandidate>> knownBySpeaker,
                                        RandomGenerator rng) {
+        return simulate(encounters, personas, bonds, knownBySpeaker, rng, (listener, fact) -> true);
+    }
+
+    public static List<RelayResult> simulate(List<Encounter> encounters, Map<String, Persona> personas,
+                                       BiFunction<String, String, Bond> bonds,
+                                       Function<String, List<RelayCandidate>> knownBySpeaker,
+                                       RandomGenerator rng, java.util.function.BiPredicate<String, Long> mayLearn) {
         Map<String, Map<Long, Learned>> knowledge = new LinkedHashMap<>();
         List<RelayResult> results = new ArrayList<>();
 
         for (Encounter encounter : encounters) {
             attemptRelay(encounter.a(), encounter.b(), encounter.type(), personas, bonds, knownBySpeaker,
-                knowledge, rng, results);
+                knowledge, rng, results, mayLearn);
             attemptRelay(encounter.b(), encounter.a(), encounter.type(), personas, bonds, knownBySpeaker,
-                knowledge, rng, results);
+                knowledge, rng, results, mayLearn);
         }
         return results;
     }
@@ -251,7 +258,7 @@ public final class TownSocialSim {
                                       Function<String, List<RelayCandidate>> knownBySpeaker,
                                       Map<String, Map<Long, Learned>> knowledge,
                                       RandomGenerator rng,
-                                      List<RelayResult> results) {
+                                      List<RelayResult> results, java.util.function.BiPredicate<String, Long> mayLearn) {
         Persona speaker = personas.get(speakerCode);
         Persona listener = personas.get(listenerCode);
         if (speaker == null || listener == null) {
@@ -265,7 +272,7 @@ public final class TownSocialSim {
 
         for (Map.Entry<Long, Learned> entry : new ArrayList<>(speakerKnowledge.entrySet())) {
             long factId = entry.getKey();
-            if (listenerKnowledge.containsKey(factId)) {
+            if (!mayLearn.test(listenerCode, factId) || listenerKnowledge.containsKey(factId)) {
                 continue;
             }
             Learned learned = entry.getValue();

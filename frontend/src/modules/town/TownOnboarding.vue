@@ -15,6 +15,7 @@ export interface OnboardingProps {
   distanceToGuide?: number | null
   /** 是否打开了任意面板（用于检测面板交互） */
   anyPanelOpen?: boolean
+  conversationOpen?: boolean
 }
 
 const props = defineProps<OnboardingProps>()
@@ -40,7 +41,7 @@ const steps: StepDefinition[] = [
   {
     id: 'welcome',
     title: '欢迎来到成长小镇',
-    content: '这是你的成长数据可视化空间，每个人都有自己的家，邻居是你的好友。点一栋房子，看看背后的故事。',
+    content: '这是你的小镇。居民各自散步、读书、聊天；你的家会随着真实成长慢慢变化。去街上走走，也可以打开观察模式看看他们的一天。',
     highlight: null,
     arrow: null,
     autoNext: false,
@@ -70,7 +71,7 @@ const steps: StepDefinition[] = [
     autoNext: true,
     condition: () => {
       const dist = props.distanceToGuide
-      return dist !== null && dist !== undefined && dist < 80
+      return props.conversationOpen === true || (dist !== null && dist !== undefined && dist < 80)
     },
   },
   {
@@ -85,7 +86,7 @@ const steps: StepDefinition[] = [
   {
     id: 'immersive',
     title: '沉浸模式',
-    content: '点击顶部"沉浸模式"按钮进入全屏体验，获得更大的空间。按 Esc 随时退出。',
+    content: '沉浸模式提供更大的画面。可在顶部切换全屏，按 Esc 关闭当前窗口或回到街上。',
     highlight: '.town-immersive-link, .immersive-topbar .icon-button',
     arrow: null,
     autoNext: false,
@@ -186,8 +187,8 @@ defineExpose({
 <template>
   <Teleport to="body">
     <Transition name="onboarding-fade">
-      <div v-if="visible" class="town-onboarding">
-        <div class="onboarding-overlay" @click.self="skip" />
+      <div v-if="visible" class="town-onboarding" :class="{ 'allows-play': step.autoNext }">
+        <div class="onboarding-overlay" :class="{ 'allows-play': step.autoNext }" @click.self="skip" />
 
         <div class="onboarding-card">
           <button
@@ -260,6 +261,9 @@ defineExpose({
   pointer-events: none;
 }
 
+.town-onboarding.allows-play { place-items: end start; padding-bottom: 90px; }
+.onboarding-overlay.allows-play { pointer-events: none; background: transparent; backdrop-filter: none; }
+.town-onboarding.allows-play .onboarding-card { width: min(340px, 100%); gap: 10px; padding: 18px; max-height: 45vh; overflow: auto; }
 .onboarding-overlay {
   position: absolute;
   inset: 0;

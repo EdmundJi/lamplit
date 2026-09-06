@@ -1,3 +1,4 @@
+import { wrapSpeech, peerBubbleTier } from './talking-bubbles'
 import { describe, expect, it } from 'vitest'
 import { GUIDE_CODE, bubbleTierFor, canInitiate, consume, layoutBubbles, pointsToPlay, type BubbleBox, type CameraRect } from './talking-bubbles'
 import type { InitiativeBudget, NpcTalkingPoint } from './town-npc.types'
@@ -170,5 +171,27 @@ describe('layoutBubbles (M7-8 气泡排版兜底)', () => {
     const snapshot = JSON.parse(JSON.stringify(bubbles))
     layoutBubbles(bubbles, CAMERA)
     expect(bubbles).toEqual(snapshot)
+  })
+})
+
+
+describe('中文气泡换行', () => {
+  it('breaks long CJK sentences without dropping text', () => {
+    const text = '听说公园的花开了，等会儿路过时去看看。'
+    const lines = wrapSpeech(text, 8)
+    expect(lines.join('')).toBe(text)
+    expect(lines.every(line => Array.from(line).length <= 8)).toBe(true)
+  })
+  it('preserves explicit line breaks and unicode characters', () => {
+    expect(wrapSpeech('早安\n今天也慢慢走🌳')).toEqual(['早安', '今天也慢慢走🌳'])
+  })
+})
+
+
+describe('NPC peer familiarity', () => {
+  it('distinguishes strangers, acquaintances and close peers without using player affinity', () => {
+    expect(peerBubbleTier({ code: 'A', affinityToNpcs: { B: .8 } }, { code: 'B' })).toBe('high')
+    expect(peerBubbleTier({ code: 'A' }, { code: 'B', affinityToNpcs: { A: .4 } })).toBe('mid')
+    expect(peerBubbleTier({ code: 'A' }, { code: 'B' })).toBe('low')
   })
 })

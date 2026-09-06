@@ -68,6 +68,177 @@ class TownSocietyIT {
     @Autowired MockMvc mvc;
     @Autowired JdbcTemplate jdbc;
     @Autowired TownSocietyService society;
+    @org.springframework.test.context.bean.override.mockito.MockitoSpyBean
+    QwenRetellGenerator retellGenerator;
+
+    @Autowired TownNpcProvisioner provisioner;
+    @Autowired TownMoodService moodService;
+    @Autowired TownDailyProduction daily;
+    @Autowired org.springframework.transaction.support.TransactionTemplate tx;
+    @Autowired java.time.Clock clock;
+    @Autowired com.fasterxml.jackson.databind.ObjectMapper mapper;
+
+    @Test
+    void firstRosterBootstrapsSixOwnedPublicPlansWithoutLlmOrBroadcast() throws Exception {
+        Session owner = register("town-first-day-public-plans@example.test");
+        long id = userIdOf("town-first-day-public-plans@example.test");
+        org.mockito.Mockito.clearInvocations(retellGenerator);
+        var response = mvc.perform(get("/api/v1/town/npcs").cookie(owner.access()))
+            .andExpect(status().isOk()).andReturn();
+        var first = mapper.readTree(body(response)).path("data").path("npcs");
+        var factIds = new java.util.HashSet<String>();
+        var individualLines = new java.util.HashSet<String>();
+        for (var npc : first) {
+            var points = npc.path("talkingPoints");
+            if (npc.path("layer").asInt() == 2) {
+                assertThat(points.size()).isEqualTo(1);
+                String factId = points.get(0).path("factId").asText();
+                factIds.add(factId);
+                individualLines.add(points.get(0).path("text").asText().replace(npc.path("displayName").asText(), ""));
+                assertThat(jdbc.queryForObject("""
+                    select count(*) from town_fact f join town_npc_knowledge k on k.fact_id=f.id
+                    where f.public_id=? and f.town_user_id=? and f.subject_kind='NPC'
+                      and f.kind='NPC_DAY_PLAN' and k.npc_code=f.subject_ref and k.npc_code=?
+                      and k.learned_from='SELF' and k.hops=0 and k.retold_text is not null
+                    """,Integer.class,factId,id,npc.path("code").asText())).isEqualTo(1);
+            } else {
+                assertThat(points.size()).as("bootstrap is not a town-wide broadcast").isZero();
+            }
+        }
+        assertThat(factIds).hasSize(6);
+        assertThat(individualLines).hasSize(6);
+        assertThat(jdbc.queryForObject("select count(*) from town_fact where town_user_id=?",Integer.class,id)).isEqualTo(6);
+        assertThat(jdbc.queryForObject("select count(*) from town_npc_knowledge where town_user_id=?",Integer.class,id)).isEqualTo(6);
+        assertThat(jdbc.queryForObject("select count(*) from town_fact where town_user_id=? and subject_kind='PLAYER'",Integer.class,id)).isZero();
+        // Repeated/concurrent GETs neither mint new identities nor refresh salience after decay.
+        jdbc.update("update town_npc_knowledge set salience=0.2 where town_user_id=?",id);
+        try (var executor = java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            var a = executor.submit(() -> society.roster(id));
+            var b = executor.submit(() -> society.roster(id));
+            a.get(); b.get();
+        }
+        var again = society.roster(id);
+        assertThat(again.npcs().stream().flatMap(n -> n.talkingPoints().stream()).map(TownSocietyService.TalkingPoint::factId).toList())
+            .containsExactlyInAnyOrderElementsOf(factIds);
+        assertThat(jdbc.queryForObject("select max(salience) from town_npc_knowledge where town_user_id=?",Double.class,id)).isEqualTo(0.2);
+        assertThat(jdbc.queryForObject("select count(*) from town_npc_knowledge where town_user_id=?",Integer.class,id)).isEqualTo(6);
+        org.mockito.Mockito.verify(retellGenerator,org.mockito.Mockito.never()).retell(org.mockito.ArgumentMatchers.anyList());
+    }
+
+    private void freezeAt(long userId, LocalDate date, java.util.Set<String> cafeResidents) throws Exception {
+        moodService.ensureDay(userId,date);
+        tx.executeWithoutResult(status -> daily.claim(userId,date,"EVENT"));
+        for(String code:jdbc.queryForList("select npc_code from town_npc where town_user_id=?",String.class,userId)) {
+            var plan=new TownDayPlan.DayPlan(date,List.of(new TownDayPlan.Errand(
+                cafeResidents.contains(code)?"cafe":"home","sit",0,1440,1,"RHYTHM")),List.of());
+            jdbc.update("update town_npc_mood set day_plan=cast(? as json) where town_user_id=? and npc_code=? and local_date=?",
+                mapper.writeValueAsString(plan),userId,code,java.sql.Date.valueOf(date));
+        }
+    }
+
+    @Test
+    void recognizesReportedPublicEntrancesAndRealInteriorKeysButNotTownOrHome() throws Exception {
+        register("town-presence-tags@example.test");
+        long id = userIdOf("town-presence-tags@example.test");
+        LocalDate date = daily.today(id);
+        freezeAt(id,date,java.util.Set.of());
+        var plan = new TownDayPlan.DayPlan(date,List.of(
+            new TownDayPlan.Errand("home","idle",0,360,1,"RHYTHM"),
+            new TownDayPlan.Errand("academy","reading",360,420,1,"RHYTHM"),
+            new TownDayPlan.Errand("gym","idle",420,480,1,"RHYTHM"),
+            new TownDayPlan.Errand("cafe","sit",480,540,1,"RHYTHM"),
+            new TownDayPlan.Errand("park","sit",540,600,1,"RHYTHM"),
+            new TownDayPlan.Errand("plaza","sit",600,660,1,"RHYTHM"),
+            new TownDayPlan.Errand("home","idle",660,1440,1,"RHYTHM")),List.of());
+        jdbc.update("update town_npc_mood set day_plan=cast(? as json) where town_user_id=? and npc_code='KE_YUN' and local_date=?",
+            mapper.writeValueAsString(plan),id,java.sql.Date.valueOf(date));
+        String[][] reports = {{"interior:academy-study","370"},{"town:academy","371"},
+            {"interior:public-gym","430"},{"town:gym","431"},{"interior:cafe-interior","490"},
+            {"town:cafe","491"},{"town","492"},{"unknown","493"},{"interior:home-living-room","494"},
+            {"town:home","495"},{"town:park","550"},{"town:plaza","610"}};
+        for (String[] report : reports) {
+            var instant = date.atStartOfDay(daily.zone(id)).plusMinutes(Integer.parseInt(report[1])).toInstant();
+            new TownPresenceService(jdbc,tx,java.time.Clock.fixed(instant,java.time.ZoneOffset.UTC))
+                .report(id,new TownPresenceService.PresenceCommand(100.0,100.0,"down",report[0]));
+        }
+        society.runNightly(id,date);
+        assertThat(jdbc.queryForList("""
+            select f.kind from town_fact f join town_npc_knowledge k on k.fact_id=f.id
+            where f.town_user_id=? and f.kind like 'PUBLIC_VISIT_%' and k.npc_code='KE_YUN'
+            """,String.class,id)).containsExactlyInAnyOrder("PUBLIC_VISIT_ACADEMY","PUBLIC_VISIT_GYM",
+                "PUBLIC_VISIT_CAFE","PUBLIC_VISIT_PARK","PUBLIC_VISIT_PLAZA");
+        assertThat(jdbc.queryForObject("select count(*) from town_fact where town_user_id=? and kind like 'PUBLIC_VISIT_%'",Integer.class,id)).isEqualTo(5);
+    }
+
+    @Test
+    void actualPresenceSamplesSurviveLatestPositionAndOnlyAuthorizeVisibleVisits() throws Exception {
+        register("town-sample-proof@example.test");
+        long id=userIdOf("town-sample-proof@example.test");
+        LocalDate date=daily.today(id);
+        freezeAt(id,date,java.util.Set.of("KE_YUN","LU_XIA","TOWNIE_01"));
+        var sampleClock=java.time.Clock.fixed(date.atTime(10,10).atZone(daily.zone(id)).toInstant(),java.time.ZoneOffset.UTC);
+        var presence=new TownPresenceService(jdbc,tx,sampleClock);
+        presence.report(id,new TownPresenceService.PresenceCommand(100.0,100.0,"down","cafe"));
+        presence.report(id,new TownPresenceService.PresenceCommand(100.0,100.0,"down","cafe"));
+        presence.report(id,new TownPresenceService.PresenceCommand(100.0,100.0,"down","home"));
+        assertThat(jdbc.queryForObject("select count(*) from town_presence_sample where user_id=?",Integer.class,id)).isEqualTo(2);
+        assertThat(presence.latest(id).scene()).isEqualTo("home");
+        society.runNightly(id,date);
+        var visible=jdbc.queryForList("""
+            select distinct f.kind from town_npc_knowledge k join town_fact f on f.id=k.fact_id
+            where k.town_user_id=? and k.npc_code<>'GUIDE' and f.subject_kind='PLAYER'
+            """,String.class,id);
+        assertThat(visible).containsExactly("PUBLIC_VISIT_CAFE");
+        assertThat(jdbc.queryForObject("""
+            select count(*) from town_npc_knowledge k join town_fact f on f.id=k.fact_id
+            join town_npc n on n.town_user_id=k.town_user_id and n.npc_code=k.npc_code
+            where k.town_user_id=? and n.layer=3 and f.subject_kind='PLAYER'
+            """,Integer.class,id)).isZero();
+    }
+
+    @Test
+    void latestPresenceAloneCannotInventHistoricalWitnesses() throws Exception {
+        register("town-no-fake-trajectory@example.test");
+        long id=userIdOf("town-no-fake-trajectory@example.test");
+        LocalDate date=daily.today(id);
+        freezeAt(id,date,java.util.Set.of("KE_YUN","LU_XIA"));
+        jdbc.update("insert into town_presence(user_id,x,y,facing,scene,updated_at) values (?,100,100,'down','cafe',?)",
+            id,Timestamp.from(date.atTime(10,10).atZone(daily.zone(id)).toInstant()));
+        society.runNightly(id,date);
+        assertThat(jdbc.queryForList("""
+            select distinct k.npc_code from town_npc_knowledge k join town_fact f on f.id=k.fact_id
+            where k.town_user_id=? and f.subject_kind='PLAYER'
+            """,String.class,id)).containsExactly("GUIDE");
+    }
+
+    @Test
+    void regardEntersProductionOnlyAsAThirdPartyGuessNotAnOwnersDisclosure() throws Exception {
+        register("town-regard-witness@example.test");
+        long id=userIdOf("town-regard-witness@example.test");
+        LocalDate date=daily.today(id);
+        freezeAt(id,date,java.util.Set.of("KE_YUN","LU_XIA","WEN_QING"));
+        assertThat(jdbc.queryForObject("select count(*) from town_bond where town_user_id=? and regard>0",Integer.class,id)).isPositive();
+        jdbc.update("update town_bond set regard=0,regard_kind=null where town_user_id=?",id);
+        jdbc.update("""
+            insert into town_bond(public_id,town_user_id,a_kind,a_ref,b_kind,b_ref,affinity,regard,regard_kind)
+            values ('01JREGARDPRODUCTION0000001',?,'NPC','KE_YUN','NPC','LU_XIA',0.1,0.9,'CRUSH')
+            on duplicate key update regard=0.9,regard_kind='CRUSH'
+            """,id);
+        society.runNightly(id,date);
+        var witnesses=jdbc.queryForList("""
+            select k.npc_code from town_npc_knowledge k join town_fact f on f.id=k.fact_id
+            where k.town_user_id=? and f.kind='REGARD_GUESS' and k.hops=0 and k.no_relay=0
+            """,String.class,id);
+        assertThat(witnesses).containsExactly("WEN_QING");
+        assertThat(jdbc.queryForObject("""
+            select count(*) from town_npc_knowledge k join town_fact f on f.id=k.fact_id
+            where k.town_user_id=? and f.kind='REGARD_GUESS' and k.npc_code='KE_YUN'
+            """,Integer.class,id)).isZero();
+        var json=mapper.writeValueAsString(society.roster(id));
+        assertThat(json).doesNotContain("regard", "CRUSH", "确实暗恋");
+        assertThat(json).contains("affinityToNpcs");
+        assertThat(jdbc.queryForObject("select coalesce(sum(used),0) from town_initiative_budget where user_id=?",Integer.class,id)).isZero();
+    }
 
     @Test
     void blursPlayerFactsKeepsTheGuideSilentAndServesPerNpcTalkingPoints() throws Exception {
@@ -266,7 +437,7 @@ class TownSocietyIT {
     void anEventTodayShowsUpAsAHighPriorityErrandInTheHostsDayPlan() throws Exception {
         Session owner = register("town-event-plan@example.test");
         long userId = userIdOf("town-event-plan@example.test");
-        society.roster(userId);
+        provisioner.ensurePopulated(userId);
 
         String host = jdbc.queryForObject(
             "select npc_code from town_npc where town_user_id = ? and layer = 2 order by npc_code limit 1",
@@ -316,8 +487,8 @@ class TownSocietyIT {
         jdbc.update("""
             insert into town_migration
                 (public_id, npc_code, from_user_id, to_user_id, paired_with_npc_code, moved_at, created_at)
-            values (?, ?, ?, ?, null, ?, ?)
-            """, "01JARRIVEDTODAY000000000A", newcomer, userId, userId,
+            values (?, ?, ?, ?, ?, ?, ?)
+            """, "01JARRIVEDTODAY000000000A", "TOWNIE_10", userId, userId, newcomer,
             Timestamp.valueOf(today.atTime(2, 0)), Timestamp.valueOf(LocalDateTime.now()));
         jdbc.update("update town_npc set settled_at = ? where town_user_id = ? and npc_code = ?",
             Timestamp.valueOf(today.atTime(2, 0)), userId, newcomer);

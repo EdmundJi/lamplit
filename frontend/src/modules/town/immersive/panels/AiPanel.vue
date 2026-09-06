@@ -1,114 +1,174 @@
 <script setup lang="ts">
-import { inject, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { History, Plus, Send, Square } from 'lucide-vue-next'
 import { api } from '../../../../shared/api/client'
 import { postSse, SseRequestError } from '../../../../shared/api/sse'
 import MarkdownDocument from '../../../../shared/ui/MarkdownDocument.vue'
-import { worldBridgeKey } from '../panel.types'
-import { openFullPage } from './shared'
 
 type ChatMessage = { role: 'USER' | 'ASSISTANT'; text: string }
 type SessionSummary = { publicId: string; scene: string; updatedAt: string; messageCount: number; lastMessage?: string | null }
 
-const FULL_PAGE = '/ai'
 const QUOTA_MESSAGE = 'AI 今天陪聊得有点累了，晚点或明天再来聊聊'
-
-const bridge = inject(worldBridgeKey, undefined)
 
 const session = ref('')
 const draft = ref('')
 const messages = ref<ChatMessage[]>([])
 const history = ref<SessionSummary[]>([])
 const loadingHistory = ref(false)
+const historyError = ref('')
+const openingSession = ref(false)
 const busy = ref(false)
 const error = ref('')
 const listElement = ref<HTMLElement | null>(null)
 let controller: AbortController | undefined
+let operation = 0
+let historyRequest = 0
+let disposed = false
+let recoverUnsent: (() => void) | undefined
+
+function current(id: number) {
+  return !disposed && id === operation
+}
+
+// Invalidate before aborting: even synchronous abort handlers belong to the old operation.
+function invalidate() {
+  recoverUnsent?.()
+  recoverUnsent = undefined
+  operation++
+  controller?.abort()
+  controller = undefined
+  busy.value = false
+  openingSession.value = false
+  return operation
+}
 
 async function loadHistory() {
+  const id = ++historyRequest
   loadingHistory.value = true
+  historyError.value = ''
   try {
-    history.value = await api.get<SessionSummary[]>('/ai/sessions')
+    const loaded = await api.get<SessionSummary[]>('/ai/sessions')
+    if (!disposed && id === historyRequest) history.value = loaded
   } catch {
-    error.value = '历史对话暂时无法加载'
+    if (!disposed && id === historyRequest) historyError.value = '历史对话暂时无法加载'
   } finally {
-    loadingHistory.value = false
+    if (!disposed && id === historyRequest) loadingHistory.value = false
   }
 }
 
-async function scrollToBottom() {
+async function scrollToBottom(id: number) {
   await nextTick()
-  if (listElement.value) listElement.value.scrollTop = listElement.value.scrollHeight
+  if (current(id) && listElement.value) listElement.value.scrollTop = listElement.value.scrollHeight
 }
 
-async function ensureSession() {
-  if (!session.value) session.value = (await api.post<{ publicId: string }>('/ai/sessions', { scene: 'STUDY' })).publicId
-}
-
-async function send(text?: string) {
-  const value = (text ?? draft.value).trim()
-  if (!value || busy.value) return
+async function send() {
+  const value = draft.value.trim()
+  if (!value || busy.value || openingSession.value || disposed) return
+  const id = invalidate()
+  const requestController = new AbortController()
+  controller = requestController
+  const active = () => current(id) && !requestController.signal.aborted
+  let acceptingEvents = true
+  let assistant = ''
+  let failed = false
   busy.value = true
   error.value = ''
   draft.value = ''
+  const userIndex = messages.value.length
   messages.value.push({ role: 'USER', text: value })
-  await scrollToBottom()
-  controller = new AbortController()
+  recoverUnsent = () => {
+    if (current(id)) {
+      draft.value = value
+      messages.value.splice(userIndex)
+    }
+  }
+  void scrollToBottom(id)
   try {
-    await ensureSession()
-    let assistant = ''
-    await postSse(`/ai/sessions/${session.value}/messages:stream`, { message: value }, async event => {
+    // Capture the destination locally; a late creation must never replace a new session.
+    let targetSession = session.value
+    if (!targetSession) {
+      const created = await api.post<{ publicId: string }>('/ai/sessions', { scene: 'STUDY' })
+      if (!active()) return
+      targetSession = created.publicId
+      session.value = targetSession
+    }
+    if (!active()) return
+    // From this point the server may have accepted the message; don't roll back on stop.
+    recoverUnsent = undefined
+    await postSse(`/ai/sessions/${encodeURIComponent(targetSession)}/messages:stream`, { message: value }, event => {
+      if (!active() || !acceptingEvents) return
       if (event.name === 'delta') {
-        const delta = (event.data as { text?: string }).text ?? ''
-        assistant += delta
-        const last = messages.value.at(-1)
-        if (last?.role === 'ASSISTANT') last.text = assistant
-        else messages.value.push({ role: 'ASSISTANT', text: assistant })
-        await scrollToBottom()
+        assistant += (event.data as { text?: string }).text ?? ''
+        const reply = { role: 'ASSISTANT' as const, text: assistant }
+        if (messages.value.length === userIndex + 1) messages.value.push(reply)
+        else messages.value[userIndex + 1] = reply
+        void scrollToBottom(id)
       } else if (event.name === 'safety') {
         error.value = (event.data as { message?: string }).message || '这段内容需要更谨慎的支持，建议联系可信任的人。'
       } else if (event.name === 'error') {
-        const failure = event.data as { message?: string }
-        error.value = failure.message || 'AI 暂时不可用，请稍后再试'
+        failed = true
+        error.value = (event.data as { message?: string }).message || 'AI 暂时不可用，请稍后再试'
+        acceptingEvents = false
+      } else if (event.name === 'done') {
+        acceptingEvents = false
       }
-    }, controller.signal)
-    await loadHistory()
+    }, requestController.signal)
+    if (active()) void loadHistory()
   } catch (caught) {
-    if (caught instanceof SseRequestError) {
-      error.value = caught.status === 429 ? QUOTA_MESSAGE : 'AI 暂时不可用，请稍后再试'
-    } else if ((caught as { name?: string }).name !== 'AbortError') {
-      error.value = 'AI 暂时不可用，请稍后再试'
+    if (!active()) return
+    if ((caught as { name?: string } | null)?.name !== 'AbortError') {
+      failed = true
+      error.value = caught instanceof SseRequestError && caught.status === 429
+        ? QUOTA_MESSAGE : 'AI 暂时不可用，请稍后再试'
     }
   } finally {
-    busy.value = false
+    acceptingEvents = false
+    if (active()) {
+      recoverUnsent = undefined
+      // Preserve a failed, unanswered draft for explicit retry; never auto-resend.
+      if (failed && !assistant) {
+        draft.value = value
+        messages.value.splice(userIndex)
+      }
+      busy.value = false
+      controller = undefined
+    }
   }
 }
 
 async function openSession(item: SessionSummary) {
-  if (busy.value) return
+  if (disposed) return
+  const id = invalidate()
+  openingSession.value = true
   error.value = ''
   try {
-    session.value = item.publicId
-    const loaded = await api.get<{ role: string; content: string }[]>(`/ai/sessions/${item.publicId}/messages`)
-    messages.value = loaded
+    const loaded = await api.get<{ role: string; content: string }[]>(`/ai/sessions/${encodeURIComponent(item.publicId)}/messages`)
+    if (!current(id)) return
+    const nextMessages = loaded
       .filter(row => row.role === 'USER' || row.role === 'ASSISTANT')
       .map(row => ({ role: row.role as ChatMessage['role'], text: row.content }))
-    await scrollToBottom()
+    // Commit both together. Failure leaves the previous conversation coherent and usable.
+    session.value = item.publicId
+    messages.value = nextMessages
+    draft.value = ''
+    void scrollToBottom(id)
   } catch {
-    error.value = '历史对话暂时无法打开'
+    if (current(id)) error.value = '历史对话暂时无法打开，请重新选择重试'
+  } finally {
+    if (current(id)) openingSession.value = false
   }
 }
 
 function reset() {
-  controller?.abort()
+  invalidate()
   session.value = ''
   messages.value = []
+  draft.value = ''
   error.value = ''
 }
 
-/** 只掐断这一次回复，会话和已有消息都留着——区别于「新会话」那种连历史一起清空的重来。 */
 function stop() {
-  controller?.abort()
+  invalidate()
 }
 
 function preview(item: SessionSummary) {
@@ -118,7 +178,11 @@ function preview(item: SessionSummary) {
 }
 
 onMounted(loadHistory)
-onBeforeUnmount(() => controller?.abort())
+onBeforeUnmount(() => {
+  disposed = true
+  invalidate()
+  historyRequest++
+})
 </script>
 
 <template>
@@ -135,6 +199,13 @@ onBeforeUnmount(() => controller?.abort())
       </details>
     </div>
 
+    <p v-if="loadingHistory" role="status">正在加载历史对话…</p>
+    <p v-if="historyError" class="error" role="alert">
+      {{ historyError }}
+      <button class="secondary" type="button" :disabled="loadingHistory" @click="loadHistory">重试加载历史</button>
+    </p>
+    <p v-if="openingSession" role="status">正在打开对话…</p>
+
     <div ref="listElement" class="ai-chat" aria-live="polite">
       <div v-if="!messages.length" class="empty">
         <p>把还没理清的想法说给它听，比如“今天精力不太够，帮我把目标缩成一件事”。</p>
@@ -150,11 +221,11 @@ onBeforeUnmount(() => controller?.abort())
 
     <form class="ai-composer" @submit.prevent="send()">
       <label class="sr-only" for="ai-panel-input">给 AI 助手发消息</label>
-      <textarea id="ai-panel-input" v-model="draft" maxlength="2000" rows="2" placeholder="描述你想推进的事情" :disabled="busy" @keydown.ctrl.enter="send()"></textarea>
+      <textarea id="ai-panel-input" v-model="draft" maxlength="2000" rows="2" placeholder="描述你想推进的事情" :disabled="busy || openingSession" @keydown.ctrl.enter="send()"></textarea>
       <button
         class="primary icon-button"
         :type="busy ? 'button' : 'submit'"
-        :disabled="!busy && !draft.trim()"
+        :disabled="openingSession || (!busy && !draft.trim())"
         :aria-label="busy ? '停止生成' : '发送'"
         @click="busy && stop()"
       >
@@ -163,9 +234,6 @@ onBeforeUnmount(() => controller?.abort())
       </button>
     </form>
 
-    <footer class="panel-footer">
-      <button class="secondary" type="button" @click="openFullPage(bridge, FULL_PAGE)">打开完整页面</button>
-    </footer>
   </section>
 </template>
 
@@ -187,6 +255,5 @@ onBeforeUnmount(() => controller?.abort())
 .ai-composer textarea { min-height: 44px; max-height: 96px; resize: vertical; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--ink); padding: 8px 10px; font-size: 13px; }
 .spinning { animation: ai-spin .8s linear infinite; }
 @keyframes ai-spin { to { transform: rotate(360deg); } }
-.panel-footer { display: flex; justify-content: flex-end; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; }
 </style>

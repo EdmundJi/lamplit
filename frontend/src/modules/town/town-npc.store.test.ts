@@ -50,13 +50,13 @@ describe('town-npc store', () => {
     expect(store.error).toBe('')
   })
 
-  it('degrades to an empty roster on a 404 (feature not deployed yet) instead of erroring', async () => {
+  it('keeps the town playable but explains a missing NPC service', async () => {
     api.get.mockRejectedValue(notFound)
     const store = useTownNpcStore()
     await store.load()
     expect(store.npcs).toEqual([])
     expect(store.budget).toEqual({ limit: 0, used: 0 })
-    expect(store.error).toBe('')
+    expect(store.error).toContain('居民服务还未连接')
   })
 
   it('surfaces a real error message for a non-404 failure', async () => {

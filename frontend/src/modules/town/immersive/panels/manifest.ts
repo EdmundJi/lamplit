@@ -49,8 +49,8 @@ export const worldPanels: WorldPanelDef[] = [
   },
   {
     key: 'friends',
-    title: '好友消息',
-    subtitle: '看看同行的人捎来了什么话',
+    title: '信箱与好友',
+    subtitle: '收长信、短笺和请柬，也和好友说说话',
     icon: MessageCircle,
     loader: () => import('./FriendsPanel.vue'),
     size: 'wide',

@@ -20,29 +20,57 @@ export function usePartnerProfile() {
   const busy = ref(false)
   const error = ref('')
   const feedback = ref('')
+  let loadRequest = 0
+  let selecting = false
 
   const selectedPet = computed(() => profile.value?.selectedPet ?? profile.value?.pets[0])
   const wallet = computed(() => profile.value?.wallet ?? { coinBalance: 0, lifetimeCoins: 0 })
 
   async function load(showLoading = true) {
+    if (selecting) return
+    const request = ++loadRequest
     if (showLoading) loading.value = true
     error.value = ''
     try {
-      profile.value = await api.get<PartnerProfile>('/partners/profile')
+      const loaded = await api.get<PartnerProfile>('/partners/profile')
+      if (request !== loadRequest) return
+      profile.value = loaded
       window.dispatchEvent(new CustomEvent('better-self:partners-updated'))
     } catch {
-      error.value = '伙伴资料暂时无法加载'
+      if (request === loadRequest) error.value = '伙伴资料暂时无法加载'
     } finally {
-      if (showLoading) loading.value = false
+      if (request === loadRequest) loading.value = false
     }
   }
 
   async function selectPet(pet: Pet) {
-    if (pet.selected) return
-    await api.post(`/partners/pets/${pet.publicId}/select`)
-    feedback.value = `已切换到 ${pet.name}`
-    await load(false)
-    notifyDataChanged(['partners', 'profile'])
+    if (pet.selected || busy.value) return false
+    busy.value = selecting = true
+    // A GET started before the selection must not restore the old selected pet.
+    ++loadRequest
+    loading.value = false
+    error.value = feedback.value = ''
+    try {
+      const selected = await api.post<Pet>(`/partners/pets/${encodeURIComponent(pet.publicId)}/select`)
+      if (profile.value) {
+        profile.value = {
+          ...profile.value,
+          selectedPet: selected,
+          pets: profile.value.pets.map(item => item.publicId === selected.publicId
+            ? selected : { ...item, selected: false }),
+        }
+      }
+      feedback.value = `已切换到 ${selected.name}`
+      // Keep this store locked during synchronous data-sync callbacks; other views refresh normally.
+      notifyDataChanged(['partners', 'profile'])
+      window.dispatchEvent(new CustomEvent('better-self:partners-updated'))
+      return true
+    } catch {
+      error.value = '伙伴切换失败，请重试'
+      return false
+    } finally {
+      busy.value = selecting = false
+    }
   }
 
   /** 互动一次（好感度 +N，每天首次才有奖励）；失败时把错误信息写进 error 并返回 null。 */
@@ -75,12 +103,13 @@ export function usePartnerProfile() {
 
   /** 购买并使用一件商品；金币不足或物种不符会先在本地拦截，服务端仍会二次校验。 */
   async function purchase(item: ShopItem): Promise<{ item: ShopItem; pet: Pet } | null> {
-    if (!selectedPet.value) return null
+    if (!selectedPet.value || busy.value) return null
     if (itemDisabled(item)) {
       error.value = item.price > wallet.value.coinBalance ? '金币不足，完成今日任务可以获得金币' : `${item.name} 仅适合${item.speciesName}，换一件试试`
       return null
     }
     error.value = ''
+    busy.value = true
     try {
       const result = await api.post<{ item: ShopItem; pet: Pet }>('/partners/purchase', { petPublicId: selectedPet.value.publicId, itemPublicId: item.publicId })
       feedback.value = `${result.item.name} 已使用，${result.pet.name} 好感度 +${result.item.affectionGain}`
@@ -90,11 +119,14 @@ export function usePartnerProfile() {
     } catch (err) {
       error.value = (err as Partial<ApiError> | null)?.code === 'INSUFFICIENT_COINS' ? '金币不足，完成今日任务可以获得金币' : '购买失败，请稍后重试'
       return null
+    } finally {
+      busy.value = false
     }
   }
 
   /** 创建新伙伴或修改现有伙伴的名字/种类/颜色。 */
   async function savePet(mode: PetFormMode, form: { speciesCode: string; name: string; breed: string; furColor: string }) {
+    if (busy.value) return false
     busy.value = true
     error.value = ''
     try {

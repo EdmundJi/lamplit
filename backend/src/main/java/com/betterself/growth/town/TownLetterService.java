@@ -47,6 +47,10 @@ public class TownLetterService {
         if (!LETTER_KINDS.contains(kind)) {
             throw new IllegalArgumentException("unknown town letter kind: " + kind);
         }
+        if (("CONFIDANT".equals(senderKind) && !"LONG".equals(kind))
+            || ("NPC".equals(senderKind) && "LONG".equals(kind))) {
+            throw new IllegalArgumentException("town letter sender and track mismatch");
+        }
         if (body == null || body.isBlank()) {
             throw new IllegalArgumentException("town letter body must not be blank");
         }
@@ -57,9 +61,20 @@ public class TownLetterService {
                 values (?, ?, ?, ?, ?, ?, ?, null, ?)
                 """,
             ids.next(), recipientUserId, senderKind, senderRef, kind, body,
-            Timestamp.valueOf(deliverAt), Timestamp.valueOf(LocalDateTime.now(clock))
+            Timestamp.from(deliverAt.atZone(clock.getZone()).toInstant()), Timestamp.from(clock.instant())
         );
     }
+
+    /** Map badges use this projection so polling never fetches private letter bodies. */
+    public UnreadCountView unreadCount(long userId) {
+        Integer count = jdbc.queryForObject("""
+            select count(*) from town_letter
+            where recipient_user_id = ? and deliver_at <= ? and read_at is null
+            """, Integer.class, userId, Timestamp.from(clock.instant()));
+        return new UnreadCountView(count == null ? 0 : count);
+    }
+
+    public record UnreadCountView(int unreadCount) {}
 
     /** {@code GET /api/v1/town/letters}：只看已经到了投递时间的信，含未读数。 */
     public LetterInboxView inbox(long userId) {
@@ -78,7 +93,7 @@ public class TownLetterService {
                 rs.getTimestamp("read_at") == null ? null : rs.getTimestamp("read_at").toInstant(),
                 rs.getTimestamp("created_at").toInstant()
             ),
-            userId, Timestamp.valueOf(now)
+            userId, Timestamp.from(clock.instant())
         );
 
         Map<String, String> npcNames = npcDisplayNames(userId, rows);
@@ -99,15 +114,15 @@ public class TownLetterService {
     /** {@code POST /api/v1/town/letters/{id}/read}：幂等——已读的信再读一次不报错也不重复计数。 */
     public void markRead(long userId, String letterPublicId) {
         Integer exists = jdbc.queryForObject(
-            "select count(*) from town_letter where public_id = ? and recipient_user_id = ?",
-            Integer.class, letterPublicId, userId
+            "select count(*) from town_letter where public_id = ? and recipient_user_id = ? and deliver_at <= ?",
+            Integer.class, letterPublicId, userId, Timestamp.from(clock.instant())
         );
         if (exists == null || exists == 0) {
             throw new ApiException(HttpStatus.NOT_FOUND, "TOWN_LETTER_NOT_FOUND", "没有这封信");
         }
         jdbc.update(
             "update town_letter set read_at = ? where public_id = ? and recipient_user_id = ? and read_at is null",
-            Timestamp.valueOf(LocalDateTime.now(clock)), letterPublicId, userId
+            Timestamp.from(clock.instant()), letterPublicId, userId
         );
     }
 

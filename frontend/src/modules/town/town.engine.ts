@@ -4,18 +4,22 @@
  */
 import type PhaserNs from 'phaser'
 import { activityFor, buildBlueprint, hashString, whereShouldBe } from './building-kit'
+import { installTownProbe } from './town-probe'
 import type { TownVenue, VenueAction } from './building-kit'
 import { academyResidents, createAcademyScene } from './academy.scene'
 import { RESIDENT_WALK_SPEED, RUN_ANIM_SCALE, dominantDirection, movementDelta, moveSpeed, registerGreet, shouldGreet, stepToward, stepTowardPoint } from './walkers'
 import type { Direction4, GreetCooldowns, WalkDirection } from './walkers'
 import { buildTownCollisionWorld, canStand, nearestStandable, resolveMove } from './collision'
+import { findPath } from './pathfinding'
+import { gardenDistrict, pointAlongRoute } from './town-spaces'
+import { eventTitle, type TownEventView } from './town-events'
 import type { CollisionWorld, Point, FurnitureObstacle } from './collision'
 import type { ResidentActivity, TownModel, TownResident } from './town.types'
 import { createInteriorScene, interiorSceneKey } from './interior.scene'
 import type { InteriorOptions, InteriorPet, InteriorPetSpecies, InteriorPlayer } from './interior.scene'
 import { parseRoomMap } from './map-loader'
-import type { RoomResident } from './map-loader'
 import { TownAtmosphere } from './atmosphere'
+import { weatherForDate, npcWhereabouts, minuteInZone } from './world-life'
 import { presenceTarget, shouldTeleport, createPresenceReporter } from './presence'
 import type { PresencePayload } from './presence'
 import {
@@ -27,11 +31,11 @@ import {
 } from './town-furniture'
 import type { FurnitureItem, VenueFurniture, GroundDetail } from './town-furniture'
 import type { TownNpcView, InitiativeBudget, NpcActivity, NpcDayPlan, NpcPlace } from './town-npc.types'
-import { placeFor, densityCap, selectVisible, verticalJitter, depthForY } from './npc-placement'
+import { placeFor, densityCap, verticalJitter, depthForY } from './npc-placement'
 import type { TownLayout } from './npc-placement'
 import { buildItinerary, nextLeg } from './observation-mode'
 import type { ObservationLeg } from './observation-mode'
-import { bubbleTierFor, pointsToPlay, canInitiate, consume, layoutBubbles } from './talking-bubbles'
+import { bubbleTierFor, pointsToPlay, canInitiate, consume, layoutBubbles, wrapSpeech, peerBubbleTier } from './talking-bubbles'
 import type { BubbleBox, CameraRect } from './talking-bubbles'
 import { positionAt, dayPlanFallback } from './day-plan'
 import { shouldPauseForGreeting, shouldSeekRoadsideShelter, PASSING_GREETING_PAUSE_MS } from './roadside-episodes'
@@ -40,8 +44,14 @@ import type { Achievement } from '../achievements/achievement.types'
 import type { PartnerProfile } from '../partners/partner.types'
 
 export type TownSelection = string | 'npc:assistant' | 'npc:postman' | 'academy' | 'home' | null
+export type TownTravel = { place: string; label: string; phase: 'walking' | 'arrived' | 'blocked' }
+export type TownNearby = { id: string; label: string; action: string }
 export type TownHandlers = {
+  onObservationChange?: (enabled: boolean) => void
+  onTravelChange?: (travel: TownTravel | null) => void
+  onNearbyChange?: (nearby: TownNearby | null) => void
   onSelect?: (selection: TownSelection) => void
+  onRoomChange?: (room: string | null) => void
   /** Fired whenever the camera finishes transitioning into/out of the academy interior. */
   onAcademyChange?: (inside: boolean) => void
   /** Called when self avatar stops or at throttled interval; engine reports presence to backend. */
@@ -62,14 +72,19 @@ export type TownHandlers = {
 export type TownGame = {
   /** Hands the engine the town's NPC roster (GET /town/npcs). Safe to call repeatedly. */
   applyNpcs: (npcs: TownNpcView[], budget: InitiativeBudget) => void
+  applyEvents?: (events: TownEventView[]) => void
   /** 观察模式: detaches the camera from the player and glides it between points of interest. */
   setObservation: (on: boolean) => void
   /** 用服务端返回的权威额度覆盖本地的乐观值。刻意不复用 `applyNpcs`——那会整批重建走位。 */
   setInitiativeBudget: (budget: InitiativeBudget) => void
+  setLetterUnread?: (count: number) => void
   setNight(night: boolean): void
   /** Turns the self avatar's run mode on/off; holding Shift runs regardless of this toggle. */
   setRun(running: boolean): void
   focus(publicId: string): void
+  travelTo?(place: string): void
+  cancelTravel?(): void
+  interactNearby?(): void
   /** Updates residents' schedules/activity in place; rebuilds only the plots whose blueprint changed. */
   applyModel(model: TownModel): void
   /** Camera pan + roof-prop drop + particle burst + a brief "done" bubble over the resident. Queued, one at a time. */
@@ -138,6 +153,7 @@ const EMOTES: Record<ResidentActivity | 'mail' | 'question' | 'heart', [number, 
 }
 
 type Walker = {
+  catchupPath?: Point[]
   sprite: PhaserNs.GameObjects.Sprite
   label: PhaserNs.GameObjects.Text
   emote: PhaserNs.GameObjects.Sprite | null
@@ -259,7 +275,7 @@ export type NpcFrame = {
   activity: NpcActivity
   walking: boolean
   /** WALKING 时朝哪边走；AT（站定）时是 null——朝向由已经在播的待机动画决定，不需要改。 */
-  facing: WalkDirection | null
+  facing: Direction4 | null
   /** WALKING 时是终点 x；AT 时就是自己的 x。只用来给 detectGreetings 判断朝向的符号，不是
    * 真的还有一个"目标点"要走过去——positionAt 的 progress 已经把位置算死了。 */
   targetX: number
@@ -282,18 +298,25 @@ export function resolveNpcFrame(
   layout: TownLayout,
   streetY: number,
 ): NpcFrame {
+  const endpoint = (place: NpcPlace) => {
+    const spread = venueOffset(npcCode, place)
+    return { x: placeFor(place, layout) + spread.dx, y: (place === 'park' ? layout.parkY ?? streetY : streetY) + verticalJitter(npcCode, place) }
+  }
   const position = positionAt(dayPlan, minuteOfDay)
   if (position.kind === 'AT') {
-    const spread = venueOffset(npcCode, position.place)
-    const x = placeFor(position.place, layout) + spread.dx
-    const y = streetY + verticalJitter(npcCode, position.place)
+    const { x, y } = endpoint(position.place)
     return { x, y, depth: depthForY(y), activity: position.activity, walking: false, facing: null, targetX: x }
   }
-  const fromX = placeFor(position.fromPlace, layout)
-  const toX = placeFor(position.toPlace, layout)
-  const x = fromX + (toX - fromX) * position.progress
-  const y = streetY
-  return { x, y, depth: depthForY(y), activity: 'walking', walking: true, facing: toX >= fromX ? 'right' : 'left', targetX: toX }
+  const from = endpoint(position.fromPlace)
+  const to = endpoint(position.toPlace)
+  let route = [from, to]
+  if (layout.branchX !== undefined && layout.parkY !== undefined && (position.fromPlace === 'park' || position.toPlace === 'park')) {
+    const corner = [{ x: layout.branchX, y: streetY }, { x: layout.branchX, y: layout.parkY }]
+    route = position.toPlace === 'park' ? [from, ...corner, to] : [from, ...corner.reverse(), to]
+  }
+  const { x, y } = pointAlongRoute(route, position.progress)
+  const ahead = pointAlongRoute(route, Math.min(1, position.progress + .001))
+  return { x, y, depth: depthForY(y), activity: 'walking', walking: true, facing: dominantDirection(ahead.x - x, ahead.y - y, 'down'), targetX: to.x }
 }
 
 /** 带小数的"当地时间自 00:00 起的分钟数"——带小数才能让 WALKING 的插值逐帧平滑，而不是整
@@ -342,7 +365,7 @@ function characterSheet(publicId: string) {
 }
 
 function worldWidth(count: number) {
-  return Math.max(2600, PLOT_START + count * PLOT_PITCH + 320)
+  return Math.max(2600, PLOT_START + (count + 2) * PLOT_PITCH + 320)
 }
 
 export function plotX(index: number) {
@@ -363,13 +386,21 @@ function plotSignatureFor(resident: TownResident): string {
 
 export async function createTownGame(container: HTMLElement, model: TownModel, handlers: TownHandlers = {}): Promise<TownGame> {
   const Phaser = (await import('phaser')).default
+  // 诊断探针要早于 preload 装好，否则加载图集/JSON 时抛的错没人接（那正是最容易
+  // 把整个 create() 打断、又最不容易被发现的一类错）。生产构建里 DEV 为 false，整段被摇掉。
+  if (import.meta.env.DEV) installTownProbe()
   const residents = model.residents
   const width = worldWidth(residents.length)
+  const gymPlotX = plotX(residents.length)
+  const cafePlotX = plotX(residents.length + 1)
+  const garden = gardenDistrict(width)
   const academyDoorX = ACADEMY_X + SCHOOL_WIDTH / 2 + 8
   // 一人一镇的 NPC 名册。挂在模块作用域而不是场景上，因为名册是异步到的，可能比场景先到也可能后到。
   let townNpcRoster: TownNpcView[] = []
   let initiativeBudget: InitiativeBudget = { limit: 3, used: 0 }
   let observationOn = false
+  let townEvents: TownEventView[] = []
+  let letterUnread = 0
   const courtX = YARD_X + 220
   const parkX = academyDoorX - 60
   // The self avatar can only walk the paved street between the yard and the far edge of town.
@@ -389,12 +420,17 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
    * 淡出撞在一起。 */
   let activeRoomKey: string | null = null
   let roomBusy = false
+  let queuedDestination: string | null = null
 
   // Presence reporter: throttles self position updates to backend
   const presenceReporter = createPresenceReporter(
     (payload) => { handlers.onPresenceReport?.(payload) },
     3000
   )
+
+  function isWorldPointer(pointer: PhaserNs.Input.Pointer) {
+    return pointer?.event?.target === game.canvas
+  }
 
   function runCelebrationQueue() {
     if (celebrationBusy || celebrationQueue.length === 0) return
@@ -418,6 +454,18 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
     plotObjects = new Map<string, PhaserNs.GameObjects.GameObject[]>()
     plotSignature = new Map<string, string>()
     selfWalker: Walker | null = null
+    selfPath: Point[] = []
+    travel: TownTravel | null = null
+    nearby: TownNearby | null = null
+    clockFrameAt = -1
+    clockMinute = 0
+    nextPresenceAt = 0
+    nextNearbyAt = 0
+    eventDecor: PhaserNs.GameObjects.GameObject[] = []
+    eventSignature = ''
+    entrances = new Map<string, Point>()
+    publicRoofs = new Map<string, number>()
+    destinationMarker: PhaserNs.GameObjects.Graphics | null = null
     selfKeys: SelfKeys | null = null
     /** HUD toggle: every self move runs until it is turned off. Shift always runs regardless. */
     runMode = false
@@ -430,6 +478,7 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
     /** 劳作动画的几何；素材没生成时保持 null，NPC 就退回站着，不报错。 */
     labourGeometry: Record<string, LabourAnim> | null = null
     /** 主动搭话的全镇节流：预算之外再加一层间隔，免得三次额度在同一秒里烧完。 */
+    nextRosterCheckAt = 0
     nextInitiativeAt = 0
     /** Walkable ground + building obstacles the self avatar's free 8-directional movement is
      * checked against; rebuilt whenever a plot's height changes (level up adds a floor). */
@@ -469,10 +518,8 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
     }
 
     create() {
-      this.atmosphere = new TownAtmosphere({ worldWidth: width, worldHeight: WORLD_HEIGHT, groundY: BASELINE })
-      this.atmosphere.attach(this)
       sceneRef = this
-      ;(window as unknown as { __townScene?: TownScene }).__townScene = this
+      if (import.meta.env.DEV) (window as unknown as { __townScene?: TownScene }).__townScene = this
       this.createSharedAnimations()
       this.createGlowTexture()
       this.createSparkTexture()
@@ -480,25 +527,53 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
       this.drawBackdrop()
       this.drawAcademy()
       residents.forEach((resident, index) => { this.residentIndex.set(resident.publicId, index); this.drawPlot(resident, index) })
+      this.drawPublicPlaces()
+      this.drawGardenDistrict()
+      this.drawTownEvents()
       this.drawStreetFurniture() // 在 buildCollisionWorld 之前绘制，收集碰撞数据
       this.buildCollisionWorld() // 现在包含家具碰撞
       this.drawParkStrip()
       this.drawWildlife()
       this.spawnVehicles()
-      residents.forEach((resident, index) => this.spawnResident(resident, index))
+      residents.forEach((resident, index) => { if (resident.isSelf) this.spawnResident(resident, index) })
       this.spawnNpcs()
       // 名册可能比场景先到（store 已经拉过一次），那就在这里补生成，不必等下一次 applyNpcs。
       if (townNpcRoster.length > 0) this.applyTownNpcs(townNpcRoster)
       this.loadLabourAnimations()
-      this.atmosphere = new TownAtmosphere({ worldWidth: width, worldHeight: WORLD_HEIGHT, groundY: BASELINE })
+      this.atmosphere = new TownAtmosphere({ worldWidth: width, worldHeight: WORLD_HEIGHT, groundY: BASELINE, now: () => { const date = new Date(Date.now() + serverOffsetMs); date.setHours(this.night ? 22 : 12, 0, 0, 0); return date.getTime() } })
       this.atmosphere.attach(this)
       for (let x = 180; x < width; x += 360) this.atmosphere.registerLight({ id: `lamp-${x}`, x, y: BASELINE + 22, kind: 'lamp', radius: 120 })
-      this.atmosphere.followTarget(this.cameras.main, () => this.selfWalker ? ({ x: this.selfWalker.sprite.x, y: this.selfWalker.sprite.y }) : ({ x: academyDoorX, y: BASELINE }))
+      // Camera ownership stays with TownScene (follow, manual pan and observation).
+      this.atmosphere.setWeather(weatherForDate(latestModel.localDate))
+      this.atmosphere.setReducedMotion(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false)
+      this.atmosphere.setVisible(!document.hidden)
       this.nightOverlay = this.add.graphics().fillStyle(0x101c4a, 1).fillRect(0, 0, width, WORLD_HEIGHT).setAlpha(0).setDepth(5000)
       if (desiredNight) this.setNight(true, true)
       if (desiredRun) this.setRunMode(true)
       this.setupCamera()
       this.setupInput()
+      // DOM toolbars and page scrolling can move the canvas without resizing it.
+      // Refresh before Phaser consumes the native event, otherwise clicks use stale offsets.
+      const syncInputBounds = () => this.scale.updateBounds()
+      const nativeEvents = ['pointerdown', 'mousedown', 'touchstart', 'wheel'] as const
+      for (const name of nativeEvents) this.game.canvas.addEventListener(name, syncInputBounds, { capture: true, passive: true })
+      this.events.once('shutdown', () => {
+        for (const name of nativeEvents) this.game.canvas.removeEventListener(name, syncInputBounds, true)
+      })
+      this.scale.on('resize', this.handleViewportResize, this)
+      this.events.once('shutdown', () => this.scale.off('resize', this.handleViewportResize, this))
+      this.events.on('wake', () => {
+        this.clockFrameAt = -1
+        for (const walker of this.walkers) {
+          if (!walker.npc || !walker.dayPlan) continue
+          const frame = resolveNpcFrame(walker.dayPlan, this.npcMinuteOfDay(), walker.npc.code, this.townLayout(), STREET_Y)
+          walker.sprite.setPosition(frame.x, frame.y)
+          walker.frozenUntil = 0
+          walker.catchupPath = []
+          walker.speech?.destroy(); walker.speech = null
+          walker.travelEmote?.destroy(); walker.travelEmote = null
+        }
+      })
       this.setupPresenceListeners()
       this.events.once('shutdown', () => {
         this.atmosphere?.destroy()
@@ -528,17 +603,24 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
     reportSelfPresence() {
       if (!this.selfWalker) return
       const { sprite, facing } = this.selfWalker
+      let scene = 'town'
+      for (const place of ['academy', 'gym', 'cafe', 'park', 'plaza']) {
+        const point = this.entrances.get(place)
+        if (point && Math.hypot(point.x - sprite.x, point.y - sprite.y) <= 110) { scene = `town:${place}`; break }
+      }
       presenceReporter.update({
         x: Math.round(sprite.x),
         y: Math.round(sprite.y),
         facing,
-        scene: 'town',
+        scene,
       })
     }
 
     // ---------- world ----------
 
     groundFrame(column: number, row: number, crossingStart: number) {
+      const wx = column * TILE + TILE / 2, wy = row * TILE + TILE / 2
+      if (garden.walkable.some(r => wx >= r.x && wx <= r.x + r.width && wy >= r.y && wy <= r.y + r.height)) return `sidewalk_${25 + ((column + row) % 4)}`
       const noise = hashString(`${column}:${row}`)
       if (row >= BASELINE_ROW + 2 && row <= BASELINE_ROW + 6 && column >= crossingStart && column < crossingStart + 4) return 'sidewalk_34'
       if (row === BASELINE_ROW || row === BASELINE_ROW + 1) return `sidewalk_${25 + (noise % 4)}`
@@ -587,6 +669,7 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
     }
 
     drawAcademy() {
+      this.entrances.set('academy', { x: academyDoorX, y: BASELINE + 12 })
       const courtBottom = BASELINE - 24
       this.add.image(YARD_X, courtBottom, 'town', 'court_3').setOrigin(0, 1).setDepth(1)
       this.add.image(YARD_X + 8, courtBottom - 352, 'town', 'basketnet_1').setOrigin(0, 1).setDepth(courtBottom - 352)
@@ -605,7 +688,10 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
 
     stackPiece(x: number, bottom: number, frame: string) {
       const image = this.add.image(x, bottom, 'town', frame).setOrigin(0, 1).setDepth(BASELINE - 3)
-      return { image, top: bottom - image.height }
+      // Modular shop signs extend 64px ABOVE the wall seam; they overlap the next floor.
+      const signOverhang = /^(gym|bakery|music|icecream)_/.test(frame) ? 64 : 0
+      if (signOverhang) image.setDepth(BASELINE - 2)
+      return { image, top: bottom - image.height + signOverhang }
     }
 
     drawPlot(resident: TownResident, index: number) {
@@ -638,6 +724,7 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
       objects.push(this.plate(x + PLOT_WIDTH / 2, top - 14, `${title} · LV.${resident.level}${subtitle}`, resident.isSelf ? '#fff4e8' : '#3b312c', resident.isSelf ? '#c85f47' : '#fffdfa'))
       this.buildingCenters.set(resident.publicId, { x: x + PLOT_WIDTH / 2, y: (top + BASELINE) / 2 })
       if (resident.isSelf) {
+        this.entrances.set('home', { x: x + PLOT_WIDTH / 2, y: BASELINE + 12 })
         // M3-1: 自己的房子多一扇"门"——楼上照旧点开信息卡，楼下这一小条改成"走过去敲门进屋"。
         objects.push(...this.drawHomeDoor(x, top, resident.publicId))
       } else {
@@ -671,6 +758,7 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
         const roof = this.roofTop.get(resident.publicId)
         buildings.push({ x: plotX(index), width: PLOT_WIDTH, topY: roof ? roof.y : BASELINE - 200 })
       })
+      buildings.push({ x: gymPlotX, width: PLOT_WIDTH, topY: this.publicRoofs.get('gym') ?? BASELINE - 288 }, { x: cafePlotX, width: PLOT_WIDTH, topY: this.publicRoofs.get('cafe') ?? BASELINE - 288 })
       this.collisionWorld = buildTownCollisionWorld({
         groundMinX,
         groundMaxX,
@@ -681,6 +769,68 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
         buildings,
         furniture: this.furnitureCollisions,
       })
+      this.collisionWorld.walkable.push(...garden.walkable)
+    }
+
+    drawPublicPlaces() {
+      for (const [id, title, x, ground, roof] of [
+        ['gym', '活力健身房', gymPlotX, 'gym_1', 'roof_1'],
+        ['cafe', '街角咖啡馆', cafePlotX, 'bakery_5', 'roof_3'],
+      ] as const) {
+        const base = this.stackPiece(x, BASELINE, ground)
+        const top = this.stackPiece(x, base.top, roof)
+        this.plate(x + PLOT_WIDTH / 2, top.top - 16, title, '#fff9ee', '#355b44')
+        this.publicRoofs.set(id, top.top)
+        this.entrances.set(id, { x: x + PLOT_WIDTH / 2, y: BASELINE + 12 })
+        this.buildingCenters.set(id, { x: x + PLOT_WIDTH / 2, y: BASELINE - 80 })
+        this.plate(x + PLOT_WIDTH / 2, BASELINE - 20, '点击进入 · E', '#fff9ee', '#355b44')
+        this.hitZone(x, top.top, PLOT_WIDTH, BASELINE - top.top, id)
+      }
+      for (const [id, title, x] of [
+        ['plaza', '日光广场', YARD_X + 220],
+      ] as const) {
+        this.plate(x, BASELINE - 110, title, '#fff9ee', '#355b44')
+        this.buildingCenters.set(id, { x, y: STREET_Y })
+        this.entrances.set(id, { x, y: STREET_Y })
+        this.hitZone(x - 60, BASELINE - 110, 120, 36, id)
+      }
+    }
+
+    drawGardenDistrict() {
+      const { park, branchX } = garden
+      this.entrances.set('park', park)
+      this.entrances.set('street', { x: branchX, y: STREET_Y })
+      this.buildingCenters.set('park', park)
+      this.plate(park.x, park.y - 112, '树荫公园 · 转角后的慢时光', '#fff9ee', '#355b44')
+      this.hitZone(park.x - 110, park.y - 148, 220, 48, 'park')
+      this.plate(branchX, BASELINE - 28, '↑ 树荫公园', '#fff9ee', '#355b44')
+      this.hitZone(branchX - 70, BASELINE - 70, 140, 60, 'park')
+      for (let x = branchX - 470; x <= branchX + 50; x += 104) {
+        this.add.image(x, 350, 'town', `tree_${1 + (hashString(String(x)) % 5)}`).setOrigin(0.5, 1).setDepth(350)
+        this.add.image(x, 590, 'town', 'flowerbush_2').setOrigin(0.5, 1).setDepth(590)
+      }
+      this.add.image(park.x - 175, park.y + 28, 'town', 'fountain_1').setOrigin(0.5, 1).setDepth(park.y + 28)
+      this.add.sprite(park.x + 80, park.y + 14, 'town', 'pigeon_1').setOrigin(0.5, 1).setDepth(park.y + 14).play('pigeon-idle')
+    }
+
+    drawTownEvents() {
+      const now = Date.now() + serverOffsetMs
+      const active = townEvents.filter(e => now >= Date.parse(e.startsAt) - 30 * 60_000 && now < Date.parse(e.endsAt ?? e.startsAt) + 30 * 60_000)
+      const signature = active.map(e => e.publicId).join(',')
+      if (signature === this.eventSignature) return
+      this.eventSignature = signature
+      this.eventDecor.forEach(obj => obj.destroy())
+      this.eventDecor = []
+      for (const event of active) {
+        const center = this.entrances.get(event.venue)
+        if (!center) continue
+        const decorations: PhaserNs.GameObjects.GameObject[] = []
+        const string = this.add.graphics().lineStyle(2, 0x665d43, 1).lineBetween(center.x - 120, center.y - 115, center.x + 120, center.y - 115).setDepth(2000)
+        for (let i = 0; i < 9; i++) string.fillStyle(i % 2 ? 0xf4b46a : 0xe9dda1, 1).fillCircle(center.x - 112 + i * 28, center.y - 110, 4)
+        decorations.push(string, this.plate(center.x, center.y - 132, `${event.hostName} · ${eventTitle(event.kind)}`, '#fff9ee', '#7a5640'))
+        decorations.push(this.add.image(center.x + 120, center.y + 40, 'town', 'foodcart_1').setOrigin(0, 1).setDepth(center.y + 40))
+        this.eventDecor.push(...decorations)
+      }
     }
 
     drawStreetFurniture() {
@@ -695,14 +845,14 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
       }
 
       // 场地配套家具：健身房（假设在第一个商店位置）、咖啡馆（第二个）、公园入口（学院前）
-      const gymX = PLOT_START
-      const cafeX = PLOT_START + PLOT_PITCH
-      const parkX = ACADEMY_X - 100
+      const gymX = gymPlotX
+      const cafeX = cafePlotX
+      const parkX = garden.park.x
 
       this.venueFurniture = [
         createGymFurniture(gymX + PLOT_WIDTH / 2, BASELINE),
         createCafeFurniture(cafeX + PLOT_WIDTH / 2, BASELINE),
-        createParkFurniture(parkX, BASELINE),
+        createParkFurniture(parkX, garden.park.y),
       ]
 
       // 街道家具（密集布置）
@@ -732,7 +882,7 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
       if (item.collision) {
         this.furnitureCollisions.push({
           x: item.x + item.collision.offsetX,
-          y: item.y + item.collision.offsetY,
+          y: item.y - item.collision.height,
           width: item.collision.width,
           height: item.collision.height,
         })
@@ -740,8 +890,8 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
 
       // 可交互家具：添加交互区域
       if (item.interactive && item.interactionType) {
-        const hitArea = this.add.zone(item.x, item.y, 80, 80).setOrigin(0.5, 1).setInteractive()
-        hitArea.on('pointerdown', () => this.onFurnitureInteract(item))
+        const hitArea = this.add.zone(item.x, item.y, sprite.width, sprite.height).setOrigin(0, 1).setInteractive({ useHandCursor: true })
+        hitArea.on('pointerup', (pointer: PhaserNs.Input.Pointer) => { if (isWorldPointer(pointer) && this.dragStart && !this.dragged) this.onFurnitureInteract(item) })
       }
     }
 
@@ -833,10 +983,13 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
 
     hitZone(x: number, y: number, w: number, h: number, selection: TownSelection) {
       const zone = this.add.zone(x, y, w, h).setOrigin(0).setInteractive({ useHandCursor: true })
-      zone.on('pointerup', () => {
+      zone.on('pointerup', (pointer: PhaserNs.Input.Pointer) => {
+        if (!isWorldPointer(pointer) || !this.dragStart) return
         if (this.dragged) return
         // The academy door walks the self avatar there first (task 6); building plots select immediately.
-        if (selection === 'academy') this.walkSelfToAndSelect(academyDoorX, STREET_Y, selection)
+        if (selection === 'academy') this.travelToPlace('academy')
+        else if (selection === this.selfWalker?.resident?.publicId) this.travelToPlace('home')
+        else if (selection && ['gym', 'cafe', 'park', 'plaza'].includes(selection)) this.travelToPlace(selection)
         else handlers.onSelect?.(selection)
       })
       return zone
@@ -860,9 +1013,10 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
       const objects: PhaserNs.GameObjects.GameObject[] = []
       if (doorTop > top) objects.push(this.hitZone(x, top, PLOT_WIDTH, doorTop - top, publicId))
       const doorZone = this.add.zone(doorLeft, doorTop, doorWidth, doorHeight).setOrigin(0).setInteractive({ useHandCursor: true })
-      doorZone.on('pointerup', () => {
+      doorZone.on('pointerup', (pointer: PhaserNs.Input.Pointer) => {
+        if (!isWorldPointer(pointer) || !this.dragStart) return
         if (this.dragged) return
-        this.walkSelfToAndSelect(doorLeft + doorWidth / 2, BASELINE + 8, 'home')
+        this.travelToPlace('home')
       })
       objects.push(doorZone)
       return objects
@@ -895,11 +1049,13 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
       const columns = Math.floor((this.textures.get(sheet).getSourceImage() as HTMLImageElement).width / 32)
       const sprite = this.add.sprite(x, STREET_Y, sheet, columns + 18).setOrigin(0.5, 1).setDepth(STREET_Y)
       sprite.setInteractive({ useHandCursor: true })
-      sprite.on('pointerup', () => {
+      sprite.on('pointerup', (pointer: PhaserNs.Input.Pointer) => {
+        if (!isWorldPointer(pointer) || !this.dragStart) return
         if (this.dragged) return
         // Clicking the guide/postman walks the self avatar to them first (task 6); a neighbour
         // or one's own sprite is selected immediately, same as clicking their building.
-        if (selection === 'npc:assistant' || selection === 'npc:postman') this.walkSelfToAndSelect(sprite.x, sprite.y, selection)
+        if (selection?.startsWith('npc:')) this.walkSelfToAndSelect(sprite.x, sprite.y, selection)
+        else if (walker.npc?.layer === 3) this.saySomething(walker, `我${npcWhereabouts(walker.npc, this.npcMinuteOfDay())}，待会儿见。`)
         else handlers.onSelect?.(selection)
       })
       const label = this.add.text(x, STREET_Y + 4, name, {
@@ -926,7 +1082,7 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
       // Use presence spawn point if available and matches current scene
       let spawnX = homeX
       let spawnY = STREET_Y
-      if (resident.presence && resident.presence.scene === 'town') {
+      if (resident.presence && (resident.presence.scene === 'town' || resident.presence.scene.startsWith('town:'))) {
         spawnX = resident.presence.x
         spawnY = resident.presence.y
       }
@@ -943,12 +1099,12 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
       )
 
       // Initialize lastPresence for tracking
-      if (resident.presence && resident.presence.scene === 'town') {
+      if (resident.presence && (resident.presence.scene === 'town' || resident.presence.scene.startsWith('town:'))) {
         walker.lastPresence = { x: resident.presence.x, y: resident.presence.y }
       }
 
       // Adjust spawn y for self avatar (spawnWalker always uses STREET_Y for initial position)
-      if (resident.isSelf && resident.presence && resident.presence.scene === 'town') {
+      if (resident.isSelf && resident.presence && (resident.presence.scene === 'town' || resident.presence.scene.startsWith('town:'))) {
         walker.sprite.y = spawnY
         walker.targetY = spawnY
         walker.sprite.setDepth(spawnY)
@@ -966,6 +1122,16 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
       postman.patrol = [ACADEMY_X - 100, width - 160]
       postman.targetX = width - 160
       postman.state = 'walk'
+      this.applyLetterUnread()
+    }
+
+    applyLetterUnread() {
+      const postman = this.walkers.find(w => w.id === 'npc:postman')
+      if (!postman) return
+      const label = letterUnread > 0 ? `邮递员 · ${letterUnread} 封未读信` : latestModel.unread > 0 ? `邮递员 · ${latestModel.unread} 条好友消息` : '邮递员'
+      postman.label.setText(label)
+      if (letterUnread > 0 && !postman.emote) postman.emote = this.add.sprite(postman.sprite.x, postman.sprite.y - 66, 'emotes', EMOTES.mail[0]).setOrigin(0.5, 1).setDepth(4002).play('emote-mail')
+      if (letterUnread === 0 && latestModel.unread === 0) { postman.emote?.destroy(); postman.emote = null }
     }
 
     // ---------- 小镇社会: 18 个 NPC 的生成、日程与气泡 ----------
@@ -975,9 +1141,11 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
       return {
         academyDoorX,
         plotStartX: PLOT_START,
-        gymX: PLOT_START + PLOT_WIDTH / 2,
-        cafeX: PLOT_START + PLOT_PITCH + PLOT_WIDTH / 2,
-        parkX: ACADEMY_X - 100,
+        gymX: gymPlotX + PLOT_WIDTH / 2,
+        cafeX: cafePlotX + PLOT_WIDTH / 2,
+        parkX: garden.park.x,
+        parkY: garden.park.y,
+        branchX: garden.branchX,
         plazaMinX: YARD_X + 120,
         plazaMaxX: YARD_X + 320,
         worldWidth: width,
@@ -992,14 +1160,22 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
      * 让街上的人闪来闪去。
      */
     applyTownNpcs(list: TownNpcView[]) {
-      for (const walker of this.walkers.filter(item => item.npc !== null)) this.despawnWalker(walker)
-      const hour = new Date(Date.now() + serverOffsetMs).getHours()
-      const visible = selectVisible(
-        list.map(npc => ({ code: npc.code, layer: npc.layer, schedule: npc.schedule, npc })),
-        hour,
-        densityCap(hour),
-      )
-      for (const entry of visible) this.spawnTownNpc(entry.npc)
+      const minute = this.npcMinuteOfDay()
+      const candidates = list.filter(npc => {
+        if (npc.layer === 1) return false // guide and postman already have dedicated actors
+        const position = positionAt(npc.dayPlan ?? dayPlanFallback(npc.schedule), minute)
+        return position.kind === 'WALKING' || position.place !== 'home'
+      }).sort((a, b) => a.layer - b.layer || a.code.localeCompare(b.code))
+      const visible = candidates.slice(0, Math.max(0, densityCap(minute / 60) - 2))
+      const codes = new Set(visible.map(npc => npc.code))
+      for (const walker of [...this.walkers]) {
+        if (walker.npc && !codes.has(walker.npc.code)) this.despawnWalker(walker)
+      }
+      for (const npc of visible) {
+        const existing = this.walkers.find(walker => walker.npc?.code === npc.code)
+        if (existing) { existing.npc = npc; existing.dayPlan = npc.dayPlan ?? dayPlanFallback(npc.schedule) }
+        else this.spawnTownNpc(npc)
+      }
     }
 
     /** 生成一个 18-人名册的 walker。初始坐标直接用 resolveNpcFrame（M7-6）算——和每帧的
@@ -1030,8 +1206,7 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
       walker.sprite.y = frame.y
       walker.targetY = frame.y
       walker.sprite.setDepth(frame.depth)
-      walker.npcActivity = frame.activity
-      if (!frame.walking) walker.action = frame.activity === 'reading' ? 'read' : frame.activity === 'phone' ? 'phone' : 'idle'
+      walker.npcActivity = null // first update must start the scheduled animation
     }
 
     despawnWalker(walker: Walker) {
@@ -1046,7 +1221,11 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
     /** 带小数的当地分钟数，供 resolveNpcFrame 用；serverOffsetMs 校准到服务器时钟（同
      * evaluateSchedule 等既有代码对 Date.now() 的用法），算术部分留在纯函数 minuteOfLocalDay 里。 */
     npcMinuteOfDay() {
-      return minuteOfLocalDay(Date.now() + serverOffsetMs)
+      if (this.clockFrameAt !== this.time.now) {
+        this.clockFrameAt = this.time.now
+        this.clockMinute = minuteInZone(Date.now() + serverOffsetMs, latestModel.residents.find(r => r.isSelf)?.timezone ?? 'Asia/Shanghai')
+      }
+      return this.clockMinute
     }
 
     /**
@@ -1056,15 +1235,17 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
      * 站着"。dayPlan 缺省（旧后端还没发）时退回 dayPlanFallback(schedule)——引擎永远只有这一
      * 条渲染路径，不必分叉判断。
      */
-    updateNpcWalker(walker: Walker, now: number) {
+    updateNpcWalker(walker: Walker, now: number, delta: number) {
       const npc = walker.npc
       if (!npc) return
       // 冻结中（既有的擦肩打招呼、或 M7-9 的路上插曲）：原地不动，等冻结过去再继续渲染。这几
       // 秒会让画面"跳过" positionAt 本该给出的中间位置，是刻意的取舍（见 roadside-episodes.ts
       // 头部的硬约束）——冻结只改这一帧画在哪儿，绝不回头去改 positionAt 的输入或输出。
       if (walker.frozenUntil > now) return
+      const resuming = walker.frozenUntil !== 0
       if (walker.frozenUntil !== 0) {
         walker.frozenUntil = 0
+        walker.npcActivity = null
         walker.travelEmote?.destroy()
         walker.travelEmote = null
       }
@@ -1072,18 +1253,33 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
       const frame = resolveNpcFrame(walker.dayPlan, this.npcMinuteOfDay(), npc.code, this.townLayout(), STREET_Y)
       const shelterActive = frame.walking && walker.shelterUntil > now
       const y = shelterActive ? frame.y - ROADSIDE_SHELTER_OFFSET_PX : frame.y
-      walker.sprite.setPosition(frame.x, y)
-      walker.sprite.setDepth(frame.depth)
+      const previous = { x: walker.sprite.x, y: walker.sprite.y }
+      if (resuming) {
+        const publicFloor = { walkable: this.collisionWorld.walkable, obstacles: this.collisionWorld.obstacles.slice(0, residents.length + 3) }
+        walker.catchupPath = findPath(previous, { x: frame.x, y }, publicFloor) ?? []
+      }
+      let target = walker.catchupPath?.[0] ?? { x: frame.x, y }
+      if (Math.hypot(target.x - previous.x, target.y - previous.y) < 1 && walker.catchupPath?.length) {
+        walker.sprite.setPosition(target.x, target.y)
+        previous.x = target.x; previous.y = target.y
+        walker.catchupPath.shift()
+        target = walker.catchupPath[0] ?? { x: frame.x, y }
+      }
+      const next = stepTowardPoint(previous, target, RESIDENT_WALK_SPEED, delta)
+      walker.sprite.setPosition(next.x, next.y)
+      walker.sprite.setDepth(next.y)
+      const walking = frame.walking || Math.hypot(frame.x - next.x, y - next.y) > 2
+      const facing = dominantDirection(next.x - previous.x, next.y - previous.y, walker.facing)
       walker.targetX = frame.targetX
       walker.targetY = y
-      walker.state = frame.walking ? 'walk' : 'act'
+      walker.state = walking ? 'walk' : 'act'
 
-      if (frame.walking) {
+      if (walking) {
         // 在路上：朝向跟着走，动作永远是走路——劳作/读书/打电话那些动作只在"到达后"才播
         // （下面的 AT 分支），这正是 M7-7 要的"到达后再播活动动画"。
-        if (walker.npcActivity !== 'walking' || walker.facing !== frame.facing) {
+        if (walker.npcActivity !== 'walking' || walker.facing !== facing) {
           walker.npcActivity = 'walking'
-          if (frame.facing) walker.facing = frame.facing
+          walker.facing = facing
           this.restoreSheet(walker)
           walker.sprite.play(`${walker.sheet}-walk-${walker.facing}`, true)
         }
@@ -1110,7 +1306,7 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
       walker.episodeCheckAt = now + ROADSIDE_EPISODE_CHECK_MS // 节流：不必每帧都掷一次骰子
       // 擦肩打招呼：身边真有人（没在冻结中）才判定，免得空无一人的路上也频繁掷骰子。
       const passerby = this.walkers.some(other =>
-        other !== walker && other.frozenUntil <= now && Math.abs(other.sprite.x - walker.sprite.x) < ROADSIDE_PASSING_DISTANCE_PX)
+        other !== walker && other.frozenUntil <= now && Math.hypot(other.sprite.x - walker.sprite.x, other.sprite.y - walker.sprite.y) < ROADSIDE_PASSING_DISTANCE_PX)
       if (passerby && shouldPauseForGreeting()) {
         walker.frozenUntil = now + PASSING_GREETING_PAUSE_MS
         walker.travelEmote?.destroy()
@@ -1129,7 +1325,7 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
     saySomething(walker: Walker, text: string, holdMs = BUBBLE_HOLD_MS) {
       walker.speech?.destroy()
       const label = this.add.text(0, 0, text, {
-        fontFamily: FONT, fontSize: '13px', color: '#2a211c', wordWrap: { width: 208 },
+        fontFamily: FONT, fontSize: '13px', color: '#2a211c', wordWrap: { callback: (text: string) => wrapSpeech(text, 16) },
         align: 'center', lineSpacing: 3,
       }).setOrigin(0.5, 1).setResolution(3)
       const padX = 9
@@ -1164,10 +1360,17 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
      * 重叠的 positionSpeech。
      */
     layoutSpeechBubbles() {
-      const speakers = this.walkers.filter(walker => walker.speech !== null)
-      if (speakers.length === 0) return
+      const allSpeakers = this.walkers.filter(walker => walker.speech !== null)
+      if (allSpeakers.length === 0) return
       const camera = this.cameras.main
-      const cameraRect: CameraRect = { x: camera.scrollX, y: camera.scrollY, width: camera.width / camera.zoom, height: camera.height / camera.zoom }
+      const origin = camera.getWorldPoint(0, 0)
+      const cameraRect: CameraRect = { x: origin.x + 12 / camera.zoom, y: origin.y + 80 / camera.zoom, width: (camera.width - 24) / camera.zoom, height: (camera.height - 150) / camera.zoom }
+      const speakers = allSpeakers.filter(walker => {
+        const visible = walker.sprite.x >= origin.x && walker.sprite.x <= origin.x + camera.width / camera.zoom && walker.sprite.y >= origin.y && walker.sprite.y <= origin.y + camera.height / camera.zoom
+        walker.speech?.setVisible(visible)
+        return visible
+      }).slice(0, 3)
+      for (const walker of allSpeakers) if (!speakers.includes(walker)) walker.speech?.setVisible(false)
       const boxes: BubbleBox[] = speakers.map(walker => {
         const container = walker.speech as PhaserNs.GameObjects.Container
         const halfWidth = (container.getData('halfWidth') as number) ?? 0
@@ -1186,16 +1389,26 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
      * 两个 NPC 撞上了就各自说一句（plan §3.3）。
      *
      * <p>说什么完全取决于说话人自己 knowledge 里那几条——所以同一个镜头里两个人说的必然不一样。
-     * 这里刻意<b>不</b>按 affinityToPlayer 分档：那是"这个 NPC 和玩家多熟"，和两个 NPC 之间聊不聊
-     * 得起来没有关系。按亲密度分档属于玩家在场的那条路径（maybeInitiate），NPC 彼此之间该用的是
-     * 他们自己的 bond，而那条边目前不在名册接口里。
+     * 只读取两人之间的熟络度分档：生人点头、熟人简聊、亲近的人多聊。
+     * API 不包含隐藏牵挂。玩家在场的主动搭话走独立预算路径。
      */
     speakOnEncounter(a: Walker, b: Walker) {
+      if (a.resident?.isSelf || b.resident?.isSelf) {
+        const npc = a.resident?.isSelf ? b : a
+        if (npc.npc) this.maybeInitiate(npc, this.time.now)
+        return
+      }
+      if (!a.npc || !b.npc) return
+      const tier = peerBubbleTier(a.npc, b.npc)
+      if (tier === 'low') this.saySomething(a, '你好呀。', 1200)
+      const hold = tier === 'high' ? BUBBLE_HOLD_MS * 3 : tier === 'mid' ? BUBBLE_HOLD_MS : 0
+      a.frozenUntil = b.frozenUntil = this.time.now + hold
       for (const walker of [a, b]) {
-        const points = walker.npc?.talkingPoints ?? []
-        if (points.length === 0) continue
-        points.slice(0, 2).forEach((point, index) => {
-          this.time.delayedCall(index * 2400, () => this.saySomething(walker, point.text))
+        const points = pointsToPlay(tier, walker.npc?.talkingPoints ?? [])
+        points.forEach((point, index) => {
+          this.time.delayedCall(index * BUBBLE_HOLD_MS, () => {
+            if (walker.sprite.active) this.saySomething(walker, point.text)
+          })
         })
       }
     }
@@ -1208,7 +1421,7 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
       const npc = walker.npc
       if (!npc || !this.selfWalker) return
       if (now < this.nextInitiativeAt) return
-      if (Math.abs(walker.sprite.x - this.selfWalker.sprite.x) > 90) return
+      if (Math.hypot(walker.sprite.x - this.selfWalker.sprite.x, walker.sprite.y - this.selfWalker.sprite.y) > 90) return
       if (!canInitiate(initiativeBudget, npc.code)) return
       const lines = pointsToPlay(bubbleTierFor(npc.affinityToPlayer), npc.talkingPoints)
       if (lines.length === 0) return
@@ -1281,14 +1494,16 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
       const layout = this.townLayout()
       const y = BASELINE + 10
       return [
-        { x: layout.plazaMinX + 160, y, zoom: OBSERVATION_ZOOM },
+        { x: garden.park.x, y: garden.park.y, zoom: OBSERVATION_ZOOM },
         { x: layout.academyDoorX, y, zoom: OBSERVATION_ZOOM },
         { x: layout.cafeX, y, zoom: OBSERVATION_ZOOM },
       ]
     }
 
     setObservationMode(on: boolean) {
+      if (on === observationOn) return
       observationOn = on
+      handlers.onObservationChange?.(on)
       const camera = this.cameras.main
       if (on) {
         this.releaseCameraFollow()
@@ -1323,11 +1538,13 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
     speakAmbientLine(now: number) {
       if (now < this.nextAmbientLineAt) return
       const camera = this.cameras.main
-      const centerX = camera.scrollX + camera.width / camera.zoom / 2
+      const centerX = camera.getWorldPoint(camera.width / 2, camera.height / 2).x
       // 只挑靠近画面中央的人：站在边上的人说话，气泡会被镜头切掉一半。
       const halfView = camera.width / camera.zoom / 2
+      const centerY = camera.getWorldPoint(camera.width / 2, camera.height / 2).y
       const candidates = this.walkers.filter(walker =>
         walker.npc?.talkingPoints?.length && !walker.speech
+        && Math.abs(walker.sprite.y - centerY) < camera.height / camera.zoom / 2 - 35
         && Math.abs(walker.sprite.x - centerX) < halfView * 0.6)
       if (candidates.length === 0) return
       const walker = candidates[Math.floor(this.time.now / 997) % candidates.length]
@@ -1380,6 +1597,7 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
 
     /** 日程驱动规则: where the resident's schedule says they should be right now, and what to do there. */
     evaluateSchedule(walker: Walker) {
+      if (walker.resident?.isSelf) return walker.sprite.x
       if (!walker.resident) return walker.homeX
       const result = whereShouldBe(walker.resident, Date.now(), serverOffsetMs)
       walker.venue = result.venue
@@ -1409,6 +1627,91 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
     /** Ground/street click: walk the self avatar there, overriding schedule placement for 20s.
      * The clicked point is corrected onto the nearest standable ground first, so clicking on a
      * building or off the map still gives a sensible destination. */
+    routeSelf(target: Point) {
+      const self = this.selfWalker!
+      const route = findPath({ x: self.sprite.x, y: self.sprite.y }, target, this.collisionWorld)
+      if (!route?.length) {
+        self.arriveSelect = null
+        self.state = 'act'
+        self.manualWalk = false
+        self.travelEmote?.destroy()
+        self.travelEmote = null
+        this.selfPath = []
+        if (this.travel) { this.travel = { ...this.travel, phase: 'blocked' }; handlers.onTravelChange?.(this.travel) }
+        this.destinationMarker?.destroy(); this.destinationMarker = null
+        this.saySomething(self, '这里暂时走不到，试试旁边的路吧。', 2500)
+        return false
+      }
+      const next = route.shift()!
+      this.selfPath = route
+      self.targetX = next.x
+      self.targetY = next.y
+      return true
+    }
+
+    travelLabel(place: string) {
+      return ({ home: '我的家', academy: '成长学院', gym: '活力健身房', cafe: '街角咖啡馆', park: '树荫公园', plaza: '日光广场', street: '街角' } as Record<string, string>)[place]
+        ?? this.walkers.find(w => w.id === place || `npc:${w.id}` === place)?.npc?.displayName ?? '这里'
+    }
+
+    cancelTravel() {
+      const self = this.selfWalker
+      if (self) {
+        self.arriveSelect = null
+        self.manualWalk = false
+        self.state = 'act'
+        self.overrideUntil = this.time.now + SELF_OVERRIDE_MS
+        self.travelEmote?.destroy()
+        self.travelEmote = null
+      }
+      this.selfPath = []
+      this.travel = null
+      this.destinationMarker?.destroy()
+      this.destinationMarker = null
+      handlers.onTravelChange?.(null)
+    }
+
+    travelToPlace(place: string) {
+      if (activeRoomKey || academyEntered) {
+        queuedDestination = place
+        if (activeRoomKey) exitRoom(); else exitAcademy()
+        return
+      }
+      if (observationOn) this.setObservationMode(false)
+      const actor = this.walkers.find(w => w.id === place || `npc:${w.id}` === place)
+      const target = this.entrances.get(place) ?? (actor ? { x: actor.sprite.x, y: actor.sprite.y + 12 } : null)
+      if (!target) return
+      this.travel = { place, label: this.travelLabel(place), phase: 'walking' }
+      handlers.onTravelChange?.(this.travel)
+      this.destinationMarker?.destroy()
+      this.destinationMarker = this.add.graphics().lineStyle(2, 0xffdc87, 1).strokeEllipse(target.x, target.y, 30, 12).setDepth(target.y + 1)
+      this.walkSelfToAndSelect(target.x, target.y, place)
+    }
+
+    updateNearby() {
+      const self = this.selfWalker
+      if (!self || this.time.now < this.nextNearbyAt) return
+      this.nextNearbyAt = this.time.now + 150
+      handlers.onPlayerMove?.(self.sprite.x, self.sprite.y)
+      const guide = this.walkers.find(walker => walker.id === 'npc:assistant')
+      if (guide) handlers.onDistanceToGuide?.(Math.hypot(guide.sprite.x - self.sprite.x, guide.sprite.y - self.sprite.y))
+      const candidates: (TownNearby & { distance: number })[] = []
+      for (const [id, point] of this.entrances) {
+        const distance = Math.hypot(self.sprite.x - point.x, self.sprite.y - point.y)
+        if (distance < 88) candidates.push({ id, label: this.travelLabel(id), action: ['home', 'academy', 'gym', 'cafe'].includes(id) ? '进入' : '看看', distance })
+      }
+      for (const walker of this.walkers) {
+        if (walker === self || walker.npc?.layer === 3) continue
+        const distance = Math.hypot(self.sprite.x - walker.sprite.x, self.sprite.y - walker.sprite.y)
+        if (distance < 64) candidates.push({ id: walker.npc ? `npc:${walker.npc.code}` : walker.id, label: walker.npc?.displayName ?? (walker.id === 'npc:postman' ? '邮递员' : '小助'), action: '打招呼', distance })
+      }
+      candidates.sort((a, b) => a.distance - b.distance)
+      const next = candidates[0] ?? null
+      if (next?.id !== this.nearby?.id) { this.nearby = next; handlers.onNearbyChange?.(next) }
+    }
+
+    interactNearby() { if (this.nearby) this.travelToPlace(this.nearby.id) }
+
     walkSelfToGround(worldX: number, worldY: number, run = this.runMode) {
       const self = this.selfWalker
       if (!self) return
@@ -1419,8 +1722,7 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
       self.manualWalk = true
       self.running = run
       if (Math.hypot(target.x - self.sprite.x, target.y - self.sprite.y) < 6) { self.overrideUntil = this.time.now + SELF_OVERRIDE_MS; return }
-      self.targetX = target.x
-      self.targetY = target.y
+      if (!this.routeSelf(target)) return
       self.state = 'walk'
       self.stuckMs = 0
       this.startFollowingSelf()
@@ -1436,8 +1738,7 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
       self.running = run
       if (Math.hypot(target.x - self.sprite.x, target.y - self.sprite.y) < 6) { this.dispatchArrival(selection); return }
       self.arriveSelect = selection
-      self.targetX = target.x
-      self.targetY = target.y
+      if (!this.routeSelf(target)) return
       self.state = 'walk'
       self.stuckMs = 0
       self.travelEmote?.destroy()
@@ -1446,9 +1747,18 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
     }
 
     dispatchArrival(selection: TownSelection) {
-      if (selection === 'academy') enterAcademy()
+      if (this.travel) { this.travel = { ...this.travel, phase: 'arrived' }; handlers.onTravelChange?.(this.travel) }
+      this.destinationMarker?.destroy(); this.destinationMarker = null
+      if (selection?.startsWith('furniture:')) {
+        const item = [...this.streetFurnitureItems, ...this.venueFurniture.flatMap(v => v.items)].find(item => item.id === selection.slice(10))
+        if (item) this.executeFurnitureInteraction(item)
+      }
+      else if (selection === 'academy') enterAcademy()
       // M3-1: 走到自家门口 = 敲门进屋，而不是像其他建筑那样弹一张信息卡。
-      else if (selection === 'home') void enterRoom('home')
+      else if (selection && ['home', 'gym', 'cafe'].includes(selection)) void enterRoom(selection).catch(error => {
+        console.error('Town room failed to open', error)
+        if (sceneRef?.selfWalker) sceneRef.saySomething(sceneRef.selfWalker, '门暂时打不开，稍后再试试。')
+      })
       else handlers.onSelect?.(selection)
     }
 
@@ -1456,6 +1766,7 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
      * input is normalized so it is no faster than a straight move), sliding along walls via the
      * same collision model click-to-walk uses. */
     handleSelfKeys(now: number, delta: number) {
+      if (document.querySelector('[role="dialog"], .resident-moment, .onboarding-overlay:not(.allows-play)') || ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName ?? '') || (document.activeElement as HTMLElement | null)?.isContentEditable) { this.input.keyboard?.resetKeys(); return }
       const self = this.selfWalker
       if (!self || !this.selfKeys || self.frozenUntil > now) return
       const { cursors, keyA, keyD, keyW, keyS, shift } = this.selfKeys
@@ -1466,6 +1777,10 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
       const inputX = left === right ? 0 : left ? -1 : 1
       const inputY = up === down ? 0 : up ? -1 : 1
       if (inputX === 0 && inputY === 0) return
+      if (observationOn) this.setObservationMode(false)
+      if (this.travel || this.selfPath.length) this.cancelTravel()
+      this.selfPath = []
+      this.endFurnitureInteraction()
       const running = this.runMode || Boolean(shift?.isDown)
       self.running = running
       const from: Point = { x: self.sprite.x, y: self.sprite.y }
@@ -1502,6 +1817,7 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
           const b = moving[j]
           const aDir: WalkDirection = a.targetX - a.sprite.x < 0 ? 'left' : 'right'
           const bDir: WalkDirection = b.targetX - b.sprite.x < 0 ? 'left' : 'right'
+          if (Math.abs(a.sprite.y - b.sprite.y) > 48) continue
           if (shouldGreet({ id: a.id, x: a.sprite.x, dir: aDir }, { id: b.id, x: b.sprite.x, dir: bDir }, this.greetCooldowns, now)) {
             this.triggerGreeting(a, b, now)
           }
@@ -1526,6 +1842,13 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
     update(_time: number, delta: number) {
       this.atmosphere?.update(delta)
       const now = this.time.now
+      if (now >= this.nextRosterCheckAt) {
+        this.nextRosterCheckAt = now + 10_000
+        this.applyTownNpcs(townNpcRoster)
+        this.drawTownEvents()
+      }
+      if (now >= this.nextPresenceAt) { this.nextPresenceAt = now + 3000; this.reportSelfPresence() }
+      this.updateNearby()
       this.handleSelfKeys(now, delta)
       this.updateObservation()
       this.detectGreetings(now)
@@ -1534,7 +1857,8 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
           // 18 人名册全部走 dayPlan 驱动的独立路径（M7-6/7/8/9）——不再进入下面这套给玩家/
           // 邻居/巡逻 NPC 用的"整点判定 + 直线走"状态机。标签/表情仍然统一跟随，气泡摆位则交
           // 给循环之后的 layoutSpeechBubbles 一次性处理（要看到所有正在说话的人才能互相避让）。
-          this.updateNpcWalker(walker, now)
+          this.updateNpcWalker(walker, now, delta)
+          walker.label.setVisible(walker.npc.layer === 2 || Math.hypot(walker.sprite.x - (this.selfWalker?.sprite.x ?? 0), walker.sprite.y - (this.selfWalker?.sprite.y ?? 0)) < 160)
           walker.label.setPosition(walker.sprite.x, walker.sprite.y + 4)
           walker.emote?.setPosition(walker.sprite.x + 14, walker.sprite.y - 62)
           walker.travelEmote?.setPosition(walker.sprite.x + 14, walker.sprite.y - 66)
@@ -1583,6 +1907,14 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
           walker.sprite.anims.timeScale = walker.running ? RUN_ANIM_SCALE : 1
           const remaining = Math.hypot(walker.targetX - walker.sprite.x, walker.targetY - walker.sprite.y)
 
+          if (remaining < 1 && this.selfPath.length) {
+            walker.sprite.setPosition(walker.targetX, walker.targetY)
+            const next = this.selfPath.shift()!
+            walker.targetX = next.x
+            walker.targetY = next.y
+            continue
+          }
+
           // Periodic reporting during movement (throttled by presenceReporter)
           if (now - walker.lastReportTime > 3000) {
             walker.lastReportTime = now
@@ -1592,6 +1924,12 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
           // A straight line can dead-end against a wall (no A* pathing); give up gracefully
           // after a short stall instead of animating in place forever.
           if (remaining < 1 || walker.stuckMs > SELF_STUCK_MS) {
+            if (remaining < 1) walker.sprite.setPosition(walker.targetX, walker.targetY)
+            else {
+              this.selfPath = []
+              if (this.travel) { this.travel = { ...this.travel, phase: 'blocked' }; handlers.onTravelChange?.(this.travel) }
+              this.destinationMarker?.destroy(); this.destinationMarker = null
+            }
             walker.state = 'act'
             walker.running = false
             walker.stuckMs = 0
@@ -1601,7 +1939,8 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
               walker.arriveSelect = null
               walker.travelEmote?.destroy()
               walker.travelEmote = null
-              this.dispatchArrival(selection)
+              if (remaining < 12) this.dispatchArrival(selection)
+              else this.saySomething(walker, '前面有东西挡住了，换个方向走走吧。', 2500)
             } else if (walker.manualWalk) {
               walker.overrideUntil = now + SELF_OVERRIDE_MS
             }
@@ -1662,14 +2001,18 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
 
     // ---------- camera & input ----------
 
+    handleViewportResize() {
+      if (!this.scene.isActive() || observationOn) return
+      this.cameras.main.centerOn(this.selfWalker?.sprite.x ?? academyDoorX, (this.selfWalker?.sprite.y ?? STREET_Y) - 110)
+    }
+
     setupCamera() {
       const camera = this.cameras.main
       camera.setBounds(0, 0, width, WORLD_HEIGHT)
       camera.setZoom(Math.min(1.2, Math.max(0.75, this.scale.height / 820)))
       const self = residents.find(item => item.isSelf) ?? residents[0]
       const center = self ? this.buildingCenters.get(self.publicId) : undefined
-      camera.centerOn(academyDoorX, BASELINE - 260)
-      if (center) this.time.delayedCall(700, () => camera.pan(center.x, center.y + 40, 1600, 'Sine.easeInOut'))
+      camera.centerOn(this.selfWalker?.sprite.x ?? center?.x ?? academyDoorX, BASELINE - 80)
     }
 
     /** 家具交互：坐下/查看公告/互动 */
@@ -1680,19 +2023,9 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
         return
       }
 
-      // 走到家具附近
-      const targetX = item.x + (item.collision?.offsetX ?? 0) + (item.collision?.width ?? 32) / 2
-      const targetY = item.y + (item.collision?.offsetY ?? 0) + (item.collision?.height ?? 16) / 2
-      this.selfWalker.targetX = targetX
-      this.selfWalker.targetY = targetY + 40 // 站在家具前方
-      this.selfWalker.state = 'walk'
+      const target = nearestStandable({ x: item.x + 24, y: item.y + 12 }, this.collisionWorld)
       this.activeFurnitureId = item.id
-
-      // 到达后触发交互
-      this.time.delayedCall(1000, () => {
-        if (this.activeFurnitureId !== item.id) return
-        this.executeFurnitureInteraction(item)
-      })
+      this.walkSelfToAndSelect(target.x, target.y, `furniture:${item.id}`)
     }
 
     /** 执行具体的家具交互 */
@@ -1746,6 +2079,12 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
     }
 
     setupInput() {
+      const interact = (event: KeyboardEvent) => {
+        if (event.defaultPrevented || ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName ?? '') || document.querySelector('[role="dialog"], .resident-moment')) return
+        this.interactNearby()
+      }
+      this.input.keyboard?.on('keydown-E', interact)
+      this.events.once('shutdown', () => this.input.keyboard?.off('keydown-E', interact))
       this.selfWalker = this.walkers.find(walker => walker.resident?.isSelf) ?? null
       this.selfKeys = {
         cursors: this.input.keyboard?.createCursorKeys(),
@@ -1757,6 +2096,7 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
       }
       const camera = this.cameras.main
       this.input.on('pointerdown', (pointer: PhaserNs.Input.Pointer) => {
+        if (!isWorldPointer(pointer)) return
         this.atmosphere?.beginManualControl()
         this.dragStart = { x: pointer.x, y: pointer.y, scrollX: camera.scrollX, scrollY: camera.scrollY }
         this.dragged = false
@@ -1769,7 +2109,7 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
         camera.setScroll(this.dragStart.scrollX - dx / camera.zoom, this.dragStart.scrollY - dy / camera.zoom)
       })
       this.input.on('pointerup', (pointer: PhaserNs.Input.Pointer, objects: unknown[]) => {
-        if (!this.dragged && objects.length === 0 && pointer.getDistance() < 6) {
+        if (isWorldPointer(pointer) && this.dragStart && !this.dragged && objects.length === 0 && pointer.getDistance() < 6) {
           handlers.onSelect?.(null)
           this.endFurnitureInteraction() // 点击地面时取消家具交互
           const shiftClick = Boolean((pointer.event as MouseEvent | undefined)?.shiftKey)
@@ -1786,7 +2126,7 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
     /** Engages smooth camera-follow on the self avatar once it starts moving under player control
      * (keys or a click-to-walk); a no-op while a drag pan or another camera move is in charge. */
     startFollowingSelf() {
-      if (this.followingCamera || this.time.now < this.cameraFollowPausedUntil) return
+      if (observationOn || this.followingCamera || this.time.now < this.cameraFollowPausedUntil) return
       const self = this.selfWalker
       if (!self) return
       this.cameras.main.startFollow(self.sprite, false, 0.08, 0.08, 0, 40)
@@ -1820,7 +2160,7 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
       if (this.night === night) return
       this.night = night
       const duration = instant ? 0 : 900
-      this.tweens.add({ targets: this.nightOverlay, alpha: night ? 0.55 : 0, duration, ease: 'Sine.easeInOut' })
+      this.tweens.add({ targets: this.nightOverlay, alpha: 0, duration, ease: 'Sine.easeInOut' })
       for (const light of this.glows) this.tweens.add({ targets: light, alpha: night ? (light as PhaserNs.GameObjects.Image).getData('targetAlpha') ?? 1 : 0, duration, ease: 'Sine.easeInOut' })
     }
 
@@ -1952,22 +2292,9 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
 
   /** Fades to the 成长学院 interior (task 7 wiring): town scene sleeps, academy scene takes over. */
   function enterAcademy() {
-    if (!sceneRef || academyEntered || academyBusy || roomBusy || activeRoomKey) return
-    academyBusy = true
-    const town = sceneRef
-    const cam = town.cameras.main
-    cam.fadeOut(SCENE_FADE_MS, 8, 10, 8)
-    cam.once('camerafadeoutcomplete', () => {
-      town.scene.sleep()
-      const phaserGame = town.sys.game
-      if (phaserGame.scene.getScene('academy')) phaserGame.scene.remove('academy')
-      const academyOptions = { residents: academyResidents(latestModel), onBack: () => exitAcademy() }
-      const SceneClass = createAcademyScene(Phaser, academyOptions)
-      const academyScene = phaserGame.scene.add('academy', SceneClass, true, academyOptions)
-      academyScene?.events.once('create', () => { academyScene.cameras.main.fadeIn(SCENE_FADE_MS, 8, 10, 8) })
-      academyEntered = true
-      academyBusy = false
-      handlers.onAcademyChange?.(true)
+    void enterRoom('academy').catch(error => {
+      console.error('Town academy failed to open', error)
+      if (sceneRef?.selfWalker) sceneRef.saySomething(sceneRef.selfWalker, '学院暂时打不开，稍后再试试。')
     })
   }
 
@@ -1978,8 +2305,8 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
    * 要在这里把 player/residents/metrics/onInteract 都填好——这正是 M3-2 要补的那几个入参。
    */
   async function enterRoom(roomId: string) {
-    if (!sceneRef || academyBusy || roomBusy || activeRoomKey) return
-    const paths: Record<string, string> = { home: 'home-living-room', academy: 'academy-study', gym: 'public-gym' }
+    if (!sceneRef || academyEntered || academyBusy || roomBusy || activeRoomKey) return
+    const paths: Record<string, string> = { home: 'home-living-room', academy: 'academy-study', gym: 'public-gym', cafe: 'cafe-interior' }
     const file = paths[roomId]
     if (!file) return
     roomBusy = true
@@ -1987,11 +2314,11 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
     const cam = town.cameras.main
     try {
       const fadeOutDone = new Promise<void>(resolve => {
-        cam.fadeOut(SCENE_FADE_MS, 8, 10, 8)
+        cam.fadeEffect.start(true, SCENE_FADE_MS, 8, 10, 8, true)
         cam.once('camerafadeoutcomplete', () => resolve())
       })
       const [room, , extras] = await Promise.all([
-        fetch(`${ASSETS}/maps/${file}.json`).then(response => response.json()).then(parseRoomMap),
+        fetch(`${ASSETS}/maps/${file}.json`).then(response => { if (!response.ok) throw new Error(`房间地图加载失败 (${response.status})`); return response.json() }).then(parseRoomMap),
         fadeOutDone,
         roomId === 'home' ? fetchHomeExtras() : Promise.resolve({ homeAchievements: 0, pet: undefined as InteriorPet | undefined }),
       ])
@@ -1999,23 +2326,31 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
       const key = interiorSceneKey(room.id)
       if (game.scene.getScene(key)) game.scene.remove(key)
       const self = latestModel.residents.find(item => item.isSelf) ?? null
-      const residentsForRoom: RoomResident[] = self
-        ? [{ publicId: self.publicId, displayName: self.displayName, isSelf: true, characterSheet: characterSheet(self.publicId), state: 'idle' }]
-        : []
       const player: InteriorPlayer | undefined = self ? { characterSheet: characterSheet(self.publicId) } : undefined
       const options: InteriorOptions = {
         room,
-        metrics: { homeAchievements: extras.homeAchievements },
-        residents: residentsForRoom,
+        metrics: { homeAchievements: extras.homeAchievements, healthDone: self?.schedules.filter(s => ['DONE', 'PARTIAL'].includes(s.status) && s.roleCode === 'FITNESS_USER').length ?? 0, knowledgeDone: self?.schedules.filter(s => ['DONE', 'PARTIAL'].includes(s.status) && ['STUDENT', 'WORKER'].includes(s.roleCode ?? '')).length ?? 0 },
+        residents: roomId === 'academy' ? townNpcRoster.filter(npc => {
+          const position = positionAt(npc.dayPlan ?? dayPlanFallback(npc.schedule), town.npcMinuteOfDay())
+          return npc.layer !== 1 && position.kind === 'AT' && position.place === 'academy'
+        }).slice(0, 4).map(npc => ({ publicId: npc.code, displayName: npc.displayName, isSelf: false, characterSheet: Number(npc.sprite.replace('c', '')) || 1, state: 'reading' as const })) : [],
         player,
         pet: extras.pet,
         onExit: target => { if (target === 'town') exitRoom() },
         // engine 自己不认识 home.open-desk 之类的动作 id，转给外壳去接 world-actions.ts。
         onInteract: (actionId, id) => handlers.onInteriorInteract?.(actionId, id),
+        onPosition: (x, y, facing) => presenceReporter.update({ x: Math.round(x), y: Math.round(y), facing, scene: key }),
       }
       const interiorScene = game.scene.add(key, createInteriorScene(Phaser, options), true, options)
       town.scene.sleep()
       activeRoomKey = key
+      academyEntered = roomId === 'academy'
+      if (academyEntered) handlers.onAcademyChange?.(true)
+      handlers.onRoomChange?.(roomId)
+      handlers.onNearbyChange?.(null)
+      handlers.onSelect?.(null)
+      presenceReporter.update({ x: room.spawn.x, y: room.spawn.y, facing: 'down', scene: key })
+      presenceReporter.flush()
       interiorScene?.events.once('create', () => { interiorScene.cameras.main.fadeIn(SCENE_FADE_MS, 8, 10, 8) })
     } catch (error) {
       cam.fadeIn(SCENE_FADE_MS, 8, 10, 8) // 加载失败也要把镜头亮回来，不能留一片黑屏
@@ -2039,11 +2374,15 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
         sceneRef.cameras.main.fadeIn(SCENE_FADE_MS, 8, 10, 8)
       }
       activeRoomKey = null
+      if (academyEntered) handlers.onAcademyChange?.(false)
+      academyEntered = false
+      handlers.onRoomChange?.(null)
       roomBusy = false
+      if (queuedDestination && sceneRef) { const place = queuedDestination; queuedDestination = null; sceneRef.events.once('wake', () => sceneRef?.travelToPlace(place)) }
     }
     const cam = roomScene?.cameras.main
     if (cam) {
-      cam.fadeOut(SCENE_FADE_MS, 8, 10, 8)
+      cam.fadeEffect.start(true, SCENE_FADE_MS, 8, 10, 8, true)
       cam.once('camerafadeoutcomplete', finish)
     } else {
       finish()
@@ -2051,29 +2390,7 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
   }
 
   /** Reverses enterAcademy(): fades the interior out, wakes the street back up. */
-  function exitAcademy() {
-    if (!academyEntered || academyBusy) return
-    academyBusy = true
-    const phaserGame = sceneRef?.sys.game
-    const academyScene = phaserGame?.scene.getScene('academy')
-    const finish = () => {
-      phaserGame?.scene.stop('academy')
-      if (sceneRef) {
-        sceneRef.scene.wake('town')
-        sceneRef.cameras.main.fadeIn(SCENE_FADE_MS, 8, 10, 8)
-      }
-      academyEntered = false
-      academyBusy = false
-      handlers.onAcademyChange?.(false)
-    }
-    const cam = academyScene?.cameras.main
-    if (cam) {
-      cam.fadeOut(SCENE_FADE_MS, 8, 10, 8)
-      cam.once('camerafadeoutcomplete', finish)
-    } else {
-      finish()
-    }
-  }
+  function exitAcademy() { if (academyEntered) exitRoom() }
 
   const game = new Phaser.Game({
     type: Phaser.AUTO,
@@ -2091,16 +2408,22 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
   // Flush presence when page becomes hidden
   const visibilityHandler = () => {
     if (document.hidden) presenceReporter.flush()
+    sceneRef?.atmosphere?.setVisible(!document.hidden)
   }
   document.addEventListener('visibilitychange', visibilityHandler)
 
   return {
+    setLetterUnread: count => { letterUnread = Math.max(0, count); sceneRef?.applyLetterUnread() },
     setNight: night => { desiredNight = night; sceneRef?.setNight(night) },
     setRun: running => { desiredRun = running; sceneRef?.setRunMode(running) },
     focus: publicId => sceneRef?.focusOn(publicId),
+    travelTo: place => sceneRef?.travelToPlace(place),
+    cancelTravel: () => sceneRef?.cancelTravel(),
+    interactNearby: () => sceneRef?.interactNearby(),
     applyModel: nextModel => {
       latestModel = nextModel
       serverOffsetMs = computeServerOffset(nextModel.serverTime)
+      sceneRef?.atmosphere?.setWeather(weatherForDate(nextModel.localDate))
       sceneRef?.applyResidents(nextModel.residents)
     },
     celebrate: publicId => { celebrationQueue.push(publicId); runCelebrationQueue() },
@@ -2110,6 +2433,7 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
       sceneRef?.applyTownNpcs(npcs)
     },
     setObservation: on => sceneRef?.setObservationMode(on),
+    applyEvents: events => { townEvents = events; sceneRef?.drawTownEvents() },
     setInitiativeBudget: budget => { initiativeBudget = budget },
     enterAcademy,
     exitAcademy,
@@ -2119,6 +2443,7 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
       presenceReporter.flush()
       document.removeEventListener('visibilitychange', visibilityHandler)
       sceneRef?.atmosphere?.destroy()
+      if (import.meta.env.DEV && (window as any).__townScene === sceneRef) delete (window as any).__townScene
       sceneRef = null
       celebrationQueue = []
       game.destroy(true)

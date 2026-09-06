@@ -14,4 +14,4 @@ set -a
 set +a
 for v in ${(k)parameters}; do case $v in ADMIN_BOOTSTRAP_*) unset $v;; esac; done
 exec ./backend/mvnw -f backend/pom.xml spring-boot:run \
-  -Dspring-boot.run.arguments="--spring.profiles.active=local --server.port=8081"
+  -Dspring-boot.run.arguments="--spring.profiles.active=local --server.port=${TOWN_BACKEND_PORT:-8081}"

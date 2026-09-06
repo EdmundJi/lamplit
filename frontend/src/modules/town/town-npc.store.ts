@@ -29,12 +29,14 @@ export const useTownNpcStore = defineStore('townNpc', {
       this.error = ''
       try {
         const response = await api.get<TownNpcsResponse>('/town/npcs')
+        if (!response || !Array.isArray(response.npcs) || !response.initiativeBudget) throw new Error('居民资料格式不完整，请检查小镇服务版本')
         this.npcs = response.npcs
         this.budget = response.initiativeBudget
       } catch (error) {
         if (isNotFound(error)) {
           this.npcs = []
           this.budget = EMPTY_BUDGET
+          this.error = '居民服务还未连接，请检查开发服务是否运行当前分支'
         } else {
           this.error = (error as { message?: string }).message ?? '小镇居民暂时没能加载出来，请稍后再试'
         }

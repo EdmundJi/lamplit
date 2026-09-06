@@ -1,11 +1,12 @@
-import { flushPromises, mount } from '@vue/test-utils'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import TodayPanel from './TodayPanel.vue'
 import { worldBridgeKey } from '../panel.types'
 
 const api = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn() }))
 vi.mock('../../../../shared/api/client', () => ({ api }))
 vi.mock('../../../../app/router', () => ({ router: { push: vi.fn() } }))
+enableAutoUnmount(afterEach)
 
 function mountPanel(bridge?: Record<string, unknown>) {
   return mount(TodayPanel, {
@@ -28,6 +29,7 @@ describe('TodayPanel', () => {
     const wrapper = mountPanel()
     await flushPromises()
     expect(wrapper.text()).toContain('今天还没有安排任务')
+    expect(wrapper.text()).not.toContain('完整页面')
   })
 
   it('lists today tasks and completes one with an idempotent request, celebrating through the bridge', async () => {
@@ -120,5 +122,24 @@ describe('TodayPanel', () => {
 
     expect(api.post).toHaveBeenCalledWith('/daily-status', { energy: 'LOW', availableMinutes: 30 })
     expect(wrapper.get('.check-result .secondary').text()).toBe('更新建议')
+  })
+
+  it('starts a task and defers it with confirmation entirely inside the panel', async () => {
+    api.get.mockImplementation((path: string) => Promise.resolve(path.startsWith('/task-schedules')
+      ? [{ publicId: 'schedule-1', taskTitle: '复习', plannedStartAt: new Date().toISOString(), status: 'PLANNED' }] : []))
+    api.post.mockResolvedValue({ scheduleStatus: 'STARTED' })
+    const emit = vi.fn()
+    const wrapper = mountPanel({ emit })
+    await flushPromises()
+    await wrapper.get('[aria-label="开始"]').trigger('click')
+    await flushPromises()
+    expect(api.post).toHaveBeenCalledWith('/task-schedules/schedule-1/events', { eventType: 'STARTED' }, expect.any(Object))
+    await wrapper.findAll('.task-more button').find(button => button.text().includes('延期'))!.trigger('click')
+    await wrapper.get('#panel-deferred').setValue('2026-09-09T09:00')
+    await wrapper.get('[role="dialog"] .primary').trigger('click')
+    await flushPromises()
+    expect(api.post).toHaveBeenLastCalledWith('/task-schedules/schedule-1/events', { eventType: 'DEFERRED', deferredStartAt: new Date('2026-09-09T09:00').toISOString() }, expect.any(Object))
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
+    expect(emit).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'close' }))
   })
 })

@@ -21,6 +21,8 @@ export type TownLayout = {
   cafeX: number
   /** Park bench cluster x. */
   parkX: number
+  parkY?: number
+  branchX?: number
   /** Town-square span; `plaza` resolves to its midpoint. */
   plazaMinX: number
   plazaMaxX: number

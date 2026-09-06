@@ -39,7 +39,7 @@ let reactionTimer: number | undefined
 let inputTimers: number[] = []
 let motionObserver: MutationObserver | null = null
 function reduceMotion() {
-  return ['off', 'reduced'].includes(document.documentElement.dataset.motion ?? '') || window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  return ['off', 'reduced'].includes(document.documentElement.dataset.motion ?? '') || (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false)
 }
 function syncPlayback() {
   if (!rive) return
@@ -95,8 +95,10 @@ async function initialize() {
     },
   })
 
-  resizeObserver = new ResizeObserver(() => rive?.resizeDrawingSurfaceToCanvas())
-  resizeObserver.observe(canvasElement)
+  if (typeof ResizeObserver !== 'undefined') {
+    resizeObserver = new ResizeObserver(() => rive?.resizeDrawingSurfaceToCanvas())
+    resizeObserver.observe(canvasElement)
+  }
 }
 
 function input(name: string) {

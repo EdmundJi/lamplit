@@ -12,6 +12,8 @@
  */
 import type PhaserNs from 'phaser'
 import { hashString } from './building-kit'
+import { findPath } from './pathfinding'
+import { nearestStandable, type Point, type CollisionWorld } from './collision'
 import {
   assignSeats,
   clampToRoom,
@@ -66,6 +68,7 @@ export type ControllerContext = {
   speed: number
   isBlocked: (x: number, y: number) => boolean
   onDoor: (door: RoomDoor) => void
+  onPosition?: (x: number, y: number, facing: Direction) => void
 }
 
 export type InteriorOptions = {
@@ -89,6 +92,7 @@ export type InteriorOptions = {
    * haven't wired it up yet.
    */
   onInteract?: (actionId: string, id: string) => void
+  onPosition?: (x: number, y: number, facing: Direction) => void
   /** The resident's pet, drawn at whichever furniture piece's `interactive.actionId` is
    * `PET_HOUSE_ACTION_ID` (see map-loader.ts docs on `RoomInteraction`). No such furniture piece in
    * the room, or no `pet` given at all, and nothing pet-shaped is drawn — same "optional, defaults
@@ -183,7 +187,8 @@ export function createInteriorScene(Phaser: typeof PhaserNs, options: InteriorOp
   const key = interiorSceneKey(room.id)
 
   class InteriorScene extends Phaser.Scene {
-    escHandler: (() => void) | null = null
+    escHandler: ((event: KeyboardEvent) => void) | null = null
+    worldPress = false
     player: PhaserNs.GameObjects.Sprite | null = null
     controller: RoomController | null = null
     lastDoor: RoomDoor | null = null
@@ -223,6 +228,8 @@ export function createInteriorScene(Phaser: typeof PhaserNs, options: InteriorOp
       this.plate(worldWidth / 2, 8, room.title, '#fff4e8', '#35644f')
       this.setupCamera()
       this.setupInput()
+      this.scale.on('resize', this.setupCamera, this)
+      this.events.once('shutdown', () => this.scale.off('resize', this.setupCamera, this))
     }
 
     // ---------- world ----------
@@ -261,7 +268,7 @@ export function createInteriorScene(Phaser: typeof PhaserNs, options: InteriorOp
       const box = interaction.hit ?? defaultInteractionHit(piece, room.tileSize)
       if (interaction.label) this.plate(box.x + box.w / 2, box.y - 12, interaction.label, '#fff4e8', '#3b312c')
       const zone = this.add.zone(box.x, box.y, box.w, box.h).setOrigin(0).setInteractive({ useHandCursor: true })
-      zone.on('pointerup', () => options.onInteract?.(interaction.actionId, piece.id))
+      zone.on('pointerup', (pointer: PhaserNs.Input.Pointer) => { if (this.worldPress && pointer?.event?.target === this.game.canvas) options.onInteract?.(interaction.actionId, piece.id) })
     }
 
     // ---------- pet (M3-5) ----------
@@ -286,14 +293,14 @@ export function createInteriorScene(Phaser: typeof PhaserNs, options: InteriorOp
       const sprite = this.add.image(spot.x, spot.y, 'town', 'doghouse_sleep_1').setOrigin(0.5, 1).setDepth(spot.y + 1)
       sprite.setDisplaySize(40, 40)
       sprite.setInteractive({ useHandCursor: true })
-      sprite.on('pointerup', () => options.onInteract?.(PET_HOUSE_ACTION_ID, spot.id))
+      sprite.on('pointerup', (pointer: PhaserNs.Input.Pointer) => { if (this.worldPress && pointer?.event?.target === this.game.canvas) options.onInteract?.(PET_HOUSE_ACTION_ID, spot.id) })
     }
 
     drawPixelPet(spec: PetPixelSpec, spot: RoomMapData['furniture'][number]) {
       this.ensurePetAnimations(spec)
       const sprite = this.add.sprite(spot.x, spot.y, 'town', `${spec.framePrefix}_idle_1`).setOrigin(0.5, 1).setDepth(spot.y + 1)
       sprite.setInteractive({ useHandCursor: true })
-      sprite.on('pointerup', () => options.onInteract?.(PET_HOUSE_ACTION_ID, spot.id))
+      sprite.on('pointerup', (pointer: PhaserNs.Input.Pointer) => { if (this.worldPress && pointer?.event?.target === this.game.canvas) options.onInteract?.(PET_HOUSE_ACTION_ID, spot.id) })
       this.schedulePetWander(sprite, spec, spot)
     }
 
@@ -366,7 +373,7 @@ export function createInteriorScene(Phaser: typeof PhaserNs, options: InteriorOp
         const cx = door.rect.x + door.rect.w / 2
         if (door.label) this.plate(cx, door.rect.y - 14, door.label, '#fff4e8', '#3b312c')
         const zone = this.add.zone(door.rect.x, door.rect.y, door.rect.w, door.rect.h).setOrigin(0).setInteractive({ useHandCursor: true })
-        zone.on('pointerup', () => options.onExit(door.target, door.id))
+        zone.on('pointerup', (pointer: PhaserNs.Input.Pointer) => { if (this.worldPress && pointer?.event?.target === this.game.canvas) options.onExit(door.target, door.id) })
       }
     }
 
@@ -388,6 +395,7 @@ export function createInteriorScene(Phaser: typeof PhaserNs, options: InteriorOp
         sheet,
         speed: options.player.speed ?? DEFAULT_SPEED,
         isBlocked: (px, py) => collidesAt(room, px, py, 14, 10),
+        onPosition: options.onPosition,
         onDoor: door => {
           if (this.lastDoor?.id === door.id) return
           this.lastDoor = door
@@ -395,7 +403,13 @@ export function createInteriorScene(Phaser: typeof PhaserNs, options: InteriorOp
         },
       }
       this.controller = (options.createController ?? createDefaultController)(context)
-      this.events.on('update', (_time: number, delta: number) => this.controller?.update(delta))
+      const updateController = (_time: number, delta: number) => this.controller?.update(delta)
+      this.events.on('update', updateController)
+      this.events.once('shutdown', () => {
+        this.events.off('update', updateController)
+        this.controller?.destroy?.()
+        this.controller = null
+      })
     }
 
     // ---------- helpers ----------
@@ -428,16 +442,22 @@ export function createInteriorScene(Phaser: typeof PhaserNs, options: InteriorOp
 
     setupCamera() {
       const camera = this.cameras.main
-      camera.setBounds(0, 0, worldWidth, worldHeight)
-      const fit = Math.min(this.scale.width / worldWidth, this.scale.height / worldHeight)
-      const zoom = fit >= 1 ? Math.max(1, Math.floor(fit)) : Math.max(0.5, Math.round(fit * 4) / 4)
-      camera.setZoom(zoom)
+      camera.removeBounds()
+      camera.setViewport(0, 0, this.scale.width, this.scale.height)
+      const fit = Math.min((this.scale.width - 32) / worldWidth, (this.scale.height - 172) / worldHeight)
+      camera.setZoom(Math.max(0.25, Math.floor(fit * 4) / 4))
       camera.centerOn(worldWidth / 2, worldHeight / 2)
     }
 
     setupInput() {
+      this.input.on('pointerdown', (pointer: PhaserNs.Input.Pointer) => { this.worldPress = pointer?.event?.target === this.game.canvas })
+      this.input.on('pointerup', () => { this.worldPress = false })
       const firstDoor = room.doors[0]
-      this.escHandler = () => { if (firstDoor) options.onExit(firstDoor.target, firstDoor.id) }
+      this.escHandler = (event: KeyboardEvent) => {
+        if (document.querySelector('[role="dialog"], .resident-moment')) return
+        event.preventDefault()
+        if (firstDoor) options.onExit(firstDoor.target, firstDoor.id)
+      }
       this.input.keyboard?.on('keydown-ESC', this.escHandler)
       this.events.once('shutdown', () => {
         if (this.escHandler) this.input.keyboard?.off('keydown-ESC', this.escHandler)
@@ -466,11 +486,19 @@ export function createDefaultController(ctx: ControllerContext): RoomController 
   const keyW = scene.input.keyboard?.addKey('W')
   const keyS = scene.input.keyboard?.addKey('S')
   let clickTarget: { x: number; y: number } | null = null
+  let waypoints: Point[] = []
+  const navigation: CollisionWorld = {
+    walkable: [{ x: 14, y: 10, width: room.cols * room.tileSize - 28, height: room.rows * room.tileSize - 20 }],
+    obstacles: room.collisions.map(r => ({ x: r.x - 14, y: r.y - 10, width: r.w + 28, height: r.h + 20 })),
+  }
   let facing: Direction = 'down'
 
   const pointerHandler = (pointer: PhaserNs.Input.Pointer) => {
+    if (pointer?.event?.target !== scene.game.canvas) return
     const world = scene.cameras.main.getWorldPoint(pointer.x, pointer.y)
-    clickTarget = clampToRoom(room, world.x, world.y)
+    const target = nearestStandable(clampToRoom(room, world.x, world.y), navigation)
+    waypoints = findPath({ x: sprite.x, y: sprite.y }, target, navigation) ?? []
+    clickTarget = waypoints.shift() ?? null
   }
   scene.input.on('pointerdown', pointerHandler)
   scene.events.once('shutdown', () => scene.input.off('pointerdown', pointerHandler))
@@ -478,17 +506,24 @@ export function createDefaultController(ctx: ControllerContext): RoomController 
   function move(dx: number, dy: number, deltaMs: number) {
     if (dx === 0 && dy === 0) return false
     const length = Math.hypot(dx, dy) || 1
-    const step = (ctx.speed * deltaMs) / 1000
+    const step = Math.min(length, (ctx.speed * deltaMs) / 1000)
     const nx = sprite.x + (dx / length) * step
     const ny = sprite.y + (dy / length) * step
+    const oldX = sprite.x, oldY = sprite.y
     if (!ctx.isBlocked(nx, sprite.y)) sprite.x = nx
     if (!ctx.isBlocked(sprite.x, ny)) sprite.y = ny
     facing = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up')
-    return true
+    return sprite.x !== oldX || sprite.y !== oldY
   }
 
   return {
     update(deltaMs: number) {
+      if (!sprite.scene || !sprite.anims) return
+      ctx.onPosition?.(sprite.x, sprite.y, facing)
+      if (document.querySelector('[role="dialog"], .resident-moment') || ['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName ?? '')) {
+        sprite.play(`${sheet}-idle-${facing}`, true)
+        return
+      }
       let dx = 0
       let dy = 0
       if (cursors?.left.isDown || keyA?.isDown) dx -= 1
@@ -498,13 +533,15 @@ export function createDefaultController(ctx: ControllerContext): RoomController 
       let moving = false
       if (dx !== 0 || dy !== 0) {
         clickTarget = null
+        waypoints = []
         moving = move(dx, dy, deltaMs)
       } else if (clickTarget) {
         const remainingX = clickTarget.x - sprite.x
         const remainingY = clickTarget.y - sprite.y
-        if (Math.hypot(remainingX, remainingY) < 3) clickTarget = null
+        if (Math.hypot(remainingX, remainingY) < 3) clickTarget = waypoints.shift() ?? null
         else moving = move(remainingX, remainingY, deltaMs)
       }
+      sprite.setDepth(sprite.y)
       sprite.play(`${sheet}-${moving ? 'walk' : 'idle'}-${facing}`, true)
       const door = doorAt(room, sprite.x, sprite.y)
       if (door) ctx.onDoor(door)

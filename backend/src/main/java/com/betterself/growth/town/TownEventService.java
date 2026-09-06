@@ -28,8 +28,7 @@ import java.util.random.RandomGenerator;
  * 第三层只有日程，第一层永不做这种事。谁办、办不办由 {@link #hostProbability} 这个纯函数决定，
  * 单测直接钉住"不会连续一周冷场，也不会天天办"。
  *
- * <p>幂等靠"今天是否已经有一条 town_event"这一件事本身把关，不需要另建一张 run 表：
- * 场地/请柬/信件都是这一条 event 的下游，event 不重复，下游自然不重复。
+ * <p>每日 EVENT 决定（包括不办）与活动、请柬和投递共用短事务及唯一日期键。
  */
 @Service
 public class TownEventService {
@@ -56,38 +55,54 @@ public class TownEventService {
     private final PublicIdGenerator ids;
     private final TownLetterService letters;
     private final Clock clock;
+    private final TownMoodService moods;
+    private final TownDailyProduction daily;
 
     public TownEventService(JdbcTemplate jdbc, TransactionTemplate tx, PublicIdGenerator ids,
-                            TownLetterService letters, Clock clock) {
+                            TownLetterService letters, Clock clock, TownMoodService moods, TownDailyProduction daily) {
         this.jdbc = jdbc;
         this.tx = tx;
         this.ids = ids;
         this.letters = letters;
         this.clock = clock;
+        this.moods = moods;
+        this.daily = daily;
     }
 
     /** 幂等入口：一天最多一场活动，重跑不产生第二场、不重发第二轮请柬。 */
     public void runNightly(long userId, LocalDate localDate) {
-        if (alreadyHostedToday(userId, localDate)) {
-            log.debug("town event already decided for user {} on {}", userId, localDate);
-            return;
-        }
-        List<HostCandidate> candidates = hostCandidates(userId, localDate);
-        if (candidates.isEmpty()) {
-            return;
-        }
-        RandomGenerator rng = new SplittableRandom(seedFor(userId, localDate));
-        Optional<String> hostCode = pickHost(candidates, rng);
-        if (hostCode.isEmpty()) {
-            return;
-        }
-        HostCandidate host = candidates.stream()
-            .filter(candidate -> candidate.npcCode().equals(hostCode.get()))
-            .findFirst().orElseThrow();
-        String venue = pickVenue(host.dimension(), rng);
-
-        tx.executeWithoutResult(status -> hostEvent(userId, localDate, host, venue));
+        moods.ensureDay(userId, localDate);
+        tx.executeWithoutResult(status -> {
+            if (!daily.claim(userId, localDate, "EVENT")) return;
+            if (alreadyHostedToday(userId, localDate)) return;
+            // Never create a retroactive party (or mail an invitation to yesterday's party).
+            if (localDate.isBefore(daily.today(userId))) return;
+            List<HostCandidate> candidates = hostCandidates(userId, localDate);
+            RandomGenerator rng = new SplittableRandom(seedFor(userId, localDate));
+            pickHost(candidates, rng).ifPresent(code -> {
+                HostCandidate host = candidates.stream().filter(c -> c.npcCode().equals(code)).findFirst().orElseThrow();
+                hostEvent(userId, localDate, host, pickVenue(host.dimension(), rng));
+            });
+        });
     }
+
+    /** Authenticated owner's local calendar day; no bonds, invitee identities or private state. */
+    public List<EventView> today(long userId) {
+        LocalDate date = daily.today(userId);
+        runNightly(userId, date);
+        var zone = daily.zone(userId);
+        return jdbc.query("""
+            select e.public_id,e.kind,e.venue,n.display_name,e.starts_at,e.ends_at,e.dimension
+            from town_event e join town_npc n on n.town_user_id=e.town_user_id and n.npc_code=e.host_npc_code
+            where e.town_user_id=? and e.starts_at>=? and e.starts_at<? order by e.starts_at,e.public_id
+            """, (rs, row) -> new EventView(rs.getString(1),rs.getString(2),rs.getString(3),rs.getString(4),
+                rs.getTimestamp(5).toLocalDateTime().atZone(zone).toOffsetDateTime(),
+                rs.getTimestamp(6) == null ? null : rs.getTimestamp(6).toLocalDateTime().atZone(zone).toOffsetDateTime(),
+                rs.getString(7)), userId, Timestamp.valueOf(date.atStartOfDay()), Timestamp.valueOf(date.plusDays(1).atStartOfDay()));
+    }
+
+    public record EventView(String publicId, String kind, String venue, String hostName,
+                            java.time.OffsetDateTime startsAt, java.time.OffsetDateTime endsAt, String dimension) {}
 
     private void hostEvent(long userId, LocalDate localDate, HostCandidate host, String venue) {
         LocalDateTime startsAt = localDate.atTime(EVENT_START_HOUR);

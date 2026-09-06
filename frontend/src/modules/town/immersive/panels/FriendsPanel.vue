@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, inject, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { ArrowLeft, Check, MessageCircle, Plus, Send, UserPlus, Users, UsersRound, X } from 'lucide-vue-next'
 import { onDataChanged } from '../../../../shared/data-sync'
 import EmojiPicker from '../../../friends/EmojiPicker.vue'
@@ -15,10 +15,20 @@ import {
 } from '../../../friends/friends.logic'
 import { worldBridgeKey } from '../panel.types'
 import { openFullPage } from './shared'
+import { TownMailbox } from '../../social'
 
 const FULL_PAGE = '/friends/chat'
 
 const bridge = inject(worldBridgeKey, undefined)
+const channel = ref<'mailbox' | 'chat'>('mailbox')
+watch(channel, value => {
+  if (value === 'chat') void convs.load(true)
+  else {
+    chat.stopPoll()
+    view.value = 'list'
+    emojiOpen.value = false
+  }
+})
 
 // 三个子视图：list | directory | chat
 const view = ref<'list' | 'directory' | 'chat'>('list')
@@ -135,11 +145,11 @@ async function createGroup() {
 }
 
 const stopDataSync = onDataChanged('social', () => {
+  if (channel.value !== 'chat') return
   void convs.load(false)
   if (view.value === 'directory') void directory.load(false)
 })
 
-onMounted(() => convs.load(true))
 onBeforeUnmount(() => {
   chat.stopPoll()
   stopDataSync()
@@ -148,6 +158,12 @@ onBeforeUnmount(() => {
 
 <template>
   <section class="world-panel friends-panel">
+    <nav class="panel-actions" aria-label="邮递员服务">
+      <button class="secondary compact" type="button" :aria-pressed="channel === 'mailbox'" @click="channel = 'mailbox'">小镇信箱</button>
+      <button class="secondary compact" type="button" :aria-pressed="channel === 'chat'" @click="channel = 'chat'">好友聊天</button>
+    </nav>
+    <TownMailbox v-if="channel === 'mailbox'" @unread-change="bridge?.emit({ type: 'mail-count', count: $event })" />
+    <template v-else>
     <!-- 会话列表 -->
     <template v-if="view === 'list'">
       <div class="panel-actions">
@@ -359,6 +375,7 @@ onBeforeUnmount(() => {
       <span v-else />
       <button class="secondary compact" type="button" @click="openFullPage(bridge, FULL_PAGE)">完整页面</button>
     </footer>
+    </template>
   </section>
 </template>
 

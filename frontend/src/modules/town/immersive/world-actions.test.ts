@@ -160,20 +160,20 @@ describe('builtinWorldActions', () => {
     expect(goHome.available?.(stubContext({ selfPublicId: 'me' }))).toEqual({ ok: true })
   })
 
-  it('go-home focuses the self resident', async () => {
+  it('go-home requests actual travel to the house', async () => {
     const goHome = builtinWorldActions().find(a => a.id === 'world.go-home')!
     const result = await goHome.run(stubContext({ selfPublicId: 'me' }))
-    expect(result.events).toEqual([{ type: 'focus', publicId: 'me' }])
+    expect(result.events).toEqual([{ type: 'travel', place: 'home' }])
   })
 
-  it('toggle-academy asks for confirmation only when leaving, and flips the other way', async () => {
+  it('toggle-academy enters and leaves without an extra confirmation', async () => {
     const toggle = builtinWorldActions().find(a => a.id === 'world.toggle-academy')!
     const entering = resolveWorldAction(toggle, stubContext({ insideAcademy: false }))
     expect(entering.confirmText).toBeNull()
     expect(entering.label).toContain('学院')
 
     const leaving = resolveWorldAction(toggle, stubContext({ insideAcademy: true }))
-    expect(leaving.confirmText).toBe('确定要离开学院吗？')
+    expect(leaving.confirmText).toBeNull()
 
     const result = await toggle.run(stubContext({ insideAcademy: true }))
     expect(result.events).toEqual([{ type: 'academy', value: false }])

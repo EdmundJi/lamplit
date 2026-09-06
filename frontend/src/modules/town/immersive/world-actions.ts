@@ -199,12 +199,12 @@ function goHomeAction(): WorldAction {
   return {
     id: 'world.go-home',
     label: '回到我家',
-    hint: '镜头带你回到自己的房子',
+    hint: '沿街走到家门口，自动进入客厅',
     icon: Home,
     domain: 'world',
     available: ctx => (ctx.selfPublicId ? { ok: true } : { ok: false, reason: '还没找到你的角色' }),
     run(ctx) {
-      return { ok: true, message: '回家了', events: [{ type: 'focus', publicId: ctx.selfPublicId as string }] }
+      return { ok: true, message: '正在往家走', events: [{ type: 'travel', place: 'home' }] }
     },
   }
 }
@@ -213,11 +213,11 @@ function toggleAcademyAction(): WorldAction {
   return {
     id: 'world.toggle-academy',
     label: ctx => (ctx.insideAcademy ? '回到小镇' : '去成长学院'),
-    hint: '成长学院的自习室在小镇之外，进出都是一次场景切换',
+    hint: '走到学院门口，在自习室里继续今天的学习',
     icon: GraduationCap,
     domain: 'world',
     // 离开学院时的中断提示：进入学院不需要确认，退出时提醒一句更贴心。
-    confirm: ctx => (ctx.insideAcademy ? '确定要离开学院吗？' : ''),
+
     run(ctx) {
       const entering = !ctx.insideAcademy
       return {
@@ -307,6 +307,9 @@ export function builtinWorldActions(): WorldAction[] {
   return [
     toggleNightAction(), toggleRunAction(), goHomeAction(), toggleAcademyAction(), refreshAction(),
     openDeskAction(), openAchievementWallAction(), openPetHouseAction(),
+    { id: 'gym.open-attributes', label: '看看健康与成长', domain: 'world', anchors: ['gym'], run: () => ({ ok: true, events: [{ type: 'open', panel: 'attributes' }] }) },
+    { id: 'cafe.open-goals', label: '在桌边理理方向', domain: 'world', anchors: ['cafe'], run: () => ({ ok: true, events: [{ type: 'open', panel: 'goals' }] }) },
+    { id: 'cafe.open-ai', label: '与小助聊聊', domain: 'world', anchors: ['cafe'], run: () => ({ ok: true, events: [{ type: 'open', panel: 'ai' }] }) },
     ...panelOpenActions(),
   ]
 }

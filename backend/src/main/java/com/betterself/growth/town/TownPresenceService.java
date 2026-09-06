@@ -92,7 +92,7 @@ public class TownPresenceService {
     }
 
     private void persist(long userId, Row row) {
-        transactions.executeWithoutResult(status -> jdbc.update(
+        transactions.executeWithoutResult(status -> { jdbc.update(
             """
                 insert into town_presence (user_id, x, y, facing, scene, updated_at)
                 values (?, ?, ?, ?, ?, ?)
@@ -100,7 +100,12 @@ public class TownPresenceService {
                     scene = values(scene), updated_at = values(updated_at)
                 """,
             userId, row.x(), row.y(), row.facing(), row.scene(), Timestamp.from(row.updatedAt())
-        ));
+        );
+            jdbc.update("insert ignore into town_presence_sample (user_id,sampled_at,sample_minute,scene,x,y) values (?,?,?,?,?,?)",
+                userId, Timestamp.from(row.updatedAt()), row.updatedAt().getEpochSecond()/60, row.scene(), row.x(), row.y());
+            jdbc.update("delete from town_presence_sample where user_id=? and sampled_at<?", userId,
+                Timestamp.from(row.updatedAt().minus(Duration.ofDays(14))));
+        });
     }
 
     private static PresenceWriteView toWriteView(Row row) {

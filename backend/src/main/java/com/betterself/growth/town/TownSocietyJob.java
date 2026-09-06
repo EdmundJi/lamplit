@@ -11,7 +11,6 @@ import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
 import java.util.List;
 
 /**
@@ -38,15 +37,20 @@ public class TownSocietyJob {
     private final TownConfidantService confidant;
     private final TownMigrationService migration;
     private final Clock clock;
+    private final TownNoteService notes;
+    private final TownDailyProduction daily;
 
     public TownSocietyJob(JdbcTemplate jdbc, TownSocietyService society, TownEventService events,
-                          TownConfidantService confidant, TownMigrationService migration, Clock clock) {
+                          TownConfidantService confidant, TownMigrationService migration, Clock clock,
+                          TownNoteService notes, TownDailyProduction daily) {
         this.jdbc = jdbc;
         this.society = society;
         this.events = events;
         this.confidant = confidant;
         this.migration = migration;
         this.clock = clock;
+        this.notes = notes;
+        this.daily = daily;
     }
 
     @Scheduled(cron = "${app.town.society-cron:0 45 3 * * *}")
@@ -67,50 +71,39 @@ public class TownSocietyJob {
                 log.warn("town society failed for user {}", userId, ex);
             }
         }
+        for (long userId : candidates) {
+            try { migration.runNightly(userId, localDateFor(userId)); }
+            catch (RuntimeException ex) { log.warn("town migration failed for user {}", userId, ex); }
+        }
         log.info("town society job finished: {}/{} towns simulated", done, candidates.size());
     }
 
-    /**
-     * 一个小镇的一晚，四步。顺序不是随便排的：
-     *
-     * <ol>
-     *   <li><b>活动</b>要排在最前面。它今晚建的 {@code town_event} 起始时间就在今天，而当天行程
-     *       （M7-3）要把这场活动插成一条高优先级安排。晚于社会模拟执行的话，夜里推出的相遇序列
-     *       里没有这场活动、白天 {@code roster()} 却算得出有——前后端两份日程对不上，plan §3.5
-     *       那条「两边算出来的必须是同一份」的地基就塌了。代价只是请柬排序用的是昨晚的亲密度，
-     *       而亲密度本来就是按天缓慢变化的，肉眼无差。</li>
-     *   <li><b>社会模拟</b>：采集事实 → 目击 → 传播 → 转述 → 亲密度。</li>
-     *   <li><b>树洞回信</b>：与前两步没有依赖，且按 plan §2.7 与传播网络完全隔离。</li>
-     *   <li><b>迁徙</b>排在最后：它会改动名册，放最后就不会影响当晚其余步骤读到的「今天的人」。
-     *       它同时会写进对方的小镇，但那一镇当晚不会让新来的人入场（见
-     *       {@code TownSocietyService.simulationRoster}），所以两个用户谁先跑都算得出同一份结果。</li>
-     * </ol>
-     *
-     * <p>每一步各自幂等（社会模拟靠 {@code town_society_run}，其余三步靠自己的产出表做存在性判断），
-     * 所以某一步抛异常时前面已完成的步骤不会在重跑时被重复执行。
-     */
-    private void runTown(long userId, LocalDate localDate) {
+    /** Prepare today's immutable mood/event inputs, simulate the completed local day, then
+     * produce notes and private replies. Cross-town migrations run in a separate final pass. */
+    void runTown(long userId, LocalDate localDate) {
         events.runNightly(userId, localDate);
-        society.runNightly(userId, localDate);
+        // Only a completed local day has all accepted presence samples available.
+        society.runNightly(userId, localDate.minusDays(1));
+        notes.runNightly(userId, localDate);
         confidant.runNightly(userId, localDate);
-        migration.runNightly(userId, localDate);
+
     }
 
     private LocalDate localDateFor(long userId) {
-        String zone = jdbc.query("select timezone from sys_user where id = ?",
-            rs -> rs.next() ? rs.getString(1) : null, userId);
-        try {
-            return LocalDate.now(zone == null ? clock.getZone() : ZoneId.of(zone));
-        } catch (RuntimeException ex) {
-            return LocalDate.now(clock.getZone());
-        }
+        return daily.today(userId);
     }
 
     private List<Long> activeUsers() {
         LocalDateTime since = LocalDateTime.now(clock).minusDays(ACTIVE_WINDOW_DAYS);
         return jdbc.queryForList(
-            "select distinct user_id from task_event where occurred_at >= ?",
-            Long.class, Timestamp.valueOf(since)
+            """
+                select distinct u.id from sys_user u where u.status='ACTIVE' and u.deleted_at is null and (
+                  exists(select 1 from task_event e where e.user_id=u.id and e.occurred_at>=?)
+                  or exists(select 1 from town_presence p where p.user_id=u.id and p.updated_at>=?)
+                  or exists(select 1 from town_npc n where n.town_user_id=u.id and n.created_at>=?)
+                  or exists(select 1 from town_confidant_thread c where c.user_id=u.id and c.direction='OUT' and c.answered_at is null)
+                ) order by u.id
+                """, Long.class, Timestamp.valueOf(since),Timestamp.valueOf(since),Timestamp.valueOf(since)
         );
     }
 }

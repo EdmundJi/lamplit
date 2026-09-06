@@ -253,57 +253,61 @@ INTERIOR_PIECES = [
     ("frame_4", "livingroom", (4, 916, 29, 945)),
     # --- 成长学院·自习室 book-count data slot (a single standing book spine, repeated) ---
     ("book_1", "classroom", (392, 710, 411, 771)),
-    # --- 健身房 (public place) ---
-    ("gymmirror_1", "gym", (132, 760, 187, 795)),
-    ("gymrack_1", "gym", (258, 804, 319, 845)),
-    ("gymplate_1", "gym", (226, 772, 253, 797)),
-    ("gymmat_1", "gym", (48, 896, 79, 925)),
     # --- 客厅新增家具（视觉打磨第二轮：温馨成套家具）---
-    ("armchair_wood", "livingroom", (0, 192, 31, 255)),
-    ("loveseat_wood", "livingroom", (32, 192, 63, 255)),
-    ("armchair_blue", "livingroom", (64, 192, 95, 255)),
-    ("coffee_table_wood", "livingroom", (32, 256, 63, 287)),
-    ("side_table_round", "livingroom", (0, 256, 31, 287)),
-    ("rug_pattern_1", "livingroom", (0, 960, 95, 1055)),
-    ("rug_pattern_2", "livingroom", (96, 960, 191, 1055)),
+    ("armchair_wood", "livingroom", (32, 962, 63, 1017)),
+    ("loveseat_wood", "livingroom", (32, 906, 127, 957)),
+    ("armchair_blue", "livingroom", (96, 962, 127, 1017)),
+    ("coffee_table_wood", "livingroom", (68, 16, 123, 55)),
+    ("side_table_round", "livingroom", (128, 30, 157, 53)),
+    ("rug_pattern_1", "generic", (288, 132, 413, 215)),
+    ("rug_pattern_2", "generic", (292, 336, 341, 373)),
     ("tv_cabinet_1", "livingroom", (256, 64, 287, 111)),
     ("tv_screen_1", "livingroom", (256, 32, 287, 63)),
-    ("dining_table_1", "livingroom", (64, 384, 127, 415)),
-    ("dining_chair_1", "livingroom", (0, 384, 31, 447)),
-    ("dining_chair_2", "livingroom", (32, 384, 63, 447)),
-    ("floor_lamp_1", "livingroom", (384, 448, 415, 511)),
+    ("dining_table_1", "kitchen", (114, 472, 173, 563)),
+    ("dining_chair_1", "kitchen", (0, 352, 31, 383)),
+    ("dining_chair_2", "kitchen", (32, 352, 63, 383)),
+    ("floor_lamp_1", "livingroom", (386, 306, 413, 369)),
     ("side_table_1", "livingroom", (128, 448, 159, 479)),
     ("bar_stool_1", "livingroom", (448, 320, 479, 383)),
     ("bar_stool_2", "livingroom", (480, 320, 511, 383)),
-    ("curtain_1", "livingroom", (0, 768, 31, 895)),
-    ("wall_clock_1", "livingroom", (96, 832, 127, 863)),
-    ("painting_1", "livingroom", (0, 832, 31, 895)),
-    ("painting_2", "livingroom", (32, 832, 63, 895)),
+    ("curtain_1", "generic", (174, 1680, 241, 1747)),
+    ("wall_clock_1", "livingroom", (388, 704, 413, 749)),
+    ("painting_1", "livingroom", (0, 850, 31, 883)),
+    ("painting_2", "livingroom", (32, 850, 63, 883)),
     # --- 厨房素材（客厅需要厨房区） ---
-    ("fridge_1", "kitchen", (0, 128, 63, 223)),
-    ("stove_1", "kitchen", (256, 192, 287, 223)),
-    ("sink_1", "kitchen", (256, 256, 287, 287)),
-    ("counter_1", "kitchen", (128, 256, 191, 287)),
-    ("wall_cabinet_1", "kitchen", (192, 64, 223, 95)),
-    # --- 健身房新增家具（达到 15-30 件密度）---
-    ("treadmill_1", "gym", (128, 448, 191, 511)),
-    ("treadmill_2", "gym", (192, 448, 255, 511)),
-    ("exercise_ball_1", "gym", (64, 64, 95, 95)),
-    ("exercise_ball_2", "gym", (128, 64, 159, 95)),
-    ("bench_1", "gym", (320, 128, 383, 159)),
-    ("bench_2", "gym", (320, 192, 383, 223)),
-    ("locker_1", "gym", (128, 896, 191, 1023)),
-    ("water_dispenser_1", "gym", (448, 896, 479, 959)),
-    ("barbell_1", "gym", (256, 128, 319, 159)),
-    ("yoga_block_1", "gym", (0, 448, 31, 479)),
-    ("cable_machine_1", "gym", (384, 128, 447, 255)),
+    ("fridge_1", "kitchen", (288, 752, 319, 819)),
+    ("stove_1", "kitchen", (256, 354, 287, 407)),
+    ("sink_1", "kitchen", (266, 224, 315, 253)),
+    ("counter_1", "kitchen", (322, 232, 383, 263)),
+    ("wall_cabinet_1", "kitchen", (288, 76, 383, 95)),
+    # Visually checked against the purchased 32px theme sheets (2026-09-06).
+    # Inclusive bounds, native pixel size: whole objects, no neighbouring variants.
+    # Gym floor is an interior checker swatch, excluding its decorative border.
+    ("gymmat_1", "gym", (8, 48, 39, 79)),
+    ("gymmirror_1", "gym", (130, 686, 221, 731)),
+    ("gymrack_1", "gym", (130, 800, 191, 845)),
+    ("gymplate_1", "gym", (226, 772, 253, 797)),
+    ("treadmill_1", "gym", (330, 960, 373, 1041)),
+    ("exercise_ball_1", "gym", (14, 686, 49, 721)),
+    ("exercise_ball_2", "gym", (78, 686, 113, 721)),
+    ("bench_1", "gym", (194, 806, 255, 845)),
+    ("bench_2", "gym", (66, 800, 127, 845)),
+    ("barbell_1", "gym", (392, 682, 437, 699)),
+    ("gymbike_1", "gym", (206, 960, 241, 1023)),
+    ("gym_yoga_mat", "gym", (422, 390, 503, 445)),
+    ("cafe_counter", "kitchen", (64, 256, 223, 277)),
+    ("cafe_table", "kitchen", (306, 552, 365, 579)),
+    ("cafe_chair", "kitchen", (34, 354, 61, 381)),
+    ("cafe_espresso", "kitchen", (480, 764, 509, 793)),
+    ("cafe_cabinet", "kitchen", (288, 76, 383, 95)),
+    ("cafe_pastries", "kitchen", (128, 1242, 191, 1275)),
+    ("gym_elliptical_1", "gym", (266, 960, 309, 1023)),
+    ("gym_strength_machine_1", "gym", (290, 530, 351, 603)),
+    ("cafe_moka", "kitchen", (420, 762, 435, 789)),
 ]
 
-# Floor swatches in the gym sheet are ~30px tall preview squares rather than a seamless 32x32
-# tile, so this one frame is force-resized to a clean 32x32 after cropping (see collect_interior).
-INTERIOR_RESIZE = {
-    "gymmat_1": (32, 32),
-}
+# Keep native pixels for all inspected public-room furniture and floor swatches.
+INTERIOR_RESIZE = {}
 
 
 def load(zf: zipfile.ZipFile, name: str) -> Image.Image | None:
@@ -461,9 +465,9 @@ def pack(frames: dict[str, Image.Image], width: int = 2048, pad: int = 2) -> tup
 
 # --- Data-driven room maps (frontend/src/modules/town/map-loader.ts + interior.scene.ts) ---
 # Independent of everything above: reads no zip, only emits JSON. frontend/public/assets/town/
-# is gitignored (LimeZu is commercial-use-only, no redistribution), so these three rooms must be
+# is gitignored (LimeZu is commercial-use-only, no redistribution), so these rooms must be
 # regenerable from this script alone — nothing here is hand-edited after the fact. Re-run this
-# script whenever a room's layout changes; it always rewrites all three files.
+# script whenever a room's layout changes; it always rewrites all room files.
 ROOM_TILE = 32
 
 
@@ -496,93 +500,46 @@ def _perimeter_collisions(cols: int, rows: int, wall_rows: int = 3) -> list[dict
 
 
 def _home_living_room() -> dict:
-    cols, rows, wall_rows = 18, 11, 3
+    cols, rows, wall_rows = 20, 14, 3
     width, height = cols * ROOM_TILE, rows * ROOM_TILE
-    wall_bottom = wall_rows * ROOM_TILE
     floor, walls = _room_shell(cols, rows, wall_rows)
-    door_x = width // 2
     return {
-        "id": "home-living-room",
-        "title": "自己家 · 客厅",
-        "tileSize": ROOM_TILE,
-        "cols": cols,
-        "rows": rows,
-        "backgroundColor": "#f1e6d2",
-        "spawn": {"x": door_x, "y": height - 50},
-        "layers": {"floor": floor, "walls": walls},
-        "collisions": [
-            *_perimeter_collisions(cols, rows, wall_rows),
-            {"x": 50, "y": 170, "w": 130, "h": 90},  # 沙发组区域
-            {"x": 430, "y": wall_bottom, "w": 120, "h": 50},  # 书架（挂墙）
-            {"x": 30, "y": wall_bottom + 10, "w": 150, "h": 60},  # 电视柜
-            {"x": 330, "y": 150, "w": 90, "h": 70},  # 餐桌
-            {"x": 520, "y": wall_bottom + 10, "w": 50, "h": 90},  # 冰箱
+        "id": "home-living-room", "title": "我的家 · 留一点时间给自己", "tileSize": ROOM_TILE,
+        "cols": cols, "rows": rows, "backgroundColor": "#263d35",
+        "spawn": {"x": 320, "y": 380}, "layers": {"floor": floor, "walls": walls},
+        "collisions": _perimeter_collisions(cols, rows, wall_rows) + [
+            {"x": 62, "y": 152, "w": 116, "h": 26},
+            {"x": 405, "y": 210, "w": 70, "h": 64},
+            {"x": 470, "y": 340, "w": 64, "h": 28},
         ],
-        "doors": [
-            {"id": "front-door", "rect": {"x": door_x - 48, "y": height - 34, "w": 96, "h": 30}, "target": "town", "label": "回到小镇"},
-        ],
+        "doors": [{"id": "front-door", "rect": {"x": 288, "y": height - 24, "w": 64, "h": 24}, "target": "town", "label": "回到小镇"}],
         "furniture": [
-            # 客厅区（左侧）：温馨沙发组 + 茶几 + 地毯
-            {"id": "loveseat", "frame": "loveseat_wood", "x": 100, "y": 255},
-            {"id": "armchair-1", "frame": "armchair_wood", "x": 150, "y": 255},
-            {"id": "armchair-2", "frame": "armchair_blue", "x": 60, "y": 220},
-            {"id": "coffee-table", "frame": "coffee_table_wood", "x": 110, "y": 210},
-            {"id": "side-table", "frame": "side_table_round", "x": 160, "y": 195},
-            {"id": "floor-lamp", "frame": "floor_lamp_1", "x": 45, "y": 270},
-            {"id": "rug-living", "frame": "rug_pattern_1", "x": 110, "y": 230, "displayWidth": 150, "displayHeight": 150, "depth": 1},
-            # 电视墙（后墙左段）
-            {"id": "tv-cabinet", "frame": "tv_cabinet_1", "x": 90, "y": wall_bottom + 40},
-            {"id": "tv-screen", "frame": "tv_screen_1", "x": 90, "y": wall_bottom},
-            {"id": "plant-tv", "frame": "plant_3", "x": 40, "y": wall_bottom + 50},
-            {"id": "curtain-left", "frame": "curtain_1", "x": 20, "y": wall_bottom - 40, "depth": wall_bottom - 40},
-            {"id": "painting-tv", "frame": "painting_1", "x": 150, "y": 60, "depth": 60},
-            # 书架墙（后墙右段）
-            {"id": "bookshelf", "frame": "bookshelf_home_1", "x": 490, "y": wall_bottom},
-            {"id": "wall-clock", "frame": "wall_clock_1", "x": 400, "y": 60, "depth": 60},
-            {"id": "plant-shelf", "frame": "plant_1", "x": 555, "y": wall_bottom + 50},
-            {"id": "painting-shelf", "frame": "painting_2", "x": 360, "y": 60, "depth": 60},
-            # 餐厅区（中部）：餐桌 + 4 把椅子
-            {"id": "dining-table", "frame": "dining_table_1", "x": 375, "y": 215},
-            {"id": "chair-1", "frame": "dining_chair_1", "x": 330, "y": 185},
-            {"id": "chair-2", "frame": "dining_chair_2", "x": 420, "y": 185},
-            {"id": "chair-3", "frame": "dining_chair_1", "x": 330, "y": 245},
-            {"id": "chair-4", "frame": "dining_chair_2", "x": 420, "y": 245},
-            # 厨房角（右上）：冰箱 + 炉灶 + 水槽 + 操作台 + 吊柜
-            {"id": "fridge", "frame": "fridge_1", "x": 545, "y": wall_bottom + 85},
-            {"id": "counter", "frame": "counter_1", "x": 485, "y": wall_bottom + 56},
-            {"id": "stove", "frame": "stove_1", "x": 425, "y": wall_bottom + 56},
-            {"id": "sink", "frame": "sink_1", "x": 365, "y": wall_bottom + 56},
-            {"id": "wall-cabinet", "frame": "wall_cabinet_1", "x": 425, "y": wall_bottom, "depth": wall_bottom},
-            # 吧台区（右侧）
-            {"id": "bar-stool-1", "frame": "bar_stool_1", "x": 500, "y": 175},
-            {"id": "bar-stool-2", "frame": "bar_stool_2", "x": 535, "y": 175},
-            {"id": "plant-corner", "frame": "plant_2", "x": 560, "y": 295},
-            # 门口地毯
-            {"id": "doormat", "frame": "doormat_1", "x": door_x, "y": height - 6, "displayWidth": 96, "depth": 1},
-            # M3-3/M3-4：三件可交互家具，interactive.actionId 对应 world-actions.ts 里注册的能力，
-            # 点开的效果由那边的 run() 决定——这里只标"点这里能干嘛"。位置都挑了本图里原本空着的地板。
-            {"id": "desk", "frame": "desk_1", "x": 480, "y": 320,
+            {"id": "rug-living", "frame": "rug_pattern_1", "x": 132, "y": 276, "displayWidth": 176, "displayHeight": 120, "depth": 1},
+            {"id": "loveseat", "frame": "loveseat_wood", "x": 120, "y": 180},
+            {"id": "armchair", "frame": "armchair_blue", "x": 216, "y": 234},
+            {"id": "coffee-table", "frame": "coffee_table_wood", "x": 124, "y": 240},
+            {"id": "floor-lamp", "frame": "floor_lamp_1", "x": 54, "y": 190},
+            {"id": "plant-living", "frame": "plant_3", "x": 56, "y": 310},
+            {"id": "bookshelf", "frame": "bookshelf_home_1", "x": 488, "y": 108},
+            {"id": "painting-left", "frame": "painting_1", "x": 100, "y": 64},
+            {"id": "painting-right", "frame": "painting_2", "x": 152, "y": 64},
+            {"id": "clock", "frame": "wall_clock_1", "x": 364, "y": 64},
+            {"id": "plant-shelf", "frame": "plant_1", "x": 580, "y": 160},
+            {"id": "dining-table", "frame": "dining_table_1", "x": 440, "y": 275},
+            {"id": "chair-1", "frame": "dining_chair_1", "x": 385, "y": 240},
+            {"id": "chair-2", "frame": "dining_chair_2", "x": 495, "y": 240},
+            {"id": "plant-corner", "frame": "plant_2", "x": 580, "y": 380},
+            {"id": "doormat", "frame": "doormat_1", "x": 320, "y": height - 8, "displayWidth": 80, "depth": 1},
+            {"id": "desk", "frame": "desk_1", "x": 500, "y": 360,
              "interactive": {"actionId": "home.open-desk", "label": "打开书桌"}},
-            {"id": "achievement-board", "frame": "board_2", "x": 315, "y": wall_bottom,
+            {"id": "achievement-board", "frame": "board_2", "x": 282, "y": 108,
              "interactive": {"actionId": "home.open-achievement-wall", "label": "看看成就墙"}},
-            # 宠物窝：M3-5 的宠物（有像素素材的狗/兔/鸟，或占位窝）就画在这件家具的位置上，
-            # 见 interior.scene.ts 的 drawPet()——它按 interactive.actionId 找这个点，不需要
-            # 房间数据再单独描述一次宠物的坐标。
-            {"id": "pet-bed", "frame": "rug_pattern_2", "x": 195, "y": 320,
-             "displayWidth": 40, "displayHeight": 40, "depth": 1,
+            {"id": "pet-bed", "frame": "rug_pattern_2", "x": 174, "y": 368, "depth": 1,
              "interactive": {"actionId": "home.open-pet-house", "label": "宠物窝"}},
         ],
-        "slots": [
-            # 照片墙：成就进度决定挂几张照片（最多 4 张，循环 4 种画框）
-            {"id": "wall-frames", "frames": ["frame_1", "frame_2", "frame_3", "frame_4"], "metric": "homeAchievements",
-             "max": 4, "anchor": {"x": 240, "y": 50}, "step": {"x": 50, "y": 0}},
-        ],
+        "slots": [{"id": "wall-frames", "frames": ["frame_1", "frame_2", "frame_3", "frame_4"],
+                   "metric": "homeAchievements", "max": 4, "anchor": {"x": 220, "y": 58}, "step": {"x": 34, "y": 0}}],
         "seats": [],
-        "lights": [
-            {"type": "window", "x": 20, "y": wall_bottom - 20, "label": "左侧窗户"},
-            {"type": "ceiling", "x": width // 2, "y": wall_bottom + 80, "label": "吊灯"},
-            {"type": "ambient", "x": 50, "y": 270, "label": "落地灯"},
-        ],
     }
 
 
@@ -643,84 +600,106 @@ def _academy_study() -> dict:
     }
 
 
-def _public_gym() -> dict:
-    cols, rows, wall_rows = 16, 10, 3
-    width, height = cols * ROOM_TILE, rows * ROOM_TILE
-    wall_bottom = wall_rows * ROOM_TILE
-    floor, walls = _room_shell(cols, rows, wall_rows, floor_tile="gymmat_1")
-    door_x = width // 2
+def _public_room(room_id: str, title: str, floor_tile: str) -> dict:
+    """Public rooms share a wide central aisle and a spawn outside the exit trigger."""
+    cols, rows = 20, 14
+    floor, walls = _room_shell(cols, rows, floor_tile=floor_tile)
     return {
-        "id": "public-gym",
-        "title": "健身房",
-        "tileSize": ROOM_TILE,
-        "cols": cols,
-        "rows": rows,
-        "backgroundColor": "#dfe6ee",
-        "spawn": {"x": door_x, "y": height - 40},
-        "layers": {"floor": floor, "walls": walls},
-        "collisions": [
-            *_perimeter_collisions(cols, rows, wall_rows),
-            {"x": 50, "y": 150, "w": 80, "h": 70},  # 哑铃架区
-            {"x": 140, "y": 150, "w": 100, "h": 60},  # 长凳区
-            {"x": 360, "y": 160, "w": 80, "h": 100},  # 拉力器
-            {"x": 100, "y": 260, "w": 150, "h": 60},  # 跑步机
-            {"x": 430, "y": wall_bottom, "w": 60, "h": 120},  # 储物柜
+        "id": room_id, "title": title, "tileSize": ROOM_TILE,
+        "cols": cols, "rows": rows, "backgroundColor": "#30333b",
+        "spawn": {"x": 320, "y": 384}, "layers": {"floor": floor, "walls": walls},
+        "collisions": _perimeter_collisions(cols, rows) + [
+            # Close the front edge except for the actual 64px doorway.
+            {"x": 32, "y": 432, "w": 256, "h": 16},
+            {"x": 352, "y": 432, "w": 256, "h": 16},
         ],
-        "doors": [
-            {"id": "front-door", "rect": {"x": door_x - 48, "y": height - 34, "w": 96, "h": 30}, "target": "town", "label": "离开健身房"},
-        ],
-        "furniture": [
-            # 镜墙（后墙左中段）
-            {"id": "mirror-1", "frame": "gymmirror_1", "x": 120, "y": wall_bottom},
-            {"id": "mirror-2", "frame": "gymmirror_1", "x": 200, "y": wall_bottom},
-            {"id": "mirror-3", "frame": "gymmirror_1", "x": 280, "y": wall_bottom},
-            # 哑铃架区（左上）
-            {"id": "rack", "frame": "gymrack_1", "x": 90, "y": 220},
-            {"id": "exercise-ball-1", "frame": "exercise_ball_1", "x": 50, "y": 170},
-            {"id": "exercise-ball-2", "frame": "exercise_ball_2", "x": 120, "y": 170},
-            # 长凳区（中上）
-            {"id": "bench-1", "frame": "bench_1", "x": 190, "y": 180},
-            {"id": "bench-2", "frame": "bench_2", "x": 190, "y": 230},
-            {"id": "barbell-1", "frame": "barbell_1", "x": 240, "y": 160},
-            {"id": "yoga-block-1", "frame": "yoga_block_1", "x": 150, "y": 220},
-            {"id": "yoga-block-2", "frame": "yoga_block_1", "x": 230, "y": 220},
-            # 拉力器（右上）
-            {"id": "cable-machine", "frame": "cable_machine_1", "x": 400, "y": 220},
-            # 跑步机区（左下）
-            {"id": "treadmill-1", "frame": "treadmill_1", "x": 130, "y": 310},
-            {"id": "treadmill-2", "frame": "treadmill_2", "x": 210, "y": 310},
-            # 储物柜 + 饮水机（右侧）
-            {"id": "locker", "frame": "locker_1", "x": 460, "y": wall_bottom + 100},
-            {"id": "water-dispenser", "frame": "water_dispenser_1", "x": 460, "y": 240},
-            # 打卡黑板（右下角）
-            {"id": "board", "frame": "board_1", "x": 450, "y": 300},
-            # 绿植装饰
-            {"id": "plant-1", "frame": "plant_1", "x": 30, "y": wall_bottom + 50},
-            {"id": "plant-2", "frame": "plant_2", "x": 330, "y": wall_bottom + 50},
-            {"id": "plant-3", "frame": "plant_1", "x": width - 30, "y": 280},
-            # 瑜伽垫区标记（地面装饰，低 depth）
-            {"id": "yoga-mat-1", "frame": "doormat_1", "x": 340, "y": 280, "displayWidth": 48, "displayHeight": 80, "depth": 1},
-            {"id": "yoga-mat-2", "frame": "doormat_1", "x": 340, "y": 240, "displayWidth": 48, "displayHeight": 80, "depth": 1},
-        ],
-        "slots": [
-            # 健康任务完成数决定杠铃片数量（最多 6 片，横向排列）
-            {"id": "weight-plates", "frames": ["gymplate_1"], "metric": "healthDone", "max": 6,
-             "anchor": {"x": 150, "y": 200}, "step": {"x": 18, "y": 0}},
-        ],
-        "seats": [],
-        "lights": [
-            {"type": "ceiling", "x": width // 2, "y": height // 2, "label": "中央顶灯"},
-            {"type": "ceiling", "x": 120, "y": 180, "label": "左侧顶灯"},
-            {"type": "ceiling", "x": width - 120, "y": 180, "label": "右侧顶灯"},
-        ],
+        "doors": [{"id": "front-door", "rect": {"x": 288, "y": 424, "w": 64, "h": 24},
+                   "target": "town", "label": "回到小镇", "spawn": {"x": 320, "y": 384}}],
+        "furniture": [], "slots": [], "seats": [],
     }
 
 
+def _public_prop(room: dict, prop_id: str, frame: str, x: int, y: int,
+                 foot_height: int = 0, foot_inset: int = 2,
+                 action: str | None = None, label: str | None = None,
+                 depth: int | None = None) -> None:
+    """Native bottom-centred art; solid footprints occupy only its lower portion.
+
+    Wall art, rugs and tabletop objects use foot_height=0. Click boxes cover the
+    actual sprite instead of the engine's default single-tile target.
+    """
+    box = next(box for name, _, box in INTERIOR_PIECES if name == frame)
+    w, h = box[2] - box[0] + 1, box[3] - box[1] + 1
+    prop = {"id": prop_id, "frame": frame, "x": x, "y": y}
+    if depth is not None:
+        prop["depth"] = depth
+    if action:
+        prop["interactive"] = {"actionId": action, "label": label,
+                               "hit": {"x": x - w / 2, "y": y - h, "w": w, "h": h}}
+    room["furniture"].append(prop)
+    if foot_height:
+        room["collisions"].append({"x": x - w / 2 + foot_inset, "y": y - foot_height,
+                                   "w": w - 2 * foot_inset, "h": foot_height})
+
+
+def _public_gym() -> dict:
+    room = _public_room("public-gym", "健身房 · 按自己的节奏", "gymmat_1")
+    add = lambda *args, **kwargs: _public_prop(room, *args, **kwargs)
+    # Mirror / weights at the rear, cardio on the left, strength / stretching on
+    # the right. No furniture crosses the x=280..360 entrance-to-rear aisle.
+    add("mirror-left", "gymmirror_1", 136, 88)
+    add("mirror-right", "gymmirror_1", 232, 88)
+    add("rack", "gymrack_1", 132, 160, 16,
+        action="gym.open-attributes", label="看看健康成长")
+    add("weight-bench", "bench_2", 224, 172, 18)
+    add("barbell", "barbell_1", 224, 136, depth=173)
+    add("exercise-ball-red", "exercise_ball_1", 438, 148, 14, 8)
+    add("exercise-ball-blue", "exercise_ball_2", 494, 148, 14, 8)
+    add("strength-machine", "gym_strength_machine_1", 468, 260, 36)
+    add("rest-bench", "bench_1", 548, 260, 16)
+    add("treadmill", "treadmill_1", 100, 302, 46)
+    add("elliptical", "gym_elliptical_1", 176, 302, 30)
+    add("exercise-bike", "gymbike_1", 242, 302, 24)
+    add("stretch-mat-left", "gym_yoga_mat", 438, 364, depth=1)
+    add("stretch-mat-right", "gym_yoga_mat", 542, 364, depth=1)
+    add("plant", "plant_1", 568, 150, 12, 10)
+    add("entry-mat", "doormat_1", 320, 438, depth=1)
+    # Progress plates are small flat discs in the weights area, outside the aisle.
+    room["slots"] = [{"id": "weight-plates", "frames": ["gymplate_1"],
+                      "metric": "healthDone", "max": 4,
+                      "anchor": {"x": 88, "y": 198}, "step": {"x": 34, "y": 0}, "depth": 1}]
+    return room
+
+
+def _cafe_interior() -> dict:
+    room = _public_room("cafe-interior", "咖啡馆 · 坐下来想想下一步", "floor_1")
+    add = lambda *args, **kwargs: _public_prop(room, *args, **kwargs)
+    # A complete service counter with appliances resting on its top, plus two
+    # pairs of tables. Keep the central aisle and the space before the exit clear.
+    add("wall-cabinet", "cafe_cabinet", 156, 64)
+    add("service-counter", "cafe_counter", 156, 150, 18)
+    add("espresso-machine", "cafe_espresso", 104, 130, depth=151)
+    add("moka-pot", "cafe_moka", 142, 130, depth=151)
+    add("pastry-case", "cafe_pastries", 202, 130, depth=151)
+    add("plant-counter", "plant_1", 60, 148, 12, 10)
+    add("goals-table", "cafe_table", 458, 166, 16,
+        action="cafe.open-goals", label="整理下一步目标")
+    add("goals-chair-left", "cafe_chair", 404, 170, 10)
+    add("goals-chair-right", "cafe_chair", 512, 170, 10)
+    for prefix, x, y in [("window", 154, 270), ("friends", 458, 284), ("quiet", 154, 370)]:
+        add(f"{prefix}-table", "cafe_table", x, y, 16)
+        add(f"{prefix}-chair-left", "cafe_chair", x - 54, y + 4, 10)
+        add(f"{prefix}-chair-right", "cafe_chair", x + 54, y + 4, 10)
+    add("plant-corner", "plant_2", 564, 384, 10, 10)
+    add("entry-mat", "doormat_1", 320, 438, depth=1)
+    return room
+
+
 def generate_room_maps(out: Path) -> list[dict]:
-    """Regenerate the three room maps under out/maps/*.json. Pure Python, no zip/Pillow
+    """Regenerate the room maps under out/maps/*.json. Pure Python, no zip/Pillow
     involved — safe to call on its own, and always produces the same output for the same code
     (the actual requirement, since the output directory is gitignored)."""
-    rooms = [_home_living_room(), _academy_study(), _public_gym()]
+    rooms = [_home_living_room(), _academy_study(), _public_gym(), _cafe_interior()]
     maps_dir = out / "maps"
     maps_dir.mkdir(parents=True, exist_ok=True)
     for room in rooms:
@@ -760,6 +739,8 @@ def main() -> int:
         print(f"farm pack: {len(farm_frames)} animal frames, {len(labour_manifest)} labour animations -> {farm_path}")
     else:
         print(f"farm pack not found at {farm_path}, skipping animal frames and labour animations")
+
+    (out / "characters" / "labour-anims.json").write_text(json.dumps(labour_manifest))
 
     atlas, data = pack(frames)
     atlas.save(out / "town-atlas.png", optimize=True)

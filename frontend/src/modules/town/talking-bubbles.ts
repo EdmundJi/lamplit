@@ -120,3 +120,28 @@ export function layoutBubbles(bubbles: BubbleBox[], camera: CameraRect): BubbleB
   }
   return placed
 }
+
+/** Phaser's default word wrapping cannot break a Chinese sentence without spaces. */
+export function wrapSpeech(text: string, columns = 16): string[] {
+  const lines: string[] = []
+  let line = '', width = 0
+  for (const char of Array.from(text)) {
+    const size = /[\u0000-\u00ff]/.test(char) ? 0.55 : 1
+    if (char === '\n' || (width + size > columns && line)) {
+      lines.push(line)
+      line = ''
+      width = 0
+      if (char === '\n') continue
+    }
+    line += char
+    width += size
+  }
+  if (line) lines.push(line)
+  return lines
+}
+
+
+/** NPC conversations use the bond between those two NPCs, not their bond with the player. */
+export function peerBubbleTier(a: { code: string; affinityToNpcs?: Record<string, number> }, b: { code: string; affinityToNpcs?: Record<string, number> }): BubbleTier {
+  return bubbleTierFor(a.affinityToNpcs?.[b.code] ?? b.affinityToNpcs?.[a.code] ?? 0)
+}

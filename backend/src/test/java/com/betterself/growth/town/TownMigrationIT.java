@@ -61,6 +61,7 @@ class TownMigrationIT {
     @Autowired JdbcTemplate jdbc;
     @Autowired TownSocietyService society;
     @Autowired TownMigrationService migration;
+    @Autowired TownDailyProduction daily;
 
     @Test
     void mutualFriendsSwapABackgroundResidentAndBothTownsStayAtEighteen() throws Exception {
@@ -126,6 +127,28 @@ class TownMigrationIT {
             "select count(*) from town_fact where kind = 'CROSS_TOWN_TALE' and town_user_id in (?, ?)",
             Integer.class, userIdA, userIdB);
         assertThat(crossTownTales).isGreaterThan(0);
+        // The swapped identity includes its rhythm; today's persisted plan remains frozen.
+        String expectedRhythmB=jdbc.queryForObject("select rhythm from town_npc where town_user_id=? and npc_code=?",String.class,userIdB,codeFromB);
+        assertThat(expectedRhythmB).isNotBlank();
+        // Revoking friendship closes every copied tale's read/relay path immediately.
+        var crossIds=jdbc.queryForList("select public_id from town_fact where kind='CROSS_TOWN_TALE' and town_user_id in (?,?)",String.class,userIdA,userIdB);
+        jdbc.update("update town_npc_knowledge set salience=0 where town_user_id in (?,?)",userIdA,userIdB);
+        jdbc.update("""
+            update town_npc_knowledge k join town_fact f on f.id=k.fact_id set k.salience=1
+            where k.town_user_id in (?,?) and f.kind='CROSS_TOWN_TALE'
+            """,userIdA,userIdB);
+        assertThat(java.util.stream.Stream.concat(society.roster(userIdA).npcs().stream(),society.roster(userIdB).npcs().stream())
+            .flatMap(n->n.talkingPoints().stream()).map(TownSocietyService.TalkingPoint::factId).toList()).containsAnyElementsOf(crossIds);
+        jdbc.update("update town_fact set occurred_on=? where kind='CROSS_TOWN_TALE' and town_user_id in (?,?)",
+            java.sql.Date.valueOf(LocalDate.now().minusDays(15)),userIdA,userIdB);
+        assertThat(java.util.stream.Stream.concat(society.roster(userIdA).npcs().stream(),society.roster(userIdB).npcs().stream())
+            .flatMap(n->n.talkingPoints().stream()).map(TownSocietyService.TalkingPoint::factId).toList()).doesNotContainAnyElementsOf(crossIds);
+        jdbc.update("update town_fact set occurred_on=? where kind='CROSS_TOWN_TALE' and town_user_id in (?,?)",
+            java.sql.Date.valueOf(LocalDate.now()),userIdA,userIdB);
+        jdbc.update("delete from friend_relationship where requester_user_id in (?,?) and addressee_user_id in (?,?)",userIdA,userIdB,userIdA,userIdB);
+        assertThat(java.util.stream.Stream.concat(society.roster(userIdA).npcs().stream(),society.roster(userIdB).npcs().stream())
+            .flatMap(n->n.talkingPoints().stream()).map(TownSocietyService.TalkingPoint::factId).toList()).doesNotContainAnyElementsOf(crossIds);
+
     }
 
     @Test
@@ -155,10 +178,56 @@ class TownMigrationIT {
         migration.runNightly(lonelyId, today.plusDays(10));
 
         assertThat(travelerExists(lonelyId)).as("停留超过几天后旅人应该离开").isFalse();
+        migration.runNightly(lonelyId,today.plusDays(10));
+        assertThat(travelerExists(lonelyId)).as("重跑离开当天不能马上再生一个旅人").isFalse();
         Integer leftoverKnowledge = jdbc.queryForObject(
             "select count(*) from town_npc_knowledge where town_user_id = ? and npc_code = 'TRAVELER'",
             Integer.class, lonelyId);
         assertThat(leftoverKnowledge).isZero();
+    }
+
+    @Test
+    void concurrentFriendJobsCommitOneAtomicPairAndRetriesDoNotSwapAgain() throws Exception {
+        register("town-concurrent-a@example.test");
+        register("town-concurrent-b@example.test");
+        long a=userIdOf("town-concurrent-a@example.test"),b=userIdOf("town-concurrent-b@example.test");
+        society.roster(a);society.roster(b);befriend(a,b);
+        backdateLayerThreeSettledAt(a,LocalDateTime.now().minusDays(30));
+        backdateLayerThreeSettledAt(b,LocalDateTime.now().minusDays(30));
+        int before=countMigrations();
+        try(var executor=java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            for(int i=0;i<60 && countMigrations()==before;i++) {
+                LocalDate date=LocalDate.now().plusDays(i);
+                var first=executor.submit(() -> migration.runNightly(a,date));
+                var second=executor.submit(() -> migration.runNightly(b,date));
+                first.get(15,java.util.concurrent.TimeUnit.SECONDS);
+                second.get(15,java.util.concurrent.TimeUnit.SECONDS);
+                migration.runNightly(a,date);migration.runNightly(b,date);
+            }
+        }
+        assertThat(countMigrations()-before).isEqualTo(2);
+        assertThat(countNpcs(a)).isEqualTo(18);
+        assertThat(countNpcs(b)).isEqualTo(18);
+    }
+
+    @Test
+    void aCrossTimezoneExchangeRecordsTheArrivalDateOfEachDestination() throws Exception {
+        register("town-zone-a@example.test");register("town-zone-b@example.test");
+        long a=userIdOf("town-zone-a@example.test"),b=userIdOf("town-zone-b@example.test");
+        jdbc.update("update sys_user set timezone='Pacific/Honolulu' where id=?",b);
+        society.roster(a);society.roster(b);befriend(a,b);
+        backdateLayerThreeSettledAt(a,LocalDateTime.now().minusDays(30));
+        backdateLayerThreeSettledAt(b,LocalDateTime.now().minusDays(30));
+        int before=countMigrations();
+        LocalDate movedOn=null;
+        for(int i=0;i<60 && countMigrations()==before;i++) {
+            movedOn=daily.today(a).plusDays(i);
+            migration.runNightly(a,movedOn);
+        }
+        assertThat(countMigrations()-before).isEqualTo(2);
+        assertThat(jdbc.queryForObject("select local_date from town_migration where to_user_id=?",LocalDate.class,a)).isEqualTo(movedOn);
+        assertThat(jdbc.queryForObject("select local_date from town_migration where to_user_id=?",LocalDate.class,b))
+            .isEqualTo(daily.dateForPeer(a,b,movedOn));
     }
 
     // ---------------------------------------------------------------- helpers

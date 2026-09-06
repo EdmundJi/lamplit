@@ -121,6 +121,41 @@ function baseFixture() {
       greeting: '昨天你把最难的一章啃完了，今天可以轻一点。',
       insights: ['连续 21 天没有断过', '知识维度涨得最快'],
     },
+    /**
+     * `GET /town/npcs`。**必须打桩**，而且必须是 `{ npcs, initiativeBudget }` 这个对象形状
+     * （town-npc.types.ts 的注释里写着 "an object, not a bare array"）。
+     *
+     * 之前这个接口落到了 commands.ts 的兜底 `envelope([])` 上，于是 store 里
+     * `this.npcs = response.npcs` 拿到 undefined，引擎 create() 走到
+     * `if (townNpcRoster.length > 0)` 直接抛 TypeError，整个 create() 在 setupInput()
+     * 之前中断——小人没有键盘、镜头没有跟随对象。而 e2e.ts 又把 Phaser 相关的报错静音了，
+     * 所以这一切在日志里一个字都看不到，只表现为若干条"selfWalker 为 null"的断言失败。
+     */
+    npcs: {
+      npcs: [
+        {
+          code: 'npc-baker', displayName: '面包师老周', layer: 1, sprite: 'c05',
+          dimension: null, interests: {}, affinityToPlayer: 10, mood: { valence: 0.4, energy: 0.6 },
+          schedule: [
+            { startHour: 0, endHour: 8, place: 'home', activity: 'resting' },
+            { startHour: 8, endHour: 18, place: 'cafe', activity: 'working' },
+            { startHour: 18, endHour: 24, place: 'home', activity: 'resting' },
+          ],
+          talkingPoints: [],
+        },
+        {
+          code: 'npc-coach', displayName: '教练阿岚', layer: 2, sprite: 'c09',
+          dimension: 'FITNESS', interests: { FITNESS: 0.8 }, affinityToPlayer: 30, mood: { valence: 0.6, energy: 0.9 },
+          schedule: [
+            { startHour: 0, endHour: 7, place: 'home', activity: 'resting' },
+            { startHour: 7, endHour: 21, place: 'gym', activity: 'working' },
+            { startHour: 21, endHour: 24, place: 'home', activity: 'resting' },
+          ],
+          talkingPoints: [],
+        },
+      ],
+      initiativeBudget: { limit: 3, used: 0 },
+    },
     npcMessages: [] as unknown[],
     /** 伙伴面板会直接读 selectedPet，给一个最小但完整的资料，避免空态在渲染里炸掉。 */
     partnerProfile: {

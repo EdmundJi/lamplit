@@ -25,16 +25,15 @@ import java.util.random.RandomGenerator;
  *   <li>下雨 → 户外行程缩短（{@link #applyWeather}）；</li>
  *   <li>对玩家亲密度高 → 有概率顺路加一件小事（{@link #applyAffinityDeviation}）；</li>
  *   <li>{@code town_event}（M4 的表）→ 必定插入一条 priority=2 的行程（{@link #applyEvents}）。
- *       那张表由并行开发接 V23，这里只接收调用方传入的 {@link DayPlanContext#events()}——
- *       生产路径目前传空集合，TODO：M4 落地后把 town_event 查询接进来。</li>
+ *       由 TownSocietyService 查询已决定的活动与请柬，作为 {@link DayPlanContext#events()} 输入。</li>
  * </ul>
  */
 final class TownDayPlan {
 
     static final int MINUTES_PER_DAY = 1440;
 
-    /** 所有地点之间统一按 15 分钟通勤算——MVP 简化，日程里的地点本来就没有真实的地理距离。 */
-    private static final int COMMUTE_MINUTES = 15;
+    /** 紧凑小镇的地点之间统一按 2 分钟通勤算——MVP 简化，日程里的地点本来就没有真实的地理距离。 */
+    private static final int COMMUTE_MINUTES = 2;
 
     /** 心情阈值：低于此值开始减少外出，更低则减得更多（plan §3.5「输入取自心情」）。 */
     private static final double MOOD_LOW = -0.2;
@@ -52,8 +51,8 @@ final class TownDayPlan {
     private static final int AFFINITY_EXTRA_DURATION_SPAN = 30;
     private static final int AFFINITY_EXTRA_ATTEMPTS = 20;
 
-    /** encounters() 按这个步长抽样两条时间线；15 分钟的通勤腿至少能撞上 2~3 个采样点。 */
-    private static final int ENCOUNTER_SAMPLE_STEP_MINUTES = 5;
+    /** encounters() 按这个步长抽样两条时间线；2 分钟的通勤腿按分钟取样，短通行也能进入相遇序列。 */
+    private static final int ENCOUNTER_SAMPLE_STEP_MINUTES = 1;
 
     private TownDayPlan() {
     }

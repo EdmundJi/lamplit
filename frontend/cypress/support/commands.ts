@@ -22,6 +22,7 @@ Cypress.Commands.add('mockTown', (overrides: Partial<TownFixture> = {}) => {
   cy.intercept('GET', '/api/v1/me', { statusCode: 200, body: envelope(fixture.me) }).as('me')
   cy.intercept('GET', '/api/v1/me/profile', { statusCode: 200, body: envelope(fixture.profile) })
   cy.intercept('GET', '/api/v1/town', { statusCode: 200, body: envelope(fixture.town) }).as('town')
+  cy.intercept('GET', '/api/v1/town/npcs', { statusCode: 200, body: envelope(fixture.npcs) }).as('npcs')
   cy.intercept('POST', '/api/v1/town/presence', { statusCode: 200, body: envelope(fixture.presence) }).as('presence')
   cy.intercept('GET', '/api/v1/town/reflection/latest', {
     statusCode: fixture.reflection ? 200 : 404,

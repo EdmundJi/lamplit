@@ -11,7 +11,7 @@ const routerMock = vi.hoisted(() => ({ push: vi.fn() }))
 const engine = vi.hoisted(() => ({
   game: {
     setRun: vi.fn(), focus: vi.fn(), destroy: vi.fn(), applyModel: vi.fn(), celebrate: vi.fn(),
-    setNight: vi.fn(), enterAcademy: vi.fn(), exitAcademy: vi.fn(),
+    travelTo: vi.fn(), setObservation: vi.fn(), setNight: vi.fn(), enterAcademy: vi.fn(), exitAcademy: vi.fn(),
   },
   handlers: {
     onSelect: undefined as undefined | ((id: string | null) => void),
@@ -209,27 +209,29 @@ describe('ImmersiveTown', () => {
     return found
   }
 
-  it('walking up to an NPC pops the world action menu with its panel-open action plus the global ones', async () => {
+  it('More explicitly opens the action menu for an NPC without adding another automatic popup', async () => {
     const wrapper = await mountShell()
     expect(wrapper.find('.world-action-menu').exists()).toBe(false)
 
     engine.handlers.onSelect?.('npc:assistant')
     await flushPromises()
+    await wrapper.get('[aria-label="更多地点操作"]').trigger('click')
     expect(wrapper.find('.world-action-menu').exists()).toBe(true)
     expect(wrapper.text()).toContain('打开AI 助手')
     expect(wrapper.text()).toContain('回到我家')
     wrapper.unmount()
   })
 
-  it('running "回到我家" from the action menu focuses the self resident and shows feedback', async () => {
+  it('running "回到我家" starts real travel and shows pending feedback', async () => {
     const wrapper = await mountShell()
     engine.handlers.onSelect?.('npc:assistant')
     await flushPromises()
+    await wrapper.get('[aria-label="更多地点操作"]').trigger('click')
 
     await menuButton(wrapper, '回到我家').trigger('click')
     await flushPromises()
-    expect(engine.game.focus).toHaveBeenCalledWith('me')
-    expect(wrapper.text()).toContain('回家了')
+    expect(engine.game.travelTo).toHaveBeenCalledWith('home')
+    expect(wrapper.text()).toContain('正在往家走')
     wrapper.unmount()
   })
 
@@ -237,6 +239,7 @@ describe('ImmersiveTown', () => {
     const wrapper = await mountShell()
     engine.handlers.onSelect?.('npc:assistant')
     await flushPromises()
+    await wrapper.get('[aria-label="更多地点操作"]').trigger('click')
 
     const nightButtonText = wrapper.text().includes('切到夜晚') ? '切到夜晚' : '切到白天'
     await menuButton(wrapper, nightButtonText).trigger('click')
@@ -251,25 +254,21 @@ describe('ImmersiveTown', () => {
     wrapper.unmount()
   })
 
-  it('entering the academy needs no confirmation, but leaving it asks first', async () => {
+  it('entering and leaving the academy each need one action', async () => {
     const wrapper = await mountShell()
     engine.handlers.onSelect?.('academy')
     await flushPromises()
+    await wrapper.get('[aria-label="更多地点操作"]').trigger('click')
 
     await menuButton(wrapper, '去成长学院').trigger('click')
     await flushPromises()
     expect(engine.game.enterAcademy).toHaveBeenCalledTimes(1)
     expect(wrapper.text()).toContain('回到小镇')
 
-    // 再次点击"回到小镇"：先展示确认文案，还不应该调用 exitAcademy。
     await menuButton(wrapper, '回到小镇').trigger('click')
     await flushPromises()
-    expect(engine.game.exitAcademy).not.toHaveBeenCalled()
-    expect(wrapper.text()).toContain('确定要离开学院吗？')
-
-    await wrapper.get('.world-action-confirm-buttons button:last-child').trigger('click')
-    await flushPromises()
     expect(engine.game.exitAcademy).toHaveBeenCalledTimes(1)
+    expect(wrapper.find('.world-action-confirm-buttons').exists()).toBe(false)
     wrapper.unmount()
   })
 
@@ -278,6 +277,7 @@ describe('ImmersiveTown', () => {
     await (await dockButton(wrapper, '目标')).trigger('click')
     engine.handlers.onSelect?.('npc:assistant')
     await flushPromises()
+    await wrapper.get('[aria-label="更多地点操作"]').trigger('click')
     expect(wrapper.find('.world-action-menu').exists()).toBe(true)
     expect(wrapper.find('.world-panel').exists()).toBe(true)
 

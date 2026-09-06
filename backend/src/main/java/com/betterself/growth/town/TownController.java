@@ -95,6 +95,15 @@ public class TownController {
         return envelope(society.roster(user.id()), request);
     }
 
+    @PostMapping("/npc/{npc}/tell")
+    ApiEnvelope<Void> tell(@AuthenticationPrincipal CurrentUser user, @PathVariable("npc") String npcCode,
+                           @RequestBody TellCommand body, HttpServletRequest request) {
+        society.tell(user.id(), npcCode, body == null ? null : body.kind());
+        return envelope(null, request);
+    }
+
+    public record TellCommand(String kind) {}
+
     /**
      * 某个 NPC 今天想说的话。返回的每一条都只来自他自己的 knowledge，
      * 所以小助（全知但 no_relay）在这里永远是空的——这正是限知模型该有的样子。

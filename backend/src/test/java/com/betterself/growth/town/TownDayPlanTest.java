@@ -37,6 +37,24 @@ class TownDayPlanTest {
     // ---------------------------------------------------------------- M7-2 generate()
 
     @Test
+    void compactTownCommutesAreVisibleAndOneMinuteCrossingsAreSampled() {
+        var date=java.time.LocalDate.of(2026,9,6);
+        var rhythm=TownNpcRhythm.defaultFor("KE_YUN",java.util.Map.of("KNOWLEDGE",1.0),0.5,0.5);
+        var context=new TownDayPlan.DayPlanContext(0,false,0.15,java.util.List.of());
+        var plan=TownDayPlan.generate("KE_YUN",2,rhythm,context,date);
+        assertThat(plan.legs()).isNotEmpty().allSatisfy(leg ->
+            assertThat(leg.arriveMinute()-leg.departMinute()).isBetween(1,2));
+        assertThat(TownDayPlan.generate("KE_YUN",2,rhythm,context,date)).isEqualTo(plan);
+        var a=new TownDayPlan.DayPlan(date, java.util.List.of(
+            new TownDayPlan.Errand("home","idle",0,601,1,"RHYTHM"),
+            new TownDayPlan.Errand("cafe","sit",601,602,1,"RHYTHM"),
+            new TownDayPlan.Errand("home","idle",602,1440,1,"RHYTHM")),java.util.List.of());
+        var plans=java.util.Map.of("A",a,"B",a);
+        assertThat(TownDayPlan.encounters(plans)).isNotEmpty();
+        assertThat(TownDayPlan.encounters(plans)).isEqualTo(TownDayPlan.encounters(plans));
+    }
+
+    @Test
     void coversTheWholeDayWithNoHolesAndNoOverlap() {
         TownNpcRhythm.Rhythm rhythm = rhythmFor("KE_YUN", "KNOWLEDGE", 0.5, 0.85);
         TownDayPlan.DayPlan plan = TownDayPlan.generate("KE_YUN", 2, rhythm, neutralContext(), DAY);

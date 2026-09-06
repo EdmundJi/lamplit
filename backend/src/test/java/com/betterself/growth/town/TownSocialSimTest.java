@@ -37,6 +37,21 @@ class TownSocialSimTest {
         );
     }
 
+    @Test
+    void forbiddenIntermediateListenerCannotRelayAPlayerFactOnwards() {
+        var personas=Map.of("A",persona("A",1,1,Map.of("KNOWLEDGE",1.0),Set.of("GOSSIP_HUB")),
+            "B",new Persona("B",3,1,1,Map.of("KNOWLEDGE",1.0),Set.of("GOSSIP_HUB")),
+            "C",persona("C",1,1,Map.of("KNOWLEDGE",1.0),Set.of()));
+        var meetings=List.of(new Encounter("A","B","cafe",10,TownSocialSim.EncounterType.CO_LOCATED),new Encounter("B","C","cafe",11,TownSocialSim.EncounterType.CO_LOCATED));
+        java.util.function.Function<String,List<RelayCandidate>> knowledge=code -> "A".equals(code)
+            ? List.of(new RelayCandidate("A",null,1L,"KNOWLEDGE",0,1,"最近常来镇上")):List.of();
+        var unrestricted=TownSocialSim.simulate(meetings,personas,(a,b)->new Bond(1,1,1,TODAY),knowledge,new SplittableRandom(1));
+        assertThat(unrestricted).anySatisfy(result -> assertThat(result.listener()).isEqualTo("C"));
+        var restricted=TownSocialSim.simulate(meetings,personas,(a,b)->new Bond(1,1,1,TODAY),knowledge,
+            new SplittableRandom(1),(listener,fact) -> !"B".equals(listener));
+        assertThat(restricted).isEmpty();
+    }
+
     // ---------------------------------------------------------------- decayedAffinity
 
     @Test

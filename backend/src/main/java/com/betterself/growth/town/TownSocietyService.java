@@ -60,10 +60,11 @@ public class TownSocietyService {
     private final PublicIdGenerator ids;
     private final ObjectMapper mapper;
     private final Clock clock;
+    private final TownEventService events;
 
     public TownSocietyService(JdbcTemplate jdbc, TransactionTemplate tx, TownNpcProvisioner provisioner,
                               TownRetellGenerator retell, PublicIdGenerator ids, ObjectMapper mapper,
-                              Clock clock) {
+                              Clock clock, TownEventService events) {
         this.jdbc = jdbc;
         this.tx = tx;
         this.provisioner = provisioner;
@@ -71,6 +72,7 @@ public class TownSocietyService {
         this.ids = ids;
         this.mapper = mapper;
         this.clock = clock;
+        this.events = events;
     }
 
     // ---------------------------------------------------------------- 夜间流水线
@@ -86,31 +88,21 @@ public class TownSocietyService {
      * 拿数据库的行锁换一个外部服务的响应时间。
      */
     public void runNightly(long userId, LocalDate localDate) {
-        provisioner.ensurePopulated(userId);
-        if (!claimRun(userId, localDate)) {
-            log.debug("town society already simulated for user {} on {}", userId, localDate);
-            return;
-        }
-        List<NpcRow> npcs = simulationRoster(userId, localDate);
-        if (npcs.isEmpty()) {
-            return;
-        }
+        events.runNightly(userId, localDate);
         tx.executeWithoutResult(status -> {
-            ZoneId zone = zoneOf(userId);
-            Map<String, List<TownNpcSchedules.Slot>> schedules = schedules(npcs, localDate);
-
+            if (!claimRun(userId, localDate)) return;
+            List<NpcRow> npcs = simulationRoster(userId, localDate);
+            Map<String, TownDayPlan.DayPlan> plans = dayPlans(userId, npcs, localDate);
             decaySalience(userId);
-            List<Long> factIds = collectFacts(userId, zone, localDate, npcs, schedules);
+            List<Long> factIds = collectFacts(userId, zoneOf(userId), localDate, npcs, plans);
             Set<Long> playerFacts = new HashSet<>(playerFactIds(userId, localDate));
-            witness(userId, localDate, npcs, schedules, factIds, playerFacts);
-            // M7-4：相遇序列改由分钟级的 TownDayPlan 推出（同处停留/路上相遇/擦肩三类），
-            // 不再是「同一时段同一地点」。这会改变 town_npc_knowledge 的生成结果——历史数据
-            // 按 town_society_run 的日期键本就是一天一份，不需要额外的一次性重算。
-            List<TownSocialSim.Encounter> encounters = TownDayPlan.encounters(dayPlans(userId, npcs, localDate));
+            witness(userId, localDate, npcs, plans, factIds, playerFacts);
+            List<TownSocialSim.Encounter> encounters = TownDayPlan.encounters(plans);
             propagate(userId, localDate, npcs, encounters, playerFacts);
-            updateBonds(userId, localDate, npcs, encounters, presence(userId, localDate), schedules);
+            updateBonds(userId, localDate, npcs, encounters);
         });
-        generateRetellText(userId, npcs);
+        // Retell can be retried after a failed gateway without repeating cumulative simulation writes.
+        generateRetellText(userId, npcs(userId));
     }
 
     /**
@@ -130,9 +122,9 @@ public class TownSocietyService {
      */
     private List<NpcRow> simulationRoster(long userId, LocalDate localDate) {
         Set<String> arrivedToday = new HashSet<>(jdbc.queryForList(
-            "select npc_code from town_migration where to_user_id = ? and moved_at >= ? and moved_at < ?",
-            String.class, userId,
-            Timestamp.valueOf(localDate.atStartOfDay()), Timestamp.valueOf(localDate.plusDays(1).atStartOfDay())
+            "select paired_with_npc_code from town_migration where to_user_id = ? and (local_date = ? or (local_date is null and moved_at >= ? and moved_at < ?))",
+            String.class, userId, Date.valueOf(localDate),
+            Timestamp.from(localDate.atStartOfDay(zoneOf(userId)).toInstant()), Timestamp.from(localDate.plusDays(1).atStartOfDay(zoneOf(userId)).toInstant())
         ));
         if (arrivedToday.isEmpty()) {
             return npcs(userId);
@@ -140,7 +132,7 @@ public class TownSocietyService {
         return npcs(userId).stream().filter(npc -> !arrivedToday.contains(npc.npcCode())).toList();
     }
 
-    /** 抢占这一天的执行权；已经跑过就返回 false。 */
+    /** Claim shares the simulation transaction: rollback permits a real retry after SQL failure. */
     private boolean claimRun(long userId, LocalDate localDate) {
         return jdbc.update(
             "insert ignore into town_society_run (town_user_id, local_date, ran_at) values (?, ?, ?)",
@@ -155,7 +147,7 @@ public class TownSocietyService {
      * 返回今天新写入或已存在的 fact id，供目击判定用。
      */
     private List<Long> collectFacts(long userId, ZoneId zone, LocalDate localDate, List<NpcRow> npcs,
-                                    Map<String, List<TownNpcSchedules.Slot>> schedules) {
+                                    Map<String, TownDayPlan.DayPlan> plans) {
         List<Long> ids = new ArrayList<>();
         TownFacts facts = TownFacts.collect(jdbc, userId, zone, clock);
 
@@ -174,16 +166,27 @@ public class TownSocietyService {
             if (GUIDE.equals(npc.npcCode())) {
                 continue;
             }
-            List<TownNpcSchedules.Slot> schedule = schedules.get(npc.npcCode());
-            TownNpcSchedules.Slot afternoon = TownNpcSchedules.slotAt(schedule, 15);
-            if (afternoon == null || TownNpcSchedules.HOME.equals(afternoon.place())) {
-                continue;
-            }
+            var afternoon = TownDayPlan.positionAt(plans.get(npc.npcCode()), 15 * 60);
+            if (!"AT".equals(afternoon.kind()) || TownNpcSchedules.HOME.equals(afternoon.place())) continue;
             ids.add(upsertFact(userId, "NPC", npc.npcCode(), "NPC_ACTIVITY", null, localDate,
                 npc.displayName() + "今天" + placeCopy(afternoon.place()) + activityCopy(afternoon.activity())));
         }
 
-        ids.addAll(regardGuesses(userId, localDate, npcs, schedules));
+        // A physical sample authorizes only the visible visit, never private metrics or task details.
+        for (Presence sample : presenceSamples(userId, localDate)) {
+            String place = scenePlace(sample.scene());
+            if (place == null || TownNpcSchedules.HOME.equals(place)) continue;
+            Long id = upsertFact(userId, "PLAYER", "PLAYER", "PUBLIC_VISIT_" + place.toUpperCase(), null,
+                localDate, "最近" + placeCopy(place) + "露过面");
+            if (id != null) {
+                ids.add(id);
+                for (NpcRow npc : npcs) {
+                    if (npc.layer() <= 2 && sawPlayer(plans.get(npc.npcCode()), sample))
+                        insertKnowledge(userId, npc.npcCode(), id, localDate, "WITNESS", 0, 1, GUIDE.equals(npc.npcCode()));
+                }
+            }
+        }
+        ids.addAll(regardGuesses(userId, localDate, npcs, plans));
         ids.removeIf(java.util.Objects::isNull);
         return ids;
     }
@@ -193,37 +196,39 @@ public class TownSocietyService {
      * 然后自己猜。写进网络的是这条**猜测**，不是事实——所以它天生就该走样。
      */
     private List<Long> regardGuesses(long userId, LocalDate localDate, List<NpcRow> npcs,
-                                     Map<String, List<TownNpcSchedules.Slot>> schedules) {
+                                     Map<String, TownDayPlan.DayPlan> plans) {
         Map<String, NpcRow> byCode = new HashMap<>();
         npcs.forEach(npc -> byCode.put(npc.npcCode(), npc));
-        List<Long> ids = new ArrayList<>();
+        List<Long> facts = new ArrayList<>();
+        Set<String> observed = new HashSet<>();
         for (RegardRow regard : regards(userId)) {
             NpcRow admirer = byCode.get(regard.aRef());
             NpcRow target = byCode.get(regard.bRef());
-            if (admirer == null || target == null || regard.regard() < 0.45) {
-                continue;
+            if (observed.contains(regard.aRef()) || admirer == null || target == null || regard.regard() < 0.45 || "MISS".equals(regard.regardKind())) continue;
+            for (int minute = 0; minute < 1440; minute += 5) {
+                var a = TownDayPlan.positionAt(plans.get(admirer.npcCode()), minute);
+                var b = TownDayPlan.positionAt(plans.get(target.npcCode()), minute);
+                if (!"AT".equals(a.kind()) || !"AT".equals(b.kind()) || TownNpcSchedules.HOME.equals(a.place())
+                    || !a.place().equals(b.place())) continue;
+                final int observedMinute = minute;
+                var observer = npcs.stream().filter(n -> !GUIDE.equals(n.npcCode())
+                    && !n.npcCode().equals(admirer.npcCode()) && !n.npcCode().equals(target.npcCode()))
+                    .filter(n -> {
+                        var at = TownDayPlan.positionAt(plans.get(n.npcCode()), observedMinute);
+                        return "AT".equals(at.kind()) && a.place().equals(at.place());
+                    }).findFirst();
+                if (observer.isEmpty()) continue;
+                Long fact = upsertFact(userId, "NPC", admirer.npcCode(), "REGARD_GUESS", null, localDate,
+                    admirer.displayName() + "好像在" + placeName(a.place()) + "等人，" + target.displayName() + "也在，也许只是凑巧");
+                if (fact != null) {
+                    insertKnowledge(userId, observer.get().npcCode(), fact, localDate, "WITNESS", 0, 0.7, false);
+                    facts.add(fact);
+                    observed.add(admirer.npcCode());
+                }
+                break;
             }
-            String shared = sharedPlace(schedules.get(admirer.npcCode()), schedules.get(target.npcCode()));
-            if (shared == null) {
-                continue;
-            }
-            ids.add(upsertFact(userId, "NPC", admirer.npcCode(), "REGARD_GUESS", null, localDate,
-                admirer.displayName() + "好像老在" + placeName(shared) + "多待一会儿，" + target.displayName() + "那会儿也在"));
         }
-        return ids;
-    }
-
-    private String sharedPlace(List<TownNpcSchedules.Slot> a, List<TownNpcSchedules.Slot> b) {
-        if (a == null || b == null) {
-            return null;
-        }
-        for (int i = 0; i < a.size() && i < b.size(); i++) {
-            String place = a.get(i).place();
-            if (place.equals(b.get(i).place()) && !TownNpcSchedules.HOME.equals(place)) {
-                return place;
-            }
-        }
-        return null;
+        return facts;
     }
 
     /**
@@ -253,7 +258,7 @@ public class TownSocietyService {
                     (public_id, town_user_id, subject_kind, subject_ref, kind, dimension, payload,
                      occurred_on, occurred_at, no_relay, created_at)
                 values (?, ?, ?, ?, ?, ?, cast(? as json), ?, ?, 0, ?)
-                on duplicate key update payload = values(payload), occurred_at = values(occurred_at)
+                on duplicate key update id = town_fact.id
                 """,
             ids.next(), userId, subjectKind, subjectRef, kind, dimension, payload.toString(),
             Date.valueOf(localDate), Timestamp.valueOf(now), Timestamp.valueOf(now)
@@ -269,21 +274,14 @@ public class TownSocietyService {
 
     // ---------------------------------------------------------------- 2. 目击判定
 
-    /**
-     * 目击 = 物理在场（plan §3.2 步骤 2）。
-     *
-     * <p>能拿到的在场信息只有 {@code town_presence} 的**最后一次**上报（该表主键就是 user_id，
-     * 没有轨迹历史），所以这里按"玩家最后一次出现的时间与场景"去和 NPC 日程求交集。够不够细是另
-     * 一回事，但它保证了那条最要紧的性质：<b>玩家半夜一个人完成任务时，全镇没有一个人在场</b>，
-     * 于是只有小助知道，而小助的每一条 knowledge 都是 no_relay。
-     */
+    /** Only GUIDE learns aggregate player facts automatically. Actual public visits and
+     * third-party guesses were seeded from their own physical evidence during collection. */
     private void witness(long userId, LocalDate localDate, List<NpcRow> npcs,
-                         Map<String, List<TownNpcSchedules.Slot>> schedules, List<Long> factIds,
+                         Map<String, TownDayPlan.DayPlan> plans, List<Long> factIds,
                          Set<Long> playerFacts) {
         if (factIds.isEmpty()) {
             return;
         }
-        Presence presence = presence(userId, localDate);
 
         for (NpcRow npc : npcs) {
             boolean omniscient = GUIDE.equals(npc.npcCode());
@@ -293,16 +291,9 @@ public class TownSocietyService {
                 if (omniscient) {
                     from = "OMNISCIENT";
                 } else if (playerFact) {
-                    // §3.4 第 5 条：三层背景居民不持有本镇玩家的事实。他们是背景生命，不是
-                    // 你的观众——他们身上该带的是从别的镇搬过来的、已经走样过的传闻（M4 迁徙）。
-                    // 这条也顺带堵住了"深夜街上的夜猫子恰好看见你"这种漏法。
-                    if (npc.layer() >= 3) {
-                        continue;
-                    }
-                    if (presence == null || !sawPlayer(schedules.get(npc.npcCode()), presence)) {
-                        continue;
-                    }
-                    from = "WITNESS";
+                    // Aggregate player measurements are private. Public visits were witnessed above;
+                    // explicit tell() consent has its own narrowly scoped knowledge write.
+                    continue;
                 } else {
                     // NPC 自己的事：当事人本来就知道，旁人得靠传播。
                     if (!ownFact(userId, factId, npc.npcCode())) {
@@ -316,24 +307,25 @@ public class TownSocietyService {
         }
     }
 
-    private boolean sawPlayer(List<TownNpcSchedules.Slot> schedule, Presence presence) {
-        TownNpcSchedules.Slot slot = TownNpcSchedules.slotAt(schedule, presence.hour());
-        if (slot == null || TownNpcSchedules.HOME.equals(slot.place())) {
-            return false;
-        }
-        return slot.place().equals(scenePlace(presence.scene()));
+    private boolean sawPlayer(TownDayPlan.DayPlan plan, Presence presence) {
+        if (plan == null) return false;
+        String place = scenePlace(presence.scene());
+        if (place == null || TownNpcSchedules.HOME.equals(place)) return false;
+        var at = TownDayPlan.positionAt(plan, presence.at().toLocalTime().toSecondOfDay() / 60);
+        return "AT".equals(at.kind()) && place.equals(at.place());
     }
 
-    /** 玩家上报的 scene 映射到 NPC 日程用的地点码；认不出来就当作在街上。 */
+    /** A whole outdoor street does not establish proximity. Unknown scenes fail closed. */
     private String scenePlace(String scene) {
-        if (scene == null) {
-            return TownNpcSchedules.STREET;
-        }
+        if (scene == null) return null;
         return switch (scene) {
-            case "academy", "interior:academy-study" -> TownNpcSchedules.ACADEMY;
-            case "gym", "interior:public-gym" -> TownNpcSchedules.GYM;
+            case "academy", "interior:academy-study", "town:academy" -> TownNpcSchedules.ACADEMY;
+            case "gym", "interior:public-gym", "town:gym" -> TownNpcSchedules.GYM;
+            case "cafe", "interior:public-cafe", "interior:cafe-interior", "town:cafe" -> TownNpcSchedules.CAFE;
+            case "town:park" -> TownNpcSchedules.PARK;
+            case "town:plaza" -> TownNpcSchedules.PLAZA;
             case "home", "interior:home-living-room" -> TownNpcSchedules.HOME;
-            default -> TownNpcSchedules.STREET;
+            default -> null;
         };
     }
 
@@ -355,14 +347,21 @@ public class TownSocietyService {
         Map<String, Integer> layerByCode = new HashMap<>();
         npcs.forEach(npc -> layerByCode.put(npc.npcCode(), npc.layer()));
         Map<String, TownSocialSim.Bond> bonds = bondIndex(userId);
-        Map<String, List<TownSocialSim.RelayCandidate>> known = candidatesByNpc(userId);
+        Map<String, List<TownSocialSim.RelayCandidate>> known = candidatesByNpc(userId, localDate);
 
+        Map<Long, String> privateSubjects = new HashMap<>();
+        jdbc.query("select id,subject_ref from town_fact where town_user_id=? and kind='REGARD_GUESS'",
+            rs -> { privateSubjects.put(rs.getLong(1),rs.getString(2)); },userId);
+        known.replaceAll((code, candidates) -> candidates.stream()
+            .filter(c -> !code.equals(privateSubjects.get(c.factId()))).toList());
         List<TownSocialSim.RelayResult> results = TownSocialSim.simulate(
             gossipable,
             personas,
             (a, b) -> bonds.getOrDefault(bondKey(a, b), new TownSocialSim.Bond(0.15, 0.0, 0, null)),
             code -> known.getOrDefault(code, List.of()),
-            new SplittableRandom(seedFor(userId, localDate))
+            new SplittableRandom(seedFor(userId, localDate)),
+            (listener, fact) -> (!playerFacts.contains(fact) || layerByCode.getOrDefault(listener, 3) < 3)
+                && !listener.equals(privateSubjects.get(fact))
         );
 
         for (TownSocialSim.RelayResult result : results) {
@@ -378,14 +377,29 @@ public class TownSocietyService {
     }
 
     /** 只有 no_relay = 0 的才进传播网络——小助知道的一切在这里被拦住。 */
-    private Map<String, List<TownSocialSim.RelayCandidate>> candidatesByNpc(long userId) {
+    private Map<String, List<TownSocialSim.RelayCandidate>> candidatesByNpc(long userId, LocalDate localDate) {
         Map<String, List<TownSocialSim.RelayCandidate>> byNpc = new HashMap<>();
         jdbc.query(
             """
                 select k.npc_code, k.fact_id, k.hops, k.salience, k.retold_text,
                        f.dimension, json_unquote(json_extract(f.payload, '$.text')) as text
                 from town_npc_knowledge k join town_fact f on f.id = k.fact_id
-                where k.town_user_id = ? and k.no_relay = 0 and f.no_relay = 0 and k.salience > 0.05
+                where k.town_user_id = ? and f.town_user_id=k.town_user_id
+                  and k.npc_code <> 'GUIDE'
+                  and not (f.kind='REGARD_GUESS' and f.subject_ref=k.npc_code)
+                  and not (f.subject_kind='PLAYER' and exists (select 1 from town_npc n
+                    where n.town_user_id=k.town_user_id and n.npc_code=k.npc_code and n.layer=3))
+                  and (f.origin_town_user_id is null or f.occurred_on >= ?)
+                  and (f.origin_town_user_id is null or exists (
+                    select 1 from friend_relationship fr
+                    join sys_user origin on origin.id=f.origin_town_user_id
+                    join user_preference op on op.user_id=origin.id
+                    join user_preference tp on tp.user_id=k.town_user_id
+                    where fr.status='ACCEPTED' and origin.status='ACTIVE' and origin.deleted_at is null
+                    and op.solo_growth=0 and tp.solo_growth=0
+                    and ((fr.requester_user_id=k.town_user_id and fr.addressee_user_id=f.origin_town_user_id)
+                    or (fr.addressee_user_id=k.town_user_id and fr.requester_user_id=f.origin_town_user_id))))
+                  and k.no_relay = 0 and f.no_relay = 0 and k.salience > 0.05
                 order by k.npc_code, k.fact_id
                 """,
             rs -> {
@@ -397,7 +411,7 @@ public class TownSocietyService {
                     previous != null ? previous : rs.getString("text")
                 ));
             },
-            userId
+            userId, Date.valueOf(localDate.minusDays(14))
         );
         return byNpc;
     }
@@ -417,7 +431,8 @@ public class TownSocietyService {
                         where k2.town_user_id = k.town_user_id and k2.fact_id = k.fact_id
                           and k2.npc_code = k.learned_from) as upstream_text
                 from town_npc_knowledge k join town_fact f on f.id = k.fact_id
-                where k.town_user_id = ? and k.retold_text is null and k.no_relay = 0
+                where k.town_user_id = ? and f.town_user_id=k.town_user_id and f.no_relay=0
+                  and k.npc_code<>'GUIDE' and k.retold_text is null and k.no_relay = 0
                 order by k.hops, k.id
                 """,
             (rs, row) -> new PendingRetell(rs.getLong("id"), rs.getString("npc_code"), rs.getInt("hops"),
@@ -440,9 +455,15 @@ public class TownSocietyService {
             ));
         }
 
+        Map<String, TownRetellGenerator.Request> allowed = new HashMap<>();
+        requests.forEach(request -> allowed.put(request.key(), request));
         for (TownRetellGenerator.Retold retold : retell.retell(requests)) {
-            jdbc.update("update town_npc_knowledge set retold_text = ? where id = ?",
-                retold.text(), Long.valueOf(retold.key()));
+            if (!allowed.containsKey(retold.key())) continue;
+            String text = retold.text();
+            if (text == null || text.isBlank() || FACT_DIGITS.matcher(text).find())
+                text = new TemplateRetellGenerator().generate(allowed.get(retold.key()));
+            jdbc.update("update town_npc_knowledge set retold_text = ? where id = ? and town_user_id=? and retold_text is null",
+                text, Long.valueOf(retold.key()), userId);
         }
     }
 
@@ -463,8 +484,7 @@ public class TownSocietyService {
      * </ol>
      */
     private void updateBonds(long userId, LocalDate localDate, List<NpcRow> npcs,
-                             List<TownSocialSim.Encounter> encounters, Presence presence,
-                             Map<String, List<TownNpcSchedules.Slot>> schedules) {
+                             List<TownSocialSim.Encounter> encounters) {
         Map<String, TownSocialSim.Persona> personas = new LinkedHashMap<>();
         npcs.forEach(npc -> personas.put(npc.npcCode(), persona(npc)));
         Map<String, TownSocialSim.Bond> bonds = bondIndex(userId);
@@ -488,7 +508,7 @@ public class TownSocietyService {
         }
 
         decayUnmetBonds(userId, localDate, metToday);
-        updatePlayerBonds(userId, localDate, npcs, personas, presence, schedules, rng);
+        updatePlayerBonds(userId, localDate, npcs, personas, rng);
     }
 
     /** 今天没碰上的那些边按半衰期往下走——这条以前只有单测，生产里没人调。 */
@@ -513,13 +533,14 @@ public class TownSocietyService {
      * 玩家没有性格档案，用一份中性人设参与同一个公式，免得再写第二套算法。
      */
     private void updatePlayerBonds(long userId, LocalDate localDate, List<NpcRow> npcs,
-                                   Map<String, TownSocialSim.Persona> personas, Presence presence,
-                                   Map<String, List<TownNpcSchedules.Slot>> schedules, RandomGenerator rng) {
+                                   Map<String, TownSocialSim.Persona> personas, RandomGenerator rng) {
         TownSocialSim.Persona player = new TownSocialSim.Persona(
             "PLAYER", 1, 0.5, 0.5,
             Map.of("KNOWLEDGE", 0.2, "HEALTH", 0.2, "CAREER", 0.2, "RELATIONSHIP", 0.2, "WELLBEING", 0.2),
             Set.of()
         );
+        var plans = dayPlans(userId, npcs, localDate);
+        var samples = presenceSamples(userId, localDate);
         for (BondRow row : playerBondRows(userId)) {
             NpcRow npc = npcs.stream().filter(item -> item.npcCode().equals(row.bRef())).findFirst().orElse(null);
             TownSocialSim.Persona npcPersona = personas.get(row.bRef());
@@ -529,7 +550,7 @@ public class TownSocietyService {
             // 小助天天见你（它就站在学院门口），其余人要真的在场才算。三层不参与——他们
             // 本来就不持有你的事实，也不该因为"路过"就和你熟起来。
             boolean met = GUIDE.equals(npc.npcCode())
-                || (npc.layer() <= 2 && presence != null && sawPlayer(schedules.get(npc.npcCode()), presence));
+                || (npc.layer() <= 2 && samples.stream().anyMatch(sample -> sawPlayer(plans.get(npc.npcCode()), sample)));
 
             TownSocialSim.Bond current = new TownSocialSim.Bond(
                 row.affinity(), row.resonance(), row.meetCount(), row.lastMetOn());
@@ -581,11 +602,16 @@ public class TownSocietyService {
     public RosterView roster(long userId) {
         provisioner.ensurePopulated(userId);
         List<NpcRow> npcs = npcs(userId);
-        LocalDate today = LocalDate.now(zoneOf(userId));
+        LocalDate today = LocalDate.now(clock.withZone(zoneOf(userId)));
+        events.runNightly(userId, today);
         Map<String, Double> affinity = playerAffinity(userId);
-        Map<String, List<TalkingPoint>> points = talkingPointIndex(userId);
         Map<String, MoodRow> moods = moods(userId, today);
         Map<String, TownDayPlan.DayPlan> dayPlans = dayPlans(userId, npcs, today);
+        bootstrapPublicDays(userId, today, npcs, dayPlans);
+        Map<String, Map<String, Double>> peerAffinity = new HashMap<>();
+        jdbc.query("select a_ref,b_ref,affinity from town_bond where town_user_id=? and a_kind='NPC' and b_kind='NPC'",
+            rs -> { peerAffinity.computeIfAbsent(rs.getString(1), ignored -> new HashMap<>()).put(rs.getString(2), rs.getDouble(3)); }, userId);
+        Map<String, List<TalkingPoint>> points = talkingPointIndex(userId);
 
         List<NpcView> views = new ArrayList<>(npcs.size());
         for (NpcRow npc : npcs) {
@@ -600,10 +626,33 @@ public class TownSocietyService {
                 schedule.stream().map(slot -> new ScheduleView(
                     slot.startHour(), slot.endHour(), slot.place(), slot.activity())).toList(),
                 toDayPlanView(dayPlans.get(npc.npcCode())),
-                points.getOrDefault(npc.npcCode(), List.of())
+                points.getOrDefault(npc.npcCode(), List.of()),
+                Map.copyOf(peerAffinity.getOrDefault(npc.npcCode(), Map.of()))
             ));
         }
         return new RosterView(views, new InitiativeBudgetView(DAILY_INITIATIVE_LIMIT, initiativeUsed(userId, today)));
+    }
+
+    /** A new town has no overnight gossip yet. Each layer-two resident may describe their
+     * own saved plans immediately; this does not witness player facts or broadcast to peers.
+     * The daily claim and all six fact/knowledge pairs commit together, without any LLM call. */
+    private void bootstrapPublicDays(long userId, LocalDate date, List<NpcRow> residents,
+                                     Map<String, TownDayPlan.DayPlan> plans) {
+        tx.executeWithoutResult(status -> {
+            if (jdbc.update("insert ignore into town_daily_production (town_user_id,local_date,stage) values (?,?,'NPC_DAY_PLAN')",
+                userId, Date.valueOf(date)) == 0) return;
+            for (NpcRow npc : residents) {
+                if (npc.layer() != 2) continue;
+                String text = TownNpcPublicDay.line(npc.displayName(), npc.dimension(), readInterests(npc.interests()), plans.get(npc.npcCode()));
+                Long factId = upsertFact(userId, "NPC", npc.npcCode(), "NPC_DAY_PLAN", npc.dimension(), date, text);
+                if (factId == null) continue;
+                jdbc.update("""
+                    insert ignore into town_npc_knowledge
+                      (public_id,town_user_id,npc_code,fact_id,learned_on,learned_at,learned_from,hops,salience,retold_text,no_relay)
+                    values (?,?,?,?,?,?,'SELF',0,0.6,?,0)
+                    """, ids.next(), userId, npc.npcCode(), factId, Date.valueOf(date), Timestamp.from(clock.instant()), text);
+            }
+        });
     }
 
     /** M7-6：{@code TownDayPlan.DayPlan} 内部形状 → CONTRACT-M7.md §1 的 {@code dayPlan} JSON。 */
@@ -626,7 +675,7 @@ public class TownSocietyService {
      * 就不再往上涨（超额调用返回 {@code used == limit}，是幂等的饱和状态，不是报错）。
      */
     public InitiativeBudgetView consumeInitiative(long userId) {
-        LocalDate today = LocalDate.now(zoneOf(userId));
+        LocalDate today = LocalDate.now(clock.withZone(zoneOf(userId)));
         Timestamp now = Timestamp.valueOf(LocalDateTime.now(clock));
         jdbc.update(
             """
@@ -671,7 +720,22 @@ public class TownSocietyService {
                 select k.npc_code, f.public_id, k.hops, k.salience, k.retold_text,
                        json_unquote(json_extract(f.payload, '$.text')) as source_text
                 from town_npc_knowledge k join town_fact f on f.id = k.fact_id
-                where k.town_user_id = ? and k.no_relay = 0 and f.no_relay = 0 and k.salience > 0.05
+                where k.town_user_id = ? and f.town_user_id=k.town_user_id
+                  and k.npc_code <> 'GUIDE'
+                  and not (f.kind='REGARD_GUESS' and f.subject_ref=k.npc_code)
+                  and not (f.subject_kind='PLAYER' and exists (select 1 from town_npc n
+                    where n.town_user_id=k.town_user_id and n.npc_code=k.npc_code and n.layer=3))
+                  and (f.origin_town_user_id is null or f.occurred_on >= ?)
+                  and (f.origin_town_user_id is null or exists (
+                    select 1 from friend_relationship fr
+                    join sys_user origin on origin.id=f.origin_town_user_id
+                    join user_preference op on op.user_id=origin.id
+                    join user_preference tp on tp.user_id=k.town_user_id
+                    where fr.status='ACCEPTED' and origin.status='ACTIVE' and origin.deleted_at is null
+                    and op.solo_growth=0 and tp.solo_growth=0
+                    and ((fr.requester_user_id=k.town_user_id and fr.addressee_user_id=f.origin_town_user_id)
+                    or (fr.addressee_user_id=k.town_user_id and fr.requester_user_id=f.origin_town_user_id))))
+                  and k.no_relay = 0 and f.no_relay = 0 and k.salience > 0.05
                 order by k.salience desc
                 """,
             rs -> {
@@ -679,7 +743,7 @@ public class TownSocietyService {
                 if (text == null || text.isBlank()) {
                     text = rs.getString("source_text");
                 }
-                if (text == null || text.isBlank()) {
+                if (text == null || text.isBlank() || FACT_DIGITS.matcher(text).find()) {
                     return;
                 }
                 List<TalkingPoint> list = byNpc.computeIfAbsent(rs.getString("npc_code"), key -> new ArrayList<>());
@@ -688,7 +752,7 @@ public class TownSocietyService {
                         rs.getInt("hops"), rs.getDouble("salience")));
                 }
             },
-            userId
+            userId, Date.valueOf(LocalDate.now(clock.withZone(zoneOf(userId))).minusDays(14))
         );
         return byNpc;
     }
@@ -741,13 +805,13 @@ public class TownSocietyService {
 
     private List<Long> playerFactIds(long userId, LocalDate localDate) {
         return jdbc.queryForList(
-            "select id from town_fact where town_user_id = ? and subject_kind = 'PLAYER' and occurred_on = ?",
-            Long.class, userId, Date.valueOf(localDate));
+            "select id from town_fact where town_user_id = ? and subject_kind = 'PLAYER'",
+            Long.class, userId);
     }
 
     private boolean ownFact(long userId, long factId, String npcCode) {
         Integer count = jdbc.queryForObject(
-            "select count(*) from town_fact where id = ? and town_user_id = ? and subject_ref = ?",
+            "select count(*) from town_fact where id = ? and town_user_id = ? and subject_ref = ? and kind <> 'REGARD_GUESS'",
             Integer.class, factId, userId, npcCode);
         return count != null && count > 0;
     }
@@ -826,18 +890,34 @@ public class TownSocietyService {
         return moods;
     }
 
-    private Presence presence(long userId, LocalDate localDate) {
-        List<Presence> rows = jdbc.query(
-            "select scene, updated_at from town_presence where user_id = ?",
-            (rs, row) -> new Presence(rs.getString("scene"), rs.getTimestamp("updated_at").toLocalDateTime()),
-            userId
-        );
-        if (rows.isEmpty()) {
-            return null;
-        }
-        Presence presence = rows.get(0);
-        // 只认当天的在场：昨天站过的位置不能成为今天的目击证据。
-        return presence.at().toLocalDate().equals(localDate) ? presence : null;
+    private List<Presence> presenceSamples(long userId, LocalDate localDate) {
+        ZoneId zone = zoneOf(userId);
+        return jdbc.query("select scene,sampled_at from town_presence_sample where user_id=? and sampled_at>=? and sampled_at<? order by sampled_at",
+            (rs, row) -> new Presence(rs.getString(1), rs.getTimestamp(2).toInstant().atZone(zone).toLocalDateTime()), userId,
+            Timestamp.from(localDate.atStartOfDay(zone).toInstant()), Timestamp.from(localDate.plusDays(1).atStartOfDay(zone).toInstant()));
+    }
+
+    /** Explicit consent to share ONE server-generated coarse impression; never accepts free text. */
+    public void tell(long userId, String npcCode, String kind) {
+        provisioner.ensurePopulated(userId);
+        NpcRow npc = npc(userId, npcCode);
+        if (npc == null || npc.layer() > 2) throw new com.betterself.growth.shared.api.ApiException(
+            org.springframework.http.HttpStatus.NOT_FOUND, "TOWN_NPC_NOT_FOUND", "这个居民暂不能搭话");
+        if (kind == null || !Set.of("RHYTHM", "DIMENSION_FOCUS", "STREAK_HINT", "LEVEL_BUCKET").contains(kind))
+            throw new com.betterself.growth.shared.api.ApiException(org.springframework.http.HttpStatus.BAD_REQUEST,
+                "TOWN_TELL_KIND_INVALID", "请选择要分享的近况");
+        LocalDate date = LocalDate.now(clock.withZone(zoneOf(userId)));
+        TownFacts facts = TownFacts.collect(jdbc, userId, zoneOf(userId), clock);
+        String text = switch (kind) {
+            case "RHYTHM" -> TownNpcPerception.rhythmLine(facts.completedLast7Days());
+            case "DIMENSION_FOCUS" -> TownNpcPerception.dimensionFocusLine(facts.dominantDimension());
+            case "STREAK_HINT" -> TownNpcPerception.streakHintLine(facts.longestStreak());
+            default -> "在镇上" + TownNpcPerception.levelBucket(facts.level());
+        };
+        tx.executeWithoutResult(status -> {
+            Long factId = upsertFact(userId, "PLAYER", "PLAYER", kind, null, date, text);
+            if (factId != null) insertKnowledge(userId, npcCode, factId, date, "TOLD", 0, 1, GUIDE.equals(npcCode));
+        });
     }
 
     private ZoneId zoneOf(long userId) {
@@ -850,25 +930,14 @@ public class TownSocietyService {
         }
     }
 
-    private Map<String, List<TownNpcSchedules.Slot>> schedules(List<NpcRow> npcs, LocalDate localDate) {
-        Map<String, List<TownNpcSchedules.Slot>> schedules = new LinkedHashMap<>();
-        for (NpcRow npc : npcs) {
-            schedules.put(npc.npcCode(),
-                TownNpcSchedules.forNpc(npc.npcCode(), npc.layer(), readInterests(npc.interests()), localDate));
-        }
-        return schedules;
-    }
-
-    /**
-     * M7-2/M7-3：每个 NPC 当天的行程（节律 + 偏离），供 {@link TownDayPlan#encounters} 推相遇、
-     * 供 {@code GET /town/npcs} 下发 {@code dayPlan}。上下文里的心情、亲密度都是已经落库的真实
-     * 值；天气目前是按日期哈希模拟的占位（没有真实天气源）；事件永远是空集合——
-     * {@code town_event} 由 M4/并行分支的 V23 建表，这里先当它不存在，等接线时把
-     * {@link TownDayPlan.EventSlot} 从那张表查出来传进来即可，其余逻辑不用动。
-     */
+    /** Immutable daily output, shared by the API, fact witnesses and encounter simulation.
+     * Events and moods must be prepared first. A retry reads the saved plan even when today's
+     * affinity or a migrating resident's rhythm has since changed. */
     private Map<String, TownDayPlan.DayPlan> dayPlans(long userId, List<NpcRow> npcs, LocalDate localDate) {
         Map<String, MoodRow> moods = moods(userId, localDate);
-        Map<String, Double> affinity = playerAffinity(userId);
+        Map<String, Double> affinity = new HashMap<>();
+        jdbc.query("select npc_code,affinity_to_player from town_npc_mood where town_user_id=? and local_date=?",
+            rs -> { affinity.put(rs.getString(1), rs.getDouble(2)); }, userId, Date.valueOf(localDate));
         Map<String, List<TownDayPlan.EventSlot>> events = eventSlots(userId, localDate);
         boolean rainy = isRainy(localDate);
 
@@ -879,7 +948,14 @@ public class TownSocietyService {
             double npcAffinity = affinity.getOrDefault(npc.npcCode(), 0.15);
             TownDayPlan.DayPlanContext context = new TownDayPlan.DayPlanContext(
                 mood.valence(), rainy, npcAffinity, events.getOrDefault(npc.npcCode(), List.of()));
-            plans.put(npc.npcCode(), TownDayPlan.generate(npc.npcCode(), npc.layer(), rhythm, context, localDate));
+            var generated = TownDayPlan.generate(npc.npcCode(), npc.layer(), rhythm, context, localDate);
+            try {
+                jdbc.update("update town_npc_mood set day_plan=cast(? as json) where town_user_id=? and npc_code=? and local_date=? and day_plan is null",
+                    mapper.writeValueAsString(generated), userId, npc.npcCode(), Date.valueOf(localDate));
+                String saved = jdbc.queryForObject("select day_plan from town_npc_mood where town_user_id=? and npc_code=? and local_date=?",
+                    String.class, userId, npc.npcCode(), Date.valueOf(localDate));
+                plans.put(npc.npcCode(), mapper.readValue(saved, TownDayPlan.DayPlan.class));
+            } catch (java.io.IOException ex) { throw new IllegalStateException("invalid persisted town day plan", ex); }
         }
         return plans;
     }
@@ -910,7 +986,8 @@ public class TownSocietyService {
                     : (int) java.time.Duration.between(startsAt, endsAt.toLocalDateTime()).toMinutes();
                 TownDayPlan.EventSlot slot = new TownDayPlan.EventSlot(
                     rs.getString("venue"), "sit", startMinute, Math.max(1, duration));
-                byNpc.computeIfAbsent(rs.getString("host_npc_code"), key -> new ArrayList<>()).add(slot);
+                List<TownDayPlan.EventSlot> hostSlots = byNpc.computeIfAbsent(rs.getString("host_npc_code"), key -> new ArrayList<>());
+                if (!hostSlots.contains(slot)) hostSlots.add(slot);
                 String guest = rs.getString("recipient_ref");
                 if (guest != null) {
                     byNpc.computeIfAbsent(guest, key -> new ArrayList<>()).add(slot);
@@ -1035,7 +1112,8 @@ public class TownSocietyService {
 
     public record NpcView(String code, String displayName, int layer, String sprite, String dimension,
                           Map<String, Double> interests, double affinityToPlayer, MoodView mood,
-                          List<ScheduleView> schedule, DayPlanView dayPlan, List<TalkingPoint> talkingPoints) {
+                          List<ScheduleView> schedule, DayPlanView dayPlan, List<TalkingPoint> talkingPoints,
+                          Map<String, Double> affinityToNpcs) {
     }
 
     public record ScheduleView(int startHour, int endHour, String place, String activity) {

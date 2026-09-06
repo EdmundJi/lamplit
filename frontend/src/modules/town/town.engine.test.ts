@@ -6,6 +6,7 @@
  * dynamic `await import('phaser')` inside `createTownGame`'s body — never at module load.
  */
 import { describe, expect, it } from 'vitest'
+import { RESIDENT_WALK_SPEED, stepTowardPoint } from './walkers'
 import { isInteriorPetSpecies, minuteOfLocalDay, resolveNpcFrame } from './town.engine'
 import type { TownLayout } from './npc-placement'
 import type { NpcDayPlan } from './town-npc.types'
@@ -70,21 +71,22 @@ describe('resolveNpcFrame (M7-6/7/8)', () => {
     const frame = resolveNpcFrame(COMMUTE_PLAN, 435, 'npc-carol', LAYOUT, STREET_Y)
     expect(frame.walking).toBe(true)
     expect(frame.activity).toBe('walking')
-    const fromX = LAYOUT.plotStartX // home
-    const toX = LAYOUT.cafeX // cafe
-    expect(frame.x).toBeCloseTo((fromX + toX) / 2, 5)
-    expect(frame.y).toBe(STREET_Y) // 在路上不做纵向散开，只有站定才散
-    expect(frame.depth).toBe(STREET_Y)
-    expect(frame.targetX).toBe(toX)
-    expect(frame.facing).toBe(toX >= fromX ? 'right' : 'left')
+    const from = resolveNpcFrame(COMMUTE_PLAN, 419.999, 'npc-carol', LAYOUT, STREET_Y)
+    const to = resolveNpcFrame(COMMUTE_PLAN, 450, 'npc-carol', LAYOUT, STREET_Y)
+    expect(frame.x).toBeCloseTo((from.x + to.x) / 2, 5)
+    expect(frame.y).toBeCloseTo((from.y + to.y) / 2, 5)
+    expect(frame.depth).toBe(frame.y)
+    expect(frame.targetX).toBe(to.x)
   })
 
-  it('WALKING: position at the very start/end of a leg matches positionAt\'s clamped endpoints', () => {
-    const start = resolveNpcFrame(COMMUTE_PLAN, 420, 'npc-dave', LAYOUT, STREET_Y)
-    expect(start.x).toBeCloseTo(LAYOUT.plotStartX, 5)
-    const end = resolveNpcFrame(COMMUTE_PLAN, 449.999, 'npc-dave', LAYOUT, STREET_Y)
-    expect(end.x).toBeGreaterThan(start.x)
-    expect(end.x).toBeLessThanOrEqual(LAYOUT.cafeX)
+  it('does not teleport when leaving or arriving at a spread-out venue', () => {
+    for (const code of ['npc-dave', 'npc-erin', 'npc-alice']) {
+      for (const boundary of [420, 450]) {
+        const before = resolveNpcFrame(COMMUTE_PLAN, boundary - 0.00001, code, LAYOUT, STREET_Y)
+        const after = resolveNpcFrame(COMMUTE_PLAN, boundary, code, LAYOUT, STREET_Y)
+        expect(Math.hypot(after.x - before.x, after.y - before.y)).toBeLessThan(0.01)
+      }
+    }
   })
 
   it('a fractional (continuous) minute produces a frame strictly between the two endpoints, not a jump', () => {
@@ -122,5 +124,16 @@ describe('isInteriorPetSpecies (M3-2 宠物数据校验)', () => {
     expect(isInteriorPetSpecies('DRAGON')).toBe(false)
     expect(isInteriorPetSpecies('')).toBe(false)
     expect(isInteriorPetSpecies('cat')).toBe(false) // 大小写不匹配也算拒绝，不做隐式纠正
+  })
+})
+
+
+describe('remote NPC speed regression', () => {
+  it('caps resumed NPC movement at 55px/s including diagonal paths', () => {
+    const start = { x: 1400, y: 900 }
+    const target = { x: 2000, y: 464 }
+    const next = stepTowardPoint(start, target, RESIDENT_WALK_SPEED, 1000)
+    expect(Math.hypot(next.x - start.x, next.y - start.y)).toBeCloseTo(55)
+    expect(stepTowardPoint(target, target, RESIDENT_WALK_SPEED, 1000)).toEqual(target)
   })
 })

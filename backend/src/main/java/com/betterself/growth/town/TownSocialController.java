@@ -26,11 +26,27 @@ public class TownSocialController {
     private final TownLetterService letters;
     private final TownConfidantService confidant;
     private final Clock clock;
+    private final TownEventService events;
 
-    public TownSocialController(TownLetterService letters, TownConfidantService confidant, Clock clock) {
+    public TownSocialController(TownLetterService letters, TownConfidantService confidant, Clock clock, TownEventService events) {
         this.letters = letters;
         this.confidant = confidant;
         this.clock = clock;
+        this.events = events;
+    }
+
+    @GetMapping("/events")
+    ApiEnvelope<java.util.List<TownEventService.EventView>> events(
+        @AuthenticationPrincipal CurrentUser user, HttpServletRequest request) {
+        return envelope(events.today(user.id()), request);
+    }
+
+    /** Count only: background map polling must not fetch private letters. */
+    @GetMapping("/letters/unread")
+    ApiEnvelope<TownLetterService.UnreadCountView> unreadLetters(
+        @AuthenticationPrincipal CurrentUser user, HttpServletRequest request
+    ) {
+        return envelope(letters.unreadCount(user.id()), request);
     }
 
     /** 收件箱：树洞长信 / NPC 短笺 / 活动请柬三轨都在这里，含未读数。 */

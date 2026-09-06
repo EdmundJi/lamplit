@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import { useTownMailSignal } from '../town-mail-signal'
+import ResidentMoment from '../ResidentMoment.vue'
+import TownEventsBoard from '../TownEventsBoard.vue'
+import { useTownEventsStore } from '../town-events'
 /**
  * 沉浸式小镇外壳：全屏容器 + 世界 HUD（跑步开关、dock）+ 面板窗口 + 世界能力（走到某处弹出的动作
  * 菜单 + 统一反馈）。不离开这个页面就能用到系统里的全部功能——面板走 panel.types.ts 的契约，渲染
@@ -13,12 +17,13 @@ import { useTownStore } from '../town.store'
 import { useTownNpcStore } from '../town-npc.store'
 import TownOnboarding from '../TownOnboarding.vue'
 import { TownControls } from '../town-controls'
-import type { TownGame, TownSelection } from '../town.engine'
+import type { TownGame, TownSelection, TownTravel, TownNearby } from '../town.engine'
 import type { TownModel } from '../town.types'
 import { worldPanels } from './panels/manifest'
 import { worldBridgeKey } from './panel.types'
 import type { WorldBridge, WorldEvent, WorldPanelKey } from './panel.types'
 import { anchorForSelection, useImmersiveStore } from './immersive.store'
+import { registerTownUi } from '../town-probe'
 import {
   registerBuiltinWorldActions,
   resolveWorldAction,
@@ -31,9 +36,28 @@ import WorldActionMenu from './WorldActionMenu.vue'
 import WorldFeedback from './WorldFeedback.vue'
 
 const store = useTownStore()
+const mailSignal = useTownMailSignal()
+let socialTicker: ReturnType<typeof setInterval> | null = null
 const immersive = useImmersiveStore()
 const townNpcStore = useTownNpcStore()
 const observing = ref(false)
+const activeRoom = ref<string | null>(null)
+const eventsStore = useTownEventsStore()
+const showEvents = ref(false)
+const travel = ref<TownTravel | null>(null)
+const nearby = ref<TownNearby | null>(null)
+const clockText = ref('')
+let clockTimer: ReturnType<typeof setInterval> | null = null
+const destinations = [{ id: 'home', label: '我的家' }, { id: 'academy', label: '学院' }, { id: 'gym', label: '健身房' }, { id: 'cafe', label: '咖啡馆' }, { id: 'park', label: '公园' }, { id: 'plaza', label: '广场' }]
+function visitPlace(id: string) {
+  if (observing.value) { observing.value = false; game?.setObservation(false) }
+  selection.value = null
+  showEvents.value = false
+  game?.travelTo?.(id)
+}
+function stopTravel() { game?.cancelTravel?.() }
+function interactNearby() { game?.interactNearby?.() }
+function leaveRoom() { game?.exitRoom(); game?.exitAcademy() }
 const router = useRouter()
 
 const root = ref<HTMLElement | null>(null)
@@ -42,6 +66,11 @@ const onboardingRef = ref<InstanceType<typeof TownOnboarding> | null>(null)
 const engineError = ref('')
 const nativeFullscreen = ref(false)
 const selection = ref<TownSelection>(null)
+const selectedNpc = computed(() => {
+  const code = selection.value?.startsWith('npc:') ? selection.value.slice(4) : ''
+  const npc = townNpcStore.byCode(code)
+  return npc?.layer === 2 ? npc : null
+})
 const feedback = ref<InstanceType<typeof WorldFeedback> | null>(null)
 const playerPosition = ref<{ x: number; y: number } | null>(null)
 const distanceToGuide = ref<number | null>(null)
@@ -50,7 +79,7 @@ const distanceToGuide = ref<number | null>(null)
 const night = ref(new Date().getHours() >= 18 || new Date().getHours() < 6)
 const insideAcademy = ref(false)
 /** 玩家手动关掉了当前锚点的动作菜单：在下一次锚点变化之前不再弹出。 */
-const menuDismissed = ref(false)
+const menuDismissed = ref(true)
 
 let game: TownGame | null = null
 let controls: TownControls | null = null
@@ -61,7 +90,7 @@ let leavingImmersive = false
 const residents = computed(() => store.model?.residents ?? [])
 const self = computed(() => residents.value.find(item => item.isSelf) ?? null)
 const currentAnchor = computed(() => anchorForSelection(selection.value, self.value?.publicId ?? null))
-const anyPanelOpen = computed(() => immersive.windows.length > 0)
+const anyPanelOpen = computed(() => immersive.windows.length > 0 || selectedNpc.value !== null)
 
 const openWindows = computed(() => {
   const defs: { key: WorldPanelKey; x: number; y: number; z: number; def: (typeof worldPanels)[number] }[] = []
@@ -101,20 +130,28 @@ async function mountGame() {
     game = null
     const created = await createTownGame(canvas.value, store.model, {
       onSelect: value => { selection.value = value },
-      onAcademyChange: inside => { insideAcademy.value = inside },
+      onObservationChange: enabled => { observing.value = enabled },
+      onTravelChange: value => { travel.value = value },
+      onNearbyChange: value => { nearby.value = value },
+      onAcademyChange: inside => { insideAcademy.value = inside; activeRoom.value = inside ? 'academy' : null },
+      onRoomChange: room => { activeRoom.value = room; selection.value = null; travel.value = null },
+      onPresenceReport: payload => { void store.reportPresence(payload) },
       onPlayerMove: (x, y) => { playerPosition.value = { x, y } },
       onDistanceToGuide: distance => { distanceToGuide.value = distance },
       // 室内点书桌/成就墙/宠物窝 → 走同一份世界能力注册表，而不是让场景自己知道该开哪个面板。
       // 护栏 A：把这一次主动搭话记到服务端，再用权威额度校正引擎的乐观值。
-      onInitiativeSpent: () => { void townNpcStore.consumeInitiative().then(budget => game?.setInitiativeBudget(budget)) },
+      onInitiativeSpent: () => { void townNpcStore.consumeInitiative().then(budget => game?.setInitiativeBudget(budget)).catch(() => {}) },
       onInteriorInteract: (actionId, id) => { void worldBridge.run(actionId, id) },
     })
     if (sequence !== mountSequence) { created.destroy(); return }
     game = created
+    game.setLetterUnread?.(mailSignal.unreadCount)
     game.setRun(immersive.runMode)
     await townNpcStore.load()
+    if (sequence !== mountSequence) return
     if (game) game.applyNpcs(townNpcStore.npcs, townNpcStore.budget)
-    game.setNight(night.value)
+    game?.setNight(night.value)
+    game?.applyEvents?.(eventsStore.events)
     residentSignature = residentKey(store.model)
   } catch (error) {
     // Phaser 加载失败时不影响 dock/面板：HUD 照常可用，只是画面暂时空着。
@@ -123,7 +160,9 @@ async function mountGame() {
 }
 
 function handleWorldEvent(event: WorldEvent) {
-  if (event.type === 'celebrate') { game?.celebrate(event.publicId); feedback.value?.handle(event, residentName(event.publicId)) }
+  if (event.type === 'mail-count') mailSignal.unreadCount = event.count
+  else if (event.type === 'celebrate') { const id = residents.value.find(r => r.publicId === event.publicId)?.publicId ?? self.value?.publicId; if (id) { game?.celebrate(id); feedback.value?.handle({ ...event, publicId: id }, residentName(id)) } }
+  else if (event.type === 'travel') visitPlace(event.place)
   else if (event.type === 'focus') { game?.focus(event.publicId); feedback.value?.handle(event) }
   else if (event.type === 'toast') feedback.value?.handle(event)
   else if (event.type === 'open') immersive.openPanel(event.panel)
@@ -194,7 +233,7 @@ async function enterFullscreen() {
 
 function onFullscreenChange() {
   nativeFullscreen.value = document.fullscreenElement === root.value
-  if (!document.fullscreenElement && !leavingImmersive) { leavingImmersive = true; void router.push('/town') }
+
 }
 
 async function exitImmersive() {
@@ -214,12 +253,18 @@ function showOnboarding() {
 }
 
 function onKeydown(event: KeyboardEvent) {
+  if (event.defaultPrevented) return
   const target = event.target as HTMLElement | null
   const typing = Boolean(target && ['INPUT', 'TEXTAREA'].includes(target.tagName))
   if (event.key === 'Escape') {
     // Esc 依次关：动作菜单 > 最上层窗口 > 退出沉浸模式。
-    if (menuActions.value.length) { event.preventDefault(); dismissMenu() }
+    if (showEvents.value) { event.preventDefault(); showEvents.value = false }
+    else if (travel.value?.phase === 'walking') { event.preventDefault(); game?.cancelTravel?.() }
+    else if (selectedNpc.value) { event.preventDefault(); selection.value = null }
+    else if (observing.value) { event.preventDefault(); toggleObservation() }
+    else if (menuActions.value.length) { event.preventDefault(); dismissMenu() }
     else if (immersive.topmost) { event.preventDefault(); immersive.closeTopmost() }
+    else if (activeRoom.value) { event.preventDefault(); leaveRoom() }
     else void exitImmersive()
     return
   }
@@ -235,6 +280,16 @@ function onKeyup(event: KeyboardEvent) {
 }
 
 onMounted(async () => {
+  void mailSignal.load()
+  socialTicker = setInterval(() => {
+    void mailSignal.load()
+    void eventsStore.load()
+    void townNpcStore.load().then(() => game?.applyNpcs(townNpcStore.npcs, townNpcStore.budget))
+  }, 60_000)
+  const tickClock = () => { clockText.value = new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit', timeZone: self.value?.timezone ?? 'Asia/Shanghai' }).format(new Date()) }
+  tickClock()
+  clockTimer = setInterval(tickClock, 30_000)
+  void eventsStore.load()
   immersive.hydrate(worldPanels)
   registerBuiltinWorldActions()
 
@@ -253,15 +308,17 @@ onMounted(async () => {
   document.addEventListener('keydown', onKeydown)
   document.addEventListener('keyup', onKeyup)
   document.addEventListener('fullscreenchange', onFullscreenChange)
-  await enterFullscreen()
+
   if (store.model) await mountGame()
   else await store.load()
   store.startPolling()
 })
 
+watch(() => eventsStore.events, events => game?.applyEvents?.(events))
+
 watch(selection, sel => {
   const anchor = anchorForSelection(sel, self.value?.publicId ?? null)
-  menuDismissed.value = false
+  menuDismissed.value = true
   immersive.openForAnchor(anchor, worldPanels)
 })
 
@@ -279,7 +336,24 @@ watch(() => store.lastCelebrations, celebrations => {
   for (const item of celebrations) game.celebrate(item.publicId)
 })
 
+// 诊断探针只能从 DOM 上刮到面板标题，刮不到 store 里的真实键名和 dock 状态。这里把权威值
+// 喂进去，让 window.__town.snapshot().ui 是可断言的结构，而不是一堆界面文案。
+const stopProbeUi = import.meta.env.DEV
+  ? registerTownUi(() => ({
+      route: '/town/immersive',
+      panelsOpen: immersive.windows.filter(item => !item.minimized).map(item => item.key),
+      panelsMinimized: immersive.windows.filter(item => item.minimized).map(item => item.key),
+      dockCollapsed: immersive.dockCollapsed,
+    }))
+  : null
+
+watch(() => mailSignal.unreadCount, count => game?.setLetterUnread?.(count))
+
 onBeforeUnmount(() => {
+  if (socialTicker) clearInterval(socialTicker)
+  mountSequence++
+  stopProbeUi?.()
+  if (clockTimer) clearInterval(clockTimer)
   document.removeEventListener('keydown', onKeydown)
   document.removeEventListener('keyup', onKeyup)
   document.removeEventListener('fullscreenchange', onFullscreenChange)
@@ -301,6 +375,7 @@ onBeforeUnmount(() => {
       :player-position="playerPosition"
       :distance-to-guide="distanceToGuide"
       :any-panel-open="anyPanelOpen"
+      :conversation-open="Boolean(selectedNpc) || selection === 'npc:assistant' || selection === 'npc:postman'"
     />
 
     <div ref="canvas" class="immersive-canvas" data-testid="immersive-canvas" />
@@ -309,6 +384,23 @@ onBeforeUnmount(() => {
     <p v-else-if="engineError" class="immersive-status immersive-status--error" role="alert">画面暂时加载不出来，下面的功能仍然能用。</p>
 
     <WorldFeedback ref="feedback" />
+    <div v-if="showEvents" class="immersive-events"><TownEventsBoard @close="showEvents = false" @visit="visitPlace" /></div>
+    <div v-if="travel?.phase === 'walking'" class="travel-status" role="status">正在走向{{ travel.label }}<button type="button" @click="stopTravel">停下 · Esc</button></div>
+    <div v-else-if="travel?.phase === 'blocked'" class="travel-status" role="status">暂时走不到{{ travel.label }}<button type="button" @click="stopTravel">知道了</button></div>
+    <button v-if="nearby && !activeRoom && !observing && !selectedNpc && !openWindows.length && travel?.phase !== 'walking'" class="nearby-action" type="button" @click="interactNearby">{{ nearby.action }}{{ nearby.label }} · E</button>
+    <div v-if="townNpcStore.error" class="town-roster-error" role="alert">{{ townNpcStore.error }} <button type="button" @click="mountGame">重新连接</button></div>
+    <nav v-if="!observing && !activeRoom" class="town-wayfinder" aria-label="小镇地点">
+      <span>去哪里走走</span>
+      <button v-for="place in destinations" :key="place.id" type="button" @click="visitPlace(place.id)">{{ place.label }}</button>
+    </nav>
+    <button v-if="activeRoom" class="town-leave-room" type="button" @click="leaveRoom">回到街上</button>
+    <p v-if="!observing && !activeRoom" class="town-controls-hint">方向键 / WASD 行走 · Shift 奔跑 · 滚轮缩放 · 拖动看风景</p>
+    <div v-if="selectedNpc" class="immersive-moment"><ResidentMoment :npc="selectedNpc" @close="selection = null" /></div>
+    <div v-if="observing" class="observation-caption">
+      <span>小镇正在过它的一天</span>
+      <p>看居民散步、相遇，听几句路边闲谈。</p>
+      <button type="button" @click="toggleObservation">回到我身边 · Esc</button>
+    </div>
 
     <WorldPanel
       v-for="item in openWindows"
@@ -316,7 +408,7 @@ onBeforeUnmount(() => {
       :def="item.def"
       :x="item.x"
       :y="item.y"
-      :z="item.z"
+      :z="20 + item.z"
       @close="immersive.closePanel(item.key)"
       @minimize="immersive.minimizePanel(item.key)"
       @focus="immersive.focusPanel(item.key)"
@@ -332,7 +424,11 @@ onBeforeUnmount(() => {
 
     <header class="immersive-topbar">
       <button class="icon-button" type="button" title="退出沉浸模式" aria-label="退出沉浸模式" @click="exitImmersive"><Minimize2 :size="18" /></button>
-      <p class="immersive-title">成长小镇 · 沉浸模式<template v-if="!nativeFullscreen">（窗口内全屏）</template></p>
+      <div class="immersive-title"><strong>成长小镇</strong><span>{{ activeRoom ? '屋内时光' : '慢慢走，生活正在发生' }} · {{ clockText }}</span></div>
+      <button class="secondary" type="button" @click="immersive.openPanel('friends')">信箱<span v-if="mailSignal.unreadCount"> · {{ mailSignal.unreadCount }}</span></button>
+      <button v-if="currentAnchor" class="secondary" type="button" aria-label="更多地点操作" @click="menuDismissed = !menuDismissed">更多</button>
+      <button class="secondary" type="button" aria-label="小镇活动" @click="showEvents = !showEvents">活动</button>
+      <button v-if="!nativeFullscreen" class="secondary fullscreen-button" type="button" title="全屏显示" @click="enterFullscreen">全屏</button>
       <button class="secondary" type="button" :aria-pressed="observing" title="观察小镇：镜头脱离玩家自动巡游" aria-label="观察小镇" @click="toggleObservation"><Film :size="16" /></button>
       <button class="secondary" type="button" title="重新打开新手引导" @click="showOnboarding"><HelpCircle :size="16" /></button>
       <button class="secondary run-toggle" type="button" :aria-pressed="immersive.runMode" @click="worldBridge.setRunMode(!immersive.runMode)">
@@ -382,6 +478,14 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .immersive-town { position: fixed; inset: 0; z-index: 40; display: flex; flex-direction: column; background: var(--forest); color: var(--on-forest); overflow: hidden; }
+.immersive-events { position: absolute; z-index: 30; right: 20px; top: 90px; width: min(380px, calc(100% - 40px)); max-height: calc(100dvh - 180px); overflow: auto; }
+.travel-status, .nearby-action { position: absolute; z-index: 8; bottom: 90px; left: 50%; transform: translateX(-50%); padding: 12px 18px; border-radius: 12px; background: #fff9ee; color: #355b44; box-shadow: var(--shadow); border: 1px solid #dccdb5; max-width: calc(100% - 32px); font-size: 13px; }
+.travel-status button { margin-left: 12px; color: #355b44; background: #e9ebda; }
+.immersive-moment { position: absolute; right: 20px; bottom: 76px; z-index: 7; max-height: calc(100dvh - 150px); overflow-y: auto; }
+.observation-caption { position: absolute; left: 50%; bottom: 80px; transform: translateX(-50%); text-align: center; padding: 16px 24px; width: max-content; max-width: calc(100vw - 64px); border: 1px solid #ffffff25; border-radius: 16px; background: #172e2adb; backdrop-filter: blur(12px); color: #fff9ee; }
+.observation-caption span { font-size: 16px; letter-spacing: .15em; }
+.observation-caption p { font-size: 12px; opacity: .75; }
+.observation-caption button { border: 1px solid #ffffff40; border-radius: 8px; background: transparent; color: inherit; padding: 8px 14px; cursor: pointer; }
 .immersive-canvas { position: absolute; inset: 0; }
 .immersive-canvas :deep(canvas) { display: block; width: 100%; height: 100%; image-rendering: pixelated; }
 .immersive-status { position: absolute; top: 64px; left: 50%; transform: translateX(-50%); margin: 0; padding: 8px 16px; border-radius: 999px; background: rgb(0 0 0 / 45%); color: #fff; font-size: 13px; }
@@ -389,6 +493,15 @@ onBeforeUnmount(() => {
 .immersive-topbar { position: relative; z-index: 6; display: flex; align-items: center; gap: 14px; padding: 10px 16px; background: color-mix(in srgb, var(--forest-deep) 82%, transparent); backdrop-filter: blur(10px); }
 .immersive-topbar .icon-button { background: color-mix(in srgb, #fff 12%, transparent); color: var(--on-forest); }
 .immersive-title { flex: 1; margin: 0; font-size: 13px; font-weight: 650; color: var(--on-forest); opacity: .9; }
+.immersive-title strong { display: block; font-size: 15px; letter-spacing: .12em; }
+.immersive-title span { display: block; font-size: 11px; margin-top: 4px; opacity: .65; }
+.town-wayfinder { position: absolute; z-index: 6; left: 18px; top: 84px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px; max-width: calc(100% - 36px); padding: 8px; border: 1px solid #ffffff30; border-radius: 14px; background: #18352be6; box-shadow: 0 8px 25px #142d2220; backdrop-filter: blur(12px); }
+.town-wayfinder span { padding: 0 9px; font-size: 11px; color: #dbd3ba; }
+.town-wayfinder button { border: 0; border-radius: 8px; background: transparent; color: #fff9ee; padding: 8px 10px; cursor: pointer; font-size: 12px; }
+.town-wayfinder button:hover, .town-wayfinder button:focus-visible { background: #ffffff20; }
+.town-controls-hint { position: absolute; bottom: 16px; left: 20px; margin: 0; padding: 8px 12px; border-radius: 10px; font-size: 11px; background: #18352bd9; color: #f2eddb; pointer-events: none; }
+.town-leave-room { position: absolute; z-index: 8; top: 88px; left: 20px; border: 1px solid #ded8c4; border-radius: 10px; padding: 12px 16px; background: #fff9ee; color: #355b44; cursor: pointer; }
+.town-roster-error { position: absolute; top: 145px; left: 20px; z-index: 8; padding: 12px; border-radius: 12px; background: #fff9ee; color: #59382c; }
 .run-toggle[aria-pressed='true'] { background: var(--sun); color: var(--forest-deep); border-color: transparent; }
 .immersive-minimized { position: relative; z-index: 6; display: flex; flex-wrap: wrap; gap: 8px; padding: 0 16px 8px; }
 .immersive-minimized button { font-size: 12px; padding: 0 12px; }
@@ -401,7 +514,14 @@ onBeforeUnmount(() => {
 .dock-button:hover { background: color-mix(in srgb, #fff 10%, transparent); color: var(--on-forest); }
 .dock-button[aria-pressed='true'] { background: color-mix(in srgb, var(--sun) 22%, transparent); color: var(--sun); border-color: color-mix(in srgb, var(--sun) 40%, transparent); }
 @media (max-width: 760px) {
-  .immersive-title { display: none; }
+  .immersive-topbar { gap: 6px; padding: 8px; }
+  .immersive-topbar > .secondary { min-width: 36px; padding: 0 8px; }
+  .immersive-topbar .run-toggle { font-size: 0; gap: 0; width: 40px; flex: none; }
+  .immersive-topbar button[title="重新打开新手引导"] { display: none; }
+  .immersive-title, .fullscreen-button { display: none; }
+  .town-wayfinder { top: 76px; }
+  .town-wayfinder span, .town-controls-hint { display: none; }
+  .town-wayfinder button { padding: 8px; }
   .immersive-dock { justify-content: flex-start; overflow-x: auto; flex-wrap: nowrap; }
   .dock-button { min-width: 56px; flex: none; }
 }

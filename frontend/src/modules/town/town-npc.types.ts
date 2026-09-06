@@ -90,6 +90,8 @@ export type TownNpcView = {
   dimension: DimensionCode | null
   interests: Partial<Record<DimensionCode, number>>
   affinityToPlayer: number
+  /** Symmetric familiarity only; hidden regard is never included. */
+  affinityToNpcs?: Record<string, number>
   mood: { valence: number; energy: number }
   /** Covers 0-24h, no holes, ascending by `startHour`. Kept alongside `dayPlan` for backwards
    * compatibility (CONTRACT-M7.md §1: the backend sends both during the M7 rollout). */

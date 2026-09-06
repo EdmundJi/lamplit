@@ -11,7 +11,7 @@ export const MAX_OPEN_WINDOWS = 4
  * gym/cafe/park 目前的引擎选中值还产生不了，先留着，等引擎支持了自然就会命中。
  */
 export function anchorForSelection(selection: string | null, selfPublicId: string | null): WorldAnchor | null {
-  if (selection === 'academy') return 'academy'
+  if (selection && ['home', 'academy', 'gym', 'cafe', 'park', 'plaza', 'street'].includes(selection)) return selection as WorldAnchor
   if (selection === 'npc:assistant') return 'npc:assistant'
   if (selection === 'npc:postman') return 'npc:postman'
   if (selfPublicId && selection === selfPublicId) return 'home'
