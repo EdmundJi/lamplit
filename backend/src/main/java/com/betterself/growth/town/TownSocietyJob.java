@@ -34,11 +34,18 @@ public class TownSocietyJob {
 
     private final JdbcTemplate jdbc;
     private final TownSocietyService society;
+    private final TownEventService events;
+    private final TownConfidantService confidant;
+    private final TownMigrationService migration;
     private final Clock clock;
 
-    public TownSocietyJob(JdbcTemplate jdbc, TownSocietyService society, Clock clock) {
+    public TownSocietyJob(JdbcTemplate jdbc, TownSocietyService society, TownEventService events,
+                          TownConfidantService confidant, TownMigrationService migration, Clock clock) {
         this.jdbc = jdbc;
         this.society = society;
+        this.events = events;
+        this.confidant = confidant;
+        this.migration = migration;
         this.clock = clock;
     }
 
@@ -51,7 +58,7 @@ public class TownSocietyJob {
         int done = 0;
         for (long userId : candidates) {
             try {
-                society.runNightly(userId, localDateFor(userId));
+                runTown(userId, localDateFor(userId));
                 done++;
             } catch (ApiException ex) {
                 // 今天已经跑过（或被限流）——安静跳过，和 TownReflectionJob 一个口径。
@@ -61,6 +68,32 @@ public class TownSocietyJob {
             }
         }
         log.info("town society job finished: {}/{} towns simulated", done, candidates.size());
+    }
+
+    /**
+     * 一个小镇的一晚，四步。顺序不是随便排的：
+     *
+     * <ol>
+     *   <li><b>活动</b>要排在最前面。它今晚建的 {@code town_event} 起始时间就在今天，而当天行程
+     *       （M7-3）要把这场活动插成一条高优先级安排。晚于社会模拟执行的话，夜里推出的相遇序列
+     *       里没有这场活动、白天 {@code roster()} 却算得出有——前后端两份日程对不上，plan §3.5
+     *       那条「两边算出来的必须是同一份」的地基就塌了。代价只是请柬排序用的是昨晚的亲密度，
+     *       而亲密度本来就是按天缓慢变化的，肉眼无差。</li>
+     *   <li><b>社会模拟</b>：采集事实 → 目击 → 传播 → 转述 → 亲密度。</li>
+     *   <li><b>树洞回信</b>：与前两步没有依赖，且按 plan §2.7 与传播网络完全隔离。</li>
+     *   <li><b>迁徙</b>排在最后：它会改动名册，放最后就不会影响当晚其余步骤读到的「今天的人」。
+     *       它同时会写进对方的小镇，但那一镇当晚不会让新来的人入场（见
+     *       {@code TownSocietyService.simulationRoster}），所以两个用户谁先跑都算得出同一份结果。</li>
+     * </ol>
+     *
+     * <p>每一步各自幂等（社会模拟靠 {@code town_society_run}，其余三步靠自己的产出表做存在性判断），
+     * 所以某一步抛异常时前面已完成的步骤不会在重跑时被重复执行。
+     */
+    private void runTown(long userId, LocalDate localDate) {
+        events.runNightly(userId, localDate);
+        society.runNightly(userId, localDate);
+        confidant.runNightly(userId, localDate);
+        migration.runNightly(userId, localDate);
     }
 
     private LocalDate localDateFor(long userId) {
