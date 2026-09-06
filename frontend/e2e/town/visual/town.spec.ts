@@ -444,3 +444,93 @@ test('退出动画中脱困不会被旧回调拉回建筑门口', async ({ page 
   expect(after.onWalkable).toBe(true)
   await record(page, info, 'recovery-invalidates-exit-fade')
 })
+
+test('学院停留后可主动走出，旧地图门内出生也不自动退出', async ({ page }, info) => {
+  await page.locator('.run-toggle').click()
+  for (const legacy of [false, true]) {
+    if (legacy) await page.route('**/maps/academy-study.json', async route => {
+      const map = JSON.parse(readFileSync('public/assets/town/maps/academy-study.json', 'utf8'))
+      map.spawn = { x: 320, y: 344 }
+      await route.fulfill({ json: map })
+    }, { times: 1 })
+    await page.getByRole('button', { name: '学院', exact: true }).click()
+    await page.waitForFunction(() => (window as any).__town.snapshot().activeScene === 'interior:academy-study', null, { timeout: 30000 })
+    await page.waitForTimeout(1500)
+    expect(await page.evaluate(() => (window as any).__town.snapshot().activeScene)).toBe('interior:academy-study')
+    await record(page, info, legacy ? 'academy-legacy-spawn-stays' : 'academy-safe-spawn')
+    // Step away from the door, then deliberately cross it to leave.
+    await page.keyboard.down('ArrowUp'); await page.waitForTimeout(250); await page.keyboard.up('ArrowUp')
+    await page.keyboard.down('ArrowDown'); await page.waitForTimeout(650); await page.keyboard.up('ArrowDown')
+    await page.waitForFunction(() => (window as any).__town.snapshot().activeScene === 'town')
+  }
+})
+
+for (const mode of ['immersive', 'normal']) test(`${mode} 公园刷新布局不抢镜头，向左奔跑不反向回跳`, async ({ page }, info) => {
+  if (mode === 'normal') {
+    await page.goto('/town')
+    await page.waitForFunction(() => (window as any).__town?.snapshot().player?.controllable)
+    await page.getByRole('button', { name: '开始奔跑', exact: true }).click()
+  } else await page.locator('.run-toggle').click()
+  await page.getByRole('button', { name: '公园', exact: true }).click()
+  await page.waitForFunction(() => { const p = (window as any).__town.snapshot().player; return p.y < 580 && p.state !== 'walk' }, null, { timeout: 40000 })
+  if (await page.getByRole('button', { name: '关闭', exact: true }).count()) await page.getByRole('button', { name: '关闭', exact: true }).click()
+  await page.waitForTimeout(2200)
+  const rows = await page.evaluate(async () => {
+    const s = (window as any).__townScene, c = s.cameras.main, rows: any[] = []
+    await new Promise<void>(resolve => {
+      const sample = () => {
+        rows.push({ x:c.scrollX, y:c.scrollY })
+        if (rows.length % 15 === 0) s.scale.refresh()
+        if (rows.length >= 90) { s.game.events.off('postrender',sample); resolve() }
+      }; s.game.events.on('postrender', sample)
+    }); return rows
+  })
+  writeFileSync(info.outputPath('camera-refresh.json'), JSON.stringify(rows))
+  expect(Math.max(...rows.map(r=>r.y))-Math.min(...rows.map(r=>r.y))).toBeLessThan(1)
+  await page.keyboard.down('ArrowLeft')
+  const running = await page.evaluate(async () => {
+    const s = (window as any).__townScene, c = s.cameras.main, rows: any[] = []
+    await new Promise<void>(resolve => {
+      const sample = () => {
+        rows.push({ x:c.scrollX, y:c.scrollY, px:s.selfWalker.sprite.x })
+        if (rows.length % 15 === 0) s.scale.refresh()
+        if (rows.length >= 90) { s.game.events.off('postrender',sample); resolve() }
+      }; s.game.events.on('postrender', sample)
+    }); return rows
+  })
+  await page.keyboard.up('ArrowLeft')
+  writeFileSync(info.outputPath('camera-run-left.json'), JSON.stringify(running))
+  expect(running.at(-1)!.px).toBeLessThan(running[0].px - 100)
+  expect(Math.max(...running.slice(1).map((r,i)=>r.x-running[i].x))).toBeLessThan(1)
+  expect(Math.max(...running.map(r=>r.y))-Math.min(...running.map(r=>r.y))).toBeLessThan(1)
+  await record(page, info, 'stable-park-camera')
+})
+
+test('公园下半区和入口停留时布局刷新保持镜头稳定', async ({ page }, info) => {
+  await page.locator('.run-toggle').click()
+  await page.getByRole('button', { name: '公园', exact: true }).click()
+  await page.waitForFunction(() => { const p = (window as any).__town.snapshot().player; return p.y < 580 && p.state !== 'walk' }, null, { timeout: 40000 })
+  if (await page.getByRole('button', { name: '关闭', exact: true }).count()) await page.getByRole('button', { name: '关闭', exact: true }).click()
+  for (const [name, dx, y] of [['lower-park', 0, 552], ['park-entrance', 240, 600]] as const) {
+    await page.evaluate(({ dx, y }) => {
+      const s = (window as any).__townScene
+      s.walkSelfToGround(s.entrances.get('park').x + dx, y, true)
+    }, { dx, y })
+    await page.waitForFunction(() => (window as any).__town.snapshot().player.state !== 'walk')
+    expect(await page.evaluate(() => (window as any).__town.snapshot().player.onWalkable)).toBe(true)
+    await page.waitForTimeout(2200)
+    const rows = await page.evaluate(async () => {
+      const s = (window as any).__townScene, c = s.cameras.main, rows: number[] = []
+      await new Promise<void>(resolve => {
+        const sample = () => {
+          rows.push(c.scrollY)
+          if (rows.length % 15 === 0) s.scale.refresh()
+          if (rows.length >= 90) { s.game.events.off('postrender', sample); resolve() }
+        }; s.game.events.on('postrender', sample)
+      }); return rows
+    })
+    writeFileSync(info.outputPath(`${name}-camera.json`), JSON.stringify(rows))
+    expect(Math.max(...rows) - Math.min(...rows)).toBeLessThan(1)
+    await record(page, info, name)
+  }
+})

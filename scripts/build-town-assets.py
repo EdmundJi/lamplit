@@ -579,7 +579,7 @@ def _academy_study() -> dict:
         "cols": cols,
         "rows": rows,
         "backgroundColor": "#e7d9bd",
-        "spawn": {"x": door_x, "y": height - 40},
+        "spawn": {"x": door_x, "y": height - 64},
         "layers": {"floor": floor, "walls": walls},
         "collisions": _perimeter_collisions(cols, rows, wall_rows),
         "doors": [

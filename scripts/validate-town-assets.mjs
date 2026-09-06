@@ -20,7 +20,6 @@ for (const id of ['home-living-room', 'academy-study', ...Object.keys(actions)])
   assert.equal(room.id, id)
   const used = [...room.layers.floor.flat(), ...room.layers.walls.flat(), ...room.furniture.map(p => p.frame), ...room.slots.flatMap(s => s.frames)].filter(Boolean)
   for (const frame of used) assert.ok(atlas[frame], `${id}: missing atlas frame ${frame}`)
-  if (!actions[id]) { console.log(`PASS ${id}: parser + all frame references`); continue }
   const width = room.cols * room.tileSize, height = room.rows * room.tileSize
   const blocked = (x, y) => x < 7 || x > width - 7 || y < 10 || y > height || collidesAt(room, x, y, 14, 10)
   const { x: sx, y: sy } = room.spawn
@@ -39,8 +38,10 @@ for (const id of ['home-living-room', 'academy-study', ...Object.keys(actions)])
   }
   for (const door of room.doors) {
     assert.ok(queue.some(([x, y]) => doorAt(room, x, y)?.id === door.id), `${id}: unreachable exit`)
-    assert.ok(door.spawn && !blocked(door.spawn.x, door.spawn.y) && !doorAt(room, door.spawn.x, door.spawn.y), `${id}: invalid door entry spawn`)
+    const entry = door.spawn ?? room.spawn
+    assert.ok(!blocked(entry.x, entry.y) && !doorAt(room, entry.x, entry.y), `${id}: invalid door entry spawn`)
   }
+  if (!actions[id]) { console.log(`PASS ${id}: parser, frames, safe spawn and reachable exit (${queue.length} walkable samples)`); continue }
   const interactive = room.furniture.filter(p => p.interactive)
   assert.deepEqual(interactive.map(p => p.interactive.actionId), [actions[id]])
   for (const p of room.furniture) {

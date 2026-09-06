@@ -19,5 +19,5 @@ export default defineConfig({
     url: 'http://127.0.0.1:5176',
     reuseExistingServer: !process.env.CI,
   },
-  projects: [{ name: 'chromium', use: { browserName: 'chromium' } }],
+  projects: [{ name: 'chromium', use: { browserName: 'chromium' } }, ...(process.env.TOWN_FIREFOX ? [{ name: 'firefox', use: { browserName: 'firefox' as const } }] : [])],
 })

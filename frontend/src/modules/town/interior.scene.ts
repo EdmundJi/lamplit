@@ -492,6 +492,9 @@ export function createDefaultController(ctx: ControllerContext): RoomController 
     obstacles: room.collisions.map(r => ({ x: r.x - 14, y: r.y - 10, width: r.w + 28, height: r.h + 20 })),
   }
   let facing: Direction = 'down'
+  // Entry can land in an exit zone in an older/cached map. Require leaving that
+  // zone before walking back into it; a fresh explicit door click still exits.
+  let previousDoor = doorAt(room, sprite.x, sprite.y)?.id
 
   const pointerHandler = (pointer: PhaserNs.Input.Pointer) => {
     if (pointer?.event?.target !== scene.game.canvas) return
@@ -503,10 +506,11 @@ export function createDefaultController(ctx: ControllerContext): RoomController 
   scene.input.on('pointerdown', pointerHandler)
   scene.events.once('shutdown', () => scene.input.off('pointerdown', pointerHandler))
 
-  function move(dx: number, dy: number, deltaMs: number) {
+  function move(dx: number, dy: number, deltaMs: number, stopAtTarget = false) {
     if (dx === 0 && dy === 0) return false
     const length = Math.hypot(dx, dy) || 1
-    const step = Math.min(length, (ctx.speed * deltaMs) / 1000)
+    const distance = (ctx.speed * deltaMs) / 1000
+    const step = stopAtTarget ? Math.min(length, distance) : distance
     const nx = sprite.x + (dx / length) * step
     const ny = sprite.y + (dy / length) * step
     const oldX = sprite.x, oldY = sprite.y
@@ -539,12 +543,13 @@ export function createDefaultController(ctx: ControllerContext): RoomController 
         const remainingX = clickTarget.x - sprite.x
         const remainingY = clickTarget.y - sprite.y
         if (Math.hypot(remainingX, remainingY) < 3) clickTarget = waypoints.shift() ?? null
-        else moving = move(remainingX, remainingY, deltaMs)
+        else moving = move(remainingX, remainingY, deltaMs, true)
       }
       sprite.setDepth(sprite.y)
       sprite.play(`${sheet}-${moving ? 'walk' : 'idle'}-${facing}`, true)
       const door = doorAt(room, sprite.x, sprite.y)
-      if (door) ctx.onDoor(door)
+      if (door && door.id !== previousDoor && moving) ctx.onDoor(door)
+      previousDoor = door?.id
     },
   }
 }

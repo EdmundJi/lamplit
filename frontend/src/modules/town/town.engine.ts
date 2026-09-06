@@ -2076,9 +2076,12 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
 
     // ---------- camera & input ----------
 
-    handleViewportResize() {
-      if (!this.scene.isActive() || observationOn) return
-      this.cameras.main.centerOn(this.selfWalker?.sprite.x ?? academyDoorX, (this.selfWalker?.sprite.y ?? STREET_Y) - 110)
+    handleViewportResize(size: { width: number; height: number }, _base: unknown, _display: unknown, previousWidth: number, previousHeight: number) {
+      // Scale.refresh also emits resize when only the canvas' DOM offset changed.
+      // Recentring then fights startFollow every refresh (110 vs 40px offset).
+      if (size.width === previousWidth && size.height === previousHeight) return
+      if (!this.scene.isActive() || observationOn || this.followingCamera || this.cameras.main.panEffect.isRunning) return
+      this.cameras.main.centerOn(this.selfWalker?.sprite.x ?? academyDoorX, (this.selfWalker?.sprite.y ?? STREET_Y) - 40)
     }
 
     setupCamera() {

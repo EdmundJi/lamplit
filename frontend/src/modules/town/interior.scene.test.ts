@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
-import { characterSheetFor, interiorSceneKey, PET_HOUSE_ACTION_ID, petPixelSpecFor } from './interior.scene'
+import { describe, expect, it, vi } from 'vitest'
+import { createDefaultController, characterSheetFor, interiorSceneKey, PET_HOUSE_ACTION_ID, petPixelSpecFor } from './interior.scene'
 
 // Phaser cannot run in jsdom (same limitation academy.scene.test.ts documents), so this file only
 // covers this module's pure, Phaser-free helpers: the scene-key formula, characterSheetFor, and
@@ -76,5 +76,22 @@ describe('PET_HOUSE_ACTION_ID', () => {
     // world-actions.ts imports this same constant for its "home.open-pet-house" action, so the
     // two can never silently drift apart — this pins the literal value itself.
     expect(PET_HOUSE_ACTION_ID).toBe('home.open-pet-house')
+  })
+})
+
+
+describe('interior keyboard movement', () => {
+  it('moves the same distance in one second at 30fps and 60fps', () => {
+    for (const fps of [30, 60]) {
+      const sprite = { x: 320, y: 300, scene: {}, anims: {}, setDepth: vi.fn(), play: vi.fn() }
+      const controller = createDefaultController({
+        scene: { input: { keyboard: { createCursorKeys: () => ({ up: { isDown: true }, down: { isDown: false }, left: { isDown: false }, right: { isDown: false } }), addKey: () => ({ isDown: false }) }, on: vi.fn(), off: vi.fn() }, events: { once: vi.fn() } },
+        sprite, room: { tileSize: 32, cols: 20, rows: 12, collisions: [], doors: [] },
+        sheet: 'char_1', speed: 180, isBlocked: () => false, onDoor: vi.fn(),
+      } as any)
+      for (let i = 0; i < fps; i++) controller.update(1000 / fps)
+      expect(sprite.y).toBeCloseTo(120)
+      expect(sprite.x).toBe(320)
+    }
   })
 })
