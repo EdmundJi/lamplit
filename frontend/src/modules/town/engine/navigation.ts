@@ -2,6 +2,7 @@ import type PhaserNs from 'phaser'
 import { RUN_ANIM_SCALE, dominantDirection, movementDelta, moveSpeed } from '../walkers'
 import { nearestStandable, resolveMove } from '../collision'
 import { findPath } from '../pathfinding'
+import { socialApproach } from '../social-motion'
 import type { Point } from '../collision'
 import { BASELINE, WORLD_HEIGHT, STREET_Y, SELF_OVERRIDE_MS, EMOTES } from './shared'
 import type { TownSelection, TownNearby } from './shared'
@@ -81,7 +82,7 @@ export const navigationMethods = {
           const self = this.selfWalker;
           if (!item || !self)
               return;
-          if (item.id === 'records')
+          if (item.id === 'records' && runtime.soundEnabled)
               this.facilities?.unlockAudio();
           if (!this.facilities?.reserve(item.id, self.id)) {
               this.saySomething(self, '有人正在用，等一小会儿吧。');
@@ -159,6 +160,7 @@ export const navigationMethods = {
       self.arriveSelect = null;
       self.travelEmote?.destroy();
       self.travelEmote = null;
+      this.cancelGreeting(self);
       self.manualWalk = true;
       self.running = run;
       if (Math.hypot(target.x - self.sprite.x, target.y - self.sprite.y) < 6) {
@@ -182,7 +184,10 @@ export const navigationMethods = {
           this.dispatchArrival(selection);
           return;
       }
-      const target = nearestStandable({ x: worldX, y: worldY }, this.collisionWorld);
+      const person = selection?.startsWith('npc:') ? this.walkers.find(w => w.id === selection || `npc:${w.id}` === selection) : undefined;
+      const target = person ? socialApproach(self.sprite, person.sprite, this.collisionWorld) : nearestStandable({ x: worldX, y: worldY }, this.collisionWorld);
+      if (!target) { this.saySomething(self, '这边挤了些，换个地方再聊吧。', 1800); return; }
+      this.cancelGreeting(self);
       self.manualWalk = true;
       self.running = run;
       if (Math.hypot(target.x - self.sprite.x, target.y - self.sprite.y) < 6) {
@@ -203,6 +208,13 @@ export const navigationMethods = {
 
   dispatchArrival(this: TownScene, selection: TownSelection): void {
       const runtime = this.runtime;
+      const person = selection?.startsWith('npc:') ? this.walkers.find(w => w.id === selection || `npc:${w.id}` === selection) : undefined;
+      if (person && this.selfWalker) {
+          const distance = Math.hypot(person.sprite.x - this.selfWalker.sprite.x, person.sprite.y - this.selfWalker.sprite.y);
+          if (distance < 36 || distance > 60) { this.walkSelfToAndSelect(person.sprite.x, person.sprite.y, selection); return; }
+          this.selfWalker.facing = dominantDirection(person.sprite.x - this.selfWalker.sprite.x, person.sprite.y - this.selfWalker.sprite.y, 'down');
+          this.selfWalker.sprite.play(`${this.selfWalker.sheet}-idle-${this.selfWalker.facing}`, true);
+      }
       if (this.travel) {
           this.travel = { ...this.travel, phase: 'arrived' };
           runtime.handlers.onTravelChange?.(this.travel);
@@ -252,7 +264,7 @@ export const navigationMethods = {
           return;
       }
       const self = this.selfWalker;
-      if (!self || !this.selfKeys || self.frozenUntil > now)
+      if (!self || !this.selfKeys)
           return;
       const { cursors, keyA, keyD, keyW, keyS, shift } = this.selfKeys;
       const left = Boolean(cursors?.left.isDown || keyA?.isDown);
@@ -263,6 +275,8 @@ export const navigationMethods = {
       const inputY = up === down ? 0 : up ? -1 : 1;
       if (inputX === 0 && inputY === 0)
           return;
+      this.cancelGreeting(self);
+      if (self.frozenUntil > now) return;
       if (runtime.observationOn)
           this.setObservationMode(false);
       if (this.travel || this.selfPath.length)
@@ -284,6 +298,7 @@ export const navigationMethods = {
           self.travelEmote?.destroy();
           self.travelEmote = null;
       }
+      this.cancelGreeting(self);
       self.manualWalk = true;
       self.overrideUntil = now + SELF_OVERRIDE_MS;
       const dx = resolved.x - from.x;
@@ -417,13 +432,11 @@ export const navigationMethods = {
 
   setNight(this: TownScene, night: boolean, instant = false): void {
       const runtime = this.runtime;
-      if (this.night === night)
-          return;
+      runtime.desiredNight = night;
+      runtime.publishTime();
       this.night = night;
-      const duration = instant ? 0 : 900;
-      this.tweens.add({ targets: this.nightOverlay, alpha: 0, duration, ease: 'Sine.easeInOut' });
-      for (const light of this.glows)
-          this.tweens.add({ targets: light, alpha: night ? (light as PhaserNs.GameObjects.Image).getData('targetAlpha') ?? 1 : 0, duration, ease: 'Sine.easeInOut' });
+      if (instant) this.atmosphere?.update(900);
+      runtime.soundscape.refresh();
   },
 
   focusOn(this: TownScene, publicId: string): void {

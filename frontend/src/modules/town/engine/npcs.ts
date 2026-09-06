@@ -1,3 +1,4 @@
+import { resolveMove } from '../collision'
 import type PhaserNs from 'phaser'
 import { activityFor, hashString, whereShouldBe } from '../building-kit'
 import type { TownVenue } from '../building-kit'
@@ -276,7 +277,18 @@ export const npcsMethods = {
           walker.catchupPath.shift();
           target = walker.catchupPath[0] ?? { x: frame.x, y };
       }
-      const next = stepTowardPoint(previous, target, RESIDENT_WALK_SPEED, delta);
+      let next = resolveMove(previous, stepTowardPoint(previous, target, RESIDENT_WALK_SPEED, delta), this.collisionWorld);
+      // A regular itinerary can also meet newly placed furniture. Re-route instead of standing
+      // against it forever; failed searches are throttled rather than repeated every render frame.
+      if (Math.hypot(target.x - previous.x, target.y - previous.y) > 2 && Math.hypot(next.x - previous.x, next.y - previous.y) < .1) {
+          walker.stuckMs += delta;
+          if (walker.stuckMs >= 300) {
+              const destination = safeTownPoint(this.collisionWorld, { x: frame.x, y }, previous) ?? previous;
+              walker.catchupPath = findPath(previous, destination, this.collisionWorld) ?? [];
+              walker.stuckMs = 0;
+              if (walker.catchupPath[0]) next = resolveMove(previous, stepTowardPoint(previous, walker.catchupPath[0], RESIDENT_WALK_SPEED, delta), this.collisionWorld);
+          }
+      } else walker.stuckMs = 0;
       walker.sprite.setPosition(next.x, next.y);
       walker.sprite.setDepth(next.y);
       const walking = frame.walking || Math.hypot(frame.x - next.x, y - next.y) > 2;
@@ -311,11 +323,9 @@ export const npcsMethods = {
           return;
       walker.episodeCheckAt = now + ROADSIDE_EPISODE_CHECK_MS; // 节流：不必每帧都掷一次骰子
       // 擦肩打招呼：身边真有人（没在冻结中）才判定，免得空无一人的路上也频繁掷骰子。
-      const passerby = this.walkers.some(other => other !== walker && other.frozenUntil <= now && Math.hypot(other.sprite.x - walker.sprite.x, other.sprite.y - walker.sprite.y) < ROADSIDE_PASSING_DISTANCE_PX);
+      const passerby = this.walkers.find(other => other !== walker && other.frozenUntil <= now && !this.facilityNpcs.has(other) && !this.facilities?.isBusy(other.id) && this.conversation?.walker !== other && Math.hypot(other.sprite.x - walker.sprite.x, other.sprite.y - walker.sprite.y) >= 36 && Math.hypot(other.sprite.x - walker.sprite.x, other.sprite.y - walker.sprite.y) < 64);
       if (passerby && shouldPauseForGreeting()) {
-          walker.frozenUntil = now + PASSING_GREETING_PAUSE_MS;
-          walker.travelEmote?.destroy();
-          walker.travelEmote = this.add.sprite(walker.sprite.x, walker.sprite.y - 66, 'emotes', EMOTES.heart[0]).setOrigin(0.5, 1).setDepth(4002).play('emote-heart');
+          this.triggerGreeting(walker, passerby, now);
           return;
       }
       // 雨天躲屋檐：只是视觉上往店面那侧靠一靠，x 和 activity 都不变。

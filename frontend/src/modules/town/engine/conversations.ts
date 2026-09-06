@@ -5,9 +5,22 @@ import { conversationDeparture } from '../npc-conversation'
 import { bubbleTierFor, pointsToPlay, canInitiate, consume, layoutBubbles, wrapSpeech, peerBubbleTier } from '../talking-bubbles'
 import type { BubbleBox, CameraRect } from '../talking-bubbles'
 import { positionAt, dayPlanFallback } from '../day-plan'
-import { FONT, GREET_PAUSE_MS, BUBBLE_HOLD_MS, EMOTES } from './shared'
+import { FONT, BUBBLE_HOLD_MS } from './shared'
 import type { Walker } from './shared'
 import type { TownSceneInstance as TownScene } from './scene-core'
+import { createSocialTimeline, socialGestureFrame } from '../social-motion'
+
+type Encounter = { a: Walker; b: Walker; ax: number; ay: number; bx: number; by: number; timeline: ReturnType<typeof createSocialTimeline>; turnMs: number; lines: [string, string]; speech: PhaserNs.GameObjects.Container | null; gesture?: { actor: Walker; start: number; posing: boolean } }
+const encounters = new WeakMap<object, Encounter[]>()
+function releaseEncounter(scene: TownScene, pair: Encounter) {
+  pair.timeline.cancel()
+  if (pair.gesture?.posing && pair.gesture.actor.sprite.active) pair.gesture.actor.sprite.play(`${pair.gesture.actor.sheet}-idle-${pair.gesture.actor.facing}`, true)
+  for (const actor of [pair.a, pair.b]) {
+    if (actor.speech === pair.speech) { actor.speech?.destroy(); actor.speech = null }
+    if (actor.frozenUntil === pair.timeline.until) { actor.frozenUntil = scene.time.now || 1; actor.npcActivity = null }
+  }
+}
+
 
 export const conversationsMethods = {
   saySomething(this: TownScene, walker: Walker, text: string, holdMs = BUBBLE_HOLD_MS) {
@@ -72,29 +85,13 @@ export const conversationsMethods = {
   },
 
   speakOnEncounter(this: TownScene, a: Walker, b: Walker) {
-      const runtime = this.runtime;
-      if (a.resident?.isSelf || b.resident?.isSelf) {
-          const npc = a.resident?.isSelf ? b : a;
-          if (npc.npc)
-              this.maybeInitiate(npc, this.time.now);
-          return;
-      }
-      if (!a.npc || !b.npc)
-          return;
-      const tier = peerBubbleTier(a.npc, b.npc);
-      if (tier === 'low')
-          this.saySomething(a, '你好呀。', 1200);
-      const hold = tier === 'high' ? BUBBLE_HOLD_MS * 3 : tier === 'mid' ? BUBBLE_HOLD_MS : 0;
-      a.frozenUntil = b.frozenUntil = this.time.now + hold;
-      for (const walker of [a, b]) {
-          const points = pointsToPlay(tier, walker.npc?.talkingPoints ?? []);
-          points.forEach((point, index) => {
-              this.time.delayedCall(index * BUBBLE_HOLD_MS, () => {
-                  if (walker.sprite.active && this.conversation?.walker !== walker)
-                      this.saySomething(walker, point.text);
-              });
-          });
-      }
+      this.triggerGreeting(a, b, this.time.now);
+  },
+
+  cancelGreeting(this: TownScene, actor?: Walker) {
+      const pairs = encounters.get(this) ?? [];
+      for (const pair of pairs) if (!actor || pair.a === actor || pair.b === actor) releaseEncounter(this, pair);
+      encounters.set(this, pairs.filter(pair => actor && pair.a !== actor && pair.b !== actor));
   },
 
   maybeInitiate(this: TownScene, walker: Walker, now: number) {
@@ -102,6 +99,7 @@ export const conversationsMethods = {
       const npc = walker.npc;
       if (!npc || !this.selfWalker)
           return;
+      if ((encounters.get(this) ?? []).some(pair => pair.a === walker || pair.b === walker)) return;
       if (now < this.nextInitiativeAt)
           return;
       if (Math.hypot(walker.sprite.x - this.selfWalker.sprite.x, walker.sprite.y - this.selfWalker.sprite.y) > 90)
@@ -126,6 +124,8 @@ export const conversationsMethods = {
       const walker = this.walkers.find(w => w.id === id || w.npc?.code === code);
       if (!walker?.sprite.active || walker.npc?.layer === 3)
           return false;
+      this.cancelGreeting(walker);
+      if (this.selfWalker) this.cancelGreeting(this.selfWalker);
       this.facilities?.cancel(walker.id);
       this.facilityNpcs.delete(walker);
       const npc = walker.npc;
@@ -167,7 +167,7 @@ export const conversationsMethods = {
       if (c.walker.sprite.active) {
           c.walker.state = c.state;
           c.walker.timer = c.timer;
-          c.walker.frozenUntil = this.time.now; // catch up along the itinerary at normal walking speed
+          c.walker.frozenUntil = this.time.now + 350; // A short closing beat before walking back along the collision route
           c.walker.npcActivity = null;
       }
       runtime.handlers.onConversationChange?.({ npcCode: c.code, name: c.walker.npc?.displayName ?? (c.code === 'GUIDE' ? '小助' : '邮递员'), phase: 'ended', reason: c.reason, npcInitiated: c.phase === 'leaving' });
@@ -190,6 +190,41 @@ export const conversationsMethods = {
 
   detectGreetings(this: TownScene, now: number) {
       const runtime = this.runtime;
+      const pairs = encounters.get(this) ?? [];
+      const continuing: Encounter[] = [];
+      for (const pair of pairs) {
+          const interrupted = !pair.a.sprite.active || !pair.b.sprite.active || this.conversation?.walker === pair.a || this.conversation?.walker === pair.b
+              || this.facilities?.isBusy(pair.a.id) || this.facilities?.isBusy(pair.b.id)
+              || Math.hypot(pair.a.sprite.x - pair.ax, pair.a.sprite.y - pair.ay) > 8 || Math.hypot(pair.b.sprite.x - pair.bx, pair.b.sprite.y - pair.by) > 8;
+          if (interrupted) { releaseEncounter(this, pair); continue; }
+          const phase = pair.timeline.advance(now);
+          if (phase === 'done') { releaseEncounter(this, pair); continue; }
+          if (phase === 'greet' || phase === 'reply') {
+              for (const actor of [pair.a, pair.b]) if (actor.speech === pair.speech) { actor.speech?.destroy(); actor.speech = null; }
+              const speaker = phase === 'greet' ? pair.a : pair.b;
+              this.saySomething(speaker, pair.lines[phase === 'greet' ? 0 : 1], phase === 'greet' ? pair.turnMs : pair.turnMs + 200);
+              pair.speech = speaker.speech;
+              if (pair.gesture?.posing) pair.gesture.actor.sprite.play(`${pair.gesture.actor.sheet}-idle-${pair.gesture.actor.facing}`, true);
+              pair.gesture = { actor: speaker, start: now, posing: false };
+          }
+          if (pair.gesture) {
+              const gesture = pair.gesture, actor = gesture.actor;
+              const source = actor.sprite.texture?.getSourceImage() as HTMLImageElement | undefined;
+              const frame = source ? socialGestureFrame(source.width, source.height, actor.facing, now - gesture.start) : null;
+              if (frame !== null && actor.sprite.texture.has(String(frame))) {
+                  actor.sprite.anims.stop(); actor.sprite.setFrame(frame); gesture.posing = true;
+              } else if (gesture.posing) {
+                  actor.sprite.play(`${actor.sheet}-idle-${actor.facing}`, true); gesture.posing = false;
+              }
+          }
+          if (phase === 'leave') for (const actor of [pair.a, pair.b]) {
+              if (actor.speech === pair.speech) { actor.speech?.destroy(); actor.speech = null; }
+              actor.facing = dominantDirection(actor.targetX - actor.sprite.x, actor.targetY - actor.sprite.y, actor.facing);
+              actor.sprite.play(`${actor.sheet}-idle-${actor.facing}`, true);
+          }
+          continuing.push(pair);
+      }
+      encounters.set(this, continuing);
       const moving = this.walkers.filter(walker => !this.facilityNpcs.has(walker) && !this.facilities?.isBusy(walker.id) && this.conversation?.walker !== walker && walker.state === 'walk' && walker.frozenUntil <= now);
       for (let i = 0; i < moving.length; i += 1) {
           for (let j = i + 1; j < moving.length; j += 1) {
@@ -199,7 +234,7 @@ export const conversationsMethods = {
               const bDir: WalkDirection = b.targetX - b.sprite.x < 0 ? 'left' : 'right';
               if (Math.abs(a.sprite.y - b.sprite.y) > 48)
                   continue;
-              if (shouldGreet({ id: a.id, x: a.sprite.x, dir: aDir }, { id: b.id, x: b.sprite.x, dir: bDir }, this.greetCooldowns, now)) {
+              if (shouldGreet({ id: a.id, x: a.sprite.x, dir: aDir }, { id: b.id, x: b.sprite.x, dir: bDir }, this.greetCooldowns, now, 48)) {
                   this.triggerGreeting(a, b, now);
               }
           }
@@ -207,18 +242,27 @@ export const conversationsMethods = {
   },
 
   triggerGreeting(this: TownScene, a: Walker, b: Walker, now: number) {
-      const runtime = this.runtime;
+      if (a.frozenUntil > now || b.frozenUntil > now || !a.sprite.active || !b.sprite.active) return;
+      if (this.conversation?.walker === a || this.conversation?.walker === b || this.facilityNpcs.has(a) || this.facilityNpcs.has(b)) return;
+      const distance = Math.hypot(a.sprite.x - b.sprite.x, a.sprite.y - b.sprite.y);
+      if (distance < 32 || distance > 70) return;
       registerGreet(this.greetCooldowns, a.id, b.id, now);
-      a.frozenUntil = now + GREET_PAUSE_MS;
-      b.frozenUntil = now + GREET_PAUSE_MS;
-      const aFacesRight = a.sprite.x <= b.sprite.x;
-      a.sprite.play(`${a.sheet}-idle-${aFacesRight ? 'right' : 'left'}`, true);
-      b.sprite.play(`${b.sheet}-idle-${aFacesRight ? 'left' : 'right'}`, true);
-      for (const walker of [a, b]) {
-          walker.travelEmote?.destroy();
-          walker.travelEmote = this.add.sprite(walker.sprite.x, walker.sprite.y - 66, 'emotes', EMOTES.heart[0]).setOrigin(0.5, 1).setDepth(4002).play('emote-heart');
+      const tier = a.npc && b.npc ? peerBubbleTier(a.npc, b.npc) : 'low';
+      const first = a.npc ? pointsToPlay(tier, a.npc.talkingPoints)[0]?.text : undefined;
+      const second = b.npc ? pointsToPlay(tier, b.npc.talkingPoints)[0]?.text : undefined;
+      const lines: [string, string] = [first ?? '嗨，路上慢慢走。', second ?? '嗯，回头见。'];
+      const turnMs = Math.min(4200, Math.max(1300, Math.max(...lines.map(line => line.length)) * 95));
+      const timeline = createSocialTimeline(now, turnMs);
+      for (const [actor, other] of [[a, b], [b, a]] as const) {
+          this.restoreSheet(actor);
+          actor.frozenUntil = timeline.until;
+          actor.facing = dominantDirection(other.sprite.x - actor.sprite.x, other.sprite.y - actor.sprite.y, actor.facing);
+          actor.sprite.play(`${actor.sheet}-idle-${actor.facing}`, true);
+          actor.travelEmote?.destroy(); actor.travelEmote = null;
       }
-      this.speakOnEncounter(a, b);
+      const pair: Encounter = { a, b, ax: a.sprite.x, ay: a.sprite.y, bx: b.sprite.x, by: b.sprite.y, timeline, turnMs, lines, speech: null };
+      encounters.set(this, [...(encounters.get(this) ?? []), pair]);
+
   }
 }
 export type ConversationsMethods = typeof conversationsMethods
