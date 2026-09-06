@@ -102,6 +102,12 @@ const SELF_STUCK_MS = 350
 /** 观察模式跑完一圈的总时长——plan 的验收标准是"一段 30 秒长镜头"。 */
 const OBSERVATION_LOOP_MS = 30_000
 
+/** 气泡停留时长。40 字的中文按正常语速念完约 5 秒，留一点余量。 */
+const BUBBLE_HOLD_MS = 6_500
+
+/** 观察模式的镜头高度。比默认视角近一档，人物、气泡和店面细节才看得清。 */
+const OBSERVATION_ZOOM = 1.3
+
 /** Frames inside emotes.png (10 x 10 grid of 32px bubbles). */
 const EMOTES: Record<ResidentActivity | 'mail' | 'question' | 'heart', [number, number]> = {
   done: [64, 65],
@@ -191,6 +197,11 @@ type SelfKeys = {
 }
 
 /** Phaser's tween easings aren't reachable from a plain number, so the pan interpolation uses its own. */
+/** 同一个地点可能站着好几个人，散开一点，免得名牌和气泡叠在一起。 */
+function venueSpread(npcCode: string) {
+  return (hashString(npcCode) % 11) * 38 - 190
+}
+
 function easeInOutSine(t: number) {
   return -(Math.cos(Math.PI * Math.min(1, Math.max(0, t))) - 1) / 2
 }
@@ -833,7 +844,7 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
       const x = slot ? placeFor(slot.place, this.townLayout()) : academyDoorX
       const walker = this.spawnWalker(
         sheet,
-        x + (hashString(npc.code) % 7) * 14 - 42,
+        x + venueSpread(npc.code),
         npc.displayName,
         npc.layer === 2 ? 'rgba(84,64,120,.86)' : 'rgba(40,30,26,.62)',
         null,
@@ -865,29 +876,52 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
       if (!slot) return walker.homeX
       walker.action = slot.activity === 'reading' ? 'read' : slot.activity === 'phone' ? 'phone' : 'idle'
       walker.npcActivity = slot.activity
-      const spread = (hashString(npc.code) % 7) * 14 - 42
-      return placeFor(slot.place, this.townLayout()) + spread
+      return placeFor(slot.place, this.townLayout()) + venueSpread(npc.code)
     }
 
     /**
      * 头顶气泡。播的每一句都来自后端已经写好的 retold_text——前端不生成、不改写，
      * 只是把这一手的走样版本取出来放出来（plan §2.2 D12）。
      */
-    saySomething(walker: Walker, text: string, holdMs = 4200) {
+    saySomething(walker: Walker, text: string, holdMs = BUBBLE_HOLD_MS) {
       walker.speech?.destroy()
       const label = this.add.text(0, 0, text, {
-        fontFamily: FONT, fontSize: '11px', color: '#2a211c', wordWrap: { width: 168 }, align: 'center',
-      }).setOrigin(0.5, 1).setResolution(2)
-      const pad = 7
+        fontFamily: FONT, fontSize: '13px', color: '#2a211c', wordWrap: { width: 208 },
+        align: 'center', lineSpacing: 3,
+      }).setOrigin(0.5, 1).setResolution(3)
+      const padX = 9
+      const padY = 7
       const bubble = this.add.graphics()
-      bubble.fillStyle(0xfdf8f0, 0.96)
-      bubble.fillRoundedRect(-label.width / 2 - pad, -label.height - pad * 2, label.width + pad * 2, label.height + pad * 2, 7)
+      // 文字的 origin 是 (0.5, 1)，也就是占 y ∈ [-h, 0]。气泡必须绕着这个范围上下各留一份内边距，
+      // 否则上边 padY*2、下边 0，文字会紧贴着底边——看上去就是"文字溢出气泡"。
+      bubble.fillStyle(0xfdf8f0, 0.97)
+      bubble.fillRoundedRect(-label.width / 2 - padX, -label.height - padY,
+        label.width + padX * 2, label.height + padY * 2, 8)
+      bubble.lineStyle(1, 0x2a211c, 0.18)
+      bubble.strokeRoundedRect(-label.width / 2 - padX, -label.height - padY,
+        label.width + padX * 2, label.height + padY * 2, 8)
       const container = this.add.container(walker.sprite.x, walker.sprite.y - 74, [bubble, label]).setDepth(4100)
+      // 说话的人可能正站在画面边缘，气泡比人宽得多，直接跟着他就会被镜头切掉半句。
+      // 记下半宽，定位时把气泡按视野边界夹回来——人还在原地，只是话框往里挪一点。
+      container.setData('halfWidth', label.width / 2 + padX)
       walker.speech = container
+      this.positionSpeech(walker)
       this.time.delayedCall(holdMs, () => {
         if (walker.speech === container) walker.speech = null
         container.destroy()
       })
+    }
+
+    /** 把气泡放在说话人头顶，但整体不许超出镜头左右边界。 */
+    positionSpeech(walker: Walker) {
+      const container = walker.speech
+      if (!container) return
+      const camera = this.cameras.main
+      const halfWidth = (container.getData('halfWidth') as number) ?? 0
+      const left = camera.scrollX + halfWidth + 8
+      const right = camera.scrollX + camera.width / camera.zoom - halfWidth - 8
+      const x = right > left ? Math.min(Math.max(walker.sprite.x, left), right) : walker.sprite.x
+      container.setPosition(x, walker.sprite.y - 74)
     }
 
     /**
@@ -974,15 +1008,23 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
 
     // ---------- 观察模式 (M2-6) ----------
 
-    /** 兴趣点：镇上真正有人聚集的几处，按从西到东排，镜头扫过去像一条街的横移。 */
+    /**
+     * 兴趣点：镇上真正有人聚集的三处，从西到东排。
+     *
+     * <p>刻意只取三处。整圈固定 30 秒（验收标准就是"一段 30 秒长镜头"），点越多每段越短——
+     * 五个点时每段只有 2.4 秒平移，镜头像在甩而不是在巡游。三个点正好是 6 秒停 + 4 秒移，
+     * 也就是 observation-mode.ts 里那组默认值当初设计的节奏。
+     *
+     * <p>纵向对着街面而不是建筑顶：小镇的内容（人、车、摊位、店面）都贴着基线，镜头抬太高
+     * 会有大半屏是空草地。zoom 也调高一档，人物和气泡才看得清。
+     */
     observationPoints() {
       const layout = this.townLayout()
+      const y = BASELINE + 10
       return [
-        { x: layout.plazaMinX + 100, y: BASELINE - 120, zoom: 1.05 },
-        { x: layout.academyDoorX, y: BASELINE - 140, zoom: 1 },
-        { x: layout.parkX, y: BASELINE - 100, zoom: 1.1 },
-        { x: layout.cafeX, y: BASELINE - 120, zoom: 1.05 },
-        { x: layout.gymX, y: BASELINE - 120, zoom: 1 },
+        { x: layout.plazaMinX + 160, y, zoom: OBSERVATION_ZOOM },
+        { x: layout.academyDoorX, y, zoom: OBSERVATION_ZOOM },
+        { x: layout.cafeX, y, zoom: OBSERVATION_ZOOM },
       ]
     }
 
@@ -1032,8 +1074,8 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
       const walker = candidates[Math.floor(this.time.now / 997) % candidates.length]
       const points = walker.npc?.talkingPoints ?? []
       const point = points[Math.floor(this.time.now / 1471) % points.length]
-      this.saySomething(walker, point.text, 4600)
-      this.nextAmbientLineAt = now + 2600
+      this.saySomething(walker, point.text)
+      this.nextAmbientLineAt = now + 3200
     }
 
     /** 每帧把相机放到 nextLeg 算出来的位置上；所有算术都在纯函数里，这里只负责画。 */
@@ -1232,7 +1274,7 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
           walker.label.setPosition(walker.sprite.x, walker.sprite.y + 4)
           walker.emote?.setPosition(walker.sprite.x + 14, walker.sprite.y - 62)
           walker.travelEmote?.setPosition(walker.sprite.x + 14, walker.sprite.y - 66)
-          walker.speech?.setPosition(walker.sprite.x, walker.sprite.y - 74)
+          this.positionSpeech(walker)
           continue
         }
         if (walker.frozenUntil !== 0) {
@@ -1336,7 +1378,7 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
         walker.label.setPosition(walker.sprite.x, walker.sprite.y + 4)
         walker.emote?.setPosition(walker.sprite.x + 14, walker.sprite.y - 62)
         walker.travelEmote?.setPosition(walker.sprite.x + 14, walker.sprite.y - 66)
-        walker.speech?.setPosition(walker.sprite.x, walker.sprite.y - 74)
+        this.positionSpeech(walker)
         if (walker.npc) this.maybeInitiate(walker, now)
       }
       for (const vehicle of this.vehicles) {
