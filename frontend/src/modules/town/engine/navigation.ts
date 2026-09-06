@@ -82,7 +82,7 @@ export const navigationMethods = {
           const self = this.selfWalker;
           if (!item || !self)
               return;
-          if (item.id === 'records' && runtime.soundEnabled)
+          if (item.id === 'records')
               this.facilities?.unlockAudio();
           if (!this.facilities?.reserve(item.id, self.id)) {
               this.saySomething(self, '有人正在用，等一小会儿吧。');
@@ -432,11 +432,13 @@ export const navigationMethods = {
 
   setNight(this: TownScene, night: boolean, instant = false): void {
       const runtime = this.runtime;
-      runtime.desiredNight = night;
-      runtime.publishTime();
+      if (this.night === night)
+          return;
       this.night = night;
-      if (instant) this.atmosphere?.update(900);
-      runtime.soundscape.refresh();
+      const duration = instant ? 0 : 900;
+      this.tweens.add({ targets: this.nightOverlay, alpha: 0, duration, ease: 'Sine.easeInOut' });
+      for (const light of this.glows)
+          this.tweens.add({ targets: light, alpha: night ? (light as PhaserNs.GameObjects.Image).getData('targetAlpha') ?? 1 : 0, duration, ease: 'Sine.easeInOut' });
   },
 
   focusOn(this: TownScene, publicId: string): void {
