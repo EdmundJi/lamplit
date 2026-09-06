@@ -13,7 +13,8 @@
 import type PhaserNs from 'phaser'
 import { hashString } from './building-kit'
 import { findPath } from './pathfinding'
-import { nearestStandable, type Point, type CollisionWorld } from './collision'
+import { canStand, nearestStandable, type Point } from './collision'
+import { canUseFromHere, distanceToBox, furnitureApproach, restingFurniture, roomNavigation } from './interior-interaction'
 import {
   assignSeats,
   clampToRoom,
@@ -57,6 +58,12 @@ export type InteriorPlayer = {
 export type RoomController = {
   update: (deltaMs: number) => void
   destroy?: () => void
+  /** Queue a legal walk; arrival fires once, and only after actually reaching the destination. */
+  moveTo?: (target: Point, onArrival: () => void) => boolean
+  /** Cancel walking or get up. Returns whether an active interaction was consumed. */
+  cancel?: () => boolean
+  sitAt?: (point: Point) => void
+  isResting?: () => boolean
 }
 
 export type ControllerContext = {
@@ -83,7 +90,7 @@ export type InteriorOptions = {
    * and its `id`, so the orchestrator decides what "town" or another room id means. */
   onExit: (target: string, doorId: string) => void
   /**
-   * Fired when the player clicks a piece of interactive furniture (M3-3/M3-4, e.g. the desk, the
+   * Fired after the player walks close to a clicked piece of interactive furniture (M3-3/M3-4, e.g. the desk, the
    * achievement wall, the pet house) or the pet itself: the furniture's `interactive.actionId`
    * (a world-actions.ts registry id) and the furniture/pet's own `id`. This scene never runs the
    * action itself — same "the map only says what, not how" split as `onExit` — the orchestrator is
@@ -192,6 +199,7 @@ export function createInteriorScene(Phaser: typeof PhaserNs, options: InteriorOp
     player: PhaserNs.GameObjects.Sprite | null = null
     controller: RoomController | null = null
     lastDoor: RoomDoor | null = null
+    nearbyLabels: { piece: RoomMapData['furniture'][number]; text: PhaserNs.GameObjects.Text; rest: boolean }[] = []
 
     constructor() { super(key) }
 
@@ -216,10 +224,14 @@ export function createInteriorScene(Phaser: typeof PhaserNs, options: InteriorOp
     }
 
     create() {
+      this.lastDoor = null
+      this.worldPress = false
+      this.nearbyLabels = []
       this.cameras.main.setBackgroundColor(room.backgroundColor)
       this.drawLayer(room.layers.floor, 0)
       this.drawLayer(room.layers.walls, 2)
       this.drawFurniture()
+      this.drawRestSpots()
       this.drawPet()
       this.drawSlots()
       this.drawSeats()
@@ -266,9 +278,68 @@ export function createInteriorScene(Phaser: typeof PhaserNs, options: InteriorOp
       const interaction = piece.interactive
       if (!interaction) return
       const box = interaction.hit ?? defaultInteractionHit(piece, room.tileSize)
-      if (interaction.label) this.plate(box.x + box.w / 2, box.y - 12, interaction.label, '#fff4e8', '#3b312c')
+      if (interaction.label) this.addNearbyLabel(piece, interaction.label)
       const zone = this.add.zone(box.x, box.y, box.w, box.h).setOrigin(0).setInteractive({ useHandCursor: true })
-      zone.on('pointerup', (pointer: PhaserNs.Input.Pointer) => { if (this.worldPress && pointer?.event?.target === this.game.canvas) options.onInteract?.(interaction.actionId, piece.id) })
+      zone.on('pointerup', (pointer: PhaserNs.Input.Pointer) => {
+        if (this.acceptPress(pointer)) this.approach(piece, () => options.onInteract?.(interaction.actionId, piece.id))
+      })
+    }
+
+    acceptPress(pointer: PhaserNs.Input.Pointer) {
+      return this.worldPress && pointer?.event?.target === this.game.canvas && !roomInputBlocked()
+    }
+
+    approach(piece: RoomMapData['furniture'][number], action: () => void, frontOnly = false) {
+      if (!this.player) { action(); return }
+      this.controller?.cancel?.()
+      const target = furnitureApproach(room, this.player, piece, frontOnly)
+      if (!target) return
+      if (this.controller?.moveTo) this.controller.moveTo(target, action)
+      else if (canUseFromHere(room, this.player, target)) action()
+    }
+
+    addNearbyLabel(piece: RoomMapData['furniture'][number], label: string, rest = false) {
+      const box = piece.interactive?.hit ?? defaultInteractionHit(piece, room.tileSize)
+      const text = this.plate(box.x + box.w / 2, box.y - 44, label, '#fff4e8', 'rgba(49,43,37,.85)')
+      text.setVisible(!options.player)
+      this.nearbyLabels.push({ piece, text, rest })
+    }
+
+    drawRestSpots() {
+      if (!options.player) return
+      for (const piece of restingFurniture(room, seatAssignments.map(item => item.seat))) {
+        const box = defaultInteractionHit(piece, room.tileSize)
+        this.addNearbyLabel(piece, '坐一会儿', true)
+        const zone = this.add.zone(box.x, box.y, box.w, box.h).setOrigin(0).setInteractive({ useHandCursor: true })
+        zone.on('pointerup', (pointer: PhaserNs.Input.Pointer) => {
+          if (!this.acceptPress(pointer)) return
+          if (this.controller?.isResting?.()) { this.controller.cancel?.(); return }
+          this.approach(piece, () => {
+            if (!options.player) return
+            this.ensureSeatAnimations(`char_${options.player.characterSheet}`)
+            this.controller?.sitAt?.({ x: piece.x, y: piece.y + 6 })
+          }, true)
+        })
+      }
+    }
+
+    updateNearbyLabels() {
+      if (!this.player) return
+      let nearest: typeof this.nearbyLabels[number] | undefined
+      let distance = 86
+      for (const item of this.nearbyLabels) {
+        item.text.setVisible(false)
+        const box = item.piece.interactive?.hit ?? defaultInteractionHit(item.piece, room.tileSize)
+        const measured = distanceToBox(this.player, box)
+        if (measured < distance) { distance = measured; nearest = item }
+      }
+      if (nearest && !roomInputBlocked()) {
+        nearest.text.setVisible(true)
+        const box = nearest.piece.interactive?.hit ?? defaultInteractionHit(nearest.piece, room.tileSize)
+        // Keep the short hint above both the prop and the avatar's head, including side approaches.
+        nearest.text.setY(Math.min(box.y - 44, this.player.y - 76))
+        if (nearest.rest) nearest.text.setText(this.controller?.isResting?.() ? '休息中 · 点击地面起身' : '坐一会儿')
+      }
     }
 
     // ---------- pet (M3-5) ----------
@@ -373,7 +444,7 @@ export function createInteriorScene(Phaser: typeof PhaserNs, options: InteriorOp
         const cx = door.rect.x + door.rect.w / 2
         if (door.label) this.plate(cx, door.rect.y - 14, door.label, '#fff4e8', '#3b312c')
         const zone = this.add.zone(door.rect.x, door.rect.y, door.rect.w, door.rect.h).setOrigin(0).setInteractive({ useHandCursor: true })
-        zone.on('pointerup', (pointer: PhaserNs.Input.Pointer) => { if (this.worldPress && pointer?.event?.target === this.game.canvas) options.onExit(door.target, door.id) })
+        zone.on('pointerup', (pointer: PhaserNs.Input.Pointer) => { if (this.acceptPress(pointer)) { this.controller?.cancel?.(); options.onExit(door.target, door.id) } })
       }
     }
 
@@ -403,7 +474,7 @@ export function createInteriorScene(Phaser: typeof PhaserNs, options: InteriorOp
         },
       }
       this.controller = (options.createController ?? createDefaultController)(context)
-      const updateController = (_time: number, delta: number) => this.controller?.update(delta)
+      const updateController = (_time: number, delta: number) => { this.controller?.update(delta); this.updateNearbyLabels() }
       this.events.on('update', updateController)
       this.events.once('shutdown', () => {
         this.events.off('update', updateController)
@@ -454,14 +525,14 @@ export function createInteriorScene(Phaser: typeof PhaserNs, options: InteriorOp
       this.input.on('pointerup', () => { this.worldPress = false })
       const firstDoor = room.doors[0]
       this.escHandler = (event: KeyboardEvent) => {
-        if (document.querySelector('[role="dialog"], .resident-moment')) return
+        if (event.defaultPrevented || roomInputBlocked()) return
         event.preventDefault()
+        if (this.controller?.cancel?.()) return
         if (firstDoor) options.onExit(firstDoor.target, firstDoor.id)
       }
       this.input.keyboard?.on('keydown-ESC', this.escHandler)
       this.events.once('shutdown', () => {
         if (this.escHandler) this.input.keyboard?.off('keydown-ESC', this.escHandler)
-        this.controller?.destroy?.()
       })
     }
   }
@@ -478,77 +549,149 @@ const DEFAULT_SPEED = 180
  * map-loader.ts's `collidesAt`. Deliberately simple — a placeholder any richer controller (e.g.
  * true 8-direction movement/animation) can replace via `InteriorOptions.createController` without
  * this file changing. */
+function roomInputBlocked(): boolean {
+  return Boolean(document.querySelector('[role="dialog"], .resident-moment')
+    || document.activeElement?.matches('input, textarea, select, [contenteditable="true"]'))
+}
+
 export function createDefaultController(ctx: ControllerContext): RoomController {
   const { scene, sprite, room, sheet } = ctx
   const cursors = scene.input.keyboard?.createCursorKeys()
-  const keyA = scene.input.keyboard?.addKey('A')
-  const keyD = scene.input.keyboard?.addKey('D')
-  const keyW = scene.input.keyboard?.addKey('W')
-  const keyS = scene.input.keyboard?.addKey('S')
-  let clickTarget: { x: number; y: number } | null = null
+  const keys = Object.fromEntries(['A', 'D', 'W', 'S'].map(key => [key, scene.input.keyboard?.addKey(key)]))
+  const navigation = roomNavigation(room)
+  let clickTarget: Point | null = null
   let waypoints: Point[] = []
-  const navigation: CollisionWorld = {
-    walkable: [{ x: 14, y: 10, width: room.cols * room.tileSize - 28, height: room.rows * room.tileSize - 20 }],
-    obstacles: room.collisions.map(r => ({ x: r.x - 14, y: r.y - 10, width: r.w + 28, height: r.h + 20 })),
-  }
+  let arrival: (() => void) | null = null
+  let restingReturn: Point | null = null
   let facing: Direction = 'down'
-  // Entry can land in an exit zone in an older/cached map. Require leaving that
-  // zone before walking back into it; a fresh explicit door click still exits.
+  let worldPress = false
+  let destroyed = false
+  // Older cached maps can spawn inside an exit. Leave it before allowing walk-to-exit.
   let previousDoor = doorAt(room, sprite.x, sprite.y)?.id
 
-  const pointerHandler = (pointer: PhaserNs.Input.Pointer) => {
-    if (pointer?.event?.target !== scene.game.canvas) return
+  function cancel() {
+    const active = Boolean(clickTarget || arrival || restingReturn)
+    clickTarget = null
+    waypoints = []
+    arrival = null
+    if (restingReturn) {
+      sprite.x = restingReturn.x
+      sprite.y = restingReturn.y
+      restingReturn = null
+      sprite.setDepth(sprite.y)
+      sprite.play(`${sheet}-idle-${facing}`, true)
+    }
+    return active
+  }
+
+  function moveTo(target: Point, onArrival: () => void): boolean {
+    cancel()
+    if (destroyed || roomInputBlocked()) return false
+    const path = findPath({ x: sprite.x, y: sprite.y }, target, navigation)
+    if (!path) return false
+    waypoints = path
+    clickTarget = waypoints.shift() ?? null
+    arrival = onArrival
+    return true
+  }
+
+  const pointerDown = (pointer: PhaserNs.Input.Pointer) => {
+    worldPress = pointer?.event?.target === scene.game.canvas && !roomInputBlocked()
+  }
+  const pointerUp = (pointer: PhaserNs.Input.Pointer, over: PhaserNs.GameObjects.GameObject[] = []) => {
+    const accepted = worldPress && pointer?.event?.target === scene.game.canvas && !roomInputBlocked()
+    worldPress = false
+    // Object pointerup handles furniture/doors first; don't replace its new destination.
+    if (!accepted || over.some(object => object.input?.enabled)) return
+    cancel()
     const world = scene.cameras.main.getWorldPoint(pointer.x, pointer.y)
     const target = nearestStandable(clampToRoom(room, world.x, world.y), navigation)
-    waypoints = findPath({ x: sprite.x, y: sprite.y }, target, navigation) ?? []
-    clickTarget = waypoints.shift() ?? null
+    moveTo(target, () => {})
   }
-  scene.input.on('pointerdown', pointerHandler)
-  scene.events.once('shutdown', () => scene.input.off('pointerdown', pointerHandler))
+  scene.input.on('pointerdown', pointerDown)
+  scene.input.on('pointerup', pointerUp)
+
+  function destroy() {
+    if (destroyed) return
+    destroyed = true
+    cancel()
+    scene.input.off('pointerdown', pointerDown)
+    scene.input.off('pointerup', pointerUp)
+    scene.events.off('shutdown', destroy)
+  }
+  scene.events.once('shutdown', destroy)
 
   function move(dx: number, dy: number, deltaMs: number, stopAtTarget = false) {
     if (dx === 0 && dy === 0) return false
     const length = Math.hypot(dx, dy) || 1
-    const distance = (ctx.speed * deltaMs) / 1000
+    const distance = ctx.speed * Math.min(deltaMs, 100) / 1000
     const step = stopAtTarget ? Math.min(length, distance) : distance
-    const nx = sprite.x + (dx / length) * step
-    const ny = sprite.y + (dy / length) * step
     const oldX = sprite.x, oldY = sprite.y
-    if (!ctx.isBlocked(nx, sprite.y)) sprite.x = nx
-    if (!ctx.isBlocked(sprite.x, ny)) sprite.y = ny
+    // Collision-checked substeps prevent frame stalls from jumping over thin furniture.
+    const steps = Math.max(1, Math.ceil(step / 4))
+    for (let i = 0; i < steps; i++) {
+      const nx = sprite.x + dx / length * step / steps
+      const ny = sprite.y + dy / length * step / steps
+      if (canStand({ x: nx, y: sprite.y }, navigation) && !ctx.isBlocked(nx, sprite.y)) sprite.x = nx
+      if (canStand({ x: sprite.x, y: ny }, navigation) && !ctx.isBlocked(sprite.x, ny)) sprite.y = ny
+    }
     facing = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up')
     return sprite.x !== oldX || sprite.y !== oldY
   }
 
   return {
+    moveTo,
+    cancel,
+    destroy,
+    sitAt(point) {
+      cancel()
+      restingReturn = { x: sprite.x, y: sprite.y }
+      sprite.x = point.x
+      sprite.y = point.y
+      sprite.setDepth(sprite.y)
+      sprite.play(`${sheet}-seat-idle`, true)
+    },
+    isResting: () => Boolean(restingReturn),
     update(deltaMs: number) {
-      if (!sprite.scene || !sprite.anims) return
-      ctx.onPosition?.(sprite.x, sprite.y, facing)
-      if (document.querySelector('[role="dialog"], .resident-moment') || ['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName ?? '')) {
-        sprite.play(`${sheet}-idle-${facing}`, true)
+      if (destroyed || !sprite.scene || !sprite.anims) return
+      if (roomInputBlocked()) {
+        // Closing another UI must not fire a queued furniture action.
+        if (!restingReturn) { cancel(); sprite.play(`${sheet}-idle-${facing}`, true) }
         return
       }
-      let dx = 0
-      let dy = 0
-      if (cursors?.left.isDown || keyA?.isDown) dx -= 1
-      if (cursors?.right.isDown || keyD?.isDown) dx += 1
-      if (cursors?.up.isDown || keyW?.isDown) dy -= 1
-      if (cursors?.down.isDown || keyS?.isDown) dy += 1
+      let dx = 0, dy = 0
+      if (cursors?.left.isDown || keys.A?.isDown) dx -= 1
+      if (cursors?.right.isDown || keys.D?.isDown) dx += 1
+      if (cursors?.up.isDown || keys.W?.isDown) dy -= 1
+      if (cursors?.down.isDown || keys.S?.isDown) dy += 1
       let moving = false
       if (dx !== 0 || dy !== 0) {
-        clickTarget = null
-        waypoints = []
+        cancel()
         moving = move(dx, dy, deltaMs)
+      } else if (restingReturn) {
+        ctx.onPosition?.(sprite.x, sprite.y, facing)
+        return
       } else if (clickTarget) {
         const remainingX = clickTarget.x - sprite.x
         const remainingY = clickTarget.y - sprite.y
-        if (Math.hypot(remainingX, remainingY) < 3) clickTarget = waypoints.shift() ?? null
-        else moving = move(remainingX, remainingY, deltaMs, true)
+        if (Math.hypot(remainingX, remainingY) < 1) {
+          clickTarget = waypoints.shift() ?? null
+          if (!clickTarget) {
+            const completed = arrival
+            arrival = null
+            completed?.()
+            if (restingReturn || roomInputBlocked()) return
+          }
+        } else {
+          moving = move(remainingX, remainingY, deltaMs, true)
+          if (!moving) cancel()
+        }
       }
       sprite.setDepth(sprite.y)
       sprite.play(`${sheet}-${moving ? 'walk' : 'idle'}-${facing}`, true)
+      ctx.onPosition?.(sprite.x, sprite.y, facing)
       const door = doorAt(room, sprite.x, sprite.y)
-      if (door && door.id !== previousDoor && moving) ctx.onDoor(door)
+      if (door && door.id !== previousDoor && moving) { cancel(); ctx.onDoor(door) }
       previousDoor = door?.id
     },
   }

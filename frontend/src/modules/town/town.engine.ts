@@ -1,5 +1,6 @@
 /** Public lazy-loading boundary for the town renderer. Scene responsibilities live in engine/. */
 import type { TownModel } from './town.types'
+import type { RoomController } from './interior.scene'
 import type { TownGame, TownHandlers } from './engine/shared'
 import { computeServerOffset } from './engine/shared'
 import { installTownProbe } from './town-probe'
@@ -80,6 +81,11 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
       exitAcademy: runtime.exitAcademy,
       enterRoom: runtime.enterRoom,
       exitRoom: runtime.exitRoom,
+      cancelRoomAction: () => {
+          if (!runtime.activeRoomKey) return false;
+          const room = runtime.game.scene.getScene(runtime.activeRoomKey) as { controller?: RoomController | null } | null;
+          return room?.controller?.cancel?.() ?? false;
+      },
       destroy: () => {
           runtime.transitionGeneration++;
           runtime.roomRequest?.abort();

@@ -82,6 +82,8 @@ export type TownGame = {
   /** Reverses enterAcademy(): fades back out to the street and wakes it up. */
   exitAcademy(): void
   enterRoom(roomId: string): Promise<void>
+  /** Cancel a pending furniture approach or stand up, without leaving the room. */
+  cancelRoomAction?(): boolean
   exitRoom(): void
   destroy(): void
 }
