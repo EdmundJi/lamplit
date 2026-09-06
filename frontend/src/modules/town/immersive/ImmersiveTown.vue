@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import CompanionControls from '../CompanionControls.vue'
+import NeighbourSchedule from './NeighbourSchedule.vue'
 import { useTownCompanionLife } from '../companion-life'
 import type { ConversationNotice } from '../npc-conversation'
 import { useTownMailSignal } from '../town-mail-signal'
@@ -533,6 +534,7 @@ onBeforeUnmount(() => {
     <header class="immersive-topbar" :class="{ 'is-actions-open': hudActionsOpen }">
       <button class="icon-button" type="button" title="退出沉浸模式" aria-label="退出沉浸模式" @click="exitImmersive"><Minimize2 :size="18" /></button>
       <div class="immersive-title"><strong>成长小镇</strong><span>{{ activeRoom ? '屋内时光' : '慢慢走，生活正在发生' }} · {{ clockText }}</span></div>
+      <NeighbourSchedule :npcs="townNpcStore.npcs" :time="clockText" />
       <button class="secondary sound-toggle" type="button" :aria-pressed="soundEnabled" :title="soundEnabled ? '关闭环境声' : '打开环境声'" @click="toggleSound">
         <component :is="soundEnabled ? Volume2 : VolumeX" :size="16" />{{ soundEnabled ? '环境声开' : '环境声关' }}
       </button>
