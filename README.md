@@ -6,7 +6,7 @@
 
 - Java 21
 - Docker（含 Docker Compose）
-- Node.js 20.19 或更新
+- Node.js 22.13 或更新（`packageManager` 锁定的 pnpm 11.9 要求这个版本，Node 20 上会直接崩）
 - pnpm 11
 
 ## 本地启动
@@ -43,6 +43,22 @@ python3 scripts/build-town-assets.py
 ```
 
 规则与数据映射见 `docs/成长小镇.md`。
+
+## 共享开发服务器
+
+需要把这台机器当成一台大家都能连上来联调、调试的开发服务器时，用这一套——前后端都跑在容器里，
+源码从本机挂进去，改完自动生效，其他开发者不需要在自己机器上装 Java 21 或 pnpm。
+
+```bash
+scripts/dev-server.sh up      # 启动（首次要下 Maven / pnpm 依赖，慢一次）
+scripts/dev-server.sh urls    # 打印发给其他开发者的访问地址
+scripts/dev-server.sh logs    # 跟日志，也可以 logs backend
+```
+
+它和上面「本地启动」是**二选一**的关系：两套用的是同一批数据卷，数据互通，但端口会打架。
+切过去之前先停掉本机的 `pnpm dev` 和 `mvnw spring-boot:run`。
+
+完整说明（端口、远程调试怎么挂、数据怎么重置、给协作者的须知）见 `docs/开发服务器.md`。
 
 ## 首位管理员
 

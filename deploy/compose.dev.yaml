@@ -1,0 +1,190 @@
+# 共享开发服务器：前后端都跑在容器里，源码从宿主机挂进去，改完自动生效。
+#
+#   scripts/dev-server.sh up          启动
+#   scripts/dev-server.sh urls        看各个入口地址
+#   scripts/dev-server.sh logs        跟日志
+#
+# 与 compose.yaml（生产形态）的区别：
+#   - 生产那套是 COPY 已经构建好的 jar / dist，这套是挂源码 + 容器内构建，开发者不需要
+#     本机装 Java 21 / pnpm；
+#   - 后端开着 devtools 热重启和 JDWP 远程调试端口；
+#   - 前端跑 Vite dev server 带 HMR，而不是 nginx 托管静态文件；
+#   - 多了 dozzle 网页版日志面板。
+#
+# 数据卷刻意与 compose.yaml 同名，两套共用同一份 MySQL 数据——切换过来不会丢库。
+name: ${COMPOSE_PROJECT_NAME:-growth}
+
+services:
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-growth}
+      MYSQL_USER: ${MYSQL_USER:-growth_app}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?MYSQL_PASSWORD is required}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD is required}
+    # 对外开放，方便其他开发者用客户端直连查表——小镇的限知与传播查表就能验证。
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=$$MYSQL_PASSWORD mysqladmin ping --host=127.0.0.1 --user=$$MYSQL_USER --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  redis:
+    image: redis:7.4
+    restart: unless-stopped
+    # healthcheck 里的 $$REDIS_PASSWORD 是在容器内展开的，所以这个变量必须真的存在于容器环境里，
+    # 只在 command 上写 --requirepass 是不够的：健康检查会拿空口令去 AUTH，然后一直 unhealthy。
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:?REDIS_PASSWORD is required}"]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli --no-auth-warning -a \"$$REDIS_PASSWORD\" ping | grep PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  minio:
+    image: quay.io/minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?MINIO_ROOT_USER is required}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}
+      MINIO_KMS_SECRET_KEY: ${MINIO_KMS_SECRET_KEY:?MINIO_KMS_SECRET_KEY is required}
+    ports:
+      - "${MINIO_API_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  backend:
+    # 官方 maven 镜像直接用，不自建镜像——开发服务器最不该有的就是"改一行等一次 docker build"。
+    image: maven:3.9.9-eclipse-temurin-21
+    restart: unless-stopped
+    working_dir: /workspace/backend
+    entrypoint: ["/entrypoint.sh"]
+    environment:
+      SERVER_PORT: "8080"
+      MYSQL_HOST: mysql
+      MYSQL_PORT: "3306"
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-growth}
+      MYSQL_USER: ${MYSQL_USER:-growth_app}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?}
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?}
+      OBJECT_STORAGE_ENDPOINT: http://minio:9000
+      OBJECT_STORAGE_REGION: ${OBJECT_STORAGE_REGION:-us-east-1}
+      OBJECT_STORAGE_BUCKET: ${OBJECT_STORAGE_BUCKET:-growth-local}
+      OBJECT_STORAGE_ACCESS_KEY: ${MINIO_ROOT_USER:?}
+      OBJECT_STORAGE_SECRET_KEY: ${MINIO_ROOT_PASSWORD:?}
+      OBJECT_STORAGE_PROVIDER: ${OBJECT_STORAGE_PROVIDER:-s3}
+      JWT_SECRET: ${JWT_SECRET:?}
+      MFA_ENCRYPTION_KEY: ${MFA_ENCRYPTION_KEY:?}
+      # 开发服务器上别让人半小时掉一次线。
+      ACCESS_TOKEN_TTL: ${DEV_ACCESS_TOKEN_TTL:-P7D}
+      REFRESH_TOKEN_TTL: ${REFRESH_TOKEN_TTL:-P30D}
+      # 走 http，必须关掉 secure cookie，否则浏览器不会存。
+      SECURE_COOKIES: "false"
+      APP_URL: ${DEV_APP_URL:-http://localhost:${DEV_WEB_PORT:-5173}}
+      API_URL: ${DEV_API_URL:-http://localhost:${DEV_WEB_PORT:-5173}/api/v1}
+      QWEN_PROVIDER: ${QWEN_PROVIDER:-mock}
+      QWEN_BASE_URL: ${QWEN_BASE_URL:-https://dashscope.aliyuncs.com/compatible-mode/v1}
+      QWEN_API_KEY: ${QWEN_API_KEY:-}
+      QWEN_MODEL: ${QWEN_MODEL:-qwen-plus}
+      QWEN_TIMEOUT: ${QWEN_TIMEOUT:-PT120S}
+      QWEN_STREAM_TIMEOUT: ${QWEN_STREAM_TIMEOUT:-PT130S}
+      # 小镇的两个夜间 job 在开发环境跑得勤一点，不然要等到凌晨三点才有社会数据可看。
+      # 两个 job 都按 (用户, 当地日期) 幂等，跑多少次都不会重复累加。
+      TOWN_REFLECTION_CRON: ${DEV_TOWN_REFLECTION_CRON:-0 */5 * * * *}
+      TOWN_SOCIETY_CRON: ${DEV_TOWN_SOCIETY_CRON:-0 */5 * * * *}
+      # devtools 靠轮询 target/classes 发现改动；bind mount 上 inotify 不通，轮询才是对的。
+      SPRING_DEVTOOLS_RESTART_POLL_INTERVAL: 2s
+      SPRING_DEVTOOLS_RESTART_QUIET_PERIOD: 1s
+      MAVEN_CONFIG: /root/.m2
+    ports:
+      - "${DEV_API_PORT:-8080}:8080"
+      - "${DEV_DEBUG_PORT:-5005}:5005"
+    volumes:
+      - ../backend:/workspace/backend
+      - ./dev/backend-entrypoint.sh:/entrypoint.sh:ro
+      # target 用独立卷盖住宿主机那份：容器和你本机的 ./mvnw 各编各的，互不干扰。
+      - backend_target:/workspace/backend/target
+      - maven_cache:/root/.m2
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  frontend:
+    # Node 22：仓库锁定的 pnpm@11.9.0 要求 node >= 22.13，Node 20 上会直接 ERR_UNKNOWN_BUILTIN_MODULE。
+    image: node:22-bookworm-slim
+    restart: unless-stopped
+    working_dir: /workspace/frontend
+    entrypoint: ["/entrypoint.sh"]
+    environment:
+      VITE_PORT: "5173"
+      # Vite 的 /api/v1 反向代理指到容器网络里的后端，浏览器侧就是同源，cookie 不用操心。
+      DEV_API_TARGET: http://backend:8080
+      # bind mount 上收不到 inotify 事件，HMR 必须改成轮询才能感知改动。
+      VITE_DEV_CONTAINER: "true"
+      NODE_OPTIONS: --max-old-space-size=2048
+    ports:
+      - "${DEV_WEB_PORT:-5173}:5173"
+    volumes:
+      - ../frontend:/workspace/frontend
+      - ./dev/frontend-entrypoint.sh:/entrypoint.sh:ro
+      # 必须盖住宿主机的 node_modules：rollup/esbuild 装的是平台相关的原生二进制。
+      - frontend_node_modules:/workspace/frontend/node_modules
+      # Vite 的构建缓存也隔离，免得和你本机 pnpm dev 抢同一个目录。
+      - frontend_vite_cache:/workspace/frontend/node_modules/.vite
+      # envDir 指向仓库根目录，Vite 要在那儿读 .env。
+      - ../.env.local:/workspace/.env.local:ro
+    depends_on:
+      - backend
+
+  logs:
+    # 网页版日志面板：其他开发者不用 ssh 进你的 Mac 就能看各服务日志。
+    image: amir20/dozzle:latest
+    restart: unless-stopped
+    environment:
+      DOZZLE_NO_ANALYTICS: "true"
+      DOZZLE_FILTER: label=com.docker.compose.project=${COMPOSE_PROJECT_NAME:-growth}
+    ports:
+      - "${DEV_LOGS_PORT:-9999}:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+volumes:
+  mysql_data:
+    name: ${COMPOSE_PROJECT_NAME:-growth}_mysql_data
+  redis_data:
+    name: ${COMPOSE_PROJECT_NAME:-growth}_redis_data
+  minio_data:
+    name: ${COMPOSE_PROJECT_NAME:-growth}_minio_data
+  maven_cache:
+    name: ${COMPOSE_PROJECT_NAME:-growth}_maven_cache
+  backend_target:
+    name: ${COMPOSE_PROJECT_NAME:-growth}_backend_target
+  frontend_node_modules:
+    name: ${COMPOSE_PROJECT_NAME:-growth}_frontend_node_modules
+  frontend_vite_cache:
+    name: ${COMPOSE_PROJECT_NAME:-growth}_frontend_vite_cache
