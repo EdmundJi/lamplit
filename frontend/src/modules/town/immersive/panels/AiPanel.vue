@@ -4,6 +4,7 @@ import { History, Plus, Send, Square } from 'lucide-vue-next'
 import { api } from '../../../../shared/api/client'
 import { postSse, SseRequestError } from '../../../../shared/api/sse'
 import MarkdownDocument from '../../../../shared/ui/MarkdownDocument.vue'
+import AiNextStep from './AiNextStep.vue'
 
 type ChatMessage = { role: 'USER' | 'ASSISTANT'; text: string }
 type SessionSummary = { publicId: string; scene: string; updatedAt: string; messageCount: number; lastMessage?: string | null }
@@ -136,7 +137,8 @@ async function send() {
   }
 }
 
-async function openSession(item: SessionSummary) {
+async function openSession(item: SessionSummary, event?: Event) {
+  (event?.currentTarget as HTMLElement | null)?.closest('details')?.removeAttribute('open')
   if (disposed) return
   const id = invalidate()
   openingSession.value = true
@@ -192,7 +194,7 @@ onBeforeUnmount(() => {
       <details v-if="history.length" class="history-pick">
         <summary aria-label="历史对话"><History :size="14" />历史（{{ history.length }}）</summary>
         <div>
-          <button v-for="item in history" :key="item.publicId" type="button" :aria-pressed="session === item.publicId" @click="openSession(item)">
+          <button v-for="item in history" :key="item.publicId" type="button" :aria-pressed="session === item.publicId" @click="openSession(item, $event)">
             {{ preview(item) }}
           </button>
         </div>
@@ -216,6 +218,8 @@ onBeforeUnmount(() => {
         <p v-else class="ai-user-text">{{ item.text }}</p>
       </div>
     </div>
+
+    <AiNextStep v-if="session && messages.some(item => item.role === 'ASSISTANT' && item.text.trim())" :key="session" :session="session" :disabled="busy || openingSession" :can-replace="!draft.trim()" />
 
     <p v-if="error" class="error" role="alert">{{ error }}</p>
 

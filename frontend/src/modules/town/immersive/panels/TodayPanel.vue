@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { inject } from 'vue'
+import { computed, inject } from 'vue'
 import { BatteryMedium, Check, Clock3, Gauge, Play, RefreshCw, SkipForward, Sparkles, TimerReset, Undo2, X } from 'lucide-vue-next'
 import { taskStatusLabel } from '../../../../shared/task-status'
 import { useDialogFocus } from '../../../../shared/ui/use-dialog-focus'
 import { worldBridgeKey } from '../panel.types'
-import { DAILY_COMPLETION_LIMIT, useTodayLogic } from '../../../today/today.logic'
+import { DAILY_COMPLETION_LIMIT, useTodayLogic, type Task, type TaskEventType } from '../../../today/today.logic'
 
 const bridge = inject(worldBridgeKey, undefined)
 
@@ -17,7 +17,18 @@ const {
   suggestedPlan, recommendedTasks,
   load, prepare, canActOn, canComplete, applyCheck, startFocus, toggleFocus, closeFocus,
   act, confirmAction, finishFocus, reverse,
-} = useTodayLogic({ onCelebrate: publicId => bridge?.emit({ type: 'celebrate', publicId }) })
+// World celebrations follow the authoritative town-model diff after notifyDataChanged.
+// Task schedule IDs are not resident IDs; emitting here would also duplicate that celebration.
+} = useTodayLogic()
+
+const completedTasks = computed(() => tasks.value.filter(task => task.status === 'DONE'))
+async function recordStep(task: Task, event: TaskEventType) {
+  const before = task.status
+  await act(task, event)
+  if (task.status !== before && feedback.value) {
+    feedback.value = { ...feedback.value, text: event === 'STARTED' ? `已经开始：${task.taskTitle}。先专心做这一小步。` : event === 'COMPLETED' ? `完成了：${task.taskTitle}。这一步已经记下来了。` : feedback.value.text }
+  }
+}
 
 useDialogFocus(() => Boolean(selected.value || focusTask.value), '.today-panel-dialog', () => { selected.value = null; closeFocus() })
 </script>
@@ -29,6 +40,8 @@ useDialogFocus(() => Boolean(selected.value || focusTask.value), '.today-panel-d
       <Sparkles :size="16" />
       <p>{{ feedback.text }}<strong v-if="feedback.experience">{{ feedback.experience }}</strong></p>
     </div>
+
+    <div class="today-intro"><span>今天，先做好一件事</span><p>从开始到完成，每一步都会留下来。</p></div>
 
     <div class="panel-toolbar">
       <button class="rhythm-toggle" type="button" :aria-expanded="showCheck" aria-controls="panel-daily-rhythm" @click="showCheck = !showCheck">
@@ -63,22 +76,23 @@ useDialogFocus(() => Boolean(selected.value || focusTask.value), '.today-panel-d
     <p v-if="loading" class="empty">正在整理今天的安排…</p>
     <template v-else-if="tasks.length">
       <ul v-if="recommendedTasks.length" class="task-list">
-        <li v-for="task in recommendedTasks" :key="task.publicId" class="task-row" :data-task-id="task.publicId">
+        <li v-for="task in recommendedTasks" :key="task.publicId" class="task-row" :data-task-id="task.publicId" :data-in-progress="task.status === 'IN_PROGRESS'">
           <div class="task-main">
             <span class="status">{{ taskStatusLabel(task.status) }}<template v-if="task.roleName"> · {{ task.roleName }}</template></span>
             <strong>{{ task.taskTitle }}</strong>
             <time>{{ new Date(task.plannedStartAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) }}<template v-if="task.estimatedMinutes"> · 约 {{ task.estimatedMinutes }} 分钟</template></time>
           </div>
           <div class="task-actions">
-            <button v-if="task.status === 'PLANNED'" class="icon-button" title="开始" aria-label="开始" :disabled="!canActOn(task)" @click="act(task, 'STARTED')">
-              <Play :size="15" />
+            <button v-if="task.status === 'PLANNED'" class="primary" title="开始这一步" aria-label="开始" :disabled="!canActOn(task)" @click="recordStep(task, 'STARTED')">
+              <Play :size="15" />开始
             </button>
-            <button class="primary" :title="dailyLimitReached ? '今日完成额度已用完' : '完成'" aria-label="完成" :disabled="!canComplete(task)" @click="act(task, 'COMPLETED')">
+            <button v-if="task.status === 'IN_PROGRESS'" class="primary" :title="dailyLimitReached ? '今日完成额度已用完' : '完成'" aria-label="完成" :disabled="!canComplete(task)" @click="recordStep(task, 'COMPLETED')">
               <Check :size="15" />完成
             </button>
             <details class="task-more">
               <summary aria-label="更多任务操作">更多</summary>
               <div>
+                <button v-if="task.status === 'PLANNED'" class="secondary" :disabled="!canComplete(task)" @click="recordStep(task, 'COMPLETED')"><Check :size="14" />已经做完，记下来</button>
                 <button class="secondary" :disabled="!canActOn(task)" @click="startFocus(task)"><TimerReset :size="14" />专注执行</button>
                 <button class="secondary" :disabled="!canActOn(task)" @click="prepare(task, 'PARTIAL')"><Gauge :size="14" />部分完成</button>
                 <button class="secondary" :disabled="!canActOn(task)" @click="prepare(task, 'DEFERRED')"><Clock3 :size="14" />延期</button>
@@ -88,11 +102,18 @@ useDialogFocus(() => Boolean(selected.value || focusTask.value), '.today-panel-d
           </div>
         </li>
       </ul>
-      <p v-else class="empty">今天安排的任务都已经处理过了，歇一歇也很好。</p>
+      <p v-else-if="!completedTasks.length" class="empty">今天安排的任务都已经处理过了，歇一歇也很好。</p>
     </template>
     <div v-else class="empty">
       <p>今天还没有安排任务。</p>
+      <button v-if="bridge" type="button" class="secondary" @click="bridge.emit({ type: 'open', panel: 'ai' })">让 AI 帮我找一小步</button>
     </div>
+
+    <section v-if="completedTasks.length" class="completed-steps" aria-label="今天留下的进展">
+      <strong><Check :size="15" />今天留下的进展</strong>
+      <p v-for="task in completedTasks" :key="task.publicId"><Check :size="13" /><span>{{ task.taskTitle }}</span></p>
+      <button v-if="bridge" type="button" class="secondary" @click="bridge.emit({ type: 'close' })">回到小镇，歇一会儿</button>
+    </section>
 
     <footer class="panel-footer">
       <button class="icon-button" type="button" aria-label="刷新" @click="load(false)"><RefreshCw :size="15" /></button>
@@ -131,6 +152,15 @@ useDialogFocus(() => Boolean(selected.value || focusTask.value), '.today-panel-d
 </template>
 
 <style scoped>
+.today-intro span { font-size: 17px; font-weight: 700; color: var(--ink); }
+.today-intro p { margin: 5px 0 0; font-size: 12px; color: var(--muted); }
+.task-row[data-in-progress='true'] { border-color: var(--primary); background: color-mix(in srgb, var(--primary-soft) 55%, var(--surface)); }
+.completed-steps { display: grid; gap: 8px; padding: 12px; background: color-mix(in srgb, var(--primary-soft) 55%, var(--surface)); border-radius: 10px; }
+.completed-steps strong, .completed-steps p { display: flex; gap: 7px; align-items: center; margin: 0; font-size: 12px; }
+.completed-steps strong { color: var(--primary); }
+.completed-steps p svg { flex: none; color: var(--primary); }
+.completed-steps button { justify-self: start; margin-top: 3px; font-size: 12px; }
+
 .world-panel { display: grid; gap: 12px; width: 100%; color: var(--ink); }
 .panel-toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .rhythm-toggle { display: inline-flex; align-items: center; gap: 5px; background: transparent; color: var(--muted); font-size: 12px; padding: 0; border: 0; }
@@ -144,13 +174,14 @@ useDialogFocus(() => Boolean(selected.value || focusTask.value), '.today-panel-d
 .check-result { display: grid; gap: 4px; padding-top: 4px; border-top: 1px solid var(--border); font-size: 12px; }
 .check-result p { margin: 0; color: var(--muted); line-height: 1.5; }
 .check-result button { justify-self: start; margin-top: 2px; }
+.quota p { margin: 0; }
 .quota { display: grid; gap: 6px; font-size: 12px; color: var(--muted); }
 .quota progress { width: 100%; height: 6px; }
 .quota[data-limit-reached='true'] { color: var(--amber); }
 .task-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; max-height: 320px; overflow-y: auto; }
 .task-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 10px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
 .task-main { min-width: 0; display: grid; gap: 2px; }
-.task-main strong { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.task-main strong { font-size: 13px; overflow-wrap: anywhere; line-height: 1.5; }
 .task-main time { font-size: 11px; color: var(--muted); }
 .task-actions { display: flex; align-items: center; gap: 6px; flex: none; }
 .task-actions .icon-button { width: 30px; height: 30px; min-width: 30px; min-height: 30px; }

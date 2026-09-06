@@ -1,14 +1,17 @@
 <script setup lang="ts">
-import { inject } from 'vue'
+import { inject, onBeforeUnmount, ref } from 'vue'
 import { CheckCircle2, ListPlus, Pause, Pencil, Play, Plus, RefreshCw, Sparkles, Target, X } from 'lucide-vue-next'
 import { useDialogFocus } from '../../../../shared/ui/use-dialog-focus'
 import { worldBridgeKey } from '../panel.types'
 import { openFullPage } from './shared'
+import { onGoalDraftChanged, peekGoalDraft, takeGoalDraft } from '../../../ai/goal-draft'
+import AiDraftNotice from './AiDraftNotice.vue'
 import { goalTemplates, roleNames, roles, rruleLabel, rruleOptions, statusLabel, useGoalsLogic } from '../../../goals/goals.logic'
 
 const FULL_PAGE = '/goals'
 
 const bridge = inject(worldBridgeKey, undefined)
+function beginToday() { bridge?.emit({ type: 'close' }); bridge?.emit({ type: 'open', panel: 'today' }) }
 
 const {
   goals, dimensions, tasks, loading, panel, error, busy, feedback, goalPrompt,
@@ -18,9 +21,18 @@ const {
   activeGoals, visibleGoals,
   openGoal, openGoalForEdit, cancelGoal, syncTaskPeriod,
   openTask, openTaskForEdit, loadPresets, chooseRole, choosePreset,
-  applyGoalTemplate,
+  applyGoalTemplate, applyAiGoalDraft,
   createGoal, createTask, setTaskActive, setGoalStatus,
 } = useGoalsLogic({ onCelebrate: publicId => bridge?.emit({ type: 'celebrate', publicId }) })
+
+const pendingAiDraft = ref(peekGoalDraft())
+const stopDraftNotice = onGoalDraftChanged(() => { pendingAiDraft.value = peekGoalDraft() })
+onBeforeUnmount(stopDraftNotice)
+function loadPendingAiDraft() {
+  if (panel.value || busy.value || loading.value) return
+  const next = takeGoalDraft()
+  if (next) applyAiGoalDraft(next)
+}
 
 function tasksOf(goalPublicId: string) {
   return tasks.value.filter(task => task.goalPublicId === goalPublicId)
@@ -35,10 +47,14 @@ useDialogFocus(() => panel.value !== null, '.goals-panel-drawer', () => { if (!b
     <div v-if="feedback" class="feedback-banner" :data-tone="feedback.tone" role="status" aria-live="polite">
       <CheckCircle2 :size="16" />
       <p>{{ feedback.text }}</p>
+      <button v-if="bridge && !error && !panel && !busy" class="secondary start-today" type="button" @click="beginToday">去今天开始</button>
     </div>
+
+    <AiDraftNotice v-if="pendingAiDraft && !panel" :title="pendingAiDraft.title" :editing="false" :disabled="busy || loading" @load="loadPendingAiDraft" />
 
     <div v-if="panel" class="dialog-backdrop" @click="!busy && cancelGoal()" />
     <form v-if="panel === 'goal'" class="drawer goals-panel-drawer" role="dialog" aria-modal="true" aria-label="目标编辑" tabindex="-1" @submit.prevent="createGoal">
+      <AiDraftNotice v-if="pendingAiDraft" :title="pendingAiDraft.title" :editing="true" :disabled="true" />
       <div class="drawer-head">
         <strong>{{ editingGoalPublicId ? '编辑目标' : '新建目标' }}</strong>
         <button type="button" class="icon-button" :disabled="busy" aria-label="关闭" @click="cancelGoal"><X :size="15" /></button>
@@ -84,6 +100,7 @@ useDialogFocus(() => panel.value !== null, '.goals-panel-drawer', () => { if (!b
     </form>
 
     <form v-else-if="panel === 'task'" class="drawer goals-panel-drawer" role="dialog" aria-modal="true" aria-label="周期任务编辑" tabindex="-1" @submit.prevent="createTask">
+      <AiDraftNotice v-if="pendingAiDraft" :title="pendingAiDraft.title" :editing="true" :disabled="true" />
       <div class="drawer-head">
         <strong>{{ editingTaskPublicId ? '编辑任务' : '添加任务' }}</strong>
         <button type="button" class="icon-button" :disabled="busy" aria-label="关闭" @click="panel = null"><X :size="15" /></button>
@@ -203,6 +220,7 @@ useDialogFocus(() => panel.value !== null, '.goals-panel-drawer', () => { if (!b
 </template>
 
 <style scoped>
+.start-today { grid-column: 2; justify-self: start; padding: 8px 14px; min-height: 34px; font-size: 12px; }
 .world-panel { display: grid; gap: 12px; width: 100%; color: var(--ink); }
 .goal-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; max-height: 360px; overflow-y: auto; }
 .goal-row { display: grid; gap: 8px; padding: 10px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
