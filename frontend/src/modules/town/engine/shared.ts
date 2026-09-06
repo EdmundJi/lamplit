@@ -101,7 +101,7 @@ export const ASSETS = '/assets/town'
 export const TILE = 32
 export const BASELINE_ROW = 28
 export const BASELINE = BASELINE_ROW * TILE
-export const ROWS = 37
+export const ROWS = 88
 export const WORLD_HEIGHT = ROWS * TILE
 export const YARD_X = 96
 export const ACADEMY_X = YARD_X + 560
@@ -123,7 +123,7 @@ export const DIRECTION_INDEX: Record<Direction, number> = { right: 0, up: 1, lef
 /** How far north of the baseline an ordinary shop's sidewalk apron reaches (task: 八向自由移动). */
 export const WALK_APRON = 64
 /** Southern edge of the walkable street/sidewalk/park band, short of the world's own bottom edge. */
-export const WALK_BOTTOM = WORLD_HEIGHT - 24
+export const WALK_BOTTOM = 37 * TILE - 24
 /** The academy/yard courtyard is a proper plaza: it lets the self avatar wander further north
  * than an ordinary shop front, covering the basketball court and the guide NPC's patrol strip. */
 export const PLAZA_TOP = BASELINE - 380
@@ -368,7 +368,7 @@ export function characterSheet(publicId: string) {
 }
 
 export function worldWidth(count: number) {
-  return Math.max(2600, PLOT_START + (count + 2) * PLOT_PITCH + 320)
+  return Math.max(2800, PLOT_START + (count + 2) * PLOT_PITCH + 320)
 }
 
 export function plotX(index: number) {

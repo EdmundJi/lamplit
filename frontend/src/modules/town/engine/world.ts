@@ -1,4 +1,6 @@
 import type PhaserNs from 'phaser'
+import { drawNeighbourhood, neighbourhoodFurniture } from './neighbourhood'
+import { inNeighbourhoodPath, NEIGHBOURHOOD_PATHS, NEIGHBOURHOOD_OBSTACLES } from '../neighbourhood-layout'
 import { buildBlueprint, hashString } from '../building-kit'
 import { buildTownCollisionWorld } from '../collision'
 import { eventTitle } from '../town-events'
@@ -13,6 +15,7 @@ export const worldMethods = {
   groundFrame(this: TownScene, column: number, row: number, crossingStart: number) {
       const runtime = this.runtime;
       const wx = column * TILE + TILE / 2, wy = row * TILE + TILE / 2;
+      if (inNeighbourhoodPath(wx, wy)) return `sidewalk_${25 + ((column + row) % 4)}`;
       if (runtime.garden.walkable.some(r => wx >= r.x && wx <= r.x + r.width && wy >= r.y && wy <= r.y + r.height))
           return `sidewalk_${25 + ((column + row) % 4)}`;
       const noise = hashString(`${column}:${row}`);
@@ -182,7 +185,8 @@ export const worldMethods = {
           buildings,
           furniture: this.furnitureCollisions,
       });
-      this.collisionWorld.walkable.push(...runtime.garden.walkable);
+      this.collisionWorld.walkable.push(...runtime.garden.walkable, ...NEIGHBOURHOOD_PATHS);
+      this.collisionWorld.obstacles.push(...NEIGHBOURHOOD_OBSTACLES);
   },
 
   drawPublicPlaces(this: TownScene) {
@@ -232,6 +236,7 @@ export const worldMethods = {
       }
       this.add.image(park.x - 175, park.y + 28, 'town', 'fountain_1').setOrigin(0.5, 1).setDepth(park.y + 28);
       this.add.sprite(park.x + 80, park.y + 14, 'town', 'pigeon_1').setOrigin(0.5, 1).setDepth(park.y + 14).play('pigeon-idle');
+      drawNeighbourhood(this);
   },
 
   drawTownEvents(this: TownScene) {
@@ -276,7 +281,7 @@ export const worldMethods = {
           createParkFurniture(parkX, runtime.garden.park.y),
       ];
       // 街道家具（密集布置）
-      this.streetFurnitureItems = createStreetFurniture(ACADEMY_X, runtime.width - 200, BASELINE, 400);
+      this.streetFurnitureItems = [...createStreetFurniture(ACADEMY_X, runtime.width - 200, BASELINE, 400), ...neighbourhoodFurniture()];
       // 绘制所有场地家具
       this.venueFurniture.forEach(venue => {
           venue.items.forEach(item => this.drawFurnitureItem(item));
@@ -319,7 +324,7 @@ export const worldMethods = {
       const runtime = this.runtime;
       const y = (BASELINE_ROW + 9) * TILE;
       for (let x = 40; x < runtime.width - 80; x += 96) {
-          if (runtime.inTerrace(x, y, 80))
+          if (runtime.inTerrace(x, y, 80) || inNeighbourhoodPath(x + 24, y))
               continue;
           const seed = hashString(`park:${x}`);
           const pick = seed % 6;
