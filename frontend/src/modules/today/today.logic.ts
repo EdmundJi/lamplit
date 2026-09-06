@@ -1,4 +1,4 @@
-import { computed, onBeforeUnmount, onMounted, ref, watch, type Ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { api, type ApiError } from '../../shared/api/client'
 import { notifyDataChanged, onDataChanged } from '../../shared/data-sync'
 import { randomUUID } from '../../shared/uuid'
@@ -11,7 +11,6 @@ import { encouragement, type EncouragementMoment } from '../../shared/encouragem
 
 export type Task = {
   publicId: string
-  taskPublicId?: string
   taskTitle: string
   plannedStartAt: string
   status: string
@@ -53,9 +52,7 @@ export function isDailyLimitError(caught: unknown) {
 }
 
 export type UseTodayLogicOptions = {
-  /** 手账翻页日期；小镇省略时仍然读取今天。 */
-  date?: Ref<string>
-  /** 任务被标记完成时触发；小镇面板用它驱动庆祝动画。 */
+  /** 任务被标记完成时触发；小镇面板用它驱动庆祝动画，整页面不需要传。 */
   onCelebrate?: (publicId: string) => void
 }
 
@@ -125,19 +122,16 @@ export function useTodayLogic(options: UseTodayLogicOptions = {}) {
     return `${minutes}:${seconds}`
   })
 
-  let loadVersion = 0
   async function load(showLoading = true) {
-    const version = ++loadVersion
     if (showLoading) loading.value = true
     error.value = ''
     try {
-      const d = options.date?.value ?? localDate()
+      const d = localDate()
       const [todayTasks, activeGoalList, status] = await Promise.all([
         api.get<Task[]>(`/task-schedules?localDate=${d}`),
         api.get<Goal[]>('/goals?status=ACTIVE'),
         api.get<DailyStatus | null>('/daily-status').catch(() => null),
       ])
-      if (version !== loadVersion) return
       tasks.value = todayTasks
       goals.value = activeGoalList
       if (status) {
@@ -147,9 +141,9 @@ export function useTodayLogic(options: UseTodayLogicOptions = {}) {
         checkSubmitted.value = true
       }
     } catch {
-      if (version === loadVersion) error.value = '任务暂时无法加载，请稍后重试'
+      error.value = '今天的任务暂时无法加载'
     } finally {
-      if (version === loadVersion) loading.value = false
+      if (showLoading) loading.value = false
     }
   }
 
@@ -281,7 +275,6 @@ export function useTodayLogic(options: UseTodayLogicOptions = {}) {
 
   const stopDataSync = onDataChanged(['goals', 'tasks'], () => load(false))
 
-  if (options.date) watch(options.date, () => { tasks.value = []; last.value = null; feedback.value = null; void load(true) })
   onMounted(() => load(true))
   onBeforeUnmount(() => {
     stopDataSync()

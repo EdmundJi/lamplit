@@ -33,7 +33,7 @@ const showWelcome = ref(false)
 const showMobileMore = ref(false)
 useDialogFocus(() => showMobileMore.value, '.mobile-more-sheet', () => { showMobileMore.value = false })
 useDialogFocus(() => showWelcome.value, '.welcome-dialog', () => dismissWelcome())
-const quietWorkspace = computed(() => route.path === '/ai' || route.path.includes('/chat') || route.path.includes('/groups/') || route.path === '/town' || route.path === '/today')
+const quietWorkspace = computed(() => route.path === '/ai' || route.path.includes('/chat') || route.path.includes('/groups/') || route.path === '/town')
 const welcomeKey = computed(() => `better-self:welcome:${auth.user?.publicId ?? 'guest'}`)
 const mobileMoreActive = computed(() => mobileMoreNav.some(item => route.path === item.to || route.path.startsWith(`${item.to}/`)))
 const brandInitial = computed(() => {
@@ -75,7 +75,7 @@ onBeforeUnmount(() => {
 })
 </script>
 <template>
-  <div class="shell" :class="{ 'journal-shell': route.path !== '/town' }">
+  <div class="shell">
     <a class="skip-link" href="#main-content">跳到主要内容</a>
     <aside class="sidebar">
       <RouterLink class="brand" to="/today"><span class="brand-mark" aria-hidden="true"><Building2 :size="23" /></span><span><strong>更好的自己</strong><small>一步一步，自成风景</small></span></RouterLink>
@@ -85,7 +85,7 @@ onBeforeUnmount(() => {
     </aside>
     <main id="main-content" class="workspace" tabindex="-1">
       <header class="workspace-topbar"><span class="workspace-context"><PanelLeftClose :size="17" /><span>{{ currentNav?.group || '成长' }}</span><span class="context-slash">/</span><strong>{{ currentNav?.label || '更好的自己' }}</strong></span><div><RouterLink class="topbar-ai" to="/ai"><Sparkles :size="15" />和 AI 理一理</RouterLink><RouterLink class="icon-button" to="/friends/chat" aria-label="消息中心"><Bell :size="18" /></RouterLink></div></header>
-      <OperationGuideBar v-if="route.path !== '/today'" />
+      <OperationGuideBar />
       <RouterView v-slot="{ Component, route }">
         <Transition name="route-view" mode="out-in">
           <component :is="Component" :key="route.path" />
@@ -202,36 +202,4 @@ nav a.router-link-active { background: color-mix(in srgb, var(--primary-soft) 76
   .mobile-more-links { grid-template-columns: repeat(3, minmax(0,1fr)); }
   .mobile-nav a.router-link-active, .mobile-nav button.is-active, .mobile-nav button[aria-expanded='true'] { box-shadow: none; }
 }
-
-.skip-link:not(:focus) { width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-/* The journal uses a masthead and a single horizontal contents line. */
-.journal-shell { --canvas: #faf9f6; --surface: #faf9f6; --surface-raised: #fff; --surface-muted: #f0eee8; --ink: #22221f; --muted: #686761; --border: #d8d5cd; --primary: #bd422e; --primary-strong: #a73524; --primary-soft: #f5e7df; --accent: #bd422e; --focus: #bd422e; --radius: 3px; --radius-panel: 3px; --shadow-soft: none; color-scheme: light; color: var(--ink); background: var(--canvas); padding-left: 0; min-height: 100vh; }
-.journal-shell .sidebar { position: relative; inset: auto; width: min(1280px, 100%); margin: auto; padding: 24px 40px 0; display: grid; grid-template-columns: 1fr auto; overflow: visible; background: transparent; color: var(--ink); }
-.journal-shell .brand { color: var(--ink); padding: 0 0 22px; gap: 12px; }
-.journal-shell .brand-mark { background: var(--ink); color: var(--surface); border-radius: 0; width: 34px; height: 38px; }
-.journal-shell .brand strong { font-family: 'Songti SC', 'Noto Serif CJK SC', serif; font-size: 23px; letter-spacing: .08em; }
-.journal-shell .brand small { color: var(--muted); font-size: 10px; letter-spacing: .16em; }
-.journal-shell .sidebar nav { grid-row: 2; grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 24px; border-block: 2px solid var(--ink); border-bottom-width: 1px; }
-.journal-shell .nav-group { display: flex; gap: 16px; margin: 0; }
-.journal-shell .nav-group > p, .journal-shell .nav-dot, .journal-shell .sidebar-note, .journal-shell .sidebar nav svg { display: none; }
-.journal-shell .sidebar nav a { padding: 0 2px; margin: 0; border-radius: 0; color: var(--muted); min-height: 45px; font-size: 13px; }
-.journal-shell .sidebar nav a.router-link-active { color: var(--primary); background: transparent; box-shadow: 0 2px var(--primary); }
-.journal-shell .sidebar nav a:hover { color: var(--ink); background: transparent; }
-.journal-shell .sidebar-account { grid-column: 2; grid-row: 1; margin-bottom: 22px; border: 0; padding: 0; gap: 14px; }
-.journal-shell .sidebar-account > a:first-child, .journal-shell .account-settings { color: var(--ink); }
-.journal-shell .sidebar-account small { color: var(--muted); }
-.journal-shell .account-avatar { background: var(--surface-muted); color: var(--ink); }
-.journal-shell .workspace-topbar { display: none; }
-.journal-shell :deep(:focus-visible) { outline: 2px solid var(--focus); outline-offset: 4px; }
-.journal-shell :deep(.page-head::before) { display: none; }
-@media (max-width: 760px) {
-  .journal-shell .sidebar { padding: 20px 22px 0; }
-  .journal-shell .sidebar nav { gap: 14px; }
-  .journal-shell .nav-group { gap: 12px; }
-  .journal-shell .sidebar-account small, .journal-shell .sidebar-account strong { display: none; }
-  .journal-shell .brand strong { font-size: 20px; }
-  .journal-shell .mobile-nav { background: var(--canvas); box-shadow: none; backdrop-filter: none; }
-  .journal-shell .mobile-nav a.router-link-active { color: var(--primary); background: transparent; }
-}
-@media (max-width: 480px) { .journal-shell .sidebar nav { display: none; } .journal-shell .sidebar { border-bottom: 2px solid var(--ink); } }
 </style>
