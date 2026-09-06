@@ -214,12 +214,124 @@ class TownSocietyIT {
             .isGreaterThan(1);
     }
 
+    @Test
+    void initiativeBudgetPersistsAcrossRequestsAndSaturatesAtTheLimit() throws Exception {
+        // 护栏 A：之前 used 只在前端内存里，刷新即归零。这里钉住它现在是真的落库的——
+        // 连续调用会累加，且顶到 DAILY_INITIATIVE_LIMIT 之后不再往上涨（幂等的饱和状态）。
+        Session owner = register("town-initiative@example.test");
+
+        mvc.perform(get("/api/v1/town/npcs").cookie(owner.access())).andExpect(status().isOk());
+
+        for (int i = 1; i <= TownSocietyService.DAILY_INITIATIVE_LIMIT; i++) {
+            MvcResult result = mvc.perform(post("/api/v1/town/initiative/consume")
+                    .cookie(owner.access(), owner.csrf())
+                    .header("X-CSRF-Token", owner.csrf().getValue()))
+                .andExpect(status().isOk())
+                .andReturn();
+            assertThat(body(result)).contains("\"used\":" + i);
+        }
+
+        // 顶到上限之后，roster() 读到的 used 与再消费一次都必须停在 limit，不再往上涨。
+        MvcResult overLimit = mvc.perform(post("/api/v1/town/initiative/consume")
+                .cookie(owner.access(), owner.csrf())
+                .header("X-CSRF-Token", owner.csrf().getValue()))
+            .andExpect(status().isOk())
+            .andReturn();
+        assertThat(body(overLimit)).contains("\"used\":" + TownSocietyService.DAILY_INITIATIVE_LIMIT);
+
+        MvcResult roster = mvc.perform(get("/api/v1/town/npcs").cookie(owner.access()))
+            .andExpect(status().isOk())
+            .andReturn();
+        assertThat(body(roster)).contains(
+            "\"initiativeBudget\":{\"limit\":" + TownSocietyService.DAILY_INITIATIVE_LIMIT
+                + ",\"used\":" + TownSocietyService.DAILY_INITIATIVE_LIMIT + "}");
+    }
+
     private long userIdOf(String email) {
         return jdbc.queryForObject("select id from sys_user where email_normalized = ?", Long.class, email);
     }
 
     private int countFacts(long userId) {
         return jdbc.queryForObject("select count(*) from town_fact where town_user_id = ?", Integer.class, userId);
+    }
+
+    /**
+     * 集成接线：今天有活动的人，当天行程里必须多出一条 priority=2 的安排（M7-3 验收）。
+     *
+     * <p>这条同时钉死了整晚流水线的顺序——{@code TownEventService} 必须排在社会模拟之前，
+     * 否则夜里推相遇时看不见这场活动，而白天 {@code roster()} 看得见，两份日程就分了叉，
+     * plan §3.5 那条「两边算出来的必须是同一份」立刻不成立。
+     */
+    @Test
+    void anEventTodayShowsUpAsAHighPriorityErrandInTheHostsDayPlan() throws Exception {
+        Session owner = register("town-event-plan@example.test");
+        long userId = userIdOf("town-event-plan@example.test");
+        society.roster(userId);
+
+        String host = jdbc.queryForObject(
+            "select npc_code from town_npc where town_user_id = ? and layer = 2 order by npc_code limit 1",
+            String.class, userId);
+        LocalDate today = LocalDate.now();
+        jdbc.update("""
+            insert into town_event
+                (public_id, town_user_id, host_npc_code, kind, venue, dimension, starts_at, ends_at, created_at)
+            values (?, ?, ?, 'GATHERING', 'plaza', null, ?, ?, ?)
+            """, "01JEVENTPLAN0000000000000A", userId, host,
+            Timestamp.valueOf(today.atTime(18, 0)), Timestamp.valueOf(today.atTime(20, 0)),
+            Timestamp.valueOf(LocalDateTime.now()));
+
+        MvcResult roster = mvc.perform(get("/api/v1/town/npcs").cookie(owner.access()))
+            .andExpect(status().isOk())
+            .andReturn();
+
+        // 只看这一个 NPC 的那段 JSON，免得别人的行程也含 "plaza" 造成误判。
+        String all = body(roster);
+        int start = all.indexOf("\"code\":\"" + host + "\"");
+        assertThat(start).as("host %s must appear in the roster", host).isGreaterThan(-1);
+        int end = all.indexOf("\"code\":\"", start + 1);
+        String hostJson = end > start ? all.substring(start, end) : all.substring(start);
+
+        assertThat(hostJson).contains("\"origin\":\"EVENT\"");
+        assertThat(hostJson).contains("\"priority\":2");
+        assertThat(hostJson).contains("\"place\":\"plaza\"");
+    }
+
+    /**
+     * 迁徙是跨小镇的一次写，所以「今天才搬来的人」当晚不参与模拟——否则 B 镇那一晚算出什么
+     * 取决于 A、B 两个用户谁先被 job 扫到，而整个限知模型的地基是同一天能重算出同一条链。
+     *
+     * <p>但他当天就该在街上看得见：{@code roster()} 里有他，{@code town_npc_knowledge} 里没有他。
+     */
+    @Test
+    void anNpcThatArrivedTodayIsVisibleButSitsOutTonightsSimulation() throws Exception {
+        register("town-arrival@example.test");
+        long userId = userIdOf("town-arrival@example.test");
+        society.roster(userId);
+
+        String newcomer = jdbc.queryForObject(
+            "select npc_code from town_npc where town_user_id = ? and layer = 3 order by npc_code limit 1",
+            String.class, userId);
+        LocalDate today = LocalDate.now();
+        // 造一条"今晚刚从别的镇搬来"的迁徙记录——判断依据是它，不是建号时就写好的 settled_at。
+        jdbc.update("""
+            insert into town_migration
+                (public_id, npc_code, from_user_id, to_user_id, paired_with_npc_code, moved_at, created_at)
+            values (?, ?, ?, ?, null, ?, ?)
+            """, "01JARRIVEDTODAY000000000A", newcomer, userId, userId,
+            Timestamp.valueOf(today.atTime(2, 0)), Timestamp.valueOf(LocalDateTime.now()));
+        jdbc.update("update town_npc set settled_at = ? where town_user_id = ? and npc_code = ?",
+            Timestamp.valueOf(today.atTime(2, 0)), userId, newcomer);
+
+        society.runNightly(userId, today);
+
+        assertThat(jdbc.queryForObject(
+            "select count(*) from town_npc_knowledge where town_user_id = ? and npc_code = ?",
+            Integer.class, userId, newcomer))
+            .as("today's arrival must not join tonight's propagation")
+            .isZero();
+        assertThat(society.roster(userId).npcs().stream().map(TownSocietyService.NpcView::code))
+            .as("but he is on the street from day one")
+            .contains(newcomer);
     }
 
     private String body(MvcResult result) throws Exception {

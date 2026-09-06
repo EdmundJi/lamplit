@@ -10,9 +10,12 @@ import java.util.random.RandomGenerator;
 /**
  * 一个 NPC 一天去哪儿、在做什么——纯函数，只由 (npc_code, 日期) 决定。
  *
- * <p>刻意不落库：日程是可以重算的，存下来只会多一张需要和口径保持一致的表。夜间 job 用它推
- * 相遇序列（同一时段同一地点 = 见了面），HTTP 接口用它告诉前端这一刻该把人画在哪儿——两边算
- * 出来的必须是同一份，所以这里只有一个入口。
+ * <p>刻意不落库：日程是可以重算的，存下来只会多一张需要和口径保持一致的表。HTTP 接口用它撑
+ * 向后兼容的 {@code schedule} 字段（七个整点时段），也用来生成"NPC 今天在哪儿"这类事实文本
+ * 与目击判定（{@link TownSocietyService#sawPlayer}）。
+ *
+ * <p>M7 之后，相遇序列改由更细粒度的 {@link TownDayPlan}（分钟级 errands/legs）推出，不再从这
+ * 里的整点时段推——两种粒度都要能查"某一刻在哪"，但相遇判定只信一份，就是 {@link TownDayPlan}。
  *
  * <p>同一个 NPC 在同一天永远得到同一份日程（种子来自 npc_code 与日期），但换一天就会变；这样
  * 小镇既有稳定的作息，又不会天天完全一样。
@@ -35,8 +38,12 @@ final class TownNpcSchedules {
     /** 深夜留在外面的比例。18 个人乘这个比例，正好落在护栏 B 说的"深夜 2~3 人"上。 */
     private static final double NIGHT_OWL_SHARE = 0.15;
 
-    /** 五维度各自最"像"的去处；NPC 的兴趣权重会把他往这些地方推。 */
-    private static final Map<String, String> DIMENSION_PLACE = Map.of(
+    /**
+     * 五维度各自最"像"的去处；NPC 的兴趣权重会把他往这些地方推。包可见（而非 private）：
+     * {@link TownNpcRhythm} 推默认节律、{@link TownDayPlan} 排当天行程都要用同一份映射，
+     * 不能各写一份——那就是"同一概念两套常数"。
+     */
+    static final Map<String, String> DIMENSION_PLACE = Map.of(
         "KNOWLEDGE", ACADEMY,
         "HEALTH", GYM,
         "CAREER", PLAZA,
@@ -68,33 +75,6 @@ final class TownNpcSchedules {
         return List.copyOf(slots);
     }
 
-    /**
-     * 当日的相遇序列：同一时段落在同一地点的两个 NPC 就算见过面。
-     * 输出按 (时段, a, b) 稳定排序，好让整条传播链可复现。
-     */
-    static List<TownSocialSim.Encounter> encounters(Map<String, List<Slot>> schedulesByNpc) {
-        List<String> codes = new ArrayList<>(schedulesByNpc.keySet());
-        codes.sort(String::compareTo);
-        List<TownSocialSim.Encounter> encounters = new ArrayList<>();
-        for (int slotIndex = 0; slotIndex < BOUNDARIES.length - 1; slotIndex++) {
-            int startHour = BOUNDARIES[slotIndex];
-            for (int i = 0; i < codes.size(); i++) {
-                for (int j = i + 1; j < codes.size(); j++) {
-                    String a = codes.get(i);
-                    String b = codes.get(j);
-                    String placeA = placeAt(schedulesByNpc.get(a), slotIndex);
-                    String placeB = placeAt(schedulesByNpc.get(b), slotIndex);
-                    // 半夜各自在家不算见面，否则每晚都会凭空多出一轮全镇串门。
-                    if (placeA == null || !placeA.equals(placeB) || HOME.equals(placeA)) {
-                        continue;
-                    }
-                    encounters.add(new TownSocialSim.Encounter(a, b, placeA, startHour));
-                }
-            }
-        }
-        return List.copyOf(encounters);
-    }
-
     /** 某一刻该把这个 NPC 画在哪个地点；hour 落在 [0,24) 之外时钳回来。 */
     static Slot slotAt(List<Slot> schedule, int hour) {
         int normalized = Math.floorMod(hour, 24);
@@ -104,13 +84,6 @@ final class TownNpcSchedules {
             }
         }
         return null;
-    }
-
-    private static String placeAt(List<Slot> schedule, int slotIndex) {
-        if (schedule == null || slotIndex >= schedule.size()) {
-            return null;
-        }
-        return schedule.get(slotIndex).place();
     }
 
     private static String placeFor(int startHour, Map<String, Double> weights, RandomGenerator rng) {
@@ -144,7 +117,8 @@ final class TownNpcSchedules {
         return roll < 0.8 ? PLAZA : CAFE;
     }
 
-    private static String activityFor(String place, int layer, int startHour, RandomGenerator rng) {
+    /** 包可见：{@link TownDayPlan} 排当天行程时复用同一份地点→活动映射，不重开一套常数。 */
+    static String activityFor(String place, int layer, int startHour, RandomGenerator rng) {
         if (HOME.equals(place)) {
             return "idle";
         }
@@ -161,7 +135,7 @@ final class TownNpcSchedules {
         };
     }
 
-    private static String labour(int startHour, RandomGenerator rng) {
+    static String labour(int startHour, RandomGenerator rng) {
         List<String> pool = startHour >= 14
             ? List.of("fishing", "watering", "harvesting")
             : List.of("watering", "chopping", "digging");

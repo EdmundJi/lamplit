@@ -50,6 +50,24 @@ public final class TownSocialSim {
     private TownSocialSim() {
     }
 
+    /**
+     * How two NPCs' timelines crossed (CONTRACT-M7.md §3). {@code CO_LOCATED} means both were
+     * {@code AT} the same place at the same time — there was time to sit down and talk, so it
+     * carries the highest relay weight. {@code EN_ROUTE} is two people walking past each other
+     * mid-commute — a few words in passing. {@code PASSING} is one person standing still while
+     * the other merely walks through that spot — barely a nod. The weight multipliers below are
+     * the contract's numbers verbatim; nobody downstream should hardcode a second copy of them.
+     */
+    public enum EncounterType {
+        CO_LOCATED, EN_ROUTE, PASSING
+    }
+
+    private static final Map<EncounterType, Double> ENCOUNTER_TYPE_WEIGHT = Map.of(
+        EncounterType.CO_LOCATED, 1.0,
+        EncounterType.EN_ROUTE, 0.6,
+        EncounterType.PASSING, 0.3
+    );
+
     /** A personality facet of one NPC, projected out of {@code town_npc}. */
     public record Persona(String npcCode, int layer, double shareDrive, double curiosity,
                     Map<String, Double> interests, Set<String> quirks) {
@@ -59,8 +77,13 @@ public final class TownSocialSim {
     public record Bond(double affinity, double resonance, int meetCount, LocalDate lastMetOn) {
     }
 
-    /** One meeting between two townsfolk. */
-    public record Encounter(String a, String b, String place, int slotHour) {
+    /**
+     * One meeting between two townsfolk, classified by {@link EncounterType}. {@code atMinute}
+     * is local-time-of-day minutes ({@code [0,1440)}), replacing the old hour-slot index now
+     * that meetings come out of {@link TownDayPlan}'s minute-granular timelines rather than the
+     * seven-slot hourly schedule.
+     */
+    public record Encounter(String a, String b, String place, int atMinute, EncounterType type) {
     }
 
     /** A candidate relay: someone who could tell someone else a fact they already know. */
@@ -165,6 +188,18 @@ public final class TownSocialSim {
      */
     public static double relayProbability(RelayCandidate c, Persona speaker, Persona listener, Bond bond,
                                     double interestOverlap) {
+        return relayProbability(c, speaker, listener, bond, interestOverlap, EncounterType.CO_LOCATED);
+    }
+
+    /**
+     * Same as the five-argument overload, but scaled by how the two speakers actually crossed
+     * paths (CONTRACT-M7.md §3 / M7-5). The multiplier is applied last and is itself in
+     * {@code (0,1]}, so it can only ever lower the probability relative to a {@code CO_LOCATED}
+     * meeting — never raise it — which is what guarantees
+     * {@code P(CO_LOCATED) >= P(EN_ROUTE) >= P(PASSING)} for every other signal held fixed.
+     */
+    public static double relayProbability(RelayCandidate c, Persona speaker, Persona listener, Bond bond,
+                                    double interestOverlap, EncounterType encounterType) {
         double score = RELAY_BASELINE
             + RELAY_WEIGHT_AFFINITY * clamp01(bond.affinity())
             + RELAY_WEIGHT_SHARE_DRIVE * clamp01(speaker.shareDrive())
@@ -178,6 +213,7 @@ public final class TownSocialSim {
         if (speaker.quirks().contains("TIGHT_LIPPED")) {
             score *= TIGHT_LIPPED_MULTIPLIER;
         }
+        score *= ENCOUNTER_TYPE_WEIGHT.get(encounterType);
         return clamp01(score);
     }
 
@@ -201,13 +237,15 @@ public final class TownSocialSim {
         List<RelayResult> results = new ArrayList<>();
 
         for (Encounter encounter : encounters) {
-            attemptRelay(encounter.a(), encounter.b(), personas, bonds, knownBySpeaker, knowledge, rng, results);
-            attemptRelay(encounter.b(), encounter.a(), personas, bonds, knownBySpeaker, knowledge, rng, results);
+            attemptRelay(encounter.a(), encounter.b(), encounter.type(), personas, bonds, knownBySpeaker,
+                knowledge, rng, results);
+            attemptRelay(encounter.b(), encounter.a(), encounter.type(), personas, bonds, knownBySpeaker,
+                knowledge, rng, results);
         }
         return results;
     }
 
-    private static void attemptRelay(String speakerCode, String listenerCode,
+    private static void attemptRelay(String speakerCode, String listenerCode, EncounterType encounterType,
                                       Map<String, Persona> personas,
                                       BiFunction<String, String, Bond> bonds,
                                       Function<String, List<RelayCandidate>> knownBySpeaker,
@@ -234,7 +272,7 @@ public final class TownSocialSim {
             RelayCandidate candidate = new RelayCandidate(speakerCode, listenerCode, factId,
                 learned.dimension(), learned.hops(), learned.salience(), learned.previousText());
 
-            double probability = relayProbability(candidate, speaker, listener, bond, overlap);
+            double probability = relayProbability(candidate, speaker, listener, bond, overlap, encounterType);
             if (rng.nextDouble() < probability) {
                 int newHops = learned.hops() + 1;
                 results.add(new RelayResult(factId, listenerCode, speakerCode, newHops, learned.salience()));

@@ -95,18 +95,22 @@ public class TownNpcProvisioner {
         Timestamp now = Timestamp.from(clock.instant());
         List<Object[]> batch = new ArrayList<>();
         for (TownNpcCatalog.Archetype archetype : archetypes) {
+            // M7-1：节律只由这个 NPC 固定不变的档案决定（不接种子/日期），算好之后跟着这一行一起
+            // 落库——HTTP 与夜间 job 都读同一份 rhythm，而不是各自重算。
+            TownNpcRhythm.Rhythm rhythm = TownNpcRhythm.defaultFor(
+                archetype.code(), archetype.interests(), archetype.shareDrive(), archetype.curiosity());
             batch.add(new Object[]{
                 ids.next(), userId, archetype.code(), archetype.displayName(), archetype.layer(),
                 archetype.sprite(), archetype.dimension(), archetype.shareDrive(), archetype.curiosity(),
-                writeJson(archetype.interests()), writeJson(archetype.quirks()), now, now, now
+                writeJson(archetype.interests()), writeJson(archetype.quirks()), writeJson(rhythm), now, now, now
             });
         }
         jdbc.batchUpdate(
             """
                 insert ignore into town_npc
                     (public_id, town_user_id, npc_code, display_name, layer, sprite, dimension,
-                     share_drive, curiosity, interests, quirks, settled_at, created_at, updated_at)
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?, cast(? as json), cast(? as json), ?, ?, ?)
+                     share_drive, curiosity, interests, quirks, rhythm, settled_at, created_at, updated_at)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, cast(? as json), cast(? as json), cast(? as json), ?, ?, ?)
                 """,
             batch
         );

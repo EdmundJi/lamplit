@@ -41,6 +41,9 @@ public class TownSocietyService {
 
     private static final Logger log = LoggerFactory.getLogger(TownSocietyService.class);
 
+    /** {@code town_event.ends_at} 理论上不为空，真遇到空值时按这个时长补，免得算出 0 分钟的行程。 */
+    private static final int EVENT_FALLBACK_MINUTES = 120;
+
     /** 全知但不八卦的那一个：拿得到全部事实，但每一条都标 no_relay。 */
     static final String GUIDE = "GUIDE";
 
@@ -88,7 +91,7 @@ public class TownSocietyService {
             log.debug("town society already simulated for user {} on {}", userId, localDate);
             return;
         }
-        List<NpcRow> npcs = npcs(userId);
+        List<NpcRow> npcs = simulationRoster(userId, localDate);
         if (npcs.isEmpty()) {
             return;
         }
@@ -100,11 +103,41 @@ public class TownSocietyService {
             List<Long> factIds = collectFacts(userId, zone, localDate, npcs, schedules);
             Set<Long> playerFacts = new HashSet<>(playerFactIds(userId, localDate));
             witness(userId, localDate, npcs, schedules, factIds, playerFacts);
-            List<TownSocialSim.Encounter> encounters = TownNpcSchedules.encounters(schedules);
+            // M7-4：相遇序列改由分钟级的 TownDayPlan 推出（同处停留/路上相遇/擦肩三类），
+            // 不再是「同一时段同一地点」。这会改变 town_npc_knowledge 的生成结果——历史数据
+            // 按 town_society_run 的日期键本就是一天一份，不需要额外的一次性重算。
+            List<TownSocialSim.Encounter> encounters = TownDayPlan.encounters(dayPlans(userId, npcs, localDate));
             propagate(userId, localDate, npcs, encounters, playerFacts);
             updateBonds(userId, localDate, npcs, encounters, presence(userId, localDate), schedules);
         });
         generateRetellText(userId, npcs);
+    }
+
+    /**
+     * 今晚参与模拟的人：名册里去掉「今天才搬来的」。
+     *
+     * <p>迁徙是跨小镇的一次写：A 镇的迁徙会直接把人塞进 B 镇。如果新来的人当晚就参与 B 镇的
+     * 相遇与传播，B 镇那一晚算出什么就取决于两个用户谁先被 job 扫到——而整个限知模型的地基是
+     * 「同一天可以重算出同一条链」（plan §3.5，M1-6 的验收）。把当天到岸的人推迟一晚再入场，
+     * 跨镇的执行顺序就再也影响不到任何一镇的传播链了。
+     *
+     * <p>只影响模拟，不影响 {@code roster()}——新面孔当天就该在街上看得见，只是今晚还没跟谁
+     * 说上话。这也正好对上 plan §2.6 想要的那种「他刚来」的生疏感。
+     *
+     * <p>判断依据是 {@code town_migration} 而不是 {@code town_npc.settled_at}：后者建号时就写上了，
+     * 拿它当条件会把开镇第一天的 18 个人整个滤空。路过的旅人也不在此列——他由本镇自己的迁徙
+     * 步骤生成，不存在"另一个用户先跑还是后跑"的分叉。
+     */
+    private List<NpcRow> simulationRoster(long userId, LocalDate localDate) {
+        Set<String> arrivedToday = new HashSet<>(jdbc.queryForList(
+            "select npc_code from town_migration where to_user_id = ? and moved_at >= ? and moved_at < ?",
+            String.class, userId,
+            Timestamp.valueOf(localDate.atStartOfDay()), Timestamp.valueOf(localDate.plusDays(1).atStartOfDay())
+        ));
+        if (arrivedToday.isEmpty()) {
+            return npcs(userId);
+        }
+        return npcs(userId).stream().filter(npc -> !arrivedToday.contains(npc.npcCode())).toList();
     }
 
     /** 抢占这一天的执行权；已经跑过就返回 false。 */
@@ -552,6 +585,7 @@ public class TownSocietyService {
         Map<String, Double> affinity = playerAffinity(userId);
         Map<String, List<TalkingPoint>> points = talkingPointIndex(userId);
         Map<String, MoodRow> moods = moods(userId, today);
+        Map<String, TownDayPlan.DayPlan> dayPlans = dayPlans(userId, npcs, today);
 
         List<NpcView> views = new ArrayList<>(npcs.size());
         for (NpcRow npc : npcs) {
@@ -565,10 +599,54 @@ public class TownSocietyService {
                 new MoodView(mood.valence(), mood.energy()),
                 schedule.stream().map(slot -> new ScheduleView(
                     slot.startHour(), slot.endHour(), slot.place(), slot.activity())).toList(),
+                toDayPlanView(dayPlans.get(npc.npcCode())),
                 points.getOrDefault(npc.npcCode(), List.of())
             ));
         }
-        return new RosterView(views, new InitiativeBudgetView(DAILY_INITIATIVE_LIMIT, 0));
+        return new RosterView(views, new InitiativeBudgetView(DAILY_INITIATIVE_LIMIT, initiativeUsed(userId, today)));
+    }
+
+    /** M7-6：{@code TownDayPlan.DayPlan} 内部形状 → CONTRACT-M7.md §1 的 {@code dayPlan} JSON。 */
+    private DayPlanView toDayPlanView(TownDayPlan.DayPlan plan) {
+        List<ErrandView> errands = plan.errands().stream()
+            .map(e -> new ErrandView(e.place(), e.activity(), e.startMinute(), e.endMinute(), e.priority(),
+                e.origin()))
+            .toList();
+        List<LegView> legs = plan.legs().stream()
+            .map(l -> new LegView(l.fromPlace(), l.toPlace(), l.departMinute(), l.arriveMinute()))
+            .toList();
+        return new DayPlanView(plan.date(), errands, legs);
+    }
+
+    // ---------------------------------------------------------------- 护栏 A 持久化
+
+    /**
+     * 护栏 A 的每日预算消费。之前 {@code used} 只在前端内存里，刷新即重置——现在按
+     * (user_id, local_date) 落库，谁调这个接口谁 +1，顶到 {@link #DAILY_INITIATIVE_LIMIT}
+     * 就不再往上涨（超额调用返回 {@code used == limit}，是幂等的饱和状态，不是报错）。
+     */
+    public InitiativeBudgetView consumeInitiative(long userId) {
+        LocalDate today = LocalDate.now(zoneOf(userId));
+        Timestamp now = Timestamp.valueOf(LocalDateTime.now(clock));
+        jdbc.update(
+            """
+                insert into town_initiative_budget (user_id, local_date, used, created_at, updated_at)
+                values (?, ?, 1, ?, ?)
+                on duplicate key update
+                    used = least(town_initiative_budget.used + 1, ?),
+                    updated_at = values(updated_at)
+                """,
+            userId, Date.valueOf(today), now, now, DAILY_INITIATIVE_LIMIT
+        );
+        return new InitiativeBudgetView(DAILY_INITIATIVE_LIMIT, initiativeUsed(userId, today));
+    }
+
+    private int initiativeUsed(long userId, LocalDate localDate) {
+        Integer used = jdbc.query(
+            "select used from town_initiative_budget where user_id = ? and local_date = ?",
+            rs -> rs.next() ? rs.getInt(1) : 0, userId, Date.valueOf(localDate)
+        );
+        return used == null ? 0 : used;
     }
 
     /** {@code GET /api/v1/town/npc/{code}/talking-points} 的数据源。 */
@@ -645,12 +723,14 @@ public class TownSocietyService {
     private List<NpcRow> npcs(long userId) {
         return jdbc.query(
             """
-                select npc_code, display_name, layer, sprite, dimension, share_drive, curiosity, interests, quirks
+                select npc_code, display_name, layer, sprite, dimension, share_drive, curiosity, interests,
+                       quirks, rhythm
                 from town_npc where town_user_id = ? order by layer, npc_code
                 """,
             (rs, row) -> new NpcRow(rs.getString("npc_code"), rs.getString("display_name"), rs.getInt("layer"),
                 rs.getString("sprite"), rs.getString("dimension"), rs.getDouble("share_drive"),
-                rs.getDouble("curiosity"), rs.getString("interests"), rs.getString("quirks")),
+                rs.getDouble("curiosity"), rs.getString("interests"), rs.getString("quirks"),
+                rs.getString("rhythm")),
             userId
         );
     }
@@ -779,6 +859,88 @@ public class TownSocietyService {
         return schedules;
     }
 
+    /**
+     * M7-2/M7-3：每个 NPC 当天的行程（节律 + 偏离），供 {@link TownDayPlan#encounters} 推相遇、
+     * 供 {@code GET /town/npcs} 下发 {@code dayPlan}。上下文里的心情、亲密度都是已经落库的真实
+     * 值；天气目前是按日期哈希模拟的占位（没有真实天气源）；事件永远是空集合——
+     * {@code town_event} 由 M4/并行分支的 V23 建表，这里先当它不存在，等接线时把
+     * {@link TownDayPlan.EventSlot} 从那张表查出来传进来即可，其余逻辑不用动。
+     */
+    private Map<String, TownDayPlan.DayPlan> dayPlans(long userId, List<NpcRow> npcs, LocalDate localDate) {
+        Map<String, MoodRow> moods = moods(userId, localDate);
+        Map<String, Double> affinity = playerAffinity(userId);
+        Map<String, List<TownDayPlan.EventSlot>> events = eventSlots(userId, localDate);
+        boolean rainy = isRainy(localDate);
+
+        Map<String, TownDayPlan.DayPlan> plans = new LinkedHashMap<>();
+        for (NpcRow npc : npcs) {
+            TownNpcRhythm.Rhythm rhythm = readRhythm(npc.rhythm());
+            MoodRow mood = moods.getOrDefault(npc.npcCode(), new MoodRow(0.0, 0.5));
+            double npcAffinity = affinity.getOrDefault(npc.npcCode(), 0.15);
+            TownDayPlan.DayPlanContext context = new TownDayPlan.DayPlanContext(
+                mood.valence(), rainy, npcAffinity, events.getOrDefault(npc.npcCode(), List.of()));
+            plans.put(npc.npcCode(), TownDayPlan.generate(npc.npcCode(), npc.layer(), rhythm, context, localDate));
+        }
+        return plans;
+    }
+
+    /**
+     * 今天有活动的人，当天行程里必须多出一条去场地的高优先级安排（M7-3 验收：「活动日必定插入
+     * 对应行程」）。到场的是主办人加所有收到请柬的 NPC——玩家那张请柬不在这里，玩家不走日程。
+     *
+     * <p>这也是 {@link TownEventService} 必须排在整晚流水线最前面的原因：它今晚建的 event
+     * 起始时间就在今天，如果晚于这里执行，夜间推出的相遇序列里就没有这场活动，而白天
+     * {@code roster()} 又会算出有——前后端两份日程对不上，限知模型的地基（plan §3.5）就塌了。
+     */
+    private Map<String, List<TownDayPlan.EventSlot>> eventSlots(long userId, LocalDate localDate) {
+        Map<String, List<TownDayPlan.EventSlot>> byNpc = new LinkedHashMap<>();
+        jdbc.query(
+            """
+                select e.venue, e.starts_at, e.ends_at, e.host_npc_code, i.recipient_ref
+                from town_event e
+                left join town_invitation i on i.event_id = e.id and i.recipient_kind = 'NPC'
+                where e.town_user_id = ? and e.starts_at >= ? and e.starts_at < ?
+                """,
+            rs -> {
+                LocalDateTime startsAt = rs.getTimestamp("starts_at").toLocalDateTime();
+                Timestamp endsAt = rs.getTimestamp("ends_at");
+                int startMinute = startsAt.toLocalTime().toSecondOfDay() / 60;
+                int duration = endsAt == null
+                    ? EVENT_FALLBACK_MINUTES
+                    : (int) java.time.Duration.between(startsAt, endsAt.toLocalDateTime()).toMinutes();
+                TownDayPlan.EventSlot slot = new TownDayPlan.EventSlot(
+                    rs.getString("venue"), "sit", startMinute, Math.max(1, duration));
+                byNpc.computeIfAbsent(rs.getString("host_npc_code"), key -> new ArrayList<>()).add(slot);
+                String guest = rs.getString("recipient_ref");
+                if (guest != null) {
+                    byNpc.computeIfAbsent(guest, key -> new ArrayList<>()).add(slot);
+                }
+            },
+            userId, Timestamp.valueOf(localDate.atStartOfDay()), Timestamp.valueOf(localDate.plusDays(1).atStartOfDay())
+        );
+        return byNpc;
+    }
+
+    private TownNpcRhythm.Rhythm readRhythm(String json) {
+        try {
+            return mapper.readValue(json, TownNpcRhythm.Rhythm.class);
+        } catch (Exception ex) {
+            // 建号早于 M7 的账号理论上不该存在（迁移已经回填了所有旧行），但读坏一份不该拖垮
+            // 整晚的流水线——退回到"没有常态行程"，当天就只剩早晚在家。
+            log.warn("town npc rhythm unreadable, falling back to an empty rhythm", ex);
+            return new TownNpcRhythm.Rhythm(420, 1320, List.of());
+        }
+    }
+
+    /**
+     * 占位天气：没有真实气象数据源，按日期哈希模拟一个全镇统一的晴/雨，只为了让
+     * "雨天缩短户外行程"这条偏离规则有输入可用。TODO：接入真实天气后替换这里。
+     */
+    private static boolean isRainy(LocalDate localDate) {
+        long hashed = localDate.toEpochDay() * 2654435761L;
+        return Math.floorMod(hashed, 5) == 0;
+    }
+
     private TownSocialSim.Persona persona(NpcRow npc) {
         return new TownSocialSim.Persona(npc.npcCode(), npc.layer(), npc.shareDrive(), npc.curiosity(),
             readInterests(npc.interests()), readQuirks(npc.quirks()));
@@ -873,10 +1035,21 @@ public class TownSocietyService {
 
     public record NpcView(String code, String displayName, int layer, String sprite, String dimension,
                           Map<String, Double> interests, double affinityToPlayer, MoodView mood,
-                          List<ScheduleView> schedule, List<TalkingPoint> talkingPoints) {
+                          List<ScheduleView> schedule, DayPlanView dayPlan, List<TalkingPoint> talkingPoints) {
     }
 
     public record ScheduleView(int startHour, int endHour, String place, String activity) {
+    }
+
+    /** CONTRACT-M7.md §1：{@code schedule} 之外新增的字段，{@code schedule} 本身原样保留。 */
+    public record DayPlanView(LocalDate date, List<ErrandView> errands, List<LegView> legs) {
+    }
+
+    public record ErrandView(String place, String activity, int startMinute, int endMinute, int priority,
+                             String origin) {
+    }
+
+    public record LegView(String fromPlace, String toPlace, int departMinute, int arriveMinute) {
     }
 
     public record MoodView(double valence, double energy) {
@@ -892,7 +1065,7 @@ public class TownSocietyService {
     }
 
     private record NpcRow(String npcCode, String displayName, int layer, String sprite, String dimension,
-                          double shareDrive, double curiosity, String interests, String quirks) {
+                          double shareDrive, double curiosity, String interests, String quirks, String rhythm) {
     }
 
     private record RegardRow(String aRef, String bRef, double regard, String regardKind) {

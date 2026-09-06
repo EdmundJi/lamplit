@@ -312,9 +312,9 @@ class TownSocialSimTest {
     @Test
     void simulateIsDeterministicForTheSameSeed() {
         List<Encounter> encounters = List.of(
-            new Encounter("A", "B", "plaza", 9),
-            new Encounter("B", "C", "cafe", 12),
-            new Encounter("A", "C", "park", 15)
+            new Encounter("A", "B", "plaza", 9, TownSocialSim.EncounterType.CO_LOCATED),
+            new Encounter("B", "C", "cafe", 12, TownSocialSim.EncounterType.CO_LOCATED),
+            new Encounter("A", "C", "park", 15, TownSocialSim.EncounterType.CO_LOCATED)
         );
         Map<String, Persona> personas = Map.of(
             "A", persona("A", 0.7, 0.4, interests(0.3, 0.2, 0.2, 0.2, 0.1), Set.of("GOSSIP_HUB")),
@@ -337,8 +337,8 @@ class TownSocialSimTest {
     @Test
     void listenerNeverReceivesTheSameFactTwice() {
         List<Encounter> encounters = List.of(
-            new Encounter("A", "B", "plaza", 9),
-            new Encounter("A", "B", "plaza", 10)
+            new Encounter("A", "B", "plaza", 9, TownSocialSim.EncounterType.CO_LOCATED),
+            new Encounter("A", "B", "plaza", 10, TownSocialSim.EncounterType.CO_LOCATED)
         );
         Map<String, Persona> personas = twoPersonTown();
         java.util.function.BiFunction<String, String, Bond> bonds = (a, b) -> guaranteedRelayBond();
@@ -356,7 +356,7 @@ class TownSocialSimTest {
 
     @Test
     void hopsIsAlwaysSpeakerHopsPlusOne() {
-        List<Encounter> encounters = List.of(new Encounter("A", "B", "plaza", 9));
+        List<Encounter> encounters = List.of(new Encounter("A", "B", "plaza", 9, TownSocialSim.EncounterType.CO_LOCATED));
         Map<String, Persona> personas = twoPersonTown();
         java.util.function.BiFunction<String, String, Bond> bonds = (a, b) -> guaranteedRelayBond();
         java.util.function.Function<String, List<RelayCandidate>> known = npc -> "A".equals(npc)
@@ -397,5 +397,43 @@ class TownSocialSimTest {
                 assertThat(after.affinity()).isBetween(0.0, 1.0);
             }
         }
+    }
+
+    // ---------------------------------------------------------------- encounter type weight (M7-5)
+
+    @Test
+    void coLocatedOutranksEnRouteOutranksPassingWithEverythingElseFixed() {
+        // CONTRACT-M7.md §3: 其余条件相同时 P(CO_LOCATED) >= P(EN_ROUTE) >= P(PASSING)。
+        Persona speaker = persona("A", 0.6, 0.6, interests(0.2, 0.2, 0.2, 0.2, 0.2), Set.of("GOSSIP_HUB"));
+        Persona listener = persona("B", 0.6, 0.6, interests(0.2, 0.2, 0.2, 0.2, 0.2), Set.of());
+        Bond bond = new Bond(0.6, 0.0, 0, null);
+        RelayCandidate c = candidate(0.6);
+
+        double coLocated = TownSocialSim.relayProbability(c, speaker, listener, bond, 0.5,
+            TownSocialSim.EncounterType.CO_LOCATED);
+        double enRoute = TownSocialSim.relayProbability(c, speaker, listener, bond, 0.5,
+            TownSocialSim.EncounterType.EN_ROUTE);
+        double passing = TownSocialSim.relayProbability(c, speaker, listener, bond, 0.5,
+            TownSocialSim.EncounterType.PASSING);
+
+        assertThat(coLocated).isGreaterThanOrEqualTo(enRoute);
+        assertThat(enRoute).isGreaterThanOrEqualTo(passing);
+        assertThat(passing).isGreaterThanOrEqualTo(0.0);
+    }
+
+    @Test
+    void fiveArgOverloadIsEquivalentToCoLocated() {
+        // 没有指定相遇类型的旧签名（仍被其余单测大量使用）必须等价于"同处停留"——
+        // 否则新增权重参数会悄悄改变所有既有调用点的语义。
+        Persona speaker = persona("A", 0.4, 0.4, interests(0.2, 0.2, 0.2, 0.2, 0.2), Set.of());
+        Persona listener = persona("B", 0.4, 0.4, interests(0.2, 0.2, 0.2, 0.2, 0.2), Set.of());
+        Bond bond = new Bond(0.4, 0.0, 0, null);
+        RelayCandidate c = candidate(0.4);
+
+        double viaOldOverload = TownSocialSim.relayProbability(c, speaker, listener, bond, 0.5);
+        double viaExplicitType = TownSocialSim.relayProbability(c, speaker, listener, bond, 0.5,
+            TownSocialSim.EncounterType.CO_LOCATED);
+
+        assertThat(viaOldOverload).isEqualTo(viaExplicitType);
     }
 }

@@ -112,6 +112,18 @@ public class TownController {
         return envelope(view, request);
     }
 
+    /**
+     * 护栏 A 的每日预算持久化：谁调这个接口谁消费一次共享额度，返回消费后的
+     * {@code {limit, used}}。超额时 {@code used} 不再往上涨——这是幂等的饱和状态，不是错误。
+     */
+    @PostMapping("/initiative/consume")
+    ApiEnvelope<TownSocietyService.InitiativeBudgetView> consumeInitiative(
+        @AuthenticationPrincipal CurrentUser user,
+        HttpServletRequest request
+    ) {
+        return envelope(society.consumeInitiative(user.id()), request);
+    }
+
     @GetMapping("/reflection/latest")
     ApiEnvelope<TownReflectionService.ReflectionView> latestReflection(
         @AuthenticationPrincipal CurrentUser user,

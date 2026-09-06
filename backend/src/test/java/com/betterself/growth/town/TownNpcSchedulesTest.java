@@ -111,22 +111,6 @@ class TownNpcSchedulesTest {
         }
     }
 
-    @Test
-    void twoPeopleInTheSamePlaceAtTheSameTimeMeetButNotAtHome() {
-        Map<String, List<TownNpcSchedules.Slot>> schedules = new LinkedHashMap<>();
-        for (TownNpcCatalog.Archetype archetype : TownNpcCatalog.all()) {
-            schedules.put(archetype.code(),
-                TownNpcSchedules.forNpc(archetype.code(), archetype.layer(), archetype.interests(), DAY));
-        }
-
-        List<TownSocialSim.Encounter> encounters = TownNpcSchedules.encounters(schedules);
-
-        assertThat(encounters).isNotEmpty();
-        assertThat(encounters).allSatisfy(encounter -> {
-            assertThat(encounter.place()).isNotEqualTo(TownNpcSchedules.HOME);
-            assertThat(encounter.a()).isNotEqualTo(encounter.b());
-        });
-        // 同一份输入两次必须给出同一串相遇，否则传播链就不可复现。
-        assertThat(TownNpcSchedules.encounters(schedules)).isEqualTo(encounters);
-    }
+    // 相遇判定（同处停留 / 路上相遇 / 擦肩）M7 起改由 TownDayPlan.encounters 推出，
+    // 不再从这里的整点时段推——见 TownDayPlanTest。
 }
