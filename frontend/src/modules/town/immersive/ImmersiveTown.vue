@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import CompanionControls from '../CompanionControls.vue'
+import { useTownCompanionLife } from '../companion-life'
 import type { ConversationNotice } from '../npc-conversation'
 import { useTownMailSignal } from '../town-mail-signal'
 import ResidentMoment from '../ResidentMoment.vue'
@@ -147,6 +149,8 @@ const insideAcademy = ref(false)
 const menuDismissed = ref(true)
 
 let game: TownGame | null = null
+function interactHomeObject(id: 'journal' | 'mailbox' | 'leash') { game?.interactHomeObject?.(id) }
+function interactCompanion() { game?.interactCompanion?.() }
 let controls: TownControls | null = null
 let mountSequence = 0
 let residentSignature = ''
@@ -154,6 +158,7 @@ let leavingImmersive = false
 
 const residents = computed(() => store.model?.residents ?? [])
 const self = computed(() => residents.value.find(item => item.isSelf) ?? null)
+const companionLife = useTownCompanionLife({ userId: computed(() => self.value?.publicId ?? ''), room: activeRoom, game: () => game, openPanel: key => immersive.openPanel(key), feedback: text => feedback.value?.handle({ type: 'toast', text }) })
 const currentAnchor = computed(() => anchorForSelection(selection.value, self.value?.publicId ?? null))
 const anyPanelOpen = computed(() => immersive.windows.length > 0 || selectedNpc.value !== null)
 
@@ -195,6 +200,9 @@ async function mountGame() {
     game = null
     const created = await createTownGame(canvas.value, store.model, {
       onConversationChange,
+      onCompanionModeChange: companionLife.onModeChange,
+      onCompanionPlaceChange: companionLife.onPlaceChange,
+      onCompanionInteract: companionLife.onInteract,
       onTimeChange: isNight => { night.value = isNight },
       onSelect: value => { selection.value = value },
       onObservationChange: enabled => { observing.value = enabled },
@@ -212,6 +220,7 @@ async function mountGame() {
     })
     if (sequence !== mountSequence) { created.destroy(); return }
     game = created
+    companionLife.sync()
     game.setLetterUnread?.(mailSignal.unreadCount)
     game.setRun(immersive.runMode)
     // 初次进入默认静音；模型重建时保留玩家已选声音和手动晨昏预览。
@@ -231,7 +240,8 @@ async function mountGame() {
 }
 
 function handleWorldEvent(event: WorldEvent) {
-  if (event.type === 'mail-count') mailSignal.unreadCount = event.count
+  if (event.type === 'companion') { void companionLife.act(event.action) }
+  else if (event.type === 'mail-count') mailSignal.unreadCount = event.count
   else if (event.type === 'celebrate') { const id = residents.value.find(r => r.publicId === event.publicId)?.publicId ?? self.value?.publicId; if (id) { game?.celebrate(id); feedback.value?.handle({ ...event, publicId: id }, residentName(id)) } }
   else if (event.type === 'travel') visitPlace(event.place)
   else if (event.type === 'focus') { game?.focus(event.publicId); feedback.value?.handle(event) }
@@ -473,6 +483,14 @@ onBeforeUnmount(() => {
     <p v-else-if="engineError" class="immersive-status immersive-status--error" role="alert">画面暂时加载不出来，下面的功能仍然能用。</p>
 
     <WorldFeedback ref="feedback" />
+    <div v-if="activeRoom === 'home' && !openWindows.length" class="home-object-shortcuts" aria-label="家中的物品" @pointerdown.stop @keydown.stop>
+      <button type="button" @click="interactHomeObject('journal')">翻手账</button>
+      <button type="button" @click="interactHomeObject('mailbox')">取信</button>
+      <button type="button" @click="interactHomeObject('leash')">{{ companionLife.companion.pet ? '拿牵引绳' : '选择伙伴' }}</button>
+    </div>
+    <div v-if="!activeRoom && !openWindows.length && !selectedNpc && !observing && companionLife.companion.mode !== 'home'" class="town-companion-hud">
+      <CompanionControls :in-park="companionLife.inPark.value" :in-home="false" @home="visitPlace('home')" @choose="immersive.openPanel('partners')" @walk="companionLife.act('walk')" @stroke="interactCompanion" />
+    </div>
     <div v-if="conversationNotice?.phase === 'leaving'" class="travel-status" role="status">{{ conversationNotice.name }}：{{ conversationNotice.reason }}</div>
     <div v-if="showEvents" class="immersive-events"><TownEventsBoard @close="showEvents = false" @visit="visitPlace" /></div>
     <div v-if="travel?.phase === 'walking'" class="travel-status" role="status">正在走向{{ travel.label }}<button type="button" @click="stopTravel">停下 · Esc</button></div>
@@ -637,4 +655,8 @@ onBeforeUnmount(() => {
 }
 @media (prefers-reduced-motion: reduce) { .immersive-town * { transition: none !important; animation: none !important; } }
 .scenic-restore { position: absolute; right: 18px; bottom: 16px; z-index: 60; border: 1px solid #ffffff4d; background: #24372ce8; color: #f8efda; padding: 8px 12px; min-height: 34px; font-size: 11px; box-shadow: 0 4px 16px #142d2266; }
+.home-object-shortcuts { position: absolute; z-index: 8; right: 18px; bottom: 80px; display: flex; gap: 5px; padding: 7px; background: #f8f0dfed; border: 1px solid #cbbd9f; border-radius: 10px; }
+.home-object-shortcuts button { color: #3f5e49; background: transparent; border: 0; padding: 8px 10px; cursor: pointer; font-size: 12px; }
+.town-companion-hud { position: absolute; z-index: 8; right: 18px; bottom: 88px; }
+@media (max-width: 520px) { .town-companion-hud { right: 12px; bottom: 155px; } .home-object-shortcuts { right: 12px; bottom: 72px; max-width: calc(100% - 24px); } }
 </style>

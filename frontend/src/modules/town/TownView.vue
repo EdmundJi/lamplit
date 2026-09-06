@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import CompanionControls from './CompanionControls.vue'
+import { useTownCompanionLife } from './companion-life'
 import type { ConversationNotice } from './npc-conversation'
 import { useTownMailSignal } from './town-mail-signal'
 import ResidentMoment from './ResidentMoment.vue'
@@ -125,6 +127,8 @@ const observing = ref(false)
 // instead of leaving the panel blank — reset whenever the selection changes so a fresh open retries.
 const npcDialogueError = ref(false)
 let game: TownGame | null = null
+function interactHomeObject(id: 'journal' | 'mailbox' | 'leash') { game?.interactHomeObject?.(id) }
+function interactCompanion() { game?.interactCompanion?.() }
 let controls: TownControls | null = null
 let mountSequence = 0
 let residentSignature = ''
@@ -136,6 +140,7 @@ function residentKey(model: TownModel | null) {
 const residents = computed(() => store.model?.residents ?? [])
 const selected = computed(() => residents.value.find(item => item.publicId === selection.value) ?? null)
 const self = computed(() => residents.value.find(item => item.isSelf) ?? null)
+const companionLife = useTownCompanionLife({ userId: computed(() => self.value?.publicId ?? ''), room: activeRoom, game: () => game, openPanel: openPanel, feedback: text => { feedback.value = text } })
 const awakeCount = computed(() => residents.value.filter(item => activityFor(item) !== 'resting').length)
 const studying = computed(() => residents.value.filter(item => activityFor(item) === 'done'))
 const unread = computed(() => store.model?.unread ?? 0)
@@ -174,6 +179,9 @@ async function mountGame() {
       onTravelChange: status => { travelStatus.value = status },
       onNearbyChange: value => { nearby.value = value },
       onRoomChange: room => { activeRoom.value = room; insideAcademy.value = room === 'academy'; if (room) { selection.value = null; activePanel.value = null; closePanel() } },
+      onCompanionModeChange: companionLife.onModeChange,
+      onCompanionPlaceChange: companionLife.onPlaceChange,
+      onCompanionInteract: companionLife.onInteract,
       onTimeChange: value => { night.value = value },
       onAcademyChange: inside => { insideAcademy.value = inside },
       onPresenceReport: payload => { void store.reportPresence(payload) },
@@ -185,6 +193,7 @@ async function mountGame() {
     })
     if (sequence !== mountSequence) { created.destroy(); return }
     game = created
+    companionLife.sync()
     game.setLetterUnread?.(mailSignal.unreadCount)
     game.applyEvents?.(eventsStore.events)
     if (conversationCode.value) game?.beginConversation?.(conversationCode.value)
@@ -205,7 +214,8 @@ async function mountGame() {
 registerBuiltinWorldActions()
 const worldBridge: WorldBridge = {
   emit(event) {
-    if (event.type === 'mail-count') mailSignal.unreadCount = event.count
+    if (event.type === 'companion') { void companionLife.act(event.action) }
+    else if (event.type === 'mail-count') mailSignal.unreadCount = event.count
     else if (event.type === 'open') openPanel(event.panel)
     else if (event.type === 'close') closePanel()
     else if (event.type === 'celebrate') { const id = residents.value.find(r => r.publicId === event.publicId)?.publicId ?? self.value?.publicId; if (id) game?.celebrate(id); void store.load() }
@@ -426,11 +436,19 @@ onBeforeUnmount(() => {
     <p v-if="conversationNotice?.phase === 'leaving'" class="town-conversation-departure" role="status">{{ conversationNotice.name }}：{{ conversationNotice.reason }}</p>
     <p v-if="feedback" class="muted" role="status">{{ feedback }}</p>
     <div class="town-stage">
+      <div v-if="activeRoom === 'home'" class="home-object-shortcuts" aria-label="家中的物品" @pointerdown.stop @keydown.stop>
+        <button type="button" @click="interactHomeObject('journal')">翻手账</button>
+        <button type="button" @click="interactHomeObject('mailbox')">取信</button>
+        <button type="button" @click="interactHomeObject('leash')">{{ companionLife.companion.pet ? '拿牵引绳' : '选择伙伴' }}</button>
+      </div>
+      <div v-if="!activeRoom && companionLife.companion.mode !== 'home' && !panelVisible" class="town-companion-hud">
+        <CompanionControls :in-park="companionLife.inPark.value" :in-home="false" @home="travelTo('home')" @choose="openPanel('partners')" @walk="companionLife.act('walk')" @stroke="interactCompanion" />
+      </div>
       <div ref="canvas" class="town-canvas" data-testid="town-canvas" />
       <div v-if="store.loading && !store.model" class="town-loading" role="status">正在把大家的房子搬进小镇…</div>
 
       <aside v-if="panelVisible" id="town-info-panel" class="town-panel" :class="{ 'has-dialogue': !activePanel && isDialogueOpen, 'has-feature': activePanel, 'has-core-feature': activePanel && ['today', 'partners', 'ai'].includes(activePanel) }" aria-label="小镇面板" @pointerdown.stop @keydown.esc.stop="closePanel" @keydown.stop>
-        <div class="town-panel-bar"><button v-if="activePanel === 'friends'" class="secondary" type="button" @click="select('npc:postman-chat')">和邮递员聊聊</button><span>{{ eventsOpen ? '小镇活动' : panelDef?.title ?? '小镇见闻' }}</span><button class="town-panel-close" type="button" aria-label="关闭面板" @click="closePanel"><X :size="16" /></button></div>
+        <div class="town-panel-bar"><button v-if="activePanel === 'friends'" class="secondary" type="button" @click="select('npc:postman-chat')">和邮递员聊聊</button><span>{{ eventsOpen ? '小镇活动' : panelDef?.objectTitle ?? panelDef?.title ?? '小镇见闻' }}</span><button class="town-panel-close" type="button" aria-label="关闭面板" @click="closePanel"><X :size="16" /></button></div>
         <div class="town-panel-content">
         <TownEventsBoard v-if="eventsOpen" @close="closePanel" @visit="travelTo" />
         <component :is="panelBodies[activePanel]" v-else-if="activePanel" :key="activePanel" />
@@ -562,4 +580,8 @@ onBeforeUnmount(() => {
   .town-panel, .town-panel.has-dialogue, .town-panel.has-feature { top: 12px; bottom: auto; left: 12px; right: 12px; width: calc(100% - 24px); max-height: calc(100% - 76px); }
   .town-hint { font-size: 10px; border-radius: 8px; }
 }
+.home-object-shortcuts { position: absolute; z-index: 8; right: 18px; bottom: 80px; display: flex; gap: 5px; padding: 7px; background: #f8f0dfed; border: 1px solid #cbbd9f; border-radius: 10px; }
+.home-object-shortcuts button { color: #3f5e49; background: transparent; border: 0; padding: 8px 10px; cursor: pointer; font-size: 12px; }
+.town-companion-hud { position: absolute; z-index: 8; right: 18px; bottom: 88px; }
+@media (max-width: 520px) { .town-companion-hud { right: 12px; bottom: 155px; } .home-object-shortcuts { right: 12px; bottom: 72px; max-width: calc(100% - 24px); } }
 </style>

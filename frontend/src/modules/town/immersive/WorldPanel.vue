@@ -56,7 +56,7 @@ onBeforeUnmount(() => { window.removeEventListener('pointermove', onPointerMove)
   <section
     ref="panelEl"
     class="world-panel world-window"
-    :class="`is-${def.size}`"
+    :class="[`is-${def.size}`, def.objectSurface ? `object-${def.objectSurface}` : null]"
     :style="{ left: `${x}px`, top: `${y}px`, zIndex: z }"
     role="dialog"
     :aria-label="def.title"
@@ -67,11 +67,11 @@ onBeforeUnmount(() => { window.removeEventListener('pointermove', onPointerMove)
     <header class="world-panel-head" @pointerdown="onHeaderPointerDown">
       <component :is="def.icon" :size="18" aria-hidden="true" />
       <div class="world-panel-titles">
-        <strong>{{ def.title }}</strong>
+        <strong>{{ def.objectTitle ?? def.title }}</strong>
         <small>{{ def.subtitle }}</small>
       </div>
       <button class="icon-button" type="button" aria-label="最小化" @click="emit('minimize')"><Minus :size="15" /></button>
-      <button class="icon-button" type="button" aria-label="关闭" @click="emit('close')"><X :size="15" /></button>
+      <button class="icon-button" type="button" :title="def.objectSurface === 'journal' ? '合上手账' : def.objectSurface === 'mailbox' ? '收好信件' : '关闭'" aria-label="关闭" @click="emit('close')"><X :size="15" /></button>
     </header>
     <div class="world-panel-body">
       <component :is="body" />
@@ -98,4 +98,9 @@ onBeforeUnmount(() => { window.removeEventListener('pointermove', onPointerMove)
   .world-window.is-compact,
   .world-window.is-wide { left: 0 !important; right: 0; bottom: 0; top: auto !important; width: 100%; max-height: 72vh; border-radius: var(--radius-panel) var(--radius-panel) 0 0; }
 }
+.world-window.object-journal { background: #fff9ec; border: 1px solid #cdbf9f; border-left: 9px solid #798065; border-radius: 5px 15px 15px 5px; }
+.object-journal .world-panel-head { background: #f4ead7; border-bottom: 1px solid #d7cbb5; }
+.object-journal .world-panel-body { background: linear-gradient(90deg, #ddd1b529 0, transparent 22px), #fff9ec; }
+.world-window.object-mailbox { background: #fffaf0; border: 1px solid #c5bda9; border-radius: 8px; }
+.object-mailbox .world-panel-head { background: #eef0e4; border-bottom: 3px solid #a5af91; }
 </style>

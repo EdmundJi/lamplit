@@ -19,6 +19,8 @@ import type { WorldPanelDef } from '../panel.types'
 export const worldPanels: WorldPanelDef[] = [
   {
     key: 'today',
+    objectSurface: 'journal',
+    objectTitle: '桌边的手账',
     title: '今天',
     subtitle: '先看看今天要做的这一件事',
     icon: CalendarCheck,
@@ -60,6 +62,8 @@ export const worldPanels: WorldPanelDef[] = [
   },
   {
     key: 'friends',
+    objectSurface: 'mailbox',
+    objectTitle: '门边的信箱',
     title: '信箱与好友',
     subtitle: '收长信、短笺和请柬，也和好友说说话',
     icon: MessageCircle,
