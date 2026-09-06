@@ -34,12 +34,21 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
       if (document.hidden)
           runtime.presenceReporter.flush();
       runtime.sceneRef?.atmosphere?.setVisible(!document.hidden);
-      runtime.sceneRef?.facilities?.setMuted(document.hidden || Boolean(runtime.activeRoomKey));
+      runtime.sceneRef?.facilities?.setMuted(!runtime.soundEnabled || document.hidden || Boolean(runtime.activeRoomKey));
+      runtime.soundscape.setVisible(!document.hidden);
   };
   document.addEventListener('visibilitychange', visibilityHandler);
+  runtime.soundscape.setVisible(!document.hidden);
   return {
       setLetterUnread: count => { runtime.letterUnread = Math.max(0, count); runtime.sceneRef?.applyLetterUnread(); },
-      setNight: night => { runtime.desiredNight = night; runtime.sceneRef?.setNight(night); },
+      setNight: night => { runtime.desiredNight = night; runtime.sceneRef?.setNight(night); runtime.soundscape.refresh(); },
+      setAutomaticTime: () => { runtime.desiredNight = null; runtime.publishTime(); runtime.soundscape.refresh(); },
+      setSoundEnabled: enabled => {
+          runtime.soundEnabled = enabled;
+          runtime.soundscape.setEnabled(enabled);
+          runtime.sceneRef?.facilities?.setMuted(!enabled || document.hidden || Boolean(runtime.activeRoomKey));
+          if (enabled && !document.hidden && !runtime.activeRoomKey) runtime.sceneRef?.facilities?.unlockAudio();
+      },
       setRun: running => { runtime.desiredRun = running; runtime.sceneRef?.setRunMode(running); },
       focus: publicId => runtime.sceneRef?.focusOn(publicId),
       travelTo: place => runtime.sceneRef?.travelToPlace(place),
@@ -53,6 +62,7 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
       applyModel: nextModel => {
           runtime.latestModel = nextModel;
           runtime.serverOffsetMs = computeServerOffset(nextModel.serverTime);
+          runtime.soundscape.refresh();
           runtime.sceneRef?.atmosphere?.setWeather(weatherForDate(nextModel.localDate));
           runtime.sceneRef?.applyResidents(nextModel.residents);
       },
@@ -74,6 +84,7 @@ export async function createTownGame(container: HTMLElement, model: TownModel, h
           runtime.transitionGeneration++;
           runtime.roomRequest?.abort();
           runtime.presenceReporter.clear();
+          runtime.soundscape.destroy();
           document.removeEventListener('visibilitychange', visibilityHandler);
           runtime.sceneRef?.atmosphere?.destroy();
           const debugWindow = window as unknown as { __townScene?: TownSceneInstance };

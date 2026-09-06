@@ -35,10 +35,19 @@ export function minuteInZone(epochMs: number, zone: string): number {
   try {
     let formatter = clockFormatters.get(zone)
     if (!formatter) {
-      formatter = new Intl.DateTimeFormat('en-GB', { timeZone: zone, hourCycle: 'h23', hour: '2-digit', minute: '2-digit', second: '2-digit' })
+      formatter = new Intl.DateTimeFormat('en-GB', { timeZone: zone, hourCycle: 'h23', hour: '2-digit', minute: '2-digit', second: '2-digit', month: '2-digit' })
       clockFormatters.set(zone, formatter)
     }
     const fields = Object.fromEntries(formatter.formatToParts(epochMs).map(part => [part.type, part.value]))
     return Number(fields.hour) * 60 + Number(fields.minute) + Number(fields.second) / 60 + ((epochMs % 1000) + 1000) % 1000 / 60000
   } catch { const date = new Date(epochMs); return date.getHours() * 60 + date.getMinutes() + date.getSeconds() / 60 }
+}
+
+/** Visual previews never alter the authoritative NPC clock or the town calendar. */
+export function townTime(epochMs: number, zone: string, nightOverride: boolean | null = null): { minutes: number; month: number } {
+  const actualMinutes = minuteInZone(epochMs, zone)
+  let month = new Date(epochMs).getMonth() + 1
+  const formatter = clockFormatters.get(zone)
+  if (formatter) month = Number(formatter.formatToParts(epochMs).find(part => part.type === 'month')?.value) || month
+  return { minutes: nightOverride === null ? actualMinutes : nightOverride ? 22 * 60 : 12 * 60, month }
 }

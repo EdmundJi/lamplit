@@ -77,6 +77,7 @@ export function createRoomTransitions(runtime: TownRuntime) {
           const interiorScene = game.scene.add(key, createInteriorScene(runtime.Phaser, options), true, options);
           town.scene.sleep();
           runtime.activeRoomKey = key;
+          runtime.soundscape.setIndoor(true);
           runtime.academyEntered = roomId === 'academy';
           if (runtime.academyEntered)
               runtime.handlers.onAcademyChange?.(true);
@@ -90,7 +91,7 @@ export function createRoomTransitions(runtime: TownRuntime) {
       catch (error) {
           if (generation !== runtime.transitionGeneration)
               return;
-          town.facilities?.setMuted(document.hidden);
+          town.facilities?.setMuted(!runtime.soundEnabled || document.hidden);
           cam.fadeIn(SCENE_FADE_MS, 8, 10, 8); // 加载失败也要把镜头亮回来，不能留一片黑屏
           throw error;
       }

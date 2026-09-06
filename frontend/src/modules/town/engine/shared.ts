@@ -23,6 +23,8 @@ export type TownSelection = string | 'npc:assistant' | 'npc:postman' | 'academy'
 export type TownTravel = { place: string; label: string; phase: 'walking' | 'arrived' | 'blocked' }
 export type TownNearby = { id: string; label: string; action: string }
 export type TownHandlers = {
+  /** Actual rendered light state, including manual previews and the player timezone. */
+  onTimeChange?: (night: boolean) => void
   onConversationChange?: (notice: ConversationNotice | null) => void
   onObservationChange?: (enabled: boolean) => void
   onTravelChange?: (travel: TownTravel | null) => void
@@ -57,6 +59,10 @@ export type TownGame = {
   setInitiativeBudget: (budget: InitiativeBudget) => void
   setLetterUnread?: (count: number) => void
   setNight(night: boolean): void
+  /** Clear the visual day/night preview and resume the player’s timezone clock. */
+  setAutomaticTime(): void
+  /** Opt-in environmental sound, including the street record player. Defaults to false. */
+  setSoundEnabled(enabled: boolean): void
   /** Turns the self avatar's run mode on/off; holding Shift runs regardless of this toggle. */
   setRun(running: boolean): void
   focus(publicId: string): void

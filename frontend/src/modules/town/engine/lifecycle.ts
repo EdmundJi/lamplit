@@ -1,7 +1,8 @@
 import { RESIDENT_WALK_SPEED, RUN_ANIM_SCALE, dominantDirection, moveSpeed, stepToward, stepTowardPoint } from '../walkers'
 import { resolveMove } from '../collision'
 import type { Point } from '../collision'
-import { TownAtmosphere } from '../atmosphere'
+import { TownAtmosphere, approach, paletteForTime, seasonForMonth } from '../atmosphere'
+import type PhaserNs from 'phaser'
 import { weatherForDate } from '../world-life'
 import { type TownFacilityId } from '../town-facilities'
 import { ASSETS, BASELINE, WORLD_HEIGHT, ACADEMY_X, PLOT_PITCH, STREET_Y, SELF_OVERRIDE_MS, SELF_STUCK_MS, resolveNpcFrame, characterSheet, worldWidth } from './shared'
@@ -47,6 +48,7 @@ export const lifecycleMethods = {
       this.drawTownEvents();
       this.drawStreetFurniture(); // 在 buildCollisionWorld 之前绘制，收集碰撞数据
       this.drawLifeTerrace();
+      this.facilities?.setMuted(!runtime.soundEnabled || document.hidden);
       this.buildCollisionWorld(); // 现在包含家具碰撞
       this.drawParkStrip();
       this.drawWildlife();
@@ -58,8 +60,9 @@ export const lifecycleMethods = {
       if (runtime.townNpcRoster.length > 0)
           this.applyTownNpcs(runtime.townNpcRoster);
       this.loadLabourAnimations();
-      this.atmosphere = new TownAtmosphere({ worldWidth: runtime.width, worldHeight: WORLD_HEIGHT, groundY: BASELINE, now: () => { const date = new Date(Date.now() + runtime.serverOffsetMs); date.setHours(this.night ? 22 : 12, 0, 0, 0); return date.getTime(); } });
+      this.atmosphere = new TownAtmosphere({ worldWidth: runtime.width, worldHeight: WORLD_HEIGHT, groundY: BASELINE, townTime: () => runtime.environmentTime() });
       this.atmosphere.attach(this);
+      runtime.publishTime();
       for (let x = ACADEMY_X - 160; x < runtime.width - 96; x += PLOT_PITCH)
           this.atmosphere.registerLight({ id: `lamp-${x}`, x: x + 16, y: BASELINE - 54, kind: 'lamp', radius: 85, color: 0xe6ac65 });
       this.atmosphere.registerLight({ id: 'terrace-cafe-window', x: runtime.terraceOrigin.x - 36, y: BASELINE - 65, kind: 'window', radius: 180, color: 0xd8a565 });
@@ -71,8 +74,8 @@ export const lifecycleMethods = {
       this.atmosphere.setReducedMotion(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false);
       this.atmosphere.setVisible(!document.hidden);
       this.nightOverlay = this.add.graphics().fillStyle(0x101c4a, 1).fillRect(0, 0, runtime.width, WORLD_HEIGHT).setAlpha(0).setDepth(5000);
-      if (runtime.desiredNight)
-          this.setNight(true, true);
+      if (runtime.desiredNight !== null)
+          this.setNight(runtime.desiredNight, true);
       if (runtime.desiredRun)
           this.setRunMode(true);
       this.setupCamera();
@@ -94,7 +97,8 @@ export const lifecycleMethods = {
       this.scale.on('resize', this.handleViewportResize, this);
       this.events.once('shutdown', () => this.scale.off('resize', this.handleViewportResize, this));
       this.events.on('wake', () => {
-          this.facilities?.setMuted(document.hidden);
+          this.facilities?.setMuted(!runtime.soundEnabled || document.hidden);
+          runtime.soundscape.setIndoor(false);
           this.clockFrameAt = -1;
           for (const walker of this.walkers) {
               if (!walker.npc || !walker.dayPlan)
@@ -161,6 +165,14 @@ export const lifecycleMethods = {
   update(this: TownScene, _time: number, delta: number) {
       const runtime = this.runtime;
       this.atmosphere?.update(delta);
+      const environment = runtime.environmentTime();
+      const intensity = paletteForTime(environment.minutes, seasonForMonth(environment.month)).lightIntensity;
+      this.night = intensity >= .7;
+      runtime.publishTime();
+      for (const object of this.glows) {
+          const light = object as PhaserNs.GameObjects.Image;
+          light.setAlpha(approach(light.alpha, intensity * (light.getData('targetAlpha') ?? 1), delta, 900));
+      }
       const now = this.time.now;
       if (this.travel?.phase === 'walking' && this.travel.place.startsWith('facility:') && this.selfWalker)
           this.facilities?.reserve(this.travel.place.slice(9) as TownFacilityId, this.selfWalker.id);

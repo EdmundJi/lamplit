@@ -1,4 +1,7 @@
 import type PhaserNs from 'phaser'
+import { townTime, weatherForDate } from '../world-life'
+import { TownSoundscape } from '../soundscape'
+import { paletteForTime, seasonForMonth } from '../atmosphere'
 import type { Point } from '../collision'
 import type { TownModel, TownResident } from '../town.types'
 import type { TownNpcView, InitiativeBudget } from '../town-npc.types'
@@ -33,7 +36,11 @@ export class TownRuntime {
   scenicMode = false
   townEvents: TownEventView[] = []
   letterUnread = 0
-  desiredNight = false
+  desiredNight: boolean | null = null
+  soundEnabled = false
+  private publishedNight: boolean | null = null
+  private environmentCache: { key: string; time: ReturnType<typeof townTime> } | null = null
+  readonly soundscape: TownSoundscape
   desiredRun = false
   serverOffsetMs: number
   celebrationQueue: string[] = []
@@ -73,7 +80,22 @@ export class TownRuntime {
     this.groundMaxX = this.width - 80
     this.latestModel = model
     this.serverOffsetMs = computeServerOffset(model.serverTime)
+    this.soundscape = new TownSoundscape(() => ({ minutes: this.environmentTime().minutes, weather: weatherForDate(this.latestModel.localDate) }))
     this.presenceReporter = createPresenceReporter(payload => handlers.onPresenceReport?.(payload), 3000)
+  }
+
+  environmentTime() {
+    const epoch = Date.now() + this.serverOffsetMs
+    const zone = this.latestModel.residents.find(r => r.isSelf)?.timezone ?? 'Asia/Shanghai'
+    const key = `${Math.floor(epoch / 100)}:${zone}:${this.desiredNight}`
+    if (this.environmentCache?.key !== key) this.environmentCache = { key, time: townTime(epoch, zone, this.desiredNight) }
+    return this.environmentCache.time
+  }
+
+  publishTime() {
+    const time = this.environmentTime()
+    const night = paletteForTime(time.minutes, seasonForMonth(time.month)).lightIntensity >= .7
+    if (this.publishedNight !== night) { this.publishedNight = night; this.handlers.onTimeChange?.(night) }
   }
 
   inTerrace(x: number, y: number, margin = 0) {
