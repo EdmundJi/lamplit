@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '../modules/auth/auth.store'
 
 const routes = [
+  { path: '/town/demo', component: () => import('../modules/town/demo/CafeDemo.vue'), meta: { public: true, standaloneDemo: true } },
   { path: '/auth', component: () => import('../modules/auth/AuthView.vue'), meta: { public: true } },
   { path: '/desktop-pet', component: () => import('../modules/partners/DesktopPetWindow.vue') },
   { path: '/onboarding', component: () => import('../modules/onboarding/OnboardingView.vue') },
@@ -30,6 +31,7 @@ const routes = [
 
 export const router = createRouter({ history: createWebHistory(), routes })
 router.beforeEach(async to => {
+  if (to.meta.standaloneDemo) return
   const auth = useAuthStore()
   if (!auth.initialized) await auth.load()
   if (!to.meta.public && !auth.signedIn) return '/auth'
