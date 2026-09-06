@@ -1,3 +1,4 @@
+import { freshSocialLine } from '../social-pacing'
 import { resolveMove } from '../collision'
 import type PhaserNs from 'phaser'
 import { activityFor, hashString, whereShouldBe } from '../building-kit'
@@ -422,8 +423,9 @@ export const npcsMethods = {
 
   speakAmbientLine(this: TownScene, now: number) {
       const runtime = this.runtime;
-      if (now < this.nextAmbientLineAt)
+      if (this.conversation || now < this.nextAmbientLineAt)
           return;
+      this.nextAmbientLineAt = now + 30_000;
       const camera = this.cameras.main;
       const centerX = camera.getWorldPoint(camera.width / 2, camera.height / 2).x;
       // 只挑靠近画面中央的人：站在边上的人说话，气泡会被镜头切掉一半。
@@ -436,9 +438,8 @@ export const npcsMethods = {
           return;
       const walker = candidates[Math.floor(this.time.now / 997) % candidates.length];
       const points = walker.npc?.talkingPoints ?? [];
-      const point = points[Math.floor(this.time.now / 1471) % points.length];
-      this.saySomething(walker, point.text);
-      this.nextAmbientLineAt = now + 3200;
+      const text = freshSocialLine(runtime, walker.id, points.map(point => point.text));
+      if (text) this.saySomething(walker, text);
   },
 
   updateObservation(this: TownScene) {

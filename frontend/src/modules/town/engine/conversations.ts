@@ -1,3 +1,4 @@
+import { freshSocialLine, allowSocialEncounter } from '../social-pacing'
 import type PhaserNs from 'phaser'
 import { dominantDirection, registerGreet, shouldGreet } from '../walkers'
 import type { WalkDirection } from '../walkers'
@@ -97,7 +98,7 @@ export const conversationsMethods = {
   maybeInitiate(this: TownScene, walker: Walker, now: number) {
       const runtime = this.runtime;
       const npc = walker.npc;
-      if (!npc || !this.selfWalker)
+      if (!npc || !this.selfWalker || this.conversation || walker.speech)
           return;
       if ((encounters.get(this) ?? []).some(pair => pair.a === walker || pair.b === walker)) return;
       if (now < this.nextInitiativeAt)
@@ -107,12 +108,12 @@ export const conversationsMethods = {
       if (!canInitiate(runtime.initiativeBudget, npc.code))
           return;
       const lines = pointsToPlay(bubbleTierFor(npc.affinityToPlayer), npc.talkingPoints);
-      if (lines.length === 0)
-          return;
+      const text = freshSocialLine(runtime, walker.id, lines.map(line => line.text));
+      if (!text) return;
       runtime.initiativeBudget = consume(runtime.initiativeBudget, npc.code);
       runtime.handlers.onInitiativeSpent?.(npc.code);
-      this.nextInitiativeAt = now + 30000;
-      this.saySomething(walker, lines[0].text);
+      this.nextInitiativeAt = now + 180_000;
+      this.saySomething(walker, text);
   },
 
   beginConversation(this: TownScene, code: string) {
@@ -202,7 +203,8 @@ export const conversationsMethods = {
           if (phase === 'greet' || phase === 'reply') {
               for (const actor of [pair.a, pair.b]) if (actor.speech === pair.speech) { actor.speech?.destroy(); actor.speech = null; }
               const speaker = phase === 'greet' ? pair.a : pair.b;
-              this.saySomething(speaker, pair.lines[phase === 'greet' ? 0 : 1], phase === 'greet' ? pair.turnMs : pair.turnMs + 200);
+              const line = pair.lines[phase === 'greet' ? 0 : 1];
+              if (line) this.saySomething(speaker, line, phase === 'greet' ? pair.turnMs : pair.turnMs + 200);
               pair.speech = speaker.speech;
               if (pair.gesture?.posing) pair.gesture.actor.sprite.play(`${pair.gesture.actor.sheet}-idle-${pair.gesture.actor.facing}`, true);
               pair.gesture = { actor: speaker, start: now, posing: false };
@@ -246,11 +248,15 @@ export const conversationsMethods = {
       if (this.conversation?.walker === a || this.conversation?.walker === b || this.facilityNpcs.has(a) || this.facilityNpcs.has(b)) return;
       const distance = Math.hypot(a.sprite.x - b.sprite.x, a.sprite.y - b.sprite.y);
       if (distance < 32 || distance > 70) return;
-      registerGreet(this.greetCooldowns, a.id, b.id, now);
+      if (!allowSocialEncounter(this.runtime, a.id, b.id)) return;
+      registerGreet(this.greetCooldowns, a.id, b.id, now, 300_000);
       const tier = a.npc && b.npc ? peerBubbleTier(a.npc, b.npc) : 'low';
       const first = a.npc ? pointsToPlay(tier, a.npc.talkingPoints)[0]?.text : undefined;
       const second = b.npc ? pointsToPlay(tier, b.npc.talkingPoints)[0]?.text : undefined;
-      const lines: [string, string] = [first ?? '嗨，路上慢慢走。', second ?? '嗯，回头见。'];
+      const lines: [string, string] = [
+          freshSocialLine(this.runtime, a.id, first ? [first] : []) ?? '',
+          freshSocialLine(this.runtime, b.id, second ? [second] : []) ?? '',
+      ];
       const turnMs = Math.min(4200, Math.max(1300, Math.max(...lines.map(line => line.length)) * 95));
       const timeline = createSocialTimeline(now, turnMs);
       for (const [actor, other] of [[a, b], [b, a]] as const) {
