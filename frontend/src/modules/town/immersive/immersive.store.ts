@@ -30,6 +30,8 @@ export const useImmersiveStore = defineStore('town-immersive', {
     runMode: false,
     windows: [] as WorldWindow[],
     nextZ: 1,
+    /** M5-4：dock 默认收起。展开状态跟着 prefs 走，hydrate 时恢复。 */
+    dockCollapsed: true,
   }),
   getters: {
     isOpen: state => (key: WorldPanelKey) => state.windows.some(item => item.key === key),
@@ -46,6 +48,7 @@ export const useImmersiveStore = defineStore('town-immersive', {
       if (this.hydrated) return
       const prefs = loadWorldPrefs()
       this.runMode = prefs.runMode
+      this.dockCollapsed = prefs.dockCollapsed
       const known = new Set(panels.map(item => item.key))
       let index = 0
       for (const key of prefs.openPanels) {
@@ -109,6 +112,13 @@ export const useImmersiveStore = defineStore('town-immersive', {
         oldest.minimized = true
       }
     },
+    setDockCollapsed(collapsed: boolean) {
+      this.dockCollapsed = collapsed
+      this.persist()
+    },
+    toggleDock() {
+      this.setDockCollapsed(!this.dockCollapsed)
+    },
     setRunMode(enabled: boolean) {
       this.runMode = enabled
       this.persist()
@@ -116,7 +126,12 @@ export const useImmersiveStore = defineStore('town-immersive', {
     persist() {
       const positions: Record<string, { x: number; y: number; minimized?: boolean }> = {}
       for (const win of this.windows) positions[win.key] = { x: win.x, y: win.y, minimized: win.minimized }
-      saveWorldPrefs({ runMode: this.runMode, openPanels: this.windows.map(item => item.key), positions })
+      saveWorldPrefs({
+        runMode: this.runMode,
+        openPanels: this.windows.map(item => item.key),
+        positions,
+        dockCollapsed: this.dockCollapsed,
+      })
     },
   },
 })

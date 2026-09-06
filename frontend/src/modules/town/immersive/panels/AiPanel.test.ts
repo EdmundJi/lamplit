@@ -42,6 +42,46 @@ describe('AiPanel', () => {
     expect(wrapper.text()).toContain('先做一件小事就好')
   })
 
+  it('keeps sending in the same session across multiple turns', async () => {
+    api.post.mockResolvedValueOnce({ publicId: 'session-1' })
+    postSse.mockImplementation(async (_path, _body, onEvent) => {
+      onEvent({ name: 'delta', data: { text: '好的' } })
+    })
+    const wrapper = mount(AiPanel)
+    await flushPromises()
+
+    await wrapper.get('textarea').setValue('第一句')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    await wrapper.get('textarea').setValue('第二句')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+
+    // 只在没有会话时才建一次；第二轮沿用同一个 session,不是每条消息都开新对话。
+    expect(api.post).toHaveBeenCalledTimes(1)
+    expect(postSse).toHaveBeenNthCalledWith(2, '/ai/sessions/session-1/messages:stream', { message: '第二句' }, expect.any(Function), expect.any(AbortSignal))
+  })
+
+  it('can interrupt an in-flight reply without losing the session', async () => {
+    api.post.mockResolvedValueOnce({ publicId: 'session-1' })
+    postSse.mockImplementation((_path, _body, _onEvent, signal: AbortSignal) => new Promise((_resolve, reject) => {
+      signal.addEventListener('abort', () => reject(new DOMException('已中断', 'AbortError')))
+    }))
+    const wrapper = mount(AiPanel)
+    await flushPromises()
+
+    await wrapper.get('textarea').setValue('慢慢说')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+
+    const stopButton = wrapper.get('[aria-label="停止生成"]')
+    await stopButton.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[aria-label="停止生成"]').exists()).toBe(false)
+    expect(wrapper.find('.error').exists()).toBe(false)
+  })
+
   it('shows a readable message when the stream is interrupted by a quota error', async () => {
     api.post.mockResolvedValueOnce({ publicId: 'session-1' })
     const { SseRequestError } = await import('../../../../shared/api/sse')

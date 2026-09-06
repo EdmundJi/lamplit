@@ -147,18 +147,11 @@ describe('builtinWorldActions', () => {
   it('registers a distinctive set of world-level ids, including one open-panel action per anchored panel', () => {
     const ids = builtinWorldActions().map(a => a.id)
     expect(ids).toEqual(expect.arrayContaining([
-      'world.toggle-night',
-      'world.toggle-run',
-      'world.go-home',
-      'world.toggle-academy',
-      'world.refresh',
-      'world.open-panel:today',
-      'world.open-panel:ai',
-      'world.open-panel:friends',
-      'world.open-panel:insights',
+      'world.toggle-night', 'world.toggle-run', 'world.go-home', 'world.toggle-academy', 'world.refresh',
+      'world.open-panel:today', 'world.open-panel:ai', 'world.open-panel:friends', 'world.open-panel:insights',
     ]))
-    // goals/attributes/partners/profile/settings 在清单里没有 anchor，不生成"打开面板"能力。
-    expect(ids).not.toContain('world.open-panel:goals')
+    // M5-4 之后 9 个面板全部有 anchor，每个面板都会生成一个"打开 XX"的能力。
+    expect(ids.filter(id => id.startsWith('world.open-panel:'))).toHaveLength(9)
   })
 
   it('go-home is unavailable without a self resident, and available once there is one', () => {
@@ -208,5 +201,29 @@ describe('builtinWorldActions', () => {
     expect(openToday.anchors).toEqual(['home'])
     const result = openToday.run(stubContext()) as { events?: unknown[] }
     expect(result.events).toEqual([{ type: 'open', panel: 'today' }])
+  })
+
+  // M3-4: 书桌 / 成就墙 / 宠物窝——interior.scene.ts 点击对应家具/宠物时调用的正是这三个 id。
+  it('registers the home room\'s three interactive-furniture actions (M3-4)', () => {
+    const ids = builtinWorldActions().map(a => a.id)
+    expect(ids).toEqual(expect.arrayContaining(['home.open-desk', 'home.open-achievement-wall', 'home.open-pet-house']))
+  })
+
+  it('the desk opens the today panel', async () => {
+    const desk = builtinWorldActions().find(a => a.id === 'home.open-desk')!
+    const result = await desk.run(stubContext())
+    expect(result.events).toEqual([{ type: 'open', panel: 'today' }])
+  })
+
+  it('the achievement wall opens the insights panel', async () => {
+    const wall = builtinWorldActions().find(a => a.id === 'home.open-achievement-wall')!
+    const result = await wall.run(stubContext())
+    expect(result.events).toEqual([{ type: 'open', panel: 'insights' }])
+  })
+
+  it('the pet house opens the partners panel (where the existing Rive pet UI lives)', async () => {
+    const petHouse = builtinWorldActions().find(a => a.id === 'home.open-pet-house')!
+    const result = await petHouse.run(stubContext())
+    expect(result.events).toEqual([{ type: 'open', panel: 'partners' }])
   })
 })

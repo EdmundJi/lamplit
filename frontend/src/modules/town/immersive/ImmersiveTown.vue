@@ -7,7 +7,7 @@
  */
 import { computed, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { Film, Footprints, HelpCircle, Minimize2, Rabbit } from 'lucide-vue-next'
+import { ChevronDown, ChevronUp, Film, Footprints, Grid3x3, HelpCircle, Minimize2, Rabbit } from 'lucide-vue-next'
 import { onDataChanged } from '../../../shared/data-sync'
 import { useTownStore } from '../town.store'
 import { useTownNpcStore } from '../town-npc.store'
@@ -104,6 +104,10 @@ async function mountGame() {
       onAcademyChange: inside => { insideAcademy.value = inside },
       onPlayerMove: (x, y) => { playerPosition.value = { x, y } },
       onDistanceToGuide: distance => { distanceToGuide.value = distance },
+      // 室内点书桌/成就墙/宠物窝 → 走同一份世界能力注册表，而不是让场景自己知道该开哪个面板。
+      // 护栏 A：把这一次主动搭话记到服务端，再用权威额度校正引擎的乐观值。
+      onInitiativeSpent: () => { void townNpcStore.consumeInitiative().then(budget => game?.setInitiativeBudget(budget)) },
+      onInteriorInteract: (actionId, id) => { void worldBridge.run(actionId, id) },
     })
     if (sequence !== mountSequence) { created.destroy(); return }
     game = created
@@ -342,7 +346,23 @@ onBeforeUnmount(() => {
       </button>
     </div>
 
-    <nav class="immersive-dock" aria-label="小镇功能">
+    <!-- dock 默认收起（M5-4），所以这个把手必须常驻可见——否则收起后就再也打不开了。 -->
+    <div class="immersive-dock-handle">
+      <button
+        type="button"
+        class="secondary"
+        :aria-expanded="!immersive.dockCollapsed"
+        aria-controls="immersive-dock"
+        :title="immersive.dockCollapsed ? '展开功能栏' : '收起功能栏'"
+        @click="immersive.toggleDock()"
+      >
+        <component :is="immersive.dockCollapsed ? ChevronUp : ChevronDown" :size="14" />
+        <Grid3x3 :size="14" />
+        {{ immersive.dockCollapsed ? '功能' : '收起' }}
+      </button>
+    </div>
+
+    <nav v-if="!immersive.dockCollapsed" id="immersive-dock" class="immersive-dock" aria-label="小镇功能">
       <button
         v-for="panel in worldPanels"
         :key="panel.key"
@@ -356,6 +376,7 @@ onBeforeUnmount(() => {
         <span>{{ panel.title }}</span>
       </button>
     </nav>
+
   </section>
 </template>
 
@@ -371,7 +392,11 @@ onBeforeUnmount(() => {
 .run-toggle[aria-pressed='true'] { background: var(--sun); color: var(--forest-deep); border-color: transparent; }
 .immersive-minimized { position: relative; z-index: 6; display: flex; flex-wrap: wrap; gap: 8px; padding: 0 16px 8px; }
 .immersive-minimized button { font-size: 12px; padding: 0 12px; }
-.immersive-dock { position: relative; z-index: 6; margin-top: auto; display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); background: color-mix(in srgb, var(--forest-deep) 82%, transparent); backdrop-filter: blur(10px); }
+.immersive-dock-handle { position: relative; z-index: 6; margin-top: auto; display: flex; justify-content: center; padding: 6px 16px calc(6px + env(safe-area-inset-bottom)); }
+/* dock 展开时它自己带底部安全区内边距，把手就不用再留一份。 */
+.immersive-town:has(.immersive-dock) .immersive-dock-handle { padding-bottom: 6px; }
+.immersive-dock-handle button { gap: 4px; font-size: 12px; padding: 0 12px; }
+.immersive-dock { position: relative; z-index: 6; display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); background: color-mix(in srgb, var(--forest-deep) 82%, transparent); backdrop-filter: blur(10px); }
 .dock-button { display: flex; flex-direction: column; align-items: center; gap: 3px; min-width: 64px; min-height: var(--control); padding: 6px 8px; border: 1px solid transparent; border-radius: var(--radius); background: transparent; color: var(--nav-faint); font-size: 11px; }
 .dock-button:hover { background: color-mix(in srgb, #fff 10%, transparent); color: var(--on-forest); }
 .dock-button[aria-pressed='true'] { background: color-mix(in srgb, var(--sun) 22%, transparent); color: var(--sun); border-color: color-mix(in srgb, var(--sun) 40%, transparent); }

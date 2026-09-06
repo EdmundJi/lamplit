@@ -89,17 +89,33 @@ describe('ImmersiveTown', () => {
     return wrapper
   }
 
-  function dockButton(wrapper: Awaited<ReturnType<typeof mountShell>>, text: string) {
+  /** M5-4 之后 dock 默认收起，所以取按钮前得先把它展开——这正是真人要走的路径。 */
+  async function dockButton(wrapper: Awaited<ReturnType<typeof mountShell>>, text: string) {
+    if (!wrapper.find('.immersive-dock').exists()) {
+      await wrapper.find('.immersive-dock-handle button').trigger('click')
+    }
     const found = wrapper.findAll('.dock-button').find(button => button.text().includes(text))
     if (!found) throw new Error(`no dock button labelled "${text}"`)
     return found
   }
 
+  it('dock 默认收起，只留一个把手；点开才出现功能按钮（M5-4）', async () => {
+    const wrapper = await mountShell()
+    expect(wrapper.find('.immersive-dock').exists()).toBe(false)
+    expect(wrapper.findAll('.dock-button')).toHaveLength(0)
+
+    await wrapper.find('.immersive-dock-handle button').trigger('click')
+    expect(wrapper.find('.immersive-dock').exists()).toBe(true)
+    expect(wrapper.findAll('.dock-button').length).toBeGreaterThan(0)
+    // 必须卸载：外壳把 Escape 监听挂在 document 上，留着会去抢后面用例的按键。
+    wrapper.unmount()
+  })
+
   it('boots the engine and opens a panel from the dock without leaving the page', async () => {
     const wrapper = await mountShell()
     expect(engine.createTownGame).toHaveBeenCalled()
 
-    await dockButton(wrapper, '目标').trigger('click')
+    await (await dockButton(wrapper, '目标')).trigger('click')
     expect(wrapper.find('.world-panel').exists()).toBe(true)
     expect(wrapper.text()).toContain('目标')
     wrapper.unmount()
@@ -173,7 +189,7 @@ describe('ImmersiveTown', () => {
 
   it('Escape closes the topmost open window first, then exits immersive mode on the next press', async () => {
     const wrapper = await mountShell()
-    await dockButton(wrapper, '目标').trigger('click')
+    await (await dockButton(wrapper, '目标')).trigger('click')
     expect(wrapper.find('.world-panel').exists()).toBe(true)
 
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
@@ -259,7 +275,7 @@ describe('ImmersiveTown', () => {
 
   it('Escape closes the action menu first, ahead of panels and exiting immersive mode', async () => {
     const wrapper = await mountShell()
-    await dockButton(wrapper, '目标').trigger('click')
+    await (await dockButton(wrapper, '目标')).trigger('click')
     engine.handlers.onSelect?.('npc:assistant')
     await flushPromises()
     expect(wrapper.find('.world-action-menu').exists()).toBe(true)

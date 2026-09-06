@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { inject, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
-import { History, Loader2, Plus, Send } from 'lucide-vue-next'
+import { History, Plus, Send, Square } from 'lucide-vue-next'
 import { api } from '../../../../shared/api/client'
 import { postSse, SseRequestError } from '../../../../shared/api/sse'
 import MarkdownDocument from '../../../../shared/ui/MarkdownDocument.vue'
@@ -106,6 +106,11 @@ function reset() {
   error.value = ''
 }
 
+/** 只掐断这一次回复，会话和已有消息都留着——区别于「新会话」那种连历史一起清空的重来。 */
+function stop() {
+  controller?.abort()
+}
+
 function preview(item: SessionSummary) {
   const text = item.lastMessage?.trim()
   if (!text) return '还没有消息'
@@ -146,8 +151,14 @@ onBeforeUnmount(() => controller?.abort())
     <form class="ai-composer" @submit.prevent="send()">
       <label class="sr-only" for="ai-panel-input">给 AI 助手发消息</label>
       <textarea id="ai-panel-input" v-model="draft" maxlength="2000" rows="2" placeholder="描述你想推进的事情" :disabled="busy" @keydown.ctrl.enter="send()"></textarea>
-      <button class="primary icon-button" type="submit" :disabled="busy || !draft.trim()" aria-label="发送">
-        <Loader2 v-if="busy" :size="16" class="spinning" />
+      <button
+        class="primary icon-button"
+        :type="busy ? 'button' : 'submit'"
+        :disabled="!busy && !draft.trim()"
+        :aria-label="busy ? '停止生成' : '发送'"
+        @click="busy && stop()"
+      >
+        <Square v-if="busy" :size="14" />
         <Send v-else :size="16" />
       </button>
     </form>

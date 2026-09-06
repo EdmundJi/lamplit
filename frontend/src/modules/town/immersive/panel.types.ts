@@ -8,8 +8,10 @@ import type { Component, InjectionKey } from 'vue'
 export type WorldPanelKey =
   | 'today' | 'goals' | 'ai' | 'friends' | 'insights' | 'attributes' | 'partners' | 'profile' | 'settings'
 
-/** 小镇里可以「走过去」的锚点，与 town.engine.ts 的 TownSelection 对齐。 */
-export type WorldAnchor = 'home' | 'academy' | 'npc:assistant' | 'npc:postman' | 'gym' | 'cafe' | 'park'
+/** 小镇里可以「走过去」的锚点，与 town.engine.ts 的 TownSelection 对齐。
+ * plaza/street 目前引擎还产生不了这两个选中值（见 immersive.store.ts 的 anchorForSelection），
+ * 先把 9 个面板按地点语义分完，等引擎补上对应的可点击区域自然就会命中。 */
+export type WorldAnchor = 'home' | 'academy' | 'npc:assistant' | 'npc:postman' | 'gym' | 'cafe' | 'park' | 'plaza' | 'street'
 
 export type WorldPanelDef = {
   key: WorldPanelKey

@@ -1,5 +1,6 @@
 import type { Component } from 'vue'
-import { Footprints, GraduationCap, Home, Moon, RefreshCw } from 'lucide-vue-next'
+import { CalendarCheck, Footprints, GraduationCap, Home, Moon, PawPrint, RefreshCw, TrendingUp } from 'lucide-vue-next'
+import { PET_HOUSE_ACTION_ID } from '../interior.scene'
 import type { WorldAnchor, WorldEvent } from './panel.types'
 import type { WorldBridge } from './panel.types'
 import { worldPanels } from './panels/manifest'
@@ -242,6 +243,50 @@ function refreshAction(): WorldAction {
   }
 }
 
+// ---------------------------------------------------------------------------
+// 我的家 · 三件可交互物（M3-4）：书桌 / 成就墙 / 宠物窝。interior.scene.ts 点击对应家具时会调用
+// runWorldAction(这里的 id, ctx)——地图数据和场景本身都不知道"打开书桌"具体是什么，统一走这份
+// 注册表，和门/onExit 是同一个"数据只说做什么、这里才说怎么做"的分工。
+// ---------------------------------------------------------------------------
+
+function openDeskAction(): WorldAction {
+  return {
+    id: 'home.open-desk',
+    label: '打开书桌',
+    hint: '看看今天要做的这一件事',
+    icon: CalendarCheck,
+    domain: 'world',
+    anchors: ['home'],
+    run: () => ({ ok: true, events: [{ type: 'open', panel: 'today' }] }),
+  }
+}
+
+function openAchievementWallAction(): WorldAction {
+  return {
+    id: 'home.open-achievement-wall',
+    label: '看看成就墙',
+    hint: '这段时间的成长，都挂在这面墙上',
+    icon: TrendingUp,
+    domain: 'world',
+    anchors: ['home'],
+    run: () => ({ ok: true, events: [{ type: 'open', panel: 'insights' }] }),
+  }
+}
+
+/** id 从 interior.scene.ts 导入而不是重复写一遍字符串——那边的宠物窝家具/宠物本身点击后调用的
+ * 就是这同一个 id，两处不会因为改了一边忘了改另一边而悄悄错开。 */
+function openPetHouseAction(): WorldAction {
+  return {
+    id: PET_HOUSE_ACTION_ID,
+    label: '看看伙伴',
+    hint: '你的宠物窝在客厅角落',
+    icon: PawPrint,
+    domain: 'world',
+    anchors: ['home'],
+    run: () => ({ ok: true, events: [{ type: 'open', panel: 'partners' }] }),
+  }
+}
+
 /** 每个声明了 anchor 的面板生成一个"打开 XX"的能力，走到对应地点时能在动作菜单里手动重开
  * （面板自动开一次之后被关掉，这是重新打开它的入口）。没声明 anchor 的面板留给 dock 触达。 */
 function panelOpenActions(): WorldAction[] {
@@ -259,7 +304,11 @@ function panelOpenActions(): WorldAction[] {
 }
 
 export function builtinWorldActions(): WorldAction[] {
-  return [toggleNightAction(), toggleRunAction(), goHomeAction(), toggleAcademyAction(), refreshAction(), ...panelOpenActions()]
+  return [
+    toggleNightAction(), toggleRunAction(), goHomeAction(), toggleAcademyAction(), refreshAction(),
+    openDeskAction(), openAchievementWallAction(), openPetHouseAction(),
+    ...panelOpenActions(),
+  ]
 }
 
 /** 外壳在挂载时调用一次即可；重复调用是幂等的（同 id 覆盖）。 */

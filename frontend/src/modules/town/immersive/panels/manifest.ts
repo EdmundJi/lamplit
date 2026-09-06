@@ -33,6 +33,8 @@ export const worldPanels: WorldPanelDef[] = [
     icon: Target,
     loader: () => import('./GoalsPanel.vue'),
     size: 'compact',
+    // 咖啡馆：定方向这件事更像找人聊聊、理一理，不是在健身房或学院里做的事。
+    anchor: 'cafe',
     fullPage: '/goals',
   },
   {
@@ -72,6 +74,8 @@ export const worldPanels: WorldPanelDef[] = [
     icon: Radar,
     loader: () => import('./AttributesPanel.vue'),
     size: 'compact',
+    // 健身房：五维度里最直观能对上号的地点，走到这儿看一眼自己的雷达图很自然。
+    anchor: 'gym',
     fullPage: '/attributes',
   },
   {
@@ -81,6 +85,8 @@ export const worldPanels: WorldPanelDef[] = [
     icon: PawPrint,
     loader: () => import('./PartnersPanel.vue'),
     size: 'compact',
+    // 公园：遛宠物本来就该在这儿，比绑回自己家更像「伙伴陪着你出门」。
+    anchor: 'park',
     fullPage: '/partners',
   },
   {
@@ -90,6 +96,8 @@ export const worldPanels: WorldPanelDef[] = [
     icon: UserRound,
     loader: () => import('./ProfilePanel.vue'),
     size: 'compact',
+    // 广场：等级、称号是公开给全镇看的荣誉，挂在镇中心的告示牌逻辑上说得通。
+    anchor: 'plaza',
     fullPage: '/profile',
   },
   {
@@ -99,6 +107,8 @@ export const worldPanels: WorldPanelDef[] = [
     icon: Settings,
     loader: () => import('./SettingsPanel.vue'),
     size: 'compact',
+    // 街道：调的是外观/通知/节奏这些贯穿全镇的东西，不属于任何一栋建筑，落在路上最中性。
+    anchor: 'street',
     fullPage: '/settings',
   },
 ]
