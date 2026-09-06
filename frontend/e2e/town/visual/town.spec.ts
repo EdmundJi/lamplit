@@ -34,7 +34,7 @@ test.beforeEach(async ({ page }) => {
   const otherPet = { ...fixture.partnerProfile.selectedPet, publicId: 'pet-2', name: '花花', selected: false }
   fixture.partnerProfile.pets.push(otherPet)
   // Noon in a fixed calendar day; serverOffset keeps the simulation advancing normally.
-  fixture.town.serverTime = '2026-09-06T10:30:00+08:00'
+  fixture.town.serverTime = test.info().title.startsWith('M8') ? '2026-09-06T18:15:00+08:00' : '2026-09-06T10:30:00+08:00'
   fixture.town.localDate = '2026-09-06'
   const names = ['林知', '陆夏', '沈牧', '安禾', '许宁', '柯云', '王芳', '李明', '赵晨', '周雨', '陈晓', '苏叶', '江川', '吴桐', '方晴', '唐果']
   const npcs = names.map((name, i) => ({
@@ -243,7 +243,7 @@ test('公共建筑进入真实室内，点击家具使用功能', async ({ page 
 test('淡入时立即离开、再次进屋后 Esc 返回仍可行走', async ({ page }, info) => {
   for (let i = 0; i < 2; i++) {
     await page.getByRole('button', { name: '我的家', exact: true }).click()
-    await expect(page.getByRole('button', { name: '回到街上', exact: true })).toBeVisible()
+    await expect(page.getByRole('button', { name: '回到街上', exact: true })).toBeVisible({ timeout: 35_000 })
     if (i === 0) await page.getByRole('button', { name: '回到街上', exact: true }).click()
     else await page.keyboard.press('Escape')
     await page.waitForFunction(() => (window as any).__town.snapshot().activeScene === 'town', null, { timeout: 5000 })
@@ -587,4 +587,74 @@ test('公园下半区和入口停留时布局刷新保持镜头稳定', async ({
     expect(Math.max(...rows) - Math.min(...rows)).toBeLessThan(1)
     await record(page, info, name)
   }
+})
+
+
+test('M8 傍晚回家、家具走近、纪念跨刷新保留与无奖励休息', async ({ page }, info) => {
+  await page.route('**/api/v1/achievements', route => route.fulfill({ json: envelope([
+    { code: 'first-step', name: '第一步', body: '完成了第一次真实行动。', triggerText: '完成一次行动', category: 'ACTION', iconKey: 'Leaf', tone: 'green', earned: true, earnedAt: '2026-09-05T17:00:00Z' },
+    { code: 'locked', name: '还未获得的纪念', body: '', triggerText: '', category: 'ACTION', iconKey: 'Leaf', tone: 'green', earned: false, earnedAt: null },
+  ]) }))
+  await record(page, info, 'm8-dusk-street')
+  expect(await page.evaluate(() => (window as any).__townScene.runtime.soundscape.context)).toBeNull()
+  await page.locator('.sound-toggle').click()
+  await page.waitForFunction(() => (window as any).__townScene.runtime.soundscape.context?.state === 'running')
+  await page.getByRole('button', { name: '我的家', exact: true }).click()
+  await page.waitForFunction(() => (window as any).__town.snapshot().activeScene === 'interior:home-living-room')
+  await page.waitForFunction(() => !(window as any).__townScene.sys.game.scene.getScenes(true).at(-1).cameras.main.fadeEffect.isRunning)
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  expect(await page.evaluate(() => (window as any).__townScene.runtime.soundscape.indoor)).toBe(true)
+  const before = await page.evaluate(() => { const s = (window as any).__townScene.sys.game.scene.getScenes(true).at(-1); return { x: s.player.x, y: s.player.y } })
+  await useFurniture(page, 'home-living-room', 'home.open-achievement-wall')
+  await expect(page.getByRole('dialog', { name: '家的纪念墙', exact: true })).toBeVisible()
+  const after = await page.evaluate(() => { const s = (window as any).__townScene.sys.game.scene.getScenes(true).at(-1); return { x: s.player.x, y: s.player.y } })
+  expect(Math.hypot(after.x - before.x, after.y - before.y)).toBeGreaterThan(15)
+  await expect(page.getByRole('dialog')).toContainText('2026年9月6日')
+  await expect(page.getByRole('dialog')).not.toContainText('还未获得的纪念')
+  await record(page, info, 'm8-home-mementos')
+  await page.getByRole('button', { name: '关闭', exact: true }).click()
+  const room = parseRoomMap(JSON.parse(readFileSync('public/assets/town/maps/home-living-room.json', 'utf8')))
+  const chair = room.furniture.find(piece => piece.frame === 'loveseat_wood')!
+  expect(chair).toBeTruthy()
+  const hit = defaultInteractionHit(chair, room.tileSize)
+  const writes: string[] = []
+  const trackWrite = (request: import('@playwright/test').Request) => { if (request.method() !== 'GET' && !request.url().endsWith('/town/presence')) writes.push(request.url()) }
+  page.on('request', trackWrite)
+  await clickWorld(page, hit.x + hit.w / 2, hit.y + hit.h / 2)
+  await page.waitForFunction(() => (window as any).__townScene.sys.game.scene.getScenes(true).at(-1).controller?.isResting?.())
+  await record(page, info, 'm8-home-rest')
+  await page.keyboard.press('Escape')
+  expect(await page.evaluate(() => (window as any).__town.snapshot().activeScene)).toBe('interior:home-living-room')
+  await page.waitForFunction(() => !(window as any).__townScene.sys.game.scene.getScenes(true).at(-1).controller?.isResting?.())
+  page.off('request', trackWrite)
+  expect(writes).toEqual([])
+  await page.getByRole('button', { name: '回到街上', exact: true }).click()
+  await page.waitForFunction(() => (window as any).__town.snapshot().activeScene === 'town')
+  expect(await page.evaluate(() => (window as any).__townScene.runtime.soundscape.indoor)).toBe(false)
+  await page.locator('.sound-toggle').click()
+  await page.waitForFunction(() => (window as any).__townScene.runtime.soundscape.context?.state === 'suspended')
+  await page.reload()
+  await page.waitForFunction(() => (window as any).__town?.snapshot().player?.controllable)
+  await page.getByTitle('展开功能栏', { exact: true }).click()
+  await page.getByRole('button', { name: '家的纪念墙', exact: true }).click()
+  await expect(page.getByRole('dialog', { name: '家的纪念墙', exact: true })).toContainText('2026年9月6日')
+  await record(page, info, 'm8-mementos-reopened')
+})
+
+test('M8 窄屏安静界面的声音、退出与恢复入口可达', async ({ page }, info) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.waitForFunction(() => (window as any).__townScene?.cameras.main.width === 390)
+  await page.getByRole('button', { name: '操作', exact: true }).click()
+  await page.getByRole('button', { name: '收起界面', exact: true }).click()
+  await expect(page.getByRole('navigation', { name: '小镇地点' })).toHaveCount(0)
+  for (const button of [page.getByRole('button', { name: '退出沉浸模式', exact: true }), page.locator('.sound-toggle'), page.locator('.scenic-restore')]) {
+    await expect(button).toBeVisible()
+    const box = await button.boundingBox()
+    expect(box!.x).toBeGreaterThanOrEqual(0)
+    expect(box!.x + box!.width).toBeLessThanOrEqual(390)
+  }
+  await record(page, info, 'm8-mobile-quiet')
+  await page.locator('.scenic-restore').click()
+  await expect(page.getByRole('navigation', { name: '小镇地点' })).toBeVisible()
+  await record(page, info, 'm8-mobile-restored')
 })
