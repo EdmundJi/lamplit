@@ -18,6 +18,7 @@ import { placeFor, verticalJitter, depthForY } from '../npc-placement'
 import type { TownLayout } from '../npc-placement'
 import { positionAt } from '../day-plan'
 import { api } from '../../../shared/api/client'
+import { earnedMementos, mementoDate } from '../mementos'
 import type { Achievement } from '../../achievements/achievement.types'
 import type { PartnerProfile } from '../../partners/partner.types'
 
@@ -348,17 +349,18 @@ export function isInteriorPetSpecies(value: string): value is InteriorPetSpecies
  * 请求失败都不能把"走到门口就能进屋"这件事卡住，拿不到就按"没有"处理（成就墙按 0 算，
  * 宠物窝空着）。这两份数据都不在 TownModel/TownResident 上，只能各自问一次接口。
  */
-export async function fetchHomeExtras(): Promise<{ homeAchievements: number; pet?: InteriorPet }> {
+export async function fetchHomeExtras(timezone = 'Asia/Shanghai'): Promise<{ homeAchievements: number; pet?: InteriorPet; memories: { title: string; detail?: string }[] }> {
   const [achievements, profile] = await Promise.all([
     api.get<Achievement[]>('/achievements').catch(() => [] as Achievement[]),
     api.get<PartnerProfile>('/partners/profile').catch(() => null),
   ])
   const homeAchievements = achievements.filter(item => item.earned).length
+  const memories = earnedMementos(achievements).slice(0, 3).map(item => ({ title: item.name, detail: mementoDate(item.earnedAt, timezone) }))
   const selected = profile?.selectedPet
   const pet: InteriorPet | undefined = selected && isInteriorPetSpecies(selected.speciesCode)
-    ? { id: selected.publicId, species: selected.speciesCode, breed: selected.breed }
+    ? { id: selected.publicId, name: selected.name, species: selected.speciesCode, breed: selected.breed }
     : undefined
-  return { homeAchievements, pet }
+  return { homeAchievements, pet, memories }
 }
 
 export function characterSheet(publicId: string) {

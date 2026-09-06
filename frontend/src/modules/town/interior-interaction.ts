@@ -47,3 +47,25 @@ export function restingFurniture(room: RoomMapData, occupiedSeats: Point[]): Roo
 export function canUseFromHere(room: RoomMapData, from: Point, target: Point): boolean {
   return Math.hypot(from.x - target.x, from.y - target.y) <= 8 && clearSegment(from, target, roomNavigation(room))
 }
+
+
+/** Clicking the visible body of a tall exercise machine means approaching its usable front,
+ * not choosing the geometrically closest point hidden behind its console. Undefined means
+ * ordinary floor; null means equipment was hit but no legal front approach exists. */
+export function equipmentApproach(
+  room: RoomMapData,
+  from: Point,
+  clicked: Point,
+  frameSize: (frame: string) => { width: number; height: number } | null,
+): Point | null | undefined {
+  const frames = new Set(['treadmill_1', 'gym_elliptical_1', 'gymbike_1', 'gym_strength_machine_1'])
+  const piece = [...room.furniture].reverse().find(item => {
+    if (!frames.has(item.frame) || item.interactive) return false
+    const size = frameSize(item.frame)
+    if (!size) return false
+    const width = item.displayWidth ?? size.width, height = item.displayHeight ?? size.height
+    const left = item.x - width * (item.originX ?? .5), top = item.y - height * (item.originY ?? 1)
+    return clicked.x >= left && clicked.x <= left + width && clicked.y >= top && clicked.y <= top + height
+  })
+  return piece ? furnitureApproach(room, from, piece, true) : undefined
+}

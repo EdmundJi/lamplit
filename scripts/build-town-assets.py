@@ -231,6 +231,9 @@ INTERIOR_PIECES = [
     ("chair_1", "classroom", (2, 24, 29, 69)),
     ("chair_2", "classroom", (98, 98, 121, 139)),
     ("desk_1", "classroom", (70, 98, 95, 141)),
+    # Verified front-facing desk; desk_1 is a legacy chair-shaped crop and remains
+    # untouched for old room references. Academy uses this 56x44 desk explicitly.
+    ("study_desk_front", "classroom", (338, 116, 393, 159)),
     ("bookshelf_1", "classroom", (0, 420, 95, 499)),
     ("bookshelf_2", "classroom", (196, 420, 249, 499)),
     ("bookshelf_3", "classroom", (384, 420, 415, 461)),
@@ -564,15 +567,20 @@ def _academy_study() -> dict:
         {"id": "plant-1", "frame": "plant_1", "x": 30, "y": wall_bottom + 40},
         {"id": "plant-2", "frame": "plant_2", "x": width - 30, "y": wall_bottom + 40},
         # Explicit low depth: a rug must never out-rank the desks/chairs/residents on top of it.
-        {"id": "rug", "frame": "rug_1", "x": door_x, "y": height - 60, "displayWidth": width - 260, "displayHeight": 190, "depth": 1},
+        {"id": "rug", "frame": "rug_pattern_1", "x": door_x, "y": height - 60, "displayWidth": width - 260, "displayHeight": 190, "depth": 1},
         {"id": "doormat", "frame": "doormat_1", "x": door_x, "y": height - 6, "displayWidth": 96},
-        {"id": "book-table", "frame": "desk_1", "x": 600, "y": 320},
+        {"id": "book-table", "frame": "study_desk_front", "x": 572, "y": 320},
     ]
     seats: list[dict] = []
+    furniture_collisions: list[dict] = [{"x": 544, "y": 296, "w": 56, "h": 24}]
     for y in rows_y:
         for x in columns_x:
             furniture.append({"id": f"chair-{x}-{y}", "frame": "chair_2", "x": x, "y": y, "depth": y - 1})
-            furniture.append({"id": f"desk-{x}-{y}", "frame": "desk_1", "x": x, "y": y + 34, "depth": y + 34})
+            furniture.append({"id": f"desk-{x}-{y}", "frame": "study_desk_front", "x": x, "y": y + 48, "depth": y + 48})
+            furniture_collisions.extend([
+                {"x": x - 28, "y": y + 24, "w": 56, "h": 24},
+                {"x": x - 10, "y": y - 6, "w": 20, "h": 10},
+            ])
             seats.append({"id": f"seat-{x}-{y}", "x": x, "y": y + 6})
     return {
         "id": "academy-study",
@@ -581,9 +589,9 @@ def _academy_study() -> dict:
         "cols": cols,
         "rows": rows,
         "backgroundColor": "#e7d9bd",
-        "spawn": {"x": door_x, "y": height - 64},
+        "spawn": {"x": door_x, "y": height - 48},
         "layers": {"floor": floor, "walls": walls},
-        "collisions": _perimeter_collisions(cols, rows, wall_rows),
+        "collisions": _perimeter_collisions(cols, rows, wall_rows) + furniture_collisions,
         "doors": [
             {"id": "front-door", "rect": {"x": door_x - 48, "y": height - 40, "w": 96, "h": 40}, "target": "town", "label": "回到小镇"},
         ],
@@ -591,7 +599,7 @@ def _academy_study() -> dict:
         "slots": [
             # 字面照搬需求里的例子：完成的知识类任务数决定书桌上摞几本书 (每 2 个任务多摞一本，最多 6 本)。
             {"id": "study-books", "frames": ["book_1"], "metric": "knowledgeDone", "max": 6, "perItem": 2,
-             "anchor": {"x": 600, "y": 296}, "step": {"x": 0, "y": -14}},
+             "anchor": {"x": 572, "y": 296}, "step": {"x": 0, "y": -14}},
         ],
         "seats": seats,
         "lights": [

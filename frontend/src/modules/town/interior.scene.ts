@@ -1,6 +1,5 @@
 import { createHomeObjects, type HomeObjectState } from './home-objects'
 import { createCompanionVisual, type CompanionPet } from './companion-visual'
-import { createInteriorCompanion } from './interior-home-life'
 /**
  * 通用室内场景: renders any `RoomMapData` (map-loader.ts) — floor/wall tile layers, static
  * furniture, data-driven slots, seated residents, and doors — instead of the one hand-built room
@@ -15,9 +14,13 @@ import { createInteriorCompanion } from './interior-home-life'
  */
 import type PhaserNs from 'phaser'
 import { hashString } from './building-kit'
+import { createInteriorCompanion } from './interior-home-life'
+import { createInteriorAtmosphere } from './interior-atmosphere'
+import { createInteriorMemories, type InteriorMemory } from './interior-memories'
+export type { InteriorMemory } from './interior-memories'
 import { findPath } from './pathfinding'
 import { canStand, nearestStandable, type Point } from './collision'
-import { canUseFromHere, distanceToBox, furnitureApproach, restingFurniture, roomNavigation } from './interior-interaction'
+import { canUseFromHere, distanceToBox, equipmentApproach, furnitureApproach, restingFurniture, roomNavigation } from './interior-interaction'
 import {
   assignSeats,
   clampToRoom,
@@ -65,7 +68,7 @@ export type RoomController = {
   moveTo?: (target: Point, onArrival: () => void) => boolean
   /** Cancel walking or get up. Returns whether an active interaction was consumed. */
   cancel?: () => boolean
-  sitAt?: (point: Point) => void
+  sitAt?: (point: Point & { depth?: number }, facing?: 'left' | 'right') => void
   isResting?: () => boolean
 }
 
@@ -85,6 +88,10 @@ export type InteriorOptions = {
   room: RoomMapData
   /** Numeric facts the room's data slots read (see map-loader.ts's `evaluateSlots`). Defaults to `{}`. */
   metrics?: RoomMetrics
+  /** Only real earned records supplied by the caller; no synthetic rewards. */
+  memories?: InteriorMemory[]
+  /** Live immersion setting shared with the street; inputs and physical objects stay active. */
+  isQuiet?: () => boolean
   homeObjectState?: () => HomeObjectState
   /** Residents seated at `room.seats`, in order — same shape/semantics as academy.scene.ts's
    * `AcademyResident[]` (state drives which seated animation row plays). */
@@ -208,6 +215,7 @@ export function createInteriorScene(Phaser: typeof PhaserNs, options: InteriorOp
     disposePet: (() => void) | null = null
     petIdentity = ''
     lastDoor: RoomDoor | null = null
+    quietTextStates = new Map<PhaserNs.GameObjects.Text, boolean>()
     nearbyLabels: { piece: RoomMapData['furniture'][number]; text: PhaserNs.GameObjects.Text; rest: boolean }[] = []
 
     constructor() { super(key) }
@@ -236,6 +244,7 @@ export function createInteriorScene(Phaser: typeof PhaserNs, options: InteriorOp
       this.lastDoor = null
       this.worldPress = false
       this.nearbyLabels = []
+      this.quietTextStates.clear()
       this.cameras.main.setBackgroundColor(room.backgroundColor)
       this.drawLayer(room.layers.floor, 0)
       this.drawLayer(room.layers.walls, 2)
@@ -246,6 +255,9 @@ export function createInteriorScene(Phaser: typeof PhaserNs, options: InteriorOp
       this.drawSeats()
       this.drawDoors()
       this.spawnPlayer()
+      createInteriorAtmosphere(this, room)
+      const memoryBoard = room.furniture.find(piece => piece.interactive?.actionId === 'home.open-achievement-wall')
+      if (memoryBoard && options.memories?.length) createInteriorMemories(this, memoryBoard, options.memories, () => this.player)
       this.plate(worldWidth / 2, 8, room.title, '#fff4e8', '#35644f')
       this.setupCamera()
       this.setupInput()
@@ -259,6 +271,10 @@ export function createInteriorScene(Phaser: typeof PhaserNs, options: InteriorOp
         })
       }
       this.events.once('shutdown', () => { this.homeObjects?.destroy(); this.homeObjects = null; this.disposePet?.(); this.disposePet = null })
+      const updateQuiet = () => this.updateQuietText()
+      this.events.on('postupdate', updateQuiet)
+      this.updateQuietText()
+      this.events.once('shutdown', () => { this.events.off('postupdate', updateQuiet); this.quietTextStates.clear() })
       this.scale.on('resize', this.setupCamera, this)
       this.events.once('shutdown', () => this.scale.off('resize', this.setupCamera, this))
     }
@@ -336,17 +352,18 @@ export function createInteriorScene(Phaser: typeof PhaserNs, options: InteriorOp
           this.approach(piece, () => {
             if (!options.player) return
             this.ensureSeatAnimations(`char_${options.player.characterSheet}`)
-            this.controller?.sitAt?.({ x: piece.x, y: piece.y + 6 })
+            this.controller?.sitAt?.({ x: piece.x, y: piece.y - 8, depth: (piece.depth ?? piece.y) + 1 }, piece.frame === 'armchair_blue' || piece.frame === 'armchair_wood' ? 'left' : 'right')
           }, true)
         })
       }
     }
 
     updateNearbyLabels() {
-      if (!this.player) return
+      if (!this.player?.active || !this.player.scene || !this.sys.isActive()) return
       let nearest: typeof this.nearbyLabels[number] | undefined
       let distance = 86
       for (const item of this.nearbyLabels) {
+        if (!item.text.active || !item.text.scene) continue
         item.text.setVisible(false)
         const box = item.piece.interactive?.hit ?? defaultInteractionHit(item.piece, room.tileSize)
         const measured = distanceToBox(this.player, box)
@@ -358,6 +375,21 @@ export function createInteriorScene(Phaser: typeof PhaserNs, options: InteriorOp
         // Keep the short hint above both the prop and the avatar's head, including side approaches.
         nearest.text.setY(Math.min(box.y - 44, this.player.y - 76))
         if (nearest.rest) nearest.text.setText(this.controller?.isResting?.() ? '休息中 · 点击地面起身' : '坐一会儿')
+      }
+    }
+
+    /** Enforce after ordinary hint updates, remembering the original visible state once.
+     * In-world memory cards are containers, so their actual earned content is retained. */
+    updateQuietText() {
+      if (options.isQuiet?.()) {
+        for (const object of this.children.getChildren()) {
+          if (!(object instanceof Phaser.GameObjects.Text) || object.parentContainer) continue
+          if (!this.quietTextStates.has(object)) this.quietTextStates.set(object, object.visible)
+          object.setVisible(false)
+        }
+      } else if (this.quietTextStates.size) {
+        for (const [text, visible] of this.quietTextStates) if (text.scene && text.active) text.setVisible(visible)
+        this.quietTextStates.clear()
       }
     }
 
@@ -460,12 +492,17 @@ export function createInteriorScene(Phaser: typeof PhaserNs, options: InteriorOp
         },
       }
       this.controller = (options.createController ?? createDefaultController)(context)
-      const updateController = (_time: number, delta: number) => { this.controller?.update(delta); this.updateNearbyLabels() }
+      const updateController = (_time: number, delta: number) => {
+        if (!this.sys.isActive() || !this.player?.active) return
+        this.controller?.update(delta); this.updateNearbyLabels()
+      }
       this.events.on('update', updateController)
       this.events.once('shutdown', () => {
         this.events.off('update', updateController)
         this.controller?.destroy?.()
         this.controller = null
+        this.player = null
+        this.nearbyLabels = []
       })
     }
 
@@ -478,12 +515,14 @@ export function createInteriorScene(Phaser: typeof PhaserNs, options: InteriorOp
     }
 
     ensureSeatAnimations(sheet: string) {
-      if (this.anims.exists(`${sheet}-seat-idle`)) return
       const columns = Math.floor((this.textures.get(sheet).getSourceImage() as HTMLImageElement).width / 32)
       const range = (row: number, start: number, length = 6) => Array.from({ length }, (_, i) => ({ key: sheet, frame: row * columns + start + i }))
-      this.anims.create({ key: `${sheet}-seat-idle`, frames: range(4, 0), frameRate: 4, repeat: -1 })
-      this.anims.create({ key: `${sheet}-seat-phone`, frames: range(6, 3), frameRate: 6, repeat: -1 })
-      this.anims.create({ key: `${sheet}-seat-reading`, frames: range(7, 0), frameRate: 5, repeat: -1 })
+      if (!this.anims.exists(`${sheet}-seat-idle`)) this.anims.create({ key: `${sheet}-seat-idle`, frames: range(4, 0), frameRate: 4, repeat: -1 })
+      if (!this.anims.exists(`${sheet}-seat-phone`)) this.anims.create({ key: `${sheet}-seat-phone`, frames: range(6, 3), frameRate: 6, repeat: -1 })
+      if (!this.anims.exists(`${sheet}-seat-reading`)) this.anims.create({ key: `${sheet}-seat-reading`, frames: range(7, 0), frameRate: 5, repeat: -1 })
+      for (const [direction, start] of [['right', 0], ['left', 6]] as const) {
+        if (!this.anims.exists(`${sheet}-rest-${direction}`)) this.anims.create({ key: `${sheet}-rest-${direction}`, frames: range(4, start), frameRate: 3, repeat: -1 })
+      }
     }
 
     ensureCharacterAnimations(sheet: string) {
@@ -551,6 +590,7 @@ export function createDefaultController(ctx: ControllerContext): RoomController 
   let waypoints: Point[] = []
   let arrival: (() => void) | null = null
   let restingReturn: Point | null = null
+  let restingTween: PhaserNs.Tweens.Tween | null = null
   let facing: Direction = 'down'
   let worldPress = false
   let destroyed = false
@@ -562,12 +602,19 @@ export function createDefaultController(ctx: ControllerContext): RoomController 
     clickTarget = null
     waypoints = []
     arrival = null
+    restingTween?.stop()
+    restingTween = null
     if (restingReturn) {
-      sprite.x = restingReturn.x
-      sprite.y = restingReturn.y
+      const returnPoint = restingReturn
       restingReturn = null
-      sprite.setDepth(sprite.y)
-      sprite.play(`${sheet}-idle-${facing}`, true)
+      // Phaser may destroy display objects before the controller's shutdown listener.
+      // Never restart an animation on that destroyed actor while exiting from a seat.
+      if (!destroyed && sprite.scene && sprite.active && sprite.anims) {
+        sprite.x = returnPoint.x
+        sprite.y = returnPoint.y
+        sprite.setDepth(sprite.y)
+        sprite.play(`${sheet}-idle-${facing}`, true)
+      }
     }
     return active
   }
@@ -593,8 +640,12 @@ export function createDefaultController(ctx: ControllerContext): RoomController 
     if (!accepted || over.some(object => object.input?.enabled)) return
     cancel()
     const world = scene.cameras.main.getWorldPoint(pointer.x, pointer.y)
-    const target = nearestStandable(clampToRoom(room, world.x, world.y), navigation)
-    moveTo(target, () => {})
+    const equipment = equipmentApproach(room, sprite, world, frame => {
+      const textureFrame = scene.textures.getFrame('interior', frame)
+      return textureFrame ? { width: textureFrame.realWidth, height: textureFrame.realHeight } : null
+    })
+    const target = equipment === undefined ? nearestStandable(clampToRoom(room, world.x, world.y), navigation) : equipment
+    if (target) moveTo(target, () => {})
   }
   scene.input.on('pointerdown', pointerDown)
   scene.input.on('pointerup', pointerUp)
@@ -631,13 +682,19 @@ export function createDefaultController(ctx: ControllerContext): RoomController 
     moveTo,
     cancel,
     destroy,
-    sitAt(point) {
+    sitAt(point, direction = 'right') {
       cancel()
       restingReturn = { x: sprite.x, y: sprite.y }
-      sprite.x = point.x
-      sprite.y = point.y
-      sprite.setDepth(sprite.y)
-      sprite.play(`${sheet}-seat-idle`, true)
+      facing = direction
+      const restKey = `${sheet}-rest-${direction}`
+      sprite.play(scene.anims.exists(restKey) ? restKey : `${sheet}-seat-idle`, true)
+      // Only the final short step onto the reached chair is animated here. Navigation to the
+      // chair was collision checked before arrival; no whole-body rotation or route teleport.
+      restingTween = scene.tweens.add({
+        targets: sprite, x: point.x, y: point.y, duration: 260, ease: 'Sine.easeOut',
+        onUpdate: () => sprite.setDepth(point.depth ?? sprite.y),
+        onComplete: () => { restingTween = null; sprite.setDepth(point.depth ?? sprite.y) },
+      })
     },
     isResting: () => Boolean(restingReturn),
     update(deltaMs: number) {

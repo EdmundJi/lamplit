@@ -48,7 +48,7 @@ export function createRoomTransitions(runtime: TownRuntime) {
               fetch(`${ASSETS}/maps/${file}.json`, { signal: request.signal }).then(response => { if (!response.ok)
                   throw new Error(`房间地图加载失败 (${response.status})`); return response.json(); }).then(parseRoomMap),
               fadeOutDone,
-              roomId === 'home' ? fetchHomeExtras() : Promise.resolve({ homeAchievements: 0, pet: undefined as InteriorPet | undefined }),
+              roomId === 'home' ? fetchHomeExtras(runtime.latestModel.residents.find(r => r.isSelf)?.timezone) : Promise.resolve({ homeAchievements: 0, pet: undefined as InteriorPet | undefined, memories: [] }),
           ]);
           if (generation !== runtime.transitionGeneration || runtime.sceneRef !== town || request.signal.aborted)
               return;
@@ -70,6 +70,8 @@ export function createRoomTransitions(runtime: TownRuntime) {
                 ? (runtime.companionState.pet ? { id: runtime.companionState.pet.publicId, name: runtime.companionState.pet.name, species: runtime.companionState.pet.speciesCode as InteriorPet['species'], breed: runtime.companionState.pet.breed, furColor: runtime.companionState.pet.furColor } : undefined)
                 : extras.pet,
               homeObjectState: () => ({ hasPet: runtime.companionLoaded ? !!runtime.companionState.pet : !!extras.pet, outing: runtime.companionState.mode !== 'home', unread: runtime.letterUnread }),
+              memories: extras.memories,
+              isQuiet: () => runtime.scenicMode,
               onExit: target => { if (target === 'town')
                   runtime.exitRoom(); },
               // engine 自己不认识 home.open-desk 之类的动作 id，转给外壳去接 world-actions.ts。

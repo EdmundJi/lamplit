@@ -544,7 +544,7 @@ onBeforeUnmount(() => {
         <button v-if="currentAnchor" class="secondary" type="button" aria-label="更多地点操作" @click="menuDismissed = !menuDismissed">更多</button>
         <button class="secondary" type="button" aria-label="小镇活动" @click="showEvents = !showEvents">活动</button>
         <button v-if="!nativeFullscreen" class="secondary fullscreen-button" type="button" title="全屏显示" @click="enterFullscreen">全屏</button>
-        <button class="secondary scenic-toggle" type="button" :disabled="Boolean(activeRoom) || openWindows.length > 0 || Boolean(selectedNpc) || showEvents" @click="toggleScenic">{{ scenic ? '显示提示' : '收起界面' }}</button>
+        <button class="secondary scenic-toggle" type="button" :disabled="openWindows.length > 0 || Boolean(selectedNpc) || showEvents" @click="toggleScenic">{{ scenic ? '显示提示' : '收起界面' }}</button>
         <button class="secondary" type="button" :aria-pressed="observing" title="观察小镇：镜头脱离玩家自动巡游" aria-label="观察小镇" @click="toggleObservation"><Film :size="16" /></button>
         <button class="secondary" type="button" title="重新打开新手引导" @click="showOnboarding"><HelpCircle :size="16" /></button>
         <button class="secondary run-toggle" type="button" :aria-pressed="immersive.runMode" @click="worldBridge.setRunMode(!immersive.runMode)">
