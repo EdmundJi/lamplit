@@ -58,7 +58,7 @@ const brandInitial = computed(() => {
 })
 
 function shouldShowWelcome() {
-  return !mode.minimal && Boolean(auth.user?.publicId) && window.localStorage.getItem(welcomeKey.value) !== 'dismissed'
+  return route.path !== '/town' && !mode.minimal && Boolean(auth.user?.publicId) && window.localStorage.getItem(welcomeKey.value) !== 'dismissed'
 }
 
 function openWelcome() {
@@ -98,7 +98,7 @@ onBeforeUnmount(() => {
     <main id="main-content" class="workspace" tabindex="-1">
       <header v-if="mode.minimal" class="minimal-topbar"><RouterLink to="/today" class="minimal-brand">我的清单</RouterLink><div><RouterLink to="/settings">设置</RouterLink><button type="button" @click="changeMode(false)">切换成长模式</button></div></header>
       <header v-else class="workspace-topbar"><span class="workspace-context"><PanelLeftClose :size="17" /><span>{{ currentNav?.group || '成长' }}</span><span class="context-slash">/</span><strong>{{ currentNav?.label || '更好的自己' }}</strong></span><div><RouterLink class="topbar-ai" to="/ai"><Sparkles :size="15" />和 AI 理一理</RouterLink><RouterLink class="icon-button" to="/friends/chat" aria-label="消息中心"><Bell :size="18" /></RouterLink></div></header>
-      <OperationGuideBar v-if="!mode.minimal" />
+      <OperationGuideBar v-if="!mode.minimal && route.path !== '/town'" />
       <RouterView v-slot="{ Component, route }">
         <Transition name="route-view" mode="out-in">
           <component :is="Component" :key="route.path" />
@@ -128,7 +128,7 @@ onBeforeUnmount(() => {
     </nav>
     <DesktopPet v-if="!mode.minimal && !isDesktopCompanion && !quietWorkspace" />
     <GlobalUnreadBar v-if="!mode.minimal && !quietWorkspace" />
-    <WelcomeGuide v-if="showWelcome && !mode.minimal" @dismiss="dismissWelcome" />
+    <WelcomeGuide v-if="showWelcome && !mode.minimal && route.path !== '/town'" @dismiss="dismissWelcome" />
   </div>
 </template>
 <style scoped>

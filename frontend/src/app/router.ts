@@ -2,17 +2,17 @@ import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '../modules/auth/auth.store'
 
 const routes = [
-  { path: '/town/demo', component: () => import('../modules/town/demo/CafeDemo.vue'), meta: { public: true, standaloneDemo: true } },
+  { path: '/town', component: () => import('../modules/companion/CompanionView.vue') },
+  { path: '/town/demo', redirect: '/town' },
   { path: '/auth', component: () => import('../modules/auth/AuthView.vue'), meta: { public: true } },
   { path: '/desktop-pet', component: () => import('../modules/partners/DesktopPetWindow.vue') },
   { path: '/onboarding', component: () => import('../modules/onboarding/OnboardingView.vue') },
-  { path: '/town/immersive', component: () => import('../modules/town/immersive/ImmersiveTown.vue') },
+  { path: '/town/immersive', redirect: '/town' },
   { path: '/', component: () => import('./UserLayout.vue'), children: [
     { path: '', redirect: '/today' },
     { path: 'today', component: () => import('../modules/today/TodayEntry.vue') },
     { path: 'goals', component: () => import('../modules/goals/GoalsView.vue') },
     { path: 'partners', component: () => import('../modules/partners/PartnersView.vue') },
-    { path: 'town', component: () => import('../modules/town/TownView.vue') },
     { path: 'friends', component: () => import('../modules/friends/FriendsView.vue') },
     { path: 'friends/chat', component: () => import('../modules/friends/ConversationsView.vue') },
     { path: 'friends/groups/:publicId', component: () => import('../modules/friends/GroupChatView.vue'), props: true },

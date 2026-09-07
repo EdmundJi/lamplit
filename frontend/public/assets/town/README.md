@@ -17,3 +17,13 @@ python3 scripts/build-town-assets.py --exteriors tmp/modernexteriors-win.zip --i
 - `emotes.png`：表情气泡动画表
 
 美术署名（授权要求）：LimeZu，https://limezu.itch.io/
+
+陪伴小街另使用已购的 Modern Farm 与 Modern Office Revamped：
+
+```bash
+python3 scripts/build-companion-assets.py
+```
+
+脚本从 `tmp/Modern_Farm_v1.2.zip` 和 `tmp/Modern_Office_Revamped_v1.2.zip`
+提取菜圃、小鸡、学习桌椅与台灯，生成被 Git 忽略的 `companion-atlas.png/json`。
+四个资源包均由 LimeZu 制作；页面保留署名，不重新分发原始或生成的授权素材。

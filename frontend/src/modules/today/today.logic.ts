@@ -11,6 +11,7 @@ import { encouragement, type EncouragementMoment } from '../../shared/encouragem
 
 export type Task = {
   publicId: string
+  taskPublicId?: string
   taskTitle: string
   plannedStartAt: string
   status: string
