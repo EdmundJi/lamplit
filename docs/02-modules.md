@@ -1,6 +1,6 @@
 # 02 · 代码怎么组织
 
-继续用现有 Vue / Phaser 前端和 Spring Boot 后端，保持模块化单体。下面是改造方向，不代表代码已经按此迁移。
+继续用现有 Vue / Phaser 前端和 Spring Boot 后端，保持模块化单体。新版小街在 `town/companion` 按下面的边界实现，其余旧模块没有整体迁移。
 
 ## 四层就够了
 
@@ -38,6 +38,10 @@ interfaces/    HTTP API、定时任务等入口，调用 application
 - 模型请求不占着长数据库事务；返回后核对状态，过期的决定丢弃。
 
 ## 从现有代码慢慢改
+
+新版后端入口在 [town/companion](../backend/src/main/java/com/betterself/growth/town/companion)，前端入口在 [companion](../frontend/src/modules/companion)。世界存档与旧小镇独立，新的 HTTP 入口只调用新版推进；旧社会与反思定时任务默认停用。模型通过异步接口读取居民各自的感知与记忆，返回后校验版本再提交行动。
+
+前端将场景绘制数据与完整故事数据分开，稳定的绘制输入不会因日记或记忆刷新而重建场景。世界状态和任务结果由后端决定；Phaser 负责路径呈现和动画，DOM 负责清晰的资料与对话阅读。
 
 [后端 town](../backend/src/main/java/com/betterself/growth/town)已有日程、感知、社会模拟和模型适配；[前端 town](../frontend/src/modules/town)已有场景、寻路、面板和声景。
 

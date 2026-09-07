@@ -2,7 +2,11 @@
 
 一个适合长时间打开、陪伴用户学习与生活的网页小镇。用户搬进已有居民和过去的小街，与一个自主小人共享部分日程，通过明确安排或偶尔的念头影响它的生活。
 
-当前正在从原有成长平台转向这一体验；新版 MVP 尚待实现与验证。
+第一版入口是 `/town`：搬进一条已有四名居民的小街，选择真实 Todo 陪伴专注，或让小人按自己的节律生活。世界由后端保存，刷新后继续；专注结束不会自动完成真实任务。
+
+居民保留自己的需求、计划、关系和有来源的记忆，实际相遇会带来协商、合作及新的小愿望。模型可以在规则约束内调整计划和提出新项目；服务不可用时，居民仍按已有计划生活。认证和真实任务沿用现有基础，新小镇存档和推进逻辑独立。
+
+已实测 DeepSeek V4 Flash 的逐轮对话、模型自选 emoji 和各自的会后记忆。模型配置沿用历史 `QWEN_` 环境变量前缀：`QWEN_PROVIDER=qwen`、`QWEN_BASE_URL=https://api.deepseek.com`、`QWEN_MODEL=deepseek-v4-flash`，密钥仅放在被忽略的 `.env.local`；此模型的居民短对话使用非思考模式。
 
 - [当前进度](progress.md)：最近做了什么、接下来想做什么。
 - [01 我们想做的小镇](docs/01-requirements.md) · [02 代码怎么组织](docs/02-modules.md)：做什么、代码如何组织。
@@ -45,10 +49,11 @@ pnpm install
 pnpm dev
 ```
 
-成长小镇页面使用已购买的 LimeZu 像素素材，素材不进入版本库。首次运行前把 `modernexteriors-win.zip` 和 `moderninteriors-win.zip` 放到 `tmp/`，然后生成图集（需要 Pillow）：
+小镇使用已购买的四个 LimeZu 素材包，素材不进入版本库。首次运行前把 `modernexteriors-win.zip`、`moderninteriors-win.zip`、`Modern_Farm_v1.2.zip` 和 `Modern_Office_Revamped_v1.2.zip` 放到 `tmp/`，然后生成图集（需要 Pillow）：
 
 ```bash
 python3 scripts/build-town-assets.py
+python3 scripts/build-companion-assets.py
 ```
 
 现有代码入口与新版差异见[现有系统说明](docs/02-modules.md)；素材规则见[素材说明](frontend/public/assets/town/README.md)。
