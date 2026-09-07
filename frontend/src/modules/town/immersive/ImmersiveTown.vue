@@ -20,6 +20,9 @@ import { onDataChanged } from '../../../shared/data-sync'
 import { useTownStore } from '../town.store'
 import { useTownNpcStore } from '../town-npc.store'
 import TownOnboarding from '../TownOnboarding.vue'
+import TownReturnCue from '../TownReturnCue.vue'
+import TownPlaceActivity from '../TownPlaceActivity.vue'
+import HomeStylePanel from './panels/HomeStylePanel.vue'
 import { TownControls } from '../town-controls'
 import type { TownGame, TownSelection, TownTravel, TownNearby } from '../town.engine'
 import type { TownModel } from '../town.types'
@@ -47,6 +50,16 @@ const townNpcStore = useTownNpcStore()
 const observing = ref(false)
 const scenic = ref(false)
 const hudActionsOpen = ref(false)
+const destinationsOpen = ref(false)
+const homeStyleOpen = ref(false)
+const returnReady = ref(false)
+function syncCompact() { immersive.setCompact(window.innerWidth <= 760) }
+function directPanel(key: WorldPanelKey) { showEvents.value = false; homeStyleOpen.value = false; selection.value = null; immersive.openPanel(key) }
+function openHomeStyle() { immersive.windows.forEach(win => immersive.minimizePanel(win.key)); showEvents.value = false; selection.value = null; homeStyleOpen.value = true }
+function onboardingAction(action: 'home-style' | 'today' | 'meet') {
+  if (action === 'home-style') openHomeStyle()
+  else directPanel(action === 'today' ? 'today' : 'ai')
+}
 function toggleScenic() {
   scenic.value = !scenic.value
   if (scenic.value) hudActionsOpen.value = false
@@ -161,17 +174,19 @@ const residents = computed(() => store.model?.residents ?? [])
 const self = computed(() => residents.value.find(item => item.isSelf) ?? null)
 const companionLife = useTownCompanionLife({ userId: computed(() => self.value?.publicId ?? ''), room: activeRoom, game: () => game, openPanel: key => immersive.openPanel(key), feedback: text => feedback.value?.handle({ type: 'toast', text }) })
 const currentAnchor = computed(() => anchorForSelection(selection.value, self.value?.publicId ?? null))
-const anyPanelOpen = computed(() => immersive.windows.length > 0 || selectedNpc.value !== null)
+const anyPanelOpen = computed(() => immersive.windows.some(win => !win.minimized) || selectedNpc.value !== null || showEvents.value || homeStyleOpen.value)
 
-const openWindows = computed(() => {
+const mountedWindows = computed(() => {
   const defs: { key: WorldPanelKey; x: number; y: number; z: number; def: (typeof worldPanels)[number] }[] = []
   for (const win of immersive.windows) {
-    if (win.minimized) continue
+    // Only local working drafts remain mounted; mail and other service panels release subscriptions.
+    if (win.minimized && !['today', 'goals', 'ai'].includes(win.key)) continue
     const def = worldPanels.find(panel => panel.key === win.key)
     if (def) defs.push({ key: win.key, x: win.x, y: win.y, z: win.z, def })
   }
   return defs
 })
+const openWindows = computed(() => mountedWindows.value.filter(item => !immersive.windows.find(win => win.key === item.key)?.minimized))
 const minimizedWindows = computed(() => {
   const defs: { key: WorldPanelKey; def: (typeof worldPanels)[number] }[] = []
   for (const win of immersive.windows) {
@@ -345,7 +360,8 @@ function onKeydown(event: KeyboardEvent) {
   if (event.key === 'Escape') {
     if (scenic.value) { event.preventDefault(); toggleScenic(); return }
     // Esc 依次关：动作菜单 > 最上层窗口 > 退出沉浸模式。
-    if (showEvents.value) { event.preventDefault(); showEvents.value = false }
+    if (homeStyleOpen.value) { event.preventDefault(); homeStyleOpen.value = false }
+    else if (showEvents.value) { event.preventDefault(); showEvents.value = false }
     else if (travel.value?.phase === 'walking') { event.preventDefault(); game?.cancelTravel?.() }
     else if (selectedNpc.value) { event.preventDefault(); selection.value = null }
     else if (observing.value) { event.preventDefault(); toggleObservation() }
@@ -372,6 +388,8 @@ watch(conversationCode, (code, previous) => {
 })
 
 onMounted(async () => {
+  syncCompact()
+  window.addEventListener('resize', syncCompact)
   void mailSignal.load()
   socialTicker = setInterval(() => {
     void mailSignal.load()
@@ -442,6 +460,12 @@ const stopProbeUi = import.meta.env.DEV
     }))
   : null
 
+watch(selectedNpc, npc => {
+  if (npc && immersive.compact) { immersive.windows.forEach(win => immersive.minimizePanel(win.key)); showEvents.value = false; homeStyleOpen.value = false }
+})
+watch(() => immersive.topmost, key => {
+  if (key && immersive.compact) { showEvents.value = false; homeStyleOpen.value = false; selection.value = null }
+})
 watch(() => mailSignal.unreadCount, count => game?.setLetterUnread?.(count))
 
 watch(() => Boolean(activeRoom.value) || openWindows.value.length > 0 || Boolean(selectedNpc.value) || showEvents.value, opened => {
@@ -449,6 +473,7 @@ watch(() => Boolean(activeRoom.value) || openWindows.value.length > 0 || Boolean
 })
 
 onBeforeUnmount(() => {
+  window.removeEventListener('resize', syncCompact)
   if (socialTicker) clearInterval(socialTicker)
   mountSequence++
   stopProbeUi?.()
@@ -466,7 +491,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section ref="root" class="immersive-town" :class="{ 'is-scenic': scenic }" @focusin="recoverScenicFromFocus" @pointerdown.capture="recoverScenicFromPointer">
+  <section ref="root" class="immersive-town" :class="{ 'is-scenic': scenic }" :style="{ '--town-panel-bottom': immersive.dockCollapsed ? 'calc(48px + env(safe-area-inset-bottom))' : 'calc(124px + env(safe-area-inset-bottom))' }" @focusin="recoverScenicFromFocus" @pointerdown.capture="recoverScenicFromPointer">
     <button v-if="scenic" class="scenic-restore" type="button" @click="recoverScenicHud">显示导航与提示 · Esc</button>
     <TownOnboarding
       v-if="self"
@@ -475,6 +500,7 @@ onBeforeUnmount(() => {
       :player-position="playerPosition"
       :distance-to-guide="distanceToGuide"
       :any-panel-open="anyPanelOpen"
+      @action="onboardingAction" @close="returnReady = true" @skip="returnReady = true"
       :conversation-open="Boolean(selectedNpc) || selection === 'npc:assistant' || selection === 'npc:postman'"
     />
 
@@ -484,6 +510,9 @@ onBeforeUnmount(() => {
     <p v-else-if="engineError" class="immersive-status immersive-status--error" role="alert">画面暂时加载不出来，下面的功能仍然能用。</p>
 
     <WorldFeedback ref="feedback" />
+    <TownPlaceActivity v-if="!anyPanelOpen && !scenic && !observing" class="place-activity" :place="activeRoom || selection" @action="id => worldBridge.run(id)" />
+    <TownReturnCue v-if="self && (returnReady || onboardingRef?.isCompleted())" :key="self.publicId" v-show="!anyPanelOpen && !observing && !scenic && !activeRoom && !selection" class="immersive-return-cue" :planned="self.todayPlanned" :done="self.todayDone" :unread="mailSignal.unreadCount" :night="night" @today="directPanel('today')" @mail="directPanel('friends')" />
+    <section v-if="homeStyleOpen" class="town-style-panel" role="dialog" aria-label="布置我的家"><button class="secondary" @click="homeStyleOpen = false">关闭布置</button><HomeStylePanel @saved="homeStyleOpen = false" @cancel="homeStyleOpen = false" /></section>
     <div v-if="activeRoom === 'home' && !openWindows.length" class="home-object-shortcuts" aria-label="家中的物品" @pointerdown.stop @keydown.stop>
       <button type="button" @click="interactHomeObject('journal')">翻手账</button>
       <button type="button" @click="interactHomeObject('mailbox')">取信</button>
@@ -498,7 +527,7 @@ onBeforeUnmount(() => {
     <div v-else-if="travel?.phase === 'blocked'" class="travel-status" role="status">暂时走不到{{ travel.label }}<button type="button" @click="stopTravel">知道了</button></div>
     <button v-if="nearby && !activeRoom && !observing && !selectedNpc && !openWindows.length && travel?.phase !== 'walking'" class="nearby-action" type="button" @click="interactNearby">{{ nearby.action }}{{ nearby.label }} · E</button>
     <div v-if="townNpcStore.error" class="town-roster-error" role="alert">{{ townNpcStore.error }} <button type="button" @click="mountGame">重新连接</button></div>
-    <nav v-if="!observing && !activeRoom && !scenic" class="town-wayfinder" aria-label="小镇地点">
+    <nav v-if="destinationsOpen && !observing && !activeRoom && !scenic" class="town-wayfinder" aria-label="小镇地点">
       <span>去哪里走走</span>
       <button v-for="place in destinations" :key="place.id" type="button" @click="visitPlace(place.id)">{{ place.label }}</button>
     </nav>
@@ -512,9 +541,12 @@ onBeforeUnmount(() => {
     </div>
 
     <WorldPanel
-      v-for="item in openWindows"
+      v-for="item in mountedWindows"
+      v-show="!immersive.windows.find(win => win.key === item.key)?.minimized"
+      :inert="immersive.windows.find(win => win.key === item.key)?.minimized || undefined"
       :key="item.key"
       :def="item.def"
+      :active="!immersive.windows.find(win => win.key === item.key)?.minimized"
       :x="item.x"
       :y="item.y"
       :z="20 + item.z"
@@ -539,12 +571,16 @@ onBeforeUnmount(() => {
         <component :is="soundEnabled ? Volume2 : VolumeX" :size="16" />{{ soundEnabled ? '环境声开' : '环境声关' }}
       </button>
       <button v-if="manualTimeOverride" class="secondary" type="button" title="恢复按当前时区推进的晨昏" @click="restoreAutomaticTime">恢复随时间</button>
-      <button class="secondary hud-actions-toggle" type="button" :aria-expanded="hudActionsOpen" aria-controls="immersive-secondary-actions" @click="hudActionsOpen = !hudActionsOpen">操作</button>
-      <div id="immersive-secondary-actions" class="immersive-secondary-actions">
+      <button class="secondary" @click="directPanel('today')">今天</button>
+      <button class="secondary" :aria-expanded="destinationsOpen" @click="destinationsOpen = !destinationsOpen">去哪里</button>
+      <button class="secondary" @click="directPanel('friends')">信箱<span v-if="mailSignal.unreadCount"> · {{ mailSignal.unreadCount }}</span></button>
+      <button class="secondary hud-actions-toggle" type="button" :aria-expanded="hudActionsOpen" aria-controls="immersive-secondary-actions" @click="hudActionsOpen = !hudActionsOpen">更多</button>
+      <div v-show="hudActionsOpen" id="immersive-secondary-actions" class="immersive-secondary-actions">
+        <button class="secondary" @click="openHomeStyle">布置我的家</button>
         <button class="secondary" type="button" aria-label="返回安全位置" title="卡住时直接回到家门口，任务数据不变" @click="recoverPosition">脱困</button>
         <button class="secondary" type="button" @click="immersive.openPanel('friends')">信箱<span v-if="mailSignal.unreadCount"> · {{ mailSignal.unreadCount }}</span></button>
         <button v-if="currentAnchor" class="secondary" type="button" aria-label="更多地点操作" @click="menuDismissed = !menuDismissed">更多</button>
-        <button class="secondary" type="button" aria-label="小镇活动" @click="showEvents = !showEvents">活动</button>
+        <button class="secondary" type="button" aria-label="小镇活动" @click="homeStyleOpen = false; immersive.windows.forEach(win => immersive.minimizePanel(win.key)); selection = null; showEvents = !showEvents">活动</button>
         <button v-if="!nativeFullscreen" class="secondary fullscreen-button" type="button" title="全屏显示" @click="enterFullscreen">全屏</button>
         <button class="secondary scenic-toggle" type="button" :disabled="openWindows.length > 0 || Boolean(selectedNpc) || showEvents" @click="toggleScenic">{{ scenic ? '显示提示' : '收起界面' }}</button>
         <button class="secondary" type="button" :aria-pressed="observing" title="观察小镇：镜头脱离玩家自动巡游" aria-label="观察小镇" @click="toggleObservation"><Film :size="16" /></button>
@@ -585,7 +621,7 @@ onBeforeUnmount(() => {
         class="dock-button"
         :aria-pressed="immersive.isOpen(panel.key)"
         :title="panel.subtitle"
-        @click="immersive.openPanel(panel.key)"
+        @click="directPanel(panel.key)"
       >
         <component :is="panel.icon" :size="20" aria-hidden="true" />
         <span>{{ panel.title }}</span>
@@ -596,6 +632,10 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+.place-activity { position: absolute; top: 150px; right: 16px; z-index: 6; }
+@media (max-width: 760px) { .place-activity { top: 135px; right: 12px; } }
+.immersive-return-cue { position: absolute; top: 150px; left: 18px; z-index: 7; }
+.town-style-panel { position: absolute; right: 16px; bottom: 80px; z-index: 45; width: min(440px, calc(100vw - 32px)); max-height: 75dvh; overflow: auto; background: var(--surface); color: var(--ink); padding: 18px; border-radius: 16px; box-shadow: var(--shadow); }
 .immersive-town { position: fixed; inset: 0; z-index: 40; display: flex; flex-direction: column; background: var(--forest); color: var(--on-forest); overflow: hidden; }
 .immersive-events { position: absolute; z-index: 30; right: 20px; top: 90px; width: min(380px, calc(100% - 40px)); max-height: calc(100dvh - 180px); overflow: auto; }
 .travel-status, .nearby-action { position: absolute; z-index: 8; bottom: 90px; left: 50%; transform: translateX(-50%); padding: 12px 18px; border-radius: 12px; background: #fff9ee; color: #355b44; box-shadow: var(--shadow); border: 1px solid #dccdb5; max-width: calc(100% - 32px); font-size: 13px; }
@@ -611,8 +651,8 @@ onBeforeUnmount(() => {
 .immersive-status--error { background: color-mix(in srgb, var(--danger) 70%, black); }
 .immersive-topbar { position: relative; z-index: 6; display: flex; align-items: center; gap: 14px; padding: 10px 16px; background: color-mix(in srgb, var(--forest-deep) 82%, transparent); backdrop-filter: blur(10px); }
 .immersive-topbar .icon-button { background: color-mix(in srgb, #fff 12%, transparent); color: var(--on-forest); }
-.immersive-secondary-actions { display: flex; align-items: center; gap: 14px; }
-.hud-actions-toggle { display: none; }
+.immersive-secondary-actions { display: flex; position: absolute; right: 12px; top: calc(100% + 6px); width: min(420px, calc(100vw - 24px)); padding: 12px; flex-wrap: wrap; background: #18352bf2; border-radius: 12px; align-items: center; gap: 8px; }
+.hud-actions-toggle { display: inline-flex; }
 .immersive-title { flex: 1; margin: 0; font-size: 13px; font-weight: 650; color: var(--on-forest); opacity: .9; }
 .immersive-title strong { display: block; font-size: 15px; letter-spacing: .12em; }
 .immersive-title span { display: block; font-size: 11px; margin-top: 4px; opacity: .65; }

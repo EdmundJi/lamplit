@@ -227,3 +227,17 @@ describe('builtinWorldActions', () => {
     expect(result.events).toEqual([{ type: 'open', panel: 'partners' }])
   })
 })
+
+
+describe('place activity handoff', () => {
+  it.each([
+    ['academy.prepare-focus', 'today'], ['home.review-today', 'today'],
+    ['cafe.open-ai', 'ai'], ['park.open-companion', 'partners'],
+  ])('%s opens the existing business panel without recording progress', async (id, panel) => {
+    registerWorldActions(builtinWorldActions())
+    const ctx = stubContext()
+    const result = await runWorldAction(id, ctx)
+    expect(result.ok).toBe(true)
+    expect(ctx.bridge.emit).toHaveBeenCalledExactlyOnceWith({ type: 'open', panel })
+  })
+})

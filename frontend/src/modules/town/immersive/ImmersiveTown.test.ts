@@ -4,6 +4,7 @@ import { CalendarCheck, MessageCircle, Sparkles, Target, TrendingUp } from 'luci
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { h } from 'vue'
 import ImmersiveTown from './ImmersiveTown.vue'
+import { useImmersiveStore } from './immersive.store'
 import type { WorldPanelDef } from './panel.types'
 
 const api = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn() }))
@@ -111,6 +112,24 @@ describe('ImmersiveTown', () => {
     wrapper.unmount()
   })
 
+  it('direct shortcuts preserve the mounted draft surface when mobile switches panels', async () => {
+    const wrapper = await mountShell()
+    const store = useImmersiveStore()
+    store.setCompact(true)
+    await wrapper.findAll('button').find(btn => btn.text() === '今天')!.trigger('click')
+    await flushPromises()
+    const todayNode = wrapper.get('[aria-label="今天"]').element
+    await wrapper.findAll('button').find(btn => btn.text() === '信箱')!.trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[aria-label="今天"]').isVisible()).toBe(false)
+    expect(wrapper.findAll('.world-panel').filter(panel => panel.isVisible())).toHaveLength(1)
+    await wrapper.findAll('button').find(btn => btn.text() === '今天')!.trigger('click')
+    expect(wrapper.get('[aria-label="今天"]').element).toBe(todayNode)
+    expect(wrapper.get('[aria-label="今天"]').isVisible()).toBe(true)
+    expect(engine.game.travelTo).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
   it('boots the engine and opens a panel from the dock without leaving the page', async () => {
     const wrapper = await mountShell()
     expect(engine.createTownGame).toHaveBeenCalled()
@@ -174,6 +193,8 @@ describe('ImmersiveTown', () => {
     expect(wrapper.get('.sound-toggle').isVisible()).toBe(true)
 
     await wrapper.get('.scenic-restore').trigger('click')
+    expect(wrapper.find('.town-wayfinder').exists()).toBe(false)
+    await wrapper.findAll('button').find(btn => btn.text() === '去哪里')!.trigger('click')
     expect(wrapper.find('.town-wayfinder').exists()).toBe(true)
     wrapper.unmount()
   })

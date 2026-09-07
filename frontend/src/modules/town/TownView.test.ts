@@ -49,7 +49,7 @@ describe('Town view', () => {
       if (path === '/me/profile') return { publicId: 'me', displayName: '我', overallLevel: 5, totalExperience: 500, longestStreak: 12 }
       if (path === '/insights/attributes') return { attributes: [{ code: 'KNOWLEDGE', experience: 50 }] }
       if (path.startsWith('/task-schedules')) return [{ status: 'DONE' }]
-      if (path === '/town/events') return [{ publicId: 'event-1', kind: 'TEA', venue: 'cafe', hostName: '邻居', startsAt: '2026-09-06T10:00:00', endsAt: null, dimension: null }]
+      if (path === '/town/events') return [{ publicId: 'event-1', phase: 'ONGOING', kind: 'TEA', venue: 'cafe', hostName: '邻居', startsAt: '2026-09-06T10:00:00', endsAt: null, dimension: null }]
       if (path === '/friends') return { friends: [{ publicId: 'f1', status: 'ACCEPTED' }], incoming: [], outgoing: [] }
       if (path === '/friends/unread-summary') return { totalUnread: 2, kind: 'single', publicId: 'f1', displayName: '阿强' }
       if (path === '/friends/f1') return { publicId: 'f1', displayName: '阿强', overallLevel: 2, totalExperience: 60, longestStreak: 0, attributes: [{ code: 'HEALTH', experience: 30 }], todayTasks: [] }
@@ -66,6 +66,8 @@ describe('Town view', () => {
     expect(engine.createTownGame).toHaveBeenCalled()
     const model = engine.createTownGame.mock.calls.at(-1)?.[1] as { residents: { publicId: string }[] }
     expect(model.residents.map(item => item.publicId)).toEqual(['me', 'f1'])
+    expect(wrapper.find('.town-panel').exists()).toBe(false)
+    await wrapper.get('[aria-controls="town-info-panel"]').trigger('click')
     expect(wrapper.text()).toContain('2 户人家')
 
     engine.handlers.onSelect?.('f1')
@@ -132,6 +134,7 @@ describe('Town view', () => {
   it('closes the default panel without opening a replacement on empty selection', async () => {
     const wrapper = mount(TownView, { global: { stubs: { RouterLink: true } } })
     await flushPromises()
+    await wrapper.get('[aria-controls="town-info-panel"]').trigger('click')
     await wrapper.get('[aria-label="关闭面板"]').trigger('click')
     engine.handlers.onSelect?.(null)
     await flushPromises()
@@ -212,6 +215,21 @@ describe('Town view', () => {
     expect(router.push).not.toHaveBeenCalled()
     wrapper.unmount()
   })
+  it('closes home decoration with Escape and releases hidden task panel input blocking', async () => {
+    const wrapper = mount(TownView, { global: { stubs: { RouterLink: true } } })
+    await flushPromises()
+    await wrapper.get('.town-primary-actions').findAll('button').find(button => button.text() === '今天')!.trigger('click')
+    expect(wrapper.find('.town-panel.has-feature').exists()).toBe(true)
+    await wrapper.get('[aria-label="关闭面板"]').trigger('click')
+    expect(wrapper.find('.town-panel.has-feature').exists()).toBe(false)
+    await wrapper.findAll('button').find(button => button.text() === '布置我的家')!.trigger('click')
+    expect(wrapper.find('.town-style-panel').exists()).toBe(true)
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', cancelable: true }))
+    await flushPromises()
+    expect(wrapper.find('.town-style-panel').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
   it('loads events into the engine and walks to an invitation venue', async () => {
     const wrapper = mount(TownView, { global: { stubs: { RouterLink: true } } })
     await flushPromises()

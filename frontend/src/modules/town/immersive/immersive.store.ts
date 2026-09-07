@@ -27,6 +27,7 @@ function defaultPosition(index: number): WorldWindowPref {
 export const useImmersiveStore = defineStore('town-immersive', {
   state: () => ({
     hydrated: false,
+    compact: false,
     runMode: false,
     windows: [] as WorldWindow[],
     nextZ: 1,
@@ -43,6 +44,7 @@ export const useImmersiveStore = defineStore('town-immersive', {
     },
   },
   actions: {
+    setCompact(value: boolean) { this.compact = value; this.enforceLimit() },
     /** 从 localStorage 恢复上次开着的窗口和跑步模式；只在外壳挂载时调用一次。 */
     hydrate(panels: WorldPanelDef[]) {
       if (this.hydrated) return
@@ -57,6 +59,7 @@ export const useImmersiveStore = defineStore('town-immersive', {
         this.windows.push({ key, x: pos.x, y: pos.y, z: this.nextZ++, minimized: Boolean(pos.minimized) })
         index += 1
       }
+      this.enforceLimit()
       this.hydrated = true
     },
     /** 走到某个锚点时，把清单里挂了这个 anchor 的面板都开起来；清单没写的锚点什么也不做。 */
@@ -106,7 +109,7 @@ export const useImmersiveStore = defineStore('town-immersive', {
     /** 展开的窗口超过上限时，把最久没被聚焦过的收进最小化——不丢状态，只是先让路。 */
     enforceLimit() {
       const visible = this.windows.filter(item => !item.minimized).sort((a, b) => a.z - b.z)
-      while (visible.length > MAX_OPEN_WINDOWS) {
+      while (visible.length > (this.compact ? 1 : MAX_OPEN_WINDOWS)) {
         const oldest = visible.shift()
         if (!oldest) break
         oldest.minimized = true

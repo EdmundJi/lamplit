@@ -7,7 +7,7 @@ import { defineAsyncComponent, h, ref, onBeforeUnmount } from 'vue'
 import { Minus, X } from 'lucide-vue-next'
 import type { WorldPanelDef } from './panel.types'
 
-const props = defineProps<{ def: WorldPanelDef; x: number; y: number; z: number }>()
+const props = withDefaults(defineProps<{ def: WorldPanelDef; x: number; y: number; z: number; active?: boolean }>(), { active: true })
 const emit = defineEmits<{ close: []; minimize: []; focus: []; move: [x: number, y: number] }>()
 
 const LoadingStub = { render: () => h('p', { class: 'panel-status' }, '正在打开…') }
@@ -58,7 +58,7 @@ onBeforeUnmount(() => { window.removeEventListener('pointermove', onPointerMove)
     class="world-panel world-window"
     :class="[`is-${def.size}`, def.objectSurface ? `object-${def.objectSurface}` : null]"
     :style="{ left: `${x}px`, top: `${y}px`, zIndex: z }"
-    role="dialog"
+    :role="active ? 'dialog' : undefined"
     :aria-label="def.title"
     @pointerdown="emit('focus')"
     @keydown.esc.stop="emit('close')"
@@ -74,7 +74,7 @@ onBeforeUnmount(() => { window.removeEventListener('pointermove', onPointerMove)
       <button class="icon-button" type="button" :title="def.objectSurface === 'journal' ? '合上手账' : def.objectSurface === 'mailbox' ? '收好信件' : '关闭'" aria-label="关闭" @click="emit('close')"><X :size="15" /></button>
     </header>
     <div class="world-panel-body">
-      <component :is="body" />
+      <component :is="body" :active="active" />
     </div>
   </section>
 </template>
@@ -96,7 +96,7 @@ onBeforeUnmount(() => { window.removeEventListener('pointermove', onPointerMove)
 @media (max-width: 760px) {
   .world-window,
   .world-window.is-compact,
-  .world-window.is-wide { left: 0 !important; right: 0; bottom: 0; top: auto !important; width: 100%; max-height: 72vh; border-radius: var(--radius-panel) var(--radius-panel) 0 0; }
+  .world-window.is-wide { left: 0 !important; right: 0; bottom: var(--town-panel-bottom, 0px); top: auto !important; width: 100%; max-height: min(72vh, calc(100dvh - var(--town-panel-bottom, 0px) - 104px)); border-radius: var(--radius-panel) var(--radius-panel) 0 0; }
 }
 .world-window.object-journal { background: #fff9ec; border: 1px solid #cdbf9f; border-left: 9px solid #798065; border-radius: 5px 15px 15px 5px; }
 .object-journal .world-panel-head { background: #f4ead7; border-bottom: 1px solid #d7cbb5; }

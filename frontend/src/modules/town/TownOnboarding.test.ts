@@ -81,7 +81,7 @@ describe('TownOnboarding', () => {
     await nextTick()
     await nextTick()
 
-    expect(document.body.textContent).toContain('四处走走')
+    expect(document.body.textContent).toContain('今天的一小步')
   })
 
   it('点击跳过引导标记完成并关闭', async () => {
@@ -114,8 +114,8 @@ describe('TownOnboarding', () => {
     await nextTick()
 
     let progressBar = document.querySelector('.progress-bar') as HTMLElement
-    // 第一步是 1/6
-    expect(parseFloat(progressBar.style.width)).toBeCloseTo(16.666, 1)
+    // 第一步是 1/3
+    expect(parseFloat(progressBar.style.width)).toBeCloseTo(33.333, 1)
 
     const primaryBtn = document.querySelector('.primary') as HTMLElement
     primaryBtn?.click()
@@ -123,8 +123,8 @@ describe('TownOnboarding', () => {
     await nextTick()
 
     progressBar = document.querySelector('.progress-bar') as HTMLElement
-    // 第二步是 2/6
-    expect(parseFloat(progressBar.style.width)).toBeCloseTo(33.333, 1)
+    // 第二步是 2/3
+    expect(parseFloat(progressBar.style.width)).toBeCloseTo(66.666, 1)
   })
 
   it('restart 重新开始引导', async () => {
@@ -147,6 +147,18 @@ describe('TownOnboarding', () => {
 
     expect(document.querySelector('.town-onboarding')).toBeTruthy()
     expect(document.body.textContent).toContain('欢迎来到成长小镇')
+  })
+
+  it('发出实际入住动作并在面板打开期间让出界面', async () => {
+    wrapper = mount(TownOnboarding, { props: { userId: 'new' }, attachTo: document.body })
+    await nextTick()
+    ;(document.querySelector('.primary') as HTMLElement).click()
+    await nextTick()
+    expect(wrapper.emitted('action')).toEqual([['home-style']])
+    await wrapper.setProps({ anyPanelOpen: true })
+    expect(document.querySelector('.town-onboarding')).toBeNull()
+    await wrapper.setProps({ anyPanelOpen: false })
+    expect(document.body.textContent).toContain('今天的一小步')
   })
 
   it('isCompleted 检查完成状态', async () => {

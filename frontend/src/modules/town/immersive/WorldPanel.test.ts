@@ -18,6 +18,14 @@ const def: WorldPanelDef = {
 }
 
 describe('WorldPanel', () => {
+  it('removes the input-blocking dialog role while retained as an inactive window', async () => {
+    const wrapper = mount(WorldPanel, { props: { def, x: 0, y: 0, z: 1, active: false } })
+    await flushPromises()
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
+    await wrapper.setProps({ active: true })
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(true)
+    wrapper.unmount()
+  })
   it('shows the title/subtitle and lazy-loads the panel body', async () => {
     const wrapper = mount(WorldPanel, { props: { def, x: 10, y: 20, z: 1 } })
     expect(wrapper.text()).toContain('今天')

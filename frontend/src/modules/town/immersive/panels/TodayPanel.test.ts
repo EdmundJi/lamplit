@@ -100,7 +100,7 @@ describe('TodayPanel', () => {
     await flushPromises()
 
     await wrapper.get('.task-more summary').trigger('click')
-    await wrapper.findAll('.task-more button').find(button => button.text().includes('专注执行'))!.trigger('click')
+    await wrapper.findAll('.task-actions button').find(button => button.text().includes('专注执行'))!.trigger('click')
     expect(wrapper.get('.focus-clock').text()).toBe('25:00')
     await wrapper.get('.focus-actions .primary').trigger('click')
     await flushPromises()
@@ -145,4 +145,18 @@ describe('TodayPanel', () => {
     expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
     expect(emit).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'close' }))
   })
+})
+
+
+it('suspends teleported focus UI while retaining the selected task on a hidden surface', async () => {
+  api.get.mockResolvedValue([{ publicId: 'schedule-1', taskTitle: '保留草稿任务', plannedStartAt: new Date().toISOString(), status: 'PLANNED' }])
+  const wrapper = mountPanel()
+  await flushPromises()
+  await wrapper.findAll('.task-actions button').find(button => button.text() === '专注执行')!.trigger('click')
+  expect(wrapper.find('.focus-panel').exists()).toBe(true)
+  await wrapper.setProps({ active: false })
+  expect(wrapper.find('.focus-panel').exists()).toBe(false)
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+  await wrapper.setProps({ active: true })
+  expect(wrapper.get('.focus-panel').text()).toContain('保留草稿任务')
 })

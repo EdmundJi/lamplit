@@ -54,6 +54,19 @@ describe('useImmersiveStore', () => {
     setActivePinia(createPinia())
   })
 
+  it('compact mode keeps one visible window while preserving positions and reopen state', () => {
+    const store = useImmersiveStore()
+    store.openPanel('today')
+    store.movePanel('today', 120, 150)
+    store.openPanel('friends')
+    store.setCompact(true)
+    expect(store.windows.filter(win => !win.minimized).map(win => win.key)).toEqual(['friends'])
+    store.focusPanel('today')
+    expect(store.windows.filter(win => !win.minimized).map(win => win.key)).toEqual(['today'])
+    expect(store.windows.find(win => win.key === 'today')).toMatchObject({ x: 120, y: 150 })
+    expect(store.windows).toHaveLength(2)
+  })
+
   it('opens a panel once and focuses it (rather than duplicating) on a second open', () => {
     const store = useImmersiveStore()
     store.openPanel('today')

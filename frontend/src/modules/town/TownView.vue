@@ -14,6 +14,9 @@ import { useTownStore } from './town.store'
 import { activityFor, activityLabels, dimensionLabels, floorsForLevel } from './building-kit'
 import NpcDialogue from './NpcDialogue.vue'
 import TownOnboarding from './TownOnboarding.vue'
+import TownReturnCue from './TownReturnCue.vue'
+import TownPlaceActivity from './TownPlaceActivity.vue'
+import HomeStylePanel from './immersive/panels/HomeStylePanel.vue'
 import { useNpcChatStore } from './npc-chat'
 import { useTownNpcStore } from './town-npc.store'
 import { TownControls, type RunMode } from './town-controls'
@@ -28,7 +31,16 @@ const mailSignal = useTownMailSignal()
 let socialTicker: ReturnType<typeof setInterval> | null = null
 const eventsStore = useTownEventsStore()
 const eventsOpen = ref(false)
-function openEvents() { activePanel.value = null; eventsOpen.value = true; panelVisible.value = true }
+const homeStyleOpen = ref(false)
+const moreOpen = ref(false)
+const destinationsOpen = ref(false)
+const returnReady = ref(false)
+function onboardingAction(action: 'home-style' | 'today' | 'meet') {
+  if (action === 'home-style') { closePanel(); homeStyleOpen.value = true }
+  else if (action === 'today') openPanel('today')
+  else select('npc:assistant')
+}
+function openEvents() { homeStyleOpen.value = false; activePanel.value = null; eventsOpen.value = true; panelVisible.value = true }
 const npcChatStore = useNpcChatStore()
 const townNpcStore = useTownNpcStore()
 const router = useRouter()
@@ -40,7 +52,7 @@ const soundEnabled = ref(false)
 function restoreAutomaticTime() { manualTimeOverride.value = false; game?.setAutomaticTime?.() }
 function toggleSound() { soundEnabled.value = !soundEnabled.value; game?.setSoundEnabled?.(soundEnabled.value) }
 const selection = ref<TownSelection>(null)
-const panelVisible = ref(true)
+const panelVisible = ref(false)
 const activePanel = ref<WorldPanelKey | null>(null)
 const activeRoom = ref<string | null>(null)
 const feedback = ref('')
@@ -71,14 +83,16 @@ const panelBodies = Object.fromEntries(worldPanels.map(def => [def.key, defineAs
   delay: 100, timeout: 20000,
 })]))
 const panelDef = computed(() => worldPanels.find(def => def.key === activePanel.value))
-function closePanel() { panelVisible.value = false }
+function closePanel() { panelVisible.value = false; if (activePanel.value === 'friends') activePanel.value = null }
 function openPanel(key: WorldPanelKey) {
+  homeStyleOpen.value = false
   eventsOpen.value = false
   activePanel.value = key
   panelVisible.value = true
 }
 function select(value: TownSelection) {
   if (value === null) return
+  homeStyleOpen.value = false
   eventsOpen.value = false
   selection.value = value
   activePanel.value = null
@@ -283,6 +297,7 @@ async function onNpcAction() {
 
 function onKeyDown(event: KeyboardEvent) {
   if (event.defaultPrevented) return
+  if (event.key === 'Escape' && homeStyleOpen.value) { homeStyleOpen.value = false; event.preventDefault(); return }
   if (event.key === 'Escape' && travelStatus.value?.phase === 'walking') { cancelTravel(); event.preventDefault(); return }
   if (event.key === 'Escape' && panelVisible.value) { closePanel(); event.preventDefault(); return }
   if (controls?.handleKeyDown(event)) {
@@ -385,7 +400,8 @@ onBeforeUnmount(() => {
       :user-id="self.publicId"
       :player-position="playerPosition"
       :distance-to-guide="distanceToGuide"
-      :any-panel-open="anyPanelOpen"
+      :any-panel-open="anyPanelOpen || homeStyleOpen"
+      @action="onboardingAction" @close="returnReady = true" @skip="returnReady = true"
       :conversation-open="Boolean(selectedNpc) || selection === 'npc:assistant' || selection === 'npc:postman'"
     />
 
@@ -394,7 +410,14 @@ onBeforeUnmount(() => {
         <p class="eyebrow">一步一步，自成风景</p>
         <h1>成长小镇</h1>
       </div>
-      <div class="actions">
+      <div class="actions town-primary-actions">
+        <button class="secondary" @click="openPanel('today')">今天</button>
+        <button class="secondary" :aria-expanded="destinationsOpen" @click="destinationsOpen = !destinationsOpen">去哪里</button>
+        <button class="secondary" @click="openPanel('friends')">信箱<span v-if="mailSignal.unreadCount"> · {{ mailSignal.unreadCount }}</span></button>
+        <button class="secondary" :aria-expanded="moreOpen" @click="moreOpen = !moreOpen">更多</button>
+      </div>
+      <div v-show="moreOpen" class="actions town-more-actions">
+        <button class="secondary" @click="onboardingAction('home-style')">布置我的家</button>
         <button class="secondary" type="button" aria-label="返回安全位置" title="卡住时直接回到家门口，任务数据不变" @click="recoverPosition">脱困</button>
         <button class="secondary" type="button" @click="toggleNight">
           <component :is="night ? Sun : Moon" :size="17" />{{ night ? '切到白天' : '切到夜晚' }}
@@ -418,7 +441,7 @@ onBeforeUnmount(() => {
     <p v-if="store.error" class="error" role="alert">{{ store.error }}</p>
     <p v-else-if="engineError" class="error" role="alert">{{ engineError }}</p>
 
-    <nav class="town-places actions" aria-label="小镇地点">
+    <nav v-show="destinationsOpen" class="town-places actions" aria-label="小镇地点">
       <button v-for="place in places" :key="place.id" class="secondary" type="button" :disabled="!store.model || !!activeRoom" :title="`走到${place.label}${place.id === 'park' ? '' : '并进入'}`" @click="travelTo(place.id)">{{ place.label }}</button>
       <button v-if="activeRoom" class="secondary" type="button" @click="exitRoom">回到小镇</button>
       <button class="secondary" type="button" @click="openEvents">活动</button>
@@ -428,6 +451,8 @@ onBeforeUnmount(() => {
       <button class="secondary" type="button" @click="openPanel('ai')">AI 助手</button>
       <button class="secondary" type="button" :aria-expanded="panelVisible" aria-controls="town-info-panel" @click="panelVisible = !panelVisible">{{ panelVisible ? '收起面板' : '打开面板' }}</button>
     </nav>
+    <TownReturnCue v-if="self && (returnReady || onboardingRef?.isCompleted())" :key="self.publicId" v-show="!anyPanelOpen && !homeStyleOpen" :planned="self.todayPlanned" :done="self.todayDone" :unread="mailSignal.unreadCount" :night="night" @today="openPanel('today')" @mail="openPanel('friends')" />
+    <section v-if="homeStyleOpen" class="town-style-panel" role="dialog" aria-label="布置我的家"><button class="secondary" @click="homeStyleOpen = false">关闭布置</button><HomeStylePanel @saved="homeStyleOpen = false" @cancel="homeStyleOpen = false" /></section>
     <div class="town-navigation">
       <p v-if="travelMessage" class="town-travel-status" role="status">{{ travelMessage }}</p>
       <button v-if="travelStatus?.phase === 'walking'" class="secondary" type="button" @click="cancelTravel">取消前往</button>
@@ -436,6 +461,7 @@ onBeforeUnmount(() => {
     <p v-if="conversationNotice?.phase === 'leaving'" class="town-conversation-departure" role="status">{{ conversationNotice.name }}：{{ conversationNotice.reason }}</p>
     <p v-if="feedback" class="muted" role="status">{{ feedback }}</p>
     <div class="town-stage">
+      <TownPlaceActivity v-if="!anyPanelOpen && !homeStyleOpen" class="place-activity" :place="activeRoom || selection" @action="id => worldBridge.run(id)" />
       <div v-if="activeRoom === 'home'" class="home-object-shortcuts" aria-label="家中的物品" @pointerdown.stop @keydown.stop>
         <button type="button" @click="interactHomeObject('journal')">翻手账</button>
         <button type="button" @click="interactHomeObject('mailbox')">取信</button>
@@ -447,13 +473,14 @@ onBeforeUnmount(() => {
       <div ref="canvas" class="town-canvas" data-testid="town-canvas" />
       <div v-if="store.loading && !store.model" class="town-loading" role="status">正在把大家的房子搬进小镇…</div>
 
-      <aside v-if="panelVisible" id="town-info-panel" class="town-panel" :class="{ 'has-dialogue': !activePanel && isDialogueOpen, 'has-feature': activePanel, 'has-core-feature': activePanel && ['today', 'partners', 'ai'].includes(activePanel) }" aria-label="小镇面板" @pointerdown.stop @keydown.esc.stop="closePanel" @keydown.stop>
+      <aside v-if="panelVisible || activePanel" v-show="panelVisible" :inert="!panelVisible || undefined" id="town-info-panel" class="town-panel" :class="{ 'has-dialogue': !activePanel && isDialogueOpen, 'has-feature': panelVisible && activePanel, 'has-core-feature': activePanel && ['today', 'partners', 'ai'].includes(activePanel) }" aria-label="小镇面板" @pointerdown.stop @keydown.esc.stop="closePanel" @keydown.stop>
         <div class="town-panel-bar"><button v-if="activePanel === 'friends'" class="secondary" type="button" @click="select('npc:postman-chat')">和邮递员聊聊</button><span>{{ eventsOpen ? '小镇活动' : panelDef?.objectTitle ?? panelDef?.title ?? '小镇见闻' }}</span><button class="town-panel-close" type="button" aria-label="关闭面板" @click="closePanel"><X :size="16" /></button></div>
         <div class="town-panel-content">
         <TownEventsBoard v-if="eventsOpen" @close="closePanel" @visit="travelTo" />
-        <component :is="panelBodies[activePanel]" v-else-if="activePanel" :key="activePanel" />
+        <KeepAlive><component :is="panelBodies[activePanel]" :active="panelVisible && !eventsOpen" v-if="activePanel && ['today', 'ai', 'goals'].includes(activePanel) && !eventsOpen" :key="activePanel" /></KeepAlive>
+        <component :is="panelBodies[activePanel]" v-if="panelVisible && activePanel && !['today', 'ai', 'goals'].includes(activePanel) && !eventsOpen" :key="activePanel" />
 
-        <template v-else-if="selected">
+        <template v-if="!activePanel && !eventsOpen && selected">
           <p class="eyebrow">{{ selected.isSelf ? '这是你的房子' : '邻居' }}</p>
           <h2>{{ selected.displayName }}<small v-if="selected.title"> · {{ selected.title }}</small></h2>
           <dl class="town-facts">
@@ -467,8 +494,8 @@ onBeforeUnmount(() => {
           <RouterLink v-else class="button secondary" :to="`/friends/${selected.publicId}`">看看 TA 的成长</RouterLink>
         </template>
 
-        <ResidentMoment v-else-if="selectedNpc" :npc="selectedNpc" :conversation-state="conversationNotice?.phase" :leaving-reason="conversationNotice?.phase === 'leaving' ? conversationNotice.reason : undefined" @close="closePanel" />
-        <template v-else-if="selection === 'npc:assistant'">
+        <ResidentMoment v-else-if="!activePanel && !eventsOpen && selectedNpc" :npc="selectedNpc" :conversation-state="conversationNotice?.phase" :leaving-reason="conversationNotice?.phase === 'leaving' ? conversationNotice.reason : undefined" @close="closePanel" />
+        <template v-else-if="!activePanel && !eventsOpen && selection === 'npc:assistant'">
           <NpcDialogue v-if="!npcDialogueError" npc="GUIDE" display-name="小助" :leaving-reason="conversationNotice?.phase === 'leaving' ? conversationNotice.reason : undefined" @interrupt="reason => interruptNpc('GUIDE', reason)" :opener="guideOpener" @close="closePanel" @action="onNpcAction" />
           <template v-else>
             <p class="eyebrow">学院门口的向导</p>
@@ -478,7 +505,7 @@ onBeforeUnmount(() => {
           </template>
         </template>
 
-        <template v-else-if="(selection === 'npc:postman' || selection === 'npc:postman-chat')">
+        <template v-else-if="!activePanel && !eventsOpen && (selection === 'npc:postman' || selection === 'npc:postman-chat')">
           <NpcDialogue v-if="!npcDialogueError" npc="POSTMAN" display-name="邮递员" :leaving-reason="conversationNotice?.phase === 'leaving' ? conversationNotice.reason : undefined" @interrupt="reason => interruptNpc('POSTMAN', reason)" :opener="postmanLine" @close="closePanel" @action="onNpcAction" />
           <template v-else>
             <p class="eyebrow">街上的邮递员</p>
@@ -488,7 +515,7 @@ onBeforeUnmount(() => {
           </template>
         </template>
 
-        <template v-else-if="selection === 'academy'">
+        <template v-else-if="!activePanel && !eventsOpen && selection === 'academy'">
           <p class="eyebrow">大家一起变好的地方</p>
           <h2><GraduationCap :size="20" /> 成长学院</h2>
           <p class="town-speech">今天有 {{ studying.length }} 位邻居完成了任务，正在学院里读书。</p>
@@ -498,7 +525,7 @@ onBeforeUnmount(() => {
           <RouterLink class="button secondary" to="/friends">邀请朋友搬来小镇</RouterLink>
         </template>
 
-        <template v-else>
+        <template v-else-if="!activePanel && !eventsOpen">
           <p class="eyebrow">小镇现状</p>
           <h2><Building2 :size="20" /> {{ residents.length }} 户人家 · {{ townNpcStore.npcs.length }} 位邻里</h2>
           <p class="muted">今天已经开张 {{ awakeCount }} 户。点一栋房子、一个小人，看看背后的故事。</p>
@@ -522,6 +549,10 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+.place-activity { position: absolute; top: 70px; right: 16px; z-index: 6; }
+.town-style-panel { position: fixed; right: 16px; bottom: 20px; z-index: 45; width: min(440px, calc(100vw - 32px)); max-height: 80dvh; overflow: auto; background: var(--surface); color: var(--ink); padding: 18px; border-radius: 16px; box-shadow: var(--shadow); }
+.town-page .page-head .town-primary-actions { flex: 1; }
+.town-page .page-head .town-more-actions { flex-basis: 100%; }
 .town-page { width: min(100%, 1280px); }
 .town-stage { position: relative; }
 .town-canvas { width: 100%; height: clamp(480px, 72vh, 820px); border-radius: var(--radius); overflow: hidden; background: #78a95f; box-shadow: var(--shadow); touch-action: none; }

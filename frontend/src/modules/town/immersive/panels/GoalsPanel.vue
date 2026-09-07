@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { onActivated, onDeactivated } from 'vue'
 import { inject, onBeforeUnmount, ref } from 'vue'
 import { CheckCircle2, ListPlus, Pause, Pencil, Play, Plus, RefreshCw, Sparkles, Target, X } from 'lucide-vue-next'
 import { useDialogFocus } from '../../../../shared/ui/use-dialog-focus'
@@ -38,7 +39,11 @@ function tasksOf(goalPublicId: string) {
   return tasks.value.filter(task => task.goalPublicId === goalPublicId)
 }
 
-useDialogFocus(() => panel.value !== null, '.goals-panel-drawer', () => { if (!busy.value) panel.value = null })
+const props = withDefaults(defineProps<{ active?: boolean }>(), { active: true })
+const deactivated = ref(false)
+onActivated(() => { deactivated.value = false })
+onDeactivated(() => { deactivated.value = true })
+useDialogFocus(() => props.active && !deactivated.value && panel.value !== null, '.goals-panel-drawer', () => { if (!busy.value) panel.value = null })
 </script>
 
 <template>

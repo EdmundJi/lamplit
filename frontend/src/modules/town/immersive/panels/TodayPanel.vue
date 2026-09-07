@@ -1,11 +1,16 @@
 <script setup lang="ts">
-import { computed, inject } from 'vue'
+import { computed, inject, onActivated, onDeactivated, ref } from 'vue'
 import { BatteryMedium, Check, Clock3, Gauge, Play, RefreshCw, SkipForward, Sparkles, TimerReset, Undo2, X } from 'lucide-vue-next'
 import { taskStatusLabel } from '../../../../shared/task-status'
 import { useDialogFocus } from '../../../../shared/ui/use-dialog-focus'
 import { worldBridgeKey } from '../panel.types'
 import { useTodayLogic, type Task, type TaskEventType } from '../../../today/today.logic'
 
+const props = withDefaults(defineProps<{ active?: boolean }>(), { active: true })
+const deactivated = ref(false)
+onActivated(() => { deactivated.value = false })
+onDeactivated(() => { deactivated.value = true })
+const surfaceActive = computed(() => props.active && !deactivated.value)
 const bridge = inject(worldBridgeKey, undefined)
 
 const {
@@ -30,7 +35,7 @@ async function recordStep(task: Task, event: TaskEventType) {
   }
 }
 
-useDialogFocus(() => Boolean(selected.value || focusTask.value), '.today-panel-dialog', () => { selected.value = null; closeFocus() })
+useDialogFocus(() => surfaceActive.value && Boolean(selected.value || focusTask.value), '.today-panel-dialog', () => { selected.value = null; closeFocus() })
 </script>
 
 <template>
@@ -41,7 +46,7 @@ useDialogFocus(() => Boolean(selected.value || focusTask.value), '.today-panel-d
       <p>{{ feedback.text }}<strong v-if="feedback.experience">{{ feedback.experience }}</strong></p>
     </div>
 
-    <div class="today-intro"><span>今天，先做好一件事</span><p>从开始到完成，每一步都会留下来。</p></div>
+    <div class="today-intro"><span>今天，先做好一件事</span><p>选一件任务，点击“专注执行”开始；结束后按真实进度记录。</p></div>
 
     <div class="panel-toolbar">
       <button class="rhythm-toggle" type="button" :aria-expanded="showCheck" aria-controls="panel-daily-rhythm" @click="showCheck = !showCheck">
@@ -84,11 +89,11 @@ useDialogFocus(() => Boolean(selected.value || focusTask.value), '.today-panel-d
             <button v-if="task.status === 'IN_PROGRESS'" class="primary" title="完成" aria-label="完成" :disabled="!canComplete(task)" @click="recordStep(task, 'COMPLETED')">
               <Check :size="15" />完成
             </button>
+            <button class="secondary" :disabled="!canActOn(task)" @click="startFocus(task)"><TimerReset :size="14" />专注执行</button>
             <details class="task-more">
               <summary aria-label="更多任务操作">更多</summary>
               <div>
                 <button v-if="task.status === 'PLANNED'" class="secondary" :disabled="!canComplete(task)" @click="recordStep(task, 'COMPLETED')"><Check :size="14" />已经做完，记下来</button>
-                <button class="secondary" :disabled="!canActOn(task)" @click="startFocus(task)"><TimerReset :size="14" />专注执行</button>
                 <button class="secondary" :disabled="!canActOn(task)" @click="prepare(task, 'PARTIAL')"><Gauge :size="14" />部分完成</button>
                 <button class="secondary" :disabled="!canActOn(task)" @click="prepare(task, 'DEFERRED')"><Clock3 :size="14" />延期</button>
                 <button v-if="task.status === 'PLANNED'" class="secondary" :disabled="!canActOn(task)" @click="act(task, 'SKIPPED')"><SkipForward :size="14" />跳过</button>
@@ -114,7 +119,7 @@ useDialogFocus(() => Boolean(selected.value || focusTask.value), '.today-panel-d
       <button class="icon-button" type="button" aria-label="刷新" @click="load(false)"><RefreshCw :size="15" /></button>
     </footer>
 
-    <Teleport to="body">
+    <Teleport v-if="surfaceActive" to="body">
       <div v-if="selected || focusTask" class="dialog-backdrop" @click="selected = null; closeFocus()" />
       <section v-if="selected" class="action-panel today-panel-dialog" role="dialog" aria-modal="true" tabindex="-1" :aria-label="selected.eventType === 'PARTIAL' ? '记录部分完成' : '选择延期时间'">
         <template v-if="selected.eventType === 'PARTIAL'">

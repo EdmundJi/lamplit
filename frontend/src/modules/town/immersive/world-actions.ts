@@ -314,7 +314,10 @@ export function builtinWorldActions(): WorldAction[] {
     { id: 'pet.stroke', label: '摸摸它', domain: 'world', anchors: ['home', 'park'], run: () => ({ ok: true, events: [{ type: 'companion', action: 'stroke' }] }) },
     { id: 'gym.open-attributes', label: '看看健康与成长', domain: 'world', anchors: ['gym'], run: () => ({ ok: true, events: [{ type: 'open', panel: 'attributes' }] }) },
     { id: 'cafe.open-goals', label: '在桌边理理方向', domain: 'world', anchors: ['cafe'], run: () => ({ ok: true, events: [{ type: 'open', panel: 'goals' }] }) },
-    { id: 'cafe.open-ai', label: '与小助聊聊', domain: 'world', anchors: ['cafe'], run: () => ({ ok: true, events: [{ type: 'open', panel: 'ai' }] }) },
+    { id: 'academy.prepare-focus', label: '选一件事，开始专注', hint: '打开今天，选择任务的专注执行；结束后按真实进度记录', domain: 'world', anchors: ['academy'], run: () => ({ ok: true, events: [{ type: 'open', panel: 'today' }] }) },
+    { id: 'home.review-today', label: '回看今天', hint: '整理今天的记录，也可以只休息', domain: 'world', anchors: ['home'], run: () => ({ ok: true, events: [{ type: 'open', panel: 'today' }] }) },
+    { id: 'park.open-companion', label: '看看同行伙伴', hint: '陪伙伴走走，按自己的节奏休息', domain: 'world', anchors: ['park'], run: () => ({ ok: true, events: [{ type: 'open', panel: 'partners' }] }) },
+    { id: 'cafe.open-ai', label: '整理我的下一步', hint: '聊一个想法，确认后把下一步加入已有计划', domain: 'world', anchors: ['cafe'], run: () => ({ ok: true, events: [{ type: 'open', panel: 'ai' }] }) },
     ...panelOpenActions(),
   ]
 }
