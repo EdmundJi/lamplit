@@ -27,12 +27,9 @@ import {
 import type { Pet, ShopItem } from '../../../partners/partner.types'
 import RivePet from '../../../partners/RivePet.vue'
 import { worldBridgeKey } from '../panel.types'
-import { openFullPage } from './shared'
 
 type ShopFilter = 'ALL' | ShopItem['itemType']
 type DialogueMessage = { text: string; actionLabel: string; rewarded: boolean; affectionDelta: number }
-
-const FULL_PAGE = '/partners'
 
 const shopItemImages: Record<string, string> = {
   'pet-food-salmon-bento': '/assets/shop/salmon-bento.svg',
@@ -102,10 +99,9 @@ async function interact(action: PetInteractionOption) {
 }
 
 async function selectPet(p: Pet) {
-  if (p.selected) return
+  if (p.selected || profile.busy.value) return
   closeDialogue()
-  await profile.selectPet(p)
-  bridge?.emit({ type: 'toast', text: profile.feedback.value })
+  if (await profile.selectPet(p)) bridge?.emit({ type: 'toast', text: profile.feedback.value })
 }
 
 function selectVariant(index: number) {
@@ -159,7 +155,7 @@ function toggleDesktopPet() {
 const stopDataSync = onDataChanged(['partners'], () => profile.load(false))
 
 onMounted(() => profile.load(true))
-onBeforeUnmount(stopDataSync)
+onBeforeUnmount(() => { stopDataSync(); closeDialogue() })
 </script>
 
 <template>
@@ -167,6 +163,7 @@ onBeforeUnmount(stopDataSync)
     <!-- 主视图 -->
     <template v-if="view === 'main'">
       <p v-if="profile.error.value" class="error" role="alert">{{ profile.error.value }}</p>
+      <p v-if="profile.feedback.value" role="status">{{ profile.feedback.value }}</p>
       <p v-if="profile.loading.value" class="empty">正在整理伙伴资料…</p>
       <template v-else-if="pet && profile.profile.value">
         <div class="wallet">
@@ -192,6 +189,8 @@ onBeforeUnmount(stopDataSync)
                 :class="{ active: p.selected }"
                 type="button"
                 :aria-label="`切换到 ${p.name}`"
+                :aria-pressed="p.selected"
+                :disabled="profile.busy.value"
                 @click="selectPet(p)"
               />
             </div>
@@ -297,7 +296,7 @@ onBeforeUnmount(stopDataSync)
           <button
             class="primary compact"
             type="button"
-            :disabled="profile.itemDisabled(item)"
+            :disabled="profile.busy.value || profile.itemDisabled(item)"
             @click="purchase(item)"
           >
             使用
@@ -362,7 +361,7 @@ onBeforeUnmount(stopDataSync)
     </template>
 
     <footer class="panel-footer">
-      <button class="secondary compact" type="button" @click="openFullPage(bridge, FULL_PAGE)">完整页面</button>
+      <button class="secondary compact" type="button" :disabled="profile.loading.value || profile.busy.value" @click="profile.load(true)">刷新伙伴</button>
     </footer>
   </section>
 </template>

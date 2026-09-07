@@ -23,11 +23,11 @@ button:disabled { cursor: not-allowed; opacity: .62; }
 .page--talk { padding-bottom: 24px; }
 :root[data-density='compact'] .page { padding-top: 20px; padding-bottom: 46px; }
 .page-head { display: flex; align-items: center; justify-content: space-between; column-gap: 14px; row-gap: 16px; margin-bottom: 32px; }
-.page-head::before { content: ''; width: 4px; height: 42px; border-radius: 4px; background: var(--primary); flex: none; }
+.page-head::before { display: none; content: ''; width: 4px; height: 42px; border-radius: 4px; background: var(--primary); flex: none; }
 .page-head > :first-child { flex: 1; }
 .page-head > * { min-width: 0; }
-.page-head h1 { margin: 0; color: var(--ink); font-size: 32px; font-weight: 750; line-height: 1.3; letter-spacing: -.8px; }
-.eyebrow { margin: 0 0 8px; color: var(--primary-strong); font-size: 12px; font-weight: 700; letter-spacing: .06em; }
+.page-head h1 { margin: 0; color: var(--ink); font-size: 30px; font-weight: 600; line-height: 1.3; letter-spacing: -.8px; }
+.eyebrow { margin: 0 0 8px; color: var(--primary-strong); font-size: 11px; font-weight: 500; letter-spacing: .08em; }
 .band { position: relative; border-top: 1px solid color-mix(in srgb, var(--border) 78%, transparent); padding: 28px 0; }
 :root[data-density='compact'] .band { padding: 15px 0; }
 .band:last-child { border-bottom: 1px solid var(--border); }

@@ -22,6 +22,8 @@ import java.util.Base64;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -168,10 +170,8 @@ class TaskExecutionIT {
         for (int index = 1; index < 4; index++) {
             event(session, quotaSchedules[index], "quota-complete-" + index, completedBody, 200);
         }
-        event(session, quotaSchedules[4], "quota-complete-4", completedBody, 409)
-            .andExpect(jsonPath("$.data.code").value("DAILY_TASK_COMPLETION_LIMIT_REACHED"))
-            .andExpect(jsonPath("$.data.details.limit").value(4))
-            .andExpect(jsonPath("$.data.details.completed").value(4));
+        event(session, quotaSchedules[4], "quota-complete-4", completedBody, 200)
+            .andExpect(jsonPath("$.data.scheduleStatus").value("DONE"));
 
         String firstQuotaEventId = JsonTestValue.read(
             firstQuotaCompletion.getResponse().getContentAsString(), "eventPublicId"
@@ -182,15 +182,60 @@ class TaskExecutionIT {
                 .header("X-CSRF-Token", session.csrf().getValue())
                 .header("Idempotency-Key", "quota-reverse-0"))
             .andExpect(status().isOk());
-        event(session, quotaSchedules[4], "quota-complete-after-reverse", completedBody, 200);
+        event(session, quotaSchedules[0], "quota-complete-after-reverse", completedBody, 200);
         assertThat(count(
             "select count(*) from task_schedule where user_id = ? and local_date = ? and status = 'DONE'",
             fixtures.userId(), Date.valueOf(LocalDate.of(2026, 8, 15))
-        )).isEqualTo(4);
+        )).isEqualTo(5);
 
         Session other = register("execution-other@example.test");
         event(other, fixtures.deferredChildSchedule(), "ownership-check", "{\"eventType\":\"SKIPPED\"}", 404)
             .andExpect(jsonPath("$.data.code").value("TASK_SCHEDULE_NOT_FOUND"));
+    }
+
+    @Test
+    void standaloneChecklistPersistsWithoutGoalsAndSharesExecutionAndOwnership() throws Exception {
+        Session session = register("checklist@example.test");
+        Session other = register("checklist-other@example.test");
+        long userId = jdbc.queryForObject("select id from sys_user where email = 'checklist@example.test'", Long.class);
+        String firstSchedule = null;
+        String firstEvent = null;
+        for (int index = 0; index < 6; index++) {
+            String body = "{\"title\":\"清单事项 " + index + "\",\"localDate\":\"2026-01-01\"}";
+            MvcResult created = mvc.perform(post("/api/v1/tasks/quick")
+                    .cookie(session.access(), session.csrf()).header("X-CSRF-Token", session.csrf().getValue())
+                    .header("Idempotency-Key", "quick-" + index).contentType("application/json").content(body))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.data.goalPublicId").doesNotExist()).andReturn();
+            String taskId = JsonTestValue.read(created.getResponse().getContentAsString(), "publicId");
+            mvc.perform(post("/api/v1/tasks/quick")
+                    .cookie(session.access(), session.csrf()).header("X-CSRF-Token", session.csrf().getValue())
+                    .header("Idempotency-Key", "quick-" + index).contentType("application/json").content(body))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.data.publicId").value(taskId));
+            String schedule = jdbc.queryForObject("select s.public_id from task_schedule s join user_task t on t.id = s.task_id where t.public_id = ?", String.class, taskId);
+            expiryJob.expireDue();
+            assertThat(jdbc.queryForObject("select status from task_schedule where public_id = ?", String.class, schedule)).isEqualTo("PLANNED");
+            mvc.perform(patch("/api/v1/tasks/" + taskId).cookie(session.access(), session.csrf())
+                    .header("X-CSRF-Token", session.csrf().getValue()).contentType("application/json").content("{\"title\":\"已修改\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.title").value("已修改"));
+            mvc.perform(get("/api/v1/tasks/" + taskId).cookie(other.access())).andExpect(status().isNotFound());
+            MvcResult done = event(session, schedule, "quick-done-" + index, "{\"eventType\":\"COMPLETED\"}", 200)
+                .andExpect(jsonPath("$.data.experienceDelta").value(0)).andReturn();
+            if (index == 0) { firstSchedule = schedule; firstEvent = JsonTestValue.read(done.getResponse().getContentAsString(), "eventPublicId"); }
+        }
+        assertThat(count("select count(*) from user_task where user_id = ?", userId)).isEqualTo(6);
+        assertThat(count("select count(*) from growth_goal where user_id = ?", userId)).isZero();
+        mvc.perform(get("/api/v1/task-schedules").cookie(session.access()))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.data.length()").value(6));
+        mvc.perform(get("/api/v1/task-schedules").cookie(other.access()))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.data.length()").value(0));
+        mvc.perform(post("/api/v1/task-schedules/{scheduleId}/events/{eventId}/reverse", firstSchedule, firstEvent)
+                .cookie(session.access(), session.csrf()).header("X-CSRF-Token", session.csrf().getValue()).header("Idempotency-Key", "quick-undo"))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.data.scheduleStatus").value("PLANNED"));
+        event(other, firstSchedule, "quick-other", "{\"eventType\":\"COMPLETED\"}", 404);
+        mvc.perform(post("/api/v1/tasks/quick").cookie(session.access(), session.csrf())
+                .header("X-CSRF-Token", session.csrf().getValue()).header("Idempotency-Key", "quick-blank")
+                .contentType("application/json").content("{\"title\":\"   \"}"))
+            .andExpect(status().isBadRequest());
     }
 
     private org.springframework.test.web.servlet.ResultActions event(

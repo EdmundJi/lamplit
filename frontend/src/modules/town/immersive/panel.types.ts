@@ -6,10 +6,12 @@ import type { Component, InjectionKey } from 'vue'
  */
 
 export type WorldPanelKey =
-  | 'today' | 'goals' | 'ai' | 'friends' | 'insights' | 'attributes' | 'partners' | 'profile' | 'settings'
+  | 'today' | 'goals' | 'ai' | 'friends' | 'insights' | 'attributes' | 'partners' | 'profile' | 'settings' | 'mementos'
 
-/** 小镇里可以「走过去」的锚点，与 town.engine.ts 的 TownSelection 对齐。 */
-export type WorldAnchor = 'home' | 'academy' | 'npc:assistant' | 'npc:postman' | 'gym' | 'cafe' | 'park'
+/** 小镇里可以「走过去」的锚点，与 town.engine.ts 的 TownSelection 对齐。
+ * plaza/street 目前引擎还产生不了这两个选中值（见 immersive.store.ts 的 anchorForSelection），
+ * 先把 9 个面板按地点语义分完，等引擎补上对应的可点击区域自然就会命中。 */
+export type WorldAnchor = 'home' | 'academy' | 'npc:assistant' | 'npc:postman' | 'gym' | 'cafe' | 'park' | 'plaza' | 'street'
 
 export type WorldPanelDef = {
   key: WorldPanelKey
@@ -23,7 +25,10 @@ export type WorldPanelDef = {
   loader: () => Promise<{ default: Component }>
   /** 窗口宽度倾向，最终几何由外壳决定。 */
   size: 'compact' | 'wide'
-  /** 走到这个地点/NPC 时自动打开本面板。 */
+  /** A familiar object around the existing business content. */
+  objectSurface?: 'journal' | 'mailbox'
+  objectTitle?: string
+  /** 面板所属地点；通过家具、明确操作或功能栏打开。 */
   anchor?: WorldAnchor
   /** 用户要求「打开完整页面」时跳转的路由。 */
   fullPage: string
@@ -31,8 +36,11 @@ export type WorldPanelDef = {
 
 /** 面板回传给世界的事件：数据变化要在画面里看得见。 */
 export type WorldEvent =
+  | { type: 'companion'; action: 'walk' | 'stay' | 'stroke' }
   | { type: 'celebrate'; publicId: string }
   | { type: 'focus'; publicId: string }
+  | { type: 'travel'; place: string }
+  | { type: 'mail-count'; count: number }
   | { type: 'toast'; text: string }
   | { type: 'open'; panel: WorldPanelKey }
   | { type: 'close' }

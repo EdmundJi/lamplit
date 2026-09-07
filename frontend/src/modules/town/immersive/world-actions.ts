@@ -1,5 +1,6 @@
 import type { Component } from 'vue'
-import { Footprints, GraduationCap, Home, Moon, RefreshCw } from 'lucide-vue-next'
+import { CalendarCheck, Footprints, GraduationCap, Home, Moon, PawPrint, RefreshCw, TrendingUp } from 'lucide-vue-next'
+import { PET_HOUSE_ACTION_ID } from '../interior.scene'
 import type { WorldAnchor, WorldEvent } from './panel.types'
 import type { WorldBridge } from './panel.types'
 import { worldPanels } from './panels/manifest'
@@ -198,12 +199,12 @@ function goHomeAction(): WorldAction {
   return {
     id: 'world.go-home',
     label: '回到我家',
-    hint: '镜头带你回到自己的房子',
+    hint: '沿街走到家门口，自动进入客厅',
     icon: Home,
     domain: 'world',
     available: ctx => (ctx.selfPublicId ? { ok: true } : { ok: false, reason: '还没找到你的角色' }),
     run(ctx) {
-      return { ok: true, message: '回家了', events: [{ type: 'focus', publicId: ctx.selfPublicId as string }] }
+      return { ok: true, message: '正在往家走', events: [{ type: 'travel', place: 'home' }] }
     },
   }
 }
@@ -212,11 +213,11 @@ function toggleAcademyAction(): WorldAction {
   return {
     id: 'world.toggle-academy',
     label: ctx => (ctx.insideAcademy ? '回到小镇' : '去成长学院'),
-    hint: '成长学院的自习室在小镇之外，进出都是一次场景切换',
+    hint: '走到学院门口，在自习室里继续今天的学习',
     icon: GraduationCap,
     domain: 'world',
     // 离开学院时的中断提示：进入学院不需要确认，退出时提醒一句更贴心。
-    confirm: ctx => (ctx.insideAcademy ? '确定要离开学院吗？' : ''),
+
     run(ctx) {
       const entering = !ctx.insideAcademy
       return {
@@ -242,6 +243,50 @@ function refreshAction(): WorldAction {
   }
 }
 
+// ---------------------------------------------------------------------------
+// 我的家 · 三件可交互物（M3-4）：书桌 / 成就墙 / 宠物窝。interior.scene.ts 点击对应家具时会调用
+// runWorldAction(这里的 id, ctx)——地图数据和场景本身都不知道"打开书桌"具体是什么，统一走这份
+// 注册表，和门/onExit 是同一个"数据只说做什么、这里才说怎么做"的分工。
+// ---------------------------------------------------------------------------
+
+function openDeskAction(): WorldAction {
+  return {
+    id: 'home.open-desk',
+    label: '打开书桌',
+    hint: '看看今天要做的这一件事',
+    icon: CalendarCheck,
+    domain: 'world',
+    anchors: ['home'],
+    run: () => ({ ok: true, events: [{ type: 'open', panel: 'today' }] }),
+  }
+}
+
+function openAchievementWallAction(): WorldAction {
+  return {
+    id: 'home.open-achievement-wall',
+    label: '看看成就墙',
+    hint: '看看留下的纪念，想起获得它的那一天',
+    icon: TrendingUp,
+    domain: 'world',
+    anchors: ['home'],
+    run: () => ({ ok: true, events: [{ type: 'open', panel: 'mementos' }] }),
+  }
+}
+
+/** id 从 interior.scene.ts 导入而不是重复写一遍字符串——那边的宠物窝家具/宠物本身点击后调用的
+ * 就是这同一个 id，两处不会因为改了一边忘了改另一边而悄悄错开。 */
+function openPetHouseAction(): WorldAction {
+  return {
+    id: PET_HOUSE_ACTION_ID,
+    label: '看看伙伴',
+    hint: '你的宠物窝在客厅角落',
+    icon: PawPrint,
+    domain: 'world',
+    anchors: ['home'],
+    run: () => ({ ok: true, events: [{ type: 'open', panel: 'partners' }] }),
+  }
+}
+
 /** 每个声明了 anchor 的面板生成一个"打开 XX"的能力，走到对应地点时能在动作菜单里手动重开
  * （面板自动开一次之后被关掉，这是重新打开它的入口）。没声明 anchor 的面板留给 dock 触达。 */
 function panelOpenActions(): WorldAction[] {
@@ -259,7 +304,19 @@ function panelOpenActions(): WorldAction[] {
 }
 
 export function builtinWorldActions(): WorldAction[] {
-  return [toggleNightAction(), toggleRunAction(), goHomeAction(), toggleAcademyAction(), refreshAction(), ...panelOpenActions()]
+  return [
+    toggleNightAction(), toggleRunAction(), goHomeAction(), toggleAcademyAction(), refreshAction(),
+    openDeskAction(), openAchievementWallAction(), openPetHouseAction(),
+    { id: 'home.read-journal', label: '翻开手账', hint: '在桌边看看今天的安排', domain: 'world', anchors: ['home'], run: () => ({ ok: true, events: [{ type: 'open', panel: 'today' }] }) },
+    { id: 'home.open-mailbox', label: '取出信件', hint: '朋友的来信与镇上的请柬', domain: 'world', anchors: ['home'], run: () => ({ ok: true, events: [{ type: 'open', panel: 'friends' }] }) },
+    { id: 'home.take-leash', label: '带伙伴出门', hint: '拿起门边的牵引绳，出去走走', domain: 'world', anchors: ['home'], run: () => ({ ok: true, events: [{ type: 'companion', action: 'walk' }] }) },
+    { id: 'home.stow-leash', label: '收好牵引绳', domain: 'world', anchors: ['home'], run: () => ({ ok: true, events: [{ type: 'companion', action: 'stay' }] }) },
+    { id: 'pet.stroke', label: '摸摸它', domain: 'world', anchors: ['home', 'park'], run: () => ({ ok: true, events: [{ type: 'companion', action: 'stroke' }] }) },
+    { id: 'gym.open-attributes', label: '看看健康与成长', domain: 'world', anchors: ['gym'], run: () => ({ ok: true, events: [{ type: 'open', panel: 'attributes' }] }) },
+    { id: 'cafe.open-goals', label: '在桌边理理方向', domain: 'world', anchors: ['cafe'], run: () => ({ ok: true, events: [{ type: 'open', panel: 'goals' }] }) },
+    { id: 'cafe.open-ai', label: '与小助聊聊', domain: 'world', anchors: ['cafe'], run: () => ({ ok: true, events: [{ type: 'open', panel: 'ai' }] }) },
+    ...panelOpenActions(),
+  ]
 }
 
 /** 外壳在挂载时调用一次即可；重复调用是幂等的（同 id 覆盖）。 */

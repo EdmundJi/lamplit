@@ -65,7 +65,7 @@ const guide = computed(() => resolveGuide(route.path))
   position: relative;
   z-index: 6;
   border-bottom: 1px solid var(--border);
-  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  background: var(--canvas);
   color: var(--muted);
 }
 .operation-guide summary { display: flex; align-items: center; gap: 8px; width: fit-content; margin-left: auto; padding: 7px 32px; cursor: pointer; font-size: 11px; list-style: none; }

@@ -79,6 +79,8 @@ export type AtmosphereOptions = {
   groundY: number
   /** 注入时钟，默认 Date.now；测试或回放时可传入固定值。 */
   now?: () => number
+  /** The player’s timezone clock; separate from device-local Date access. */
+  townTime?: () => { minutes: number; month: number }
   /** 固定季节；不传则按 now() 对应的月份自动推算。 */
   season?: Season
   reducedMotion?: boolean
@@ -283,7 +285,7 @@ export class TownAtmosphere {
   }
 
   private currentSeason(): Season {
-    return this.seasonOverride ?? seasonForMonth(new Date(this.nowFn()).getMonth() + 1)
+    return this.seasonOverride ?? seasonForMonth(this.opts.townTime?.().month ?? new Date(this.nowFn()).getMonth() + 1)
   }
 
   private ensureTextures(scene: Scene) {
@@ -402,6 +404,11 @@ export class TownAtmosphere {
     else this.snowEmitter?.stop()
   }
 
+  /** 只读地看一眼当前天气——M7-9 路上插曲要靠它判断"雨天该不该往屋檐下躲"，本身不改变任何状态。 */
+  getWeather(): WeatherKind {
+    return this.weather
+  }
+
   /** 固定季节；传 null 恢复「按当前月份自动判断」。 */
   setSeasonOverride(season: Season | null): void {
     this.seasonOverride = season
@@ -486,7 +493,7 @@ export class TownAtmosphere {
   update(deltaMs: number): void {
     if (!this.scene || !this.visible) return
     const now = this.nowFn()
-    const palette = paletteForTime(minutesOfDay(new Date(now)), this.currentSeason())
+    const palette = paletteForTime(this.opts.townTime?.().minutes ?? minutesOfDay(new Date(now)), this.currentSeason())
 
     this.nightOverlay?.setFillStyle(palette.overlayColor, palette.overlayAlpha)
     for (const light of this.lights.values()) {

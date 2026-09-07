@@ -74,7 +74,7 @@ function iconOf(icon: Component | undefined) {
 </template>
 
 <style scoped>
-.world-action-menu { position: absolute; left: 50%; bottom: 92px; transform: translateX(-50%); z-index: 6; width: min(300px, calc(100vw - 32px)); border: 1px solid color-mix(in srgb, var(--border) 60%, transparent); border-radius: var(--radius-panel); background: color-mix(in srgb, var(--surface) 96%, transparent); backdrop-filter: blur(14px); box-shadow: var(--shadow); overflow: hidden; }
+.world-action-menu { color: var(--ink); position: absolute; left: 50%; bottom: 92px; transform: translateX(-50%); z-index: 30; width: min(300px, calc(100vw - 32px)); border: 1px solid color-mix(in srgb, var(--border) 60%, transparent); border-radius: var(--radius-panel); background: color-mix(in srgb, var(--surface) 96%, transparent); backdrop-filter: blur(14px); box-shadow: var(--shadow); overflow: hidden; }
 .world-action-menu-head { display: flex; align-items: center; gap: 8px; padding: 10px 8px 10px 14px; border-bottom: 1px solid var(--border); background: var(--surface-muted); font-size: 13px; }
 .world-action-menu-head strong { flex: 1; }
 .world-action-menu-head .icon-button { width: 26px; height: 26px; min-height: 26px; padding: 0; line-height: 1; }

@@ -39,6 +39,15 @@
     </dependencyManagement>
 
     <dependencies>
+        <!-- 只在 spring-boot:run 下生效：devtools 检测到自己是从 jar 启动时会自动关闭，
+             打包时也会被 spring-boot-maven-plugin 排除，所以对生产镜像没有影响。
+             共享开发服务器（deploy/compose.dev.yaml）靠它做改完即重启。 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-devtools</artifactId>
+            <scope>runtime</scope>
+            <optional>true</optional>
+        </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>

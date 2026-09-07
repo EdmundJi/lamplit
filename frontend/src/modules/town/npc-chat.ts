@@ -73,6 +73,10 @@ type NpcChatState = {
   sending: boolean
   streaming: boolean
   error: string
+  revision: number
+  draft: string
+  leavingReason: string | null
+  interruptPending: boolean
 }
 
 const QUOTA_MESSAGE = '小助今天说累了，明天再聊'
@@ -98,11 +102,11 @@ const NAV_PATHS: Partial<Record<NpcActionType, string>> = {
   OPEN_FRIENDS: '/friends',
 }
 
-/** Streams still in flight, keyed by npc, so `abort()` can cancel them. */
-const controllers = new Map<NpcCode, AbortController>()
+/** Streams are keyed by store state to isolate separate Pinia instances. */
+const controllers = new WeakMap<NpcChatState, AbortController>()
 
 function emptyState(): NpcChatState {
-  return { messages: [], loading: false, sending: false, streaming: false, error: '' }
+  return { messages: [], loading: false, sending: false, streaming: false, error: '', revision: 0, draft: '', leavingReason: null, interruptPending: false }
 }
 
 function normalizeServerMessage(row: ServerMessage): NpcMessage {
@@ -143,22 +147,26 @@ export const useNpcChatStore = defineStore('npc-chat', {
   actions: {
     async history(npc: NpcCode) {
       const state = this.byNpc[npc]
+      this.abort(npc)
+      const revision = state.revision
       state.loading = true
       state.error = ''
       try {
         const rows = await api.get<ServerMessage[]>(`/town/npc/${npc}/messages`)
-        state.messages = rows.map(normalizeServerMessage)
+        if (state.revision === revision) state.messages = rows.map(normalizeServerMessage)
       } catch {
-        state.error = '对话记录暂时无法加载'
+        if (state.revision === revision) state.error = '对话记录暂时无法加载'
       } finally {
-        state.loading = false
+        if (state.revision === revision) state.loading = false
       }
     },
 
     async send(npc: NpcCode, text: string) {
       const trimmed = text.trim()
       const state = this.byNpc[npc]
-      if (!trimmed || state.sending) return
+      if (!trimmed || state.sending || state.leavingReason !== null) return
+      const revision = ++state.revision
+      state.loading = false
 
       state.error = ''
       state.sending = true
@@ -187,9 +195,12 @@ export const useNpcChatStore = defineStore('npc-chat', {
       const live = state.messages[state.messages.length - 1] as NpcMessage
 
       const controller = new AbortController()
-      controllers.set(npc, controller)
+      controllers.set(state, controller)
+      let terminal = false
+      const current = () => state.revision === revision && !controller.signal.aborted
       try {
         await postSse(`/town/npc/${npc}/chat:stream`, { message: trimmed }, event => {
+          if (!current() || terminal) return
           if (event.name === 'meta') {
             const meta = event.data as { messagePublicId?: string }
             if (meta.messagePublicId) live.publicId = meta.messagePublicId
@@ -202,39 +213,65 @@ export const useNpcChatStore = defineStore('npc-chat', {
             live.blocked = true
             live.status = 'BLOCKED'
           } else if (event.name === 'done') {
-            const done = event.data as { messagePublicId?: string; status?: NpcMessageStatus; options?: NpcOption[]; actions?: NpcAction[] }
+            const done = event.data as { messagePublicId?: string; status?: NpcMessageStatus; options?: NpcOption[]; actions?: NpcAction[]; control?: unknown }
             if (done.messagePublicId) live.publicId = done.messagePublicId
             if (done.status) { live.status = done.status; live.blocked = done.status === 'BLOCKED' }
             live.options = done.options ?? []
             live.actions = done.actions ?? []
             live.pending = false
+            terminal = true
+            state.sending = false
+            state.streaming = false
+            const control = done.control as { type?: unknown; reason?: unknown } | null | undefined
+            if (control?.type === '/interrupt' && typeof control.reason === 'string' && control.reason.trim()) {
+              // Only structured control on this live done is executable. Never inspect prose/history.
+              live.options = []
+              live.actions = []
+              state.leavingReason = control.reason.replaceAll('/interrupt', '').trim() || '这次先聊到这里，下次再见。'
+              state.interruptPending = true
+            }
           } else if (event.name === 'error') {
             const failure = event.data as { code?: string; message?: string }
             state.error = isQuotaCode(failure.code) ? QUOTA_MESSAGE : (failure.message || '对话暂时不可用，请稍后再试')
             live.pending = false
+            terminal = true
           }
         }, controller.signal)
       } catch (caught) {
-        if ((caught as { name?: string }).name !== 'AbortError') {
+        if (current() && !terminal && (caught as { name?: string }).name !== 'AbortError') {
           const request = caught as { status?: number; code?: string }
           state.error = request.status === 429 || isQuotaCode(request.code) ? QUOTA_MESSAGE : '对话暂时不可用，请稍后再试'
         }
       } finally {
-        live.pending = false
-        state.sending = false
-        state.streaming = false
-        controllers.delete(npc)
+        if (current()) {
+          live.pending = false
+          state.sending = false
+          state.streaming = false
+          controllers.delete(state)
+        }
       }
     },
 
     abort(npc: NpcCode) {
-      controllers.get(npc)?.abort()
-      controllers.delete(npc)
       const state = this.byNpc[npc]
+      ++state.revision
+      controllers.get(state)?.abort()
+      controllers.delete(state)
+      state.loading = false
+      state.leavingReason = null
+      state.interruptPending = false
       state.sending = false
       state.streaming = false
       const last = state.messages.at(-1)
       if (last?.pending) last.pending = false
+    },
+
+    /** Consume before emitting to a parent that may synchronously close the dialogue. */
+    consumeInterrupt(npc: NpcCode): string | null {
+      const state = this.byNpc[npc]
+      if (!state.interruptPending) return null
+      state.interruptPending = false
+      return state.leavingReason
     },
 
     async runAction(action: NpcAction, extra: { deferredStartAt?: string; completionRatio?: number } = {}): Promise<NpcActionResult> {

@@ -165,6 +165,18 @@ describe('createPresenceReporter', () => {
     expect(onReport).toHaveBeenLastCalledWith(payload2)
   })
 
+  it('clears queued interior coordinates before restoring the street', () => {
+    const onReport = vi.fn()
+    const reporter = createPresenceReporter(onReport, 3000)
+    reporter.update({ x: 320, y: 384, facing: 'down', scene: 'interior:public-gym' })
+    reporter.update({ x: 321, y: 385, facing: 'down', scene: 'interior:public-gym' })
+    reporter.clear()
+    reporter.update({ x: 2000, y: 908, facing: 'down', scene: 'town:gym' })
+    vi.advanceTimersByTime(4000)
+    expect(onReport).toHaveBeenCalledTimes(2)
+    expect(onReport).toHaveBeenLastCalledWith({ x: 2000, y: 908, facing: 'down', scene: 'town:gym' })
+  })
+
   it('flush does nothing when no pending update', () => {
     const onReport = vi.fn()
     const reporter = createPresenceReporter(onReport, 3000)

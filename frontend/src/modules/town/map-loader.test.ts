@@ -7,6 +7,7 @@ import {
   entrySpawnFor,
   evaluateSlots,
   findDoor,
+  interactableAt,
   parseRoomMap,
   RoomMapValidationError,
   stepAxis,
@@ -110,6 +111,37 @@ describe('parseRoomMap', () => {
     expect(room.doors).toEqual([])
     expect(room.furniture).toEqual([])
   })
+
+  it('leaves furniture.interactive undefined when not present (today\'s rooms keep working unchanged)', () => {
+    const room = parseRoomMap(minimalRoom())
+    expect(room.furniture[0].interactive).toBeUndefined()
+  })
+
+  it('parses a furniture piece\'s interactive field (M3-3)', () => {
+    const room = parseRoomMap(minimalRoom({
+      furniture: [{ id: 'desk', frame: 'desk_1', x: 200, y: 200, interactive: { actionId: 'home.open-desk', label: '打开书桌' } }],
+    }))
+    expect(room.furniture[0].interactive).toEqual({ actionId: 'home.open-desk', hit: undefined, label: '打开书桌' })
+  })
+
+  it('accepts an explicit hit-box on interactive furniture', () => {
+    const room = parseRoomMap(minimalRoom({
+      furniture: [{ id: 'desk', frame: 'desk_1', x: 200, y: 200, interactive: { actionId: 'a', hit: { x: 1, y: 2, w: 3, h: 4 } } }],
+    }))
+    expect(room.furniture[0].interactive?.hit).toEqual({ x: 1, y: 2, w: 3, h: 4 })
+  })
+
+  it('rejects interactive furniture missing actionId', () => {
+    expect(() => parseRoomMap(minimalRoom({
+      furniture: [{ id: 'desk', frame: 'desk_1', x: 200, y: 200, interactive: {} }],
+    }))).toThrow(/interactive\.actionId/)
+  })
+
+  it('rejects an interactive hit-box that is not a valid rect', () => {
+    expect(() => parseRoomMap(minimalRoom({
+      furniture: [{ id: 'desk', frame: 'desk_1', x: 200, y: 200, interactive: { actionId: 'a', hit: { x: 0, y: 0, w: 0, h: 0 } } }],
+    }))).toThrow(/interactive\.hit/)
+  })
 })
 
 describe('evaluateSlots', () => {
@@ -195,6 +227,36 @@ describe('doors: findDoor / doorAt / entrySpawnFor', () => {
 
   it('ignores an unknown door id and falls back to the room spawn', () => {
     expect(entrySpawnFor(room, 'nope')).toEqual({ x: 64, y: 64 })
+  })
+})
+
+describe('interactableAt', () => {
+  const room: RoomMapData = parseRoomMap(minimalRoom({
+    furniture: [
+      { id: 'sofa', frame: 'sofa_1', x: 100, y: 100 },
+      { id: 'desk', frame: 'desk_1', x: 60, y: 60, interactive: { actionId: 'home.open-desk', label: '打开书桌' } },
+    ],
+  }))
+
+  it('finds the interactive furniture whose default (tileSize) hit-box contains the point', () => {
+    // tileSize=32, so the desk's box is x:[44,76] y:[28,60] (bottom-center at 60,60).
+    expect(interactableAt(room, 60, 40)?.id).toBe('desk')
+  })
+
+  it('ignores furniture without an interactive field even if the point lands on it', () => {
+    expect(interactableAt(room, 100, 90)).toBeUndefined()
+  })
+
+  it('misses once the point falls outside the hit-box', () => {
+    expect(interactableAt(room, 0, 0)).toBeUndefined()
+  })
+
+  it('respects an explicit hit-box instead of the tileSize default', () => {
+    const withHit = parseRoomMap(minimalRoom({
+      furniture: [{ id: 'wall-plaque', frame: 'board_1', x: 10, y: 10, interactive: { actionId: 'home.open-achievement-wall', hit: { x: 200, y: 200, w: 10, h: 10 } } }],
+    }))
+    expect(interactableAt(withHit, 205, 205)?.id).toBe('wall-plaque')
+    expect(interactableAt(withHit, 10, 10)).toBeUndefined() // its own (x,y) is nowhere near the overridden hit-box
   })
 })
 

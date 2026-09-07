@@ -11,9 +11,12 @@ export type WorldPrefs = {
   openPanels: WorldPanelKey[]
   /** 每个面板窗口最后一次的位置/最小化状态。 */
   positions: Partial<Record<WorldPanelKey, WorldWindowPref>>
+  /** dock 是否收起。默认 true：plan.md §1 诊断第 3 条——常驻的图标条会把世界压成壁纸、
+   * 把小镇退化成导航栏。功能入口改由走到地点触发（anchor），dock 只当兜底。 */
+  dockCollapsed: boolean
 }
 
-const DEFAULT_PREFS: WorldPrefs = { runMode: false, openPanels: [], positions: {} }
+const DEFAULT_PREFS: WorldPrefs = { runMode: false, openPanels: [], positions: {}, dockCollapsed: true }
 
 function storageAvailable() {
   return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined'
@@ -29,6 +32,8 @@ export function loadWorldPrefs(): WorldPrefs {
       runMode: Boolean(parsed.runMode),
       openPanels: Array.isArray(parsed.openPanels) ? parsed.openPanels : [],
       positions: parsed.positions && typeof parsed.positions === 'object' ? parsed.positions : {},
+      // 老版本存的 prefs 里没有这个键，缺省要落回"收起"，不能被 Boolean(undefined) 变成展开。
+      dockCollapsed: typeof parsed.dockCollapsed === 'boolean' ? parsed.dockCollapsed : DEFAULT_PREFS.dockCollapsed,
     }
   } catch {
     window.localStorage.removeItem(STORAGE_KEY)

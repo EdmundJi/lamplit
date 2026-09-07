@@ -40,7 +40,7 @@ describe('Today actions', () => {
     expect(wrapper.get('.feedback-banner[data-tone="support"]').text().length).toBeGreaterThan(12)
   })
 
-  it('shows the daily quota and disables completion after four completed tasks', async () => {
+  it('shows completion count and permits a fifth task', async () => {
     api.get.mockImplementation((path: string) => Promise.resolve(path.startsWith('/task-schedules')
       ? [
           ...Array.from({ length: 4 }, (_, index) => ({
@@ -55,9 +55,8 @@ describe('Today actions', () => {
     const wrapper = mount(TodayView, { global: { stubs: { Teleport: true, RouterLink: true } } })
     await flushPromises()
 
-    expect(wrapper.get('.task-quota').text()).toContain('4 / 4')
-    expect(wrapper.get('.task-quota').attributes('data-limit-reached')).toBe('true')
-    expect(wrapper.findAll('button[aria-label="完成"]').every(button => button.attributes('disabled') !== undefined)).toBe(true)
+    expect(wrapper.get('.completion-count').text()).toContain('4 项')
+    expect(wrapper.findAll('button[aria-label="完成"]').every(button => button.attributes('disabled') === undefined)).toBe(true)
   })
 })
 

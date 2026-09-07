@@ -31,7 +31,6 @@ export type DailyStatus = {
 }
 export type TaskEventType = 'STARTED' | 'COMPLETED' | 'PARTIAL' | 'DEFERRED' | 'SKIPPED'
 
-export const DAILY_COMPLETION_LIMIT = 4
 export const DAILY_LIMIT_MESSAGE = '今天已完成 4 个任务，明天再继续吧'
 
 export function localDate(value = new Date()) {
@@ -84,8 +83,6 @@ export function useTodayLogic(options: UseTodayLogicOptions = {}) {
   const strainedTasks = computed(() => tasks.value.filter(task => ['DEFERRED', 'SKIPPED', 'EXPIRED'].includes(task.status)))
   const activeGoals = computed(() => goals.value.filter(goal => goal.status === 'ACTIVE'))
   const completedTaskCount = computed(() => tasks.value.filter(task => task.status === 'DONE').length)
-  const remainingCompletions = computed(() => Math.max(0, DAILY_COMPLETION_LIMIT - completedTaskCount.value))
-  const dailyLimitReached = computed(() => remainingCompletions.value === 0)
   const suggestedPlan = computed(() => {
     if (checkMood.value === 'low' || availableMinutes.value < 20) {
       return { title: '缩小任务', body: '今天先保留一件最小行动，把完成比例目标降到 50%。', action: '缩小今天', advice: 'SHRINK' as const }
@@ -156,7 +153,7 @@ export function useTodayLogic(options: UseTodayLogicOptions = {}) {
   }
 
   function canComplete(task: Task) {
-    return canActOn(task) && !dailyLimitReached.value
+    return canActOn(task)
   }
 
   async function applyCheck() {
@@ -212,10 +209,6 @@ export function useTodayLogic(options: UseTodayLogicOptions = {}) {
   }
 
   async function act(task: Task, eventType: TaskEventType, extra: Record<string, unknown> = {}) {
-    if (eventType === 'COMPLETED' && dailyLimitReached.value) {
-      error.value = DAILY_LIMIT_MESSAGE
-      return
-    }
     const intent = `${task.publicId}:${eventType}`
     if (pending.value.has(intent)) return
     const key = actionKeys.get(intent) ?? randomUUID()
@@ -286,7 +279,7 @@ export function useTodayLogic(options: UseTodayLogicOptions = {}) {
     selected, completionPercent, deferredStart,
     checkMood, availableMinutes, checkSubmitted, showCheck, savedAdvice, recoveryChoice,
     focusTask, focusRunning, focusSeconds,
-    plannedTasks, strainedTasks, activeGoals, completedTaskCount, remainingCompletions, dailyLimitReached,
+    plannedTasks, strainedTasks, activeGoals, completedTaskCount,
     suggestedPlan, activeAdvice, recommendedTasks, recommendedPublicIds, dailyGuidance, focusMinutes, focusClock,
     load, prepare, canActOn, canComplete, applyCheck, applyRecovery, startFocus, toggleFocus, closeFocus,
     act, confirmAction, finishFocus, reverse,

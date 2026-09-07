@@ -126,6 +126,38 @@ class NpcReplyParserTest {
         assertThat(parsed.actions()).isEmpty();
     }
 
+    @Test
+    void controlIsIndependentAndSuppressesChipsAndBusinessActions() {
+        var parsed = NpcReplyParser.parse("我先去送信，晚点聊。§§{\"control\":{\"type\":\"/interrupt\",\"reason\":\"  要去送信  \"},\"options\":[{\"label\":\"继续\"}],\"actions\":[{\"type\":\"OPEN_TODAY\"}]}", List.of());
+        assertThat(parsed.control()).isEqualTo(new NpcReplyParser.Control("/interrupt", "要去送信"));
+        assertThat(parsed.options()).isEmpty();
+        assertThat(parsed.actions()).isEmpty();
+        assertThat(parsed.text()).isEqualTo("我先去送信，晚点聊。");
+    }
+
+    @Test
+    void rejectsInvalidOrMisplacedControls() {
+        for (String tail : List.of(
+            "{\"control\":null}", "{\"control\":\"/interrupt\"}",
+            "{\"control\":{\"type\":\"/leave\",\"reason\":\"送信\"}}",
+            "{\"control\":{\"type\":\" /interrupt\",\"reason\":\"送信\"}}",
+            "{\"control\":{\"type\":\"/interrupt\"}}",
+            "{\"control\":{\"type\":\"/interrupt\",\"reason\":42}}",
+            "{\"control\":{\"type\":\"/interrupt\",\"reason\":\"   \"}}",
+            "{\"control\":{\"type\":\"/interrupt\",\"reason\":\"" + "字".repeat(201) + "\"}}",
+            "{\"actions\":[{\"type\":\"/interrupt\",\"reason\":\"送信\"}]}",
+            "{\"nested\":{\"control\":{\"type\":\"/interrupt\",\"reason\":\"送信\"}}}",
+            "prefix {\"control\":{\"type\":\"/interrupt\",\"reason\":\"送信\"}}",
+            "{\"control\":{\"type\":\"/interrupt\",\"reason\":\"送信\"}} {}",
+            "{\"control\":{\"type\":\"/interrupt\",\"reason\":\"送信\"}"
+        )) {
+            assertThat(NpcReplyParser.parse("正文 /interrupt§§" + tail, List.of()).control()).as(tail).isNull();
+        }
+        assertThat(NpcReplyParser.parse("正文 /interrupt", List.of()).control()).isNull();
+        assertThat(new NpcReplyParser.Parsed("旧构造", List.of(), List.of()).control()).isNull();
+        assertThat(NpcReplyParser.parse("§§{\"control\":{\"type\":\"/interrupt\",\"reason\":\"" + "字".repeat(200) + "\"}}", List.of()).control()).isNotNull();
+    }
+
     private static TownService.ScheduleItem schedule(String publicId, String status) {
         Instant start = Instant.parse("2026-09-05T01:00:00Z");
         return new TownService.ScheduleItem(

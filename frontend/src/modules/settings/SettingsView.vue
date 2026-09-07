@@ -19,6 +19,8 @@ import {
 import { channelHint, channelLabel, retentionOptions, useSettingsData } from './settings.logic'
 
 const { prefs, notifications, deletion, exportJob, error, load, setRetention, toggleNotification, createExport, requestDeletion, cancelDeletion } = useSettingsData()
+import { useWorkspaceModeStore } from '../../shared/ui/workspace-mode.store'
+const mode = useWorkspaceModeStore()
 const auth = useAuthStore()
 const router = useRouter()
 const appearance = useAppearanceStore()
@@ -65,6 +67,12 @@ function replayWelcome() {
     </header>
 
     <p v-if="error" class="error" role="alert">{{ error }}</p>
+
+    <section class="band">
+      <h2>使用模式</h2>
+      <p>极简模式只保留执行清单。切换模式不会改变已有任务，偏好保存在当前设备。</p>
+      <button class="secondary" :aria-pressed="mode.minimal" @click="mode.setMinimal(!mode.minimal); router.push('/today')">{{ mode.minimal ? '切换成长模式' : '切换极简清单' }}</button>
+    </section>
 
     <section class="band appearance-section">
       <div class="section-title">

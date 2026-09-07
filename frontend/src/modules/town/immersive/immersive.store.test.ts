@@ -133,3 +133,36 @@ describe('useImmersiveStore', () => {
     expect(JSON.parse(saved.get('better-self:town-immersive') ?? '{}').runMode).toBe(true)
   })
 })
+
+describe('dock 收起状态（M5-4）', () => {
+  const saved = new Map<string, string>()
+
+  beforeEach(() => {
+    saved.clear()
+    Object.defineProperty(window, 'localStorage', {
+      configurable: true,
+      value: {
+        getItem: (key: string) => saved.get(key) ?? null,
+        setItem: (key: string, value: string) => saved.set(key, value),
+        removeItem: (key: string) => saved.delete(key),
+      },
+    })
+    setActivePinia(createPinia())
+  })
+
+  it('默认是收起的——dock 常驻会把世界压成壁纸（plan §1 诊断 3）', () => {
+    const store = useImmersiveStore()
+    expect(store.dockCollapsed).toBe(true)
+  })
+
+  it('toggleDock 来回切换并持久化，hydrate 时能恢复', () => {
+    const store = useImmersiveStore()
+    store.toggleDock()
+    expect(store.dockCollapsed).toBe(false)
+
+    setActivePinia(createPinia())
+    const restored = useImmersiveStore()
+    restored.hydrate(panels)
+    expect(restored.dockCollapsed).toBe(false)
+  })
+})

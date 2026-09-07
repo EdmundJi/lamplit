@@ -10,8 +10,8 @@ const api = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn() }))
 const routerMock = vi.hoisted(() => ({ push: vi.fn() }))
 const engine = vi.hoisted(() => ({
   game: {
-    setRun: vi.fn(), focus: vi.fn(), destroy: vi.fn(), applyModel: vi.fn(), celebrate: vi.fn(),
-    setNight: vi.fn(), enterAcademy: vi.fn(), exitAcademy: vi.fn(),
+    cancelRoomAction: vi.fn(), exitRoom: vi.fn(), setRun: vi.fn(), focus: vi.fn(), destroy: vi.fn(), applyModel: vi.fn(), celebrate: vi.fn(),
+    travelTo: vi.fn(), setObservation: vi.fn(), setNight: vi.fn(), setAutomaticTime: vi.fn(), setSoundEnabled: vi.fn(), enterAcademy: vi.fn(), exitAcademy: vi.fn(),
   },
   handlers: {
     onSelect: undefined as undefined | ((id: string | null) => void),
@@ -89,28 +89,48 @@ describe('ImmersiveTown', () => {
     return wrapper
   }
 
-  function dockButton(wrapper: Awaited<ReturnType<typeof mountShell>>, text: string) {
+  /** M5-4 之后 dock 默认收起，所以取按钮前得先把它展开——这正是真人要走的路径。 */
+  async function dockButton(wrapper: Awaited<ReturnType<typeof mountShell>>, text: string) {
+    if (!wrapper.find('.immersive-dock').exists()) {
+      await wrapper.find('.immersive-dock-handle button').trigger('click')
+    }
     const found = wrapper.findAll('.dock-button').find(button => button.text().includes(text))
     if (!found) throw new Error(`no dock button labelled "${text}"`)
     return found
   }
 
+  it('dock 默认收起，只留一个把手；点开才出现功能按钮（M5-4）', async () => {
+    const wrapper = await mountShell()
+    expect(wrapper.find('.immersive-dock').exists()).toBe(false)
+    expect(wrapper.findAll('.dock-button')).toHaveLength(0)
+
+    await wrapper.find('.immersive-dock-handle button').trigger('click')
+    expect(wrapper.find('.immersive-dock').exists()).toBe(true)
+    expect(wrapper.findAll('.dock-button').length).toBeGreaterThan(0)
+    // 必须卸载：外壳把 Escape 监听挂在 document 上，留着会去抢后面用例的按键。
+    wrapper.unmount()
+  })
+
   it('boots the engine and opens a panel from the dock without leaving the page', async () => {
     const wrapper = await mountShell()
     expect(engine.createTownGame).toHaveBeenCalled()
 
-    await dockButton(wrapper, '目标').trigger('click')
+    await (await dockButton(wrapper, '目标')).trigger('click')
     expect(wrapper.find('.world-panel').exists()).toBe(true)
     expect(wrapper.text()).toContain('目标')
     wrapper.unmount()
   })
 
-  it('walking up to an anchor auto-opens the panel the manifest maps to it', async () => {
+  it('walking into a place keeps the player in its space; only explicit NPC service entrances open panels', async () => {
     const wrapper = await mountShell()
 
     engine.handlers.onSelect?.('academy')
     await flushPromises()
-    expect(wrapper.text()).toContain('洞察')
+    expect(wrapper.find('.world-panel').exists()).toBe(false)
+
+    engine.handlers.onSelect?.('me')
+    await flushPromises()
+    expect(wrapper.find('.world-panel').exists()).toBe(false)
 
     engine.handlers.onSelect?.('npc:assistant')
     await flushPromises()
@@ -126,10 +146,35 @@ describe('ImmersiveTown', () => {
     await flushPromises()
     expect(wrapper.findAll('.world-panel')).toHaveLength(before)
 
-    // Walking home (the self resident) opens "today", which is anchored to 'home'.
-    engine.handlers.onSelect?.('me')
-    await flushPromises()
-    expect(wrapper.text()).toContain('今天')
+    wrapper.unmount()
+  })
+
+  it('starts muted with automatic local time, and does not overwrite the engine with a static night value', async () => {
+    const wrapper = await mountShell()
+    expect(engine.game.setSoundEnabled).toHaveBeenLastCalledWith(false)
+    expect(engine.game.setAutomaticTime).toHaveBeenCalledTimes(1)
+    expect(engine.game.setNight).not.toHaveBeenCalled()
+    expect(wrapper.get('.sound-toggle').text()).toContain('环境声关')
+
+    await wrapper.get('.sound-toggle').trigger('click')
+    expect(engine.game.setSoundEnabled).toHaveBeenLastCalledWith(true)
+    wrapper.unmount()
+  })
+
+  it('scenic mode quietly removes navigation and restores it with a visible control', async () => {
+    const wrapper = await mountShell()
+    const scenicButton = wrapper.findAll('button').find(button => button.text() === '收起界面')
+    if (!scenicButton) throw new Error('no scenic HUD button')
+    await scenicButton.trigger('click')
+    expect(wrapper.find('.town-wayfinder').exists()).toBe(false)
+    expect(wrapper.find('.town-controls-hint').exists()).toBe(false)
+    expect(wrapper.get('.scenic-restore').text()).toContain('显示导航与提示')
+    // Exit and sound stay available while the scene is quiet.
+    expect(wrapper.get('[aria-label="退出沉浸模式"]').isVisible()).toBe(true)
+    expect(wrapper.get('.sound-toggle').isVisible()).toBe(true)
+
+    await wrapper.get('.scenic-restore').trigger('click')
+    expect(wrapper.find('.town-wayfinder').exists()).toBe(true)
     wrapper.unmount()
   })
 
@@ -171,9 +216,24 @@ describe('ImmersiveTown', () => {
     wrapper.unmount()
   })
 
+  it('Escape cancels a room action before exiting, and only the next idle Escape leaves', async () => {
+    const wrapper = await mountShell()
+    engine.handlers.onAcademyChange?.(true)
+    await flushPromises()
+    engine.game.cancelRoomAction.mockReturnValueOnce(true).mockReturnValue(false)
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', cancelable: true }))
+    expect(engine.game.cancelRoomAction).toHaveBeenCalledOnce()
+    expect(engine.game.exitRoom).not.toHaveBeenCalled()
+    expect(routerMock.push).not.toHaveBeenCalled()
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', cancelable: true }))
+    expect(engine.game.exitRoom).toHaveBeenCalledOnce()
+    expect(routerMock.push).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
   it('Escape closes the topmost open window first, then exits immersive mode on the next press', async () => {
     const wrapper = await mountShell()
-    await dockButton(wrapper, '目标').trigger('click')
+    await (await dockButton(wrapper, '目标')).trigger('click')
     expect(wrapper.find('.world-panel').exists()).toBe(true)
 
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
@@ -193,27 +253,29 @@ describe('ImmersiveTown', () => {
     return found
   }
 
-  it('walking up to an NPC pops the world action menu with its panel-open action plus the global ones', async () => {
+  it('More explicitly opens the action menu for an NPC without adding another automatic popup', async () => {
     const wrapper = await mountShell()
     expect(wrapper.find('.world-action-menu').exists()).toBe(false)
 
     engine.handlers.onSelect?.('npc:assistant')
     await flushPromises()
+    await wrapper.get('[aria-label="更多地点操作"]').trigger('click')
     expect(wrapper.find('.world-action-menu').exists()).toBe(true)
     expect(wrapper.text()).toContain('打开AI 助手')
     expect(wrapper.text()).toContain('回到我家')
     wrapper.unmount()
   })
 
-  it('running "回到我家" from the action menu focuses the self resident and shows feedback', async () => {
+  it('running "回到我家" starts real travel and shows pending feedback', async () => {
     const wrapper = await mountShell()
     engine.handlers.onSelect?.('npc:assistant')
     await flushPromises()
+    await wrapper.get('[aria-label="更多地点操作"]').trigger('click')
 
     await menuButton(wrapper, '回到我家').trigger('click')
     await flushPromises()
-    expect(engine.game.focus).toHaveBeenCalledWith('me')
-    expect(wrapper.text()).toContain('回家了')
+    expect(engine.game.travelTo).toHaveBeenCalledWith('home')
+    expect(wrapper.text()).toContain('正在往家走')
     wrapper.unmount()
   })
 
@@ -221,6 +283,7 @@ describe('ImmersiveTown', () => {
     const wrapper = await mountShell()
     engine.handlers.onSelect?.('npc:assistant')
     await flushPromises()
+    await wrapper.get('[aria-label="更多地点操作"]').trigger('click')
 
     const nightButtonText = wrapper.text().includes('切到夜晚') ? '切到夜晚' : '切到白天'
     await menuButton(wrapper, nightButtonText).trigger('click')
@@ -235,33 +298,30 @@ describe('ImmersiveTown', () => {
     wrapper.unmount()
   })
 
-  it('entering the academy needs no confirmation, but leaving it asks first', async () => {
+  it('entering and leaving the academy each need one action', async () => {
     const wrapper = await mountShell()
     engine.handlers.onSelect?.('academy')
     await flushPromises()
+    await wrapper.get('[aria-label="更多地点操作"]').trigger('click')
 
     await menuButton(wrapper, '去成长学院').trigger('click')
     await flushPromises()
     expect(engine.game.enterAcademy).toHaveBeenCalledTimes(1)
     expect(wrapper.text()).toContain('回到小镇')
 
-    // 再次点击"回到小镇"：先展示确认文案，还不应该调用 exitAcademy。
     await menuButton(wrapper, '回到小镇').trigger('click')
     await flushPromises()
-    expect(engine.game.exitAcademy).not.toHaveBeenCalled()
-    expect(wrapper.text()).toContain('确定要离开学院吗？')
-
-    await wrapper.get('.world-action-confirm-buttons button:last-child').trigger('click')
-    await flushPromises()
     expect(engine.game.exitAcademy).toHaveBeenCalledTimes(1)
+    expect(wrapper.find('.world-action-confirm-buttons').exists()).toBe(false)
     wrapper.unmount()
   })
 
   it('Escape closes the action menu first, ahead of panels and exiting immersive mode', async () => {
     const wrapper = await mountShell()
-    await dockButton(wrapper, '目标').trigger('click')
+    await (await dockButton(wrapper, '目标')).trigger('click')
     engine.handlers.onSelect?.('npc:assistant')
     await flushPromises()
+    await wrapper.get('[aria-label="更多地点操作"]').trigger('click')
     expect(wrapper.find('.world-action-menu').exists()).toBe(true)
     expect(wrapper.find('.world-panel').exists()).toBe(true)
 

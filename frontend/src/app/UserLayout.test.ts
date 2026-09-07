@@ -3,6 +3,7 @@ import { createPinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import UserLayout from './UserLayout.vue'
+import { useWorkspaceModeStore } from '../shared/ui/workspace-mode.store'
 import { useAuthStore } from '../modules/auth/auth.store'
 
 vi.mock('../shared/ui/WelcomeGuide.vue', () => ({ default: { template: '<div />' } }))
@@ -32,6 +33,22 @@ describe('UserLayout', () => {
       value: { getItem: vi.fn(() => 'dismissed'), setItem: vi.fn(), removeItem: vi.fn() },
       configurable: true,
     })
+  })
+
+  it('switches to a quiet checklist shell and can restore the growth shell', async () => {
+    const pinia = createPinia()
+    const wrapper = await mountLayout(pinia)
+    await wrapper.get('.mode-switch').trigger('click')
+    expect(useWorkspaceModeStore(pinia).minimal).toBe(true)
+    expect(wrapper.find('.sidebar').exists()).toBe(false)
+    expect(wrapper.find('.mobile-nav').exists()).toBe(false)
+    expect(wrapper.find('.workspace-topbar').exists()).toBe(false)
+    expect(wrapper.findComponent({ name: 'DesktopPet' }).exists()).toBe(false)
+    expect(wrapper.get('.minimal-topbar').text()).toContain('我的清单')
+    await wrapper.get('.minimal-topbar button').trigger('click')
+    expect(useWorkspaceModeStore(pinia).minimal).toBe(false)
+    expect(wrapper.find('.sidebar').exists()).toBe(true)
+    wrapper.unmount()
   })
 
   it('uses the first Chinese character from the display name as the brand mark', async () => {
