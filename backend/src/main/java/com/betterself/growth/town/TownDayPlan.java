@@ -102,6 +102,7 @@ final class TownDayPlan {
             drafts.add(new Draft(errand.place(), errand.startMinute(), errand.durationMinutes(), 1, "RHYTHM", null));
         }
 
+        applyDailyLife(drafts, rhythm, npcCode);
         applyWeather(drafts, context.rainy());
         applyMoodDeviation(drafts, context.moodValence());
         applyEvents(drafts, context.events());
@@ -202,6 +203,37 @@ final class TownDayPlan {
 
     // ---------------------------------------------------------------- 当天偏离
 
+    /** Enrich both legacy and new rhythm profiles when a new daily plan is frozen.
+     * Existing frozen plans remain untouched by the persistence layer. These optional outings
+     * enter before mood/weather so staying home and bad weather remain meaningful. */
+    private static void applyDailyLife(List<Draft> drafts, TownNpcRhythm.Rhythm rhythm, String npcCode) {
+        int variant = Math.floorMod(npcCode.hashCode(), 7);
+        int morning = Math.max(rhythm.wakeMinute() + 30, 390) + variant * 8;
+        addLifeSlot(drafts, variant % 2 == 0 ? TownNpcSchedules.CAFE : TownNpcSchedules.PARK,
+            morning, 45, rhythm.sleepMinute());
+
+        // Prefer a genuine onward journey after the final daytime errand. A minority linger
+        // later in an indoor cafe; nobody is scheduled beyond their own bedtime.
+        int lastEnd = drafts.stream().filter(d -> d.end() <= 1170)
+            .mapToInt(Draft::end).max().orElse(1020);
+        int evening = lastEnd >= 960 ? lastEnd + COMMUTE_MINUTES : 1050 + variant * 10;
+        addLifeSlot(drafts, variant % 2 == 0 ? TownNpcSchedules.PARK : TownNpcSchedules.CAFE,
+            evening, 65, rhythm.sleepMinute());
+        if (variant == 0 || variant == 1) {
+            addLifeSlot(drafts, TownNpcSchedules.CAFE, Math.max(1260, rhythm.sleepMinute() - 85),
+                65, rhythm.sleepMinute());
+        }
+    }
+
+    private static void addLifeSlot(List<Draft> drafts, String place, int start, int duration, int sleep) {
+        int end = start + duration;
+        if (end + COMMUTE_MINUTES > sleep || drafts.stream().anyMatch(d ->
+            overlaps(start - COMMUTE_MINUTES, end + COMMUTE_MINUTES, d.start, d.end()))) {
+            return;
+        }
+        drafts.add(new Draft(place, start, duration, 0, "DEVIATION", null));
+    }
+
     /** 下雨天缩短户外停留——不取消，只是待得没那么久。 */
     private static void applyWeather(List<Draft> drafts, boolean rainy) {
         if (!rainy) {
@@ -246,7 +278,7 @@ final class TownDayPlan {
         for (EventSlot event : events) {
             int start = event.startMinute();
             int end = start + event.durationMinutes();
-            drafts.removeIf(draft -> overlaps(draft.start, draft.end(), start, end));
+            drafts.removeIf(draft -> overlaps(draft.start, draft.end(), start - COMMUTE_MINUTES, end + COMMUTE_MINUTES));
             drafts.add(new Draft(event.place(), start, event.durationMinutes(), 2, "EVENT", event.activity()));
         }
     }
@@ -291,49 +323,49 @@ final class TownDayPlan {
 
     // ---------------------------------------------------------------- 组装
 
-    /**
-     * 把外出草案铺回全天：每件事之前从家出发、办完立刻回家，事情之间空出来的时间待在家里，
-     * 而不是留在刚才那个地方等下一件事——回家是默认状态，这样"外出时间"就是行程本身的时间，
-     * 心情低落删掉几件事就实打实地减少了外出，不会因为"少了一件事、中间那段无所事事的时间
-     * 反而更长"而抵消掉。这也让循环不用再跟踪"人现在在哪"：每次进入循环体之前，人总是在家。
-     */
+    /** Nearby consecutive errands form one outing; longer gaps remain real home rests.
+     * Never extend outdoor visits to fill a gap, so rain still shortens outdoor exposure. */
     private static DayPlan assemble(LocalDate date, List<Draft> away, int layer, RandomGenerator activityRng) {
         List<Errand> errands = new ArrayList<>();
         List<Leg> legs = new ArrayList<>();
         int cursor = 0;
+        String currentPlace = TownNpcSchedules.HOME;
 
-        for (Draft draft : away) {
+        for (int i = 0; i < away.size(); i++) {
+            Draft draft = away.get(i);
             int departMinute = Math.max(cursor, draft.start - COMMUTE_MINUTES);
             int arriveMinute = Math.max(departMinute, draft.start);
             if (departMinute > cursor) {
-                errands.add(new Errand(TownNpcSchedules.HOME, "idle", cursor, departMinute, 1, "RHYTHM"));
+                errands.add(new Errand(currentPlace, "idle", cursor, departMinute, 1, "RHYTHM"));
             }
             if (arriveMinute > departMinute) {
-                legs.add(new Leg(TownNpcSchedules.HOME, draft.place, departMinute, arriveMinute));
+                if (currentPlace.equals(draft.place)) {
+                    errands.add(new Errand(currentPlace, "idle", departMinute, arriveMinute, 1, "RHYTHM"));
+                } else {
+                    legs.add(new Leg(currentPlace, draft.place, departMinute, arriveMinute));
+                }
             }
-            int end = Math.min(MINUTES_PER_DAY, arriveMinute + draft.duration);
-            if (end <= arriveMinute) {
-                continue;
-            }
+            int end = Math.min(MINUTES_PER_DAY, draft.end());
+            if (end <= arriveMinute) continue;
             String activity = draft.activity != null ? draft.activity
                 : TownNpcSchedules.activityFor(draft.place, layer, arriveMinute / 60, activityRng);
             errands.add(new Errand(draft.place, activity, arriveMinute, end, draft.priority, draft.origin));
             cursor = end;
+            currentPlace = draft.place;
 
-            if (cursor < MINUTES_PER_DAY) {
-                int homeDepart = cursor;
+            Draft next = i + 1 < away.size() ? away.get(i + 1) : null;
+            boolean onward = next != null && next.start - cursor >= COMMUTE_MINUTES
+                && next.start - cursor <= COMMUTE_MINUTES + 3;
+            if (!onward && cursor < MINUTES_PER_DAY) {
                 int homeArrive = Math.min(MINUTES_PER_DAY, cursor + COMMUTE_MINUTES);
-                if (homeArrive > homeDepart) {
-                    legs.add(new Leg(draft.place, TownNpcSchedules.HOME, homeDepart, homeArrive));
-                }
+                legs.add(new Leg(currentPlace, TownNpcSchedules.HOME, cursor, homeArrive));
                 cursor = homeArrive;
+                currentPlace = TownNpcSchedules.HOME;
             }
         }
-
         if (cursor < MINUTES_PER_DAY) {
             errands.add(new Errand(TownNpcSchedules.HOME, "idle", cursor, MINUTES_PER_DAY, 1, "RHYTHM"));
         }
-
         return new DayPlan(date, List.copyOf(errands), List.copyOf(legs));
     }
 

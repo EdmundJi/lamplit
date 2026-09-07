@@ -76,7 +76,7 @@ final class TownNpcRhythm {
             // 时长不能顶到下一个 slot——两头都要给通勤和上一/下一件事留够空间，
             // 否则 TownDayPlan 排 legs 时会被迫互相挤占。
             int duration = clamp((int) Math.round(weight * DURATION_SCALE), DURATION_MIN,
-                Math.max(DURATION_MIN, slot - 30));
+                Math.min(DURATION_MAX, Math.max(DURATION_MIN, slot - 30)));
             int start = clamp(wake + slot * (i + 1) - duration / 2, wake, sleep - duration);
             errands.add(new Errand(place, start, duration));
         }

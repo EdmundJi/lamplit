@@ -124,6 +124,51 @@ class TownDayPlanTest {
         assertThat(at.activity()).isEqualTo(someErrand.activity());
     }
 
+    @Test
+    void legacyProfilesGainLifeWithoutMutatingTheirStoredErrands() {
+        var rhythm = new TownNpcRhythm.Rhythm(360, 1380, List.of(
+            new TownNpcRhythm.Errand("academy", 600, 100),
+            new TownNpcRhythm.Errand("gym", 1000, 60)));
+        var plan = TownDayPlan.generate("KE_YUN", 2, rhythm, neutralContext(), DAY);
+        assertThat(rhythm.errands()).hasSize(2);
+        assertThat(plan.errands()).anySatisfy(e -> {
+            assertThat(e.place()).isNotEqualTo("home");
+            assertThat(e.startMinute()).isBetween(390, 480);
+        });
+        assertThat(plan.legs()).anySatisfy(leg -> {
+            assertThat(leg.fromPlace()).isEqualTo("gym");
+            assertThat(leg.toPlace()).isNotEqualTo("home");
+            assertThat(leg.departMinute()).isEqualTo(1060);
+        });
+        for (int minute = 0; minute < 1440; minute++) {
+            final int m = minute;
+            long coverage = plan.errands().stream().filter(e -> e.startMinute() <= m && m < e.endMinute()).count()
+                + plan.legs().stream().filter(l -> l.departMinute() <= m && m < l.arriveMinute()).count();
+            assertThat(coverage).as("minute %s", minute).isEqualTo(1);
+        }
+    }
+
+    @Test
+    void optionalLifeStillRespectsRainRestAndPriorityEventArrival() {
+        var rhythm = new TownNpcRhythm.Rhythm(360, 1380, List.of(
+            new TownNpcRhythm.Errand("park", 600, 100),
+            new TownNpcRhythm.Errand("gym", 1000, 60)));
+        var dry = TownDayPlan.generate("KE_YUN", 2, rhythm, neutralContext(), DAY);
+        var wet = TownDayPlan.generate("KE_YUN", 2, rhythm,
+            new TownDayPlan.DayPlanContext(0, true, 0, List.of()), DAY);
+        assertThat(wet.errands().stream().filter(e -> e.place().equals("park"))
+            .mapToInt(e -> e.endMinute() - e.startMinute()).sum()).isLessThan(
+                dry.errands().stream().filter(e -> e.place().equals("park"))
+                    .mapToInt(e -> e.endMinute() - e.startMinute()).sum());
+        assertThat(TownDayPlan.positionAt(dry, 300).place()).isEqualTo("home");
+        assertThat(TownDayPlan.positionAt(dry, 1400).place()).isEqualTo("home");
+        var invited = TownDayPlan.generate("KE_YUN", 2, rhythm,
+            new TownDayPlan.DayPlanContext(0, false, 0,
+                List.of(new TownDayPlan.EventSlot("cafe", "sit", 1061, 30))), DAY);
+        assertThat(invited.errands().stream().filter(e -> e.origin().equals("EVENT")))
+            .singleElement().satisfies(e -> assertThat(e.startMinute()).isEqualTo(1061));
+    }
+
     // ---------------------------------------------------------------- M7-3 当天偏离
 
     @Test
