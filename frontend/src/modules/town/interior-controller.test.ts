@@ -19,7 +19,14 @@ function harness(collisions: RoomMapData['collisions'] = []) {
     id: 'test', title: 'Test', tileSize: 32, rows: 10, cols: 10, backgroundColor: '#000',
     spawn: { x: 64, y: 128 }, layers: { floor: [], walls: [] }, collisions, doors: [], furniture: [], slots: [], seats: [],
   }
-  const scene = { input, game: { canvas }, events: { once: vi.fn(), off: vi.fn() }, cameras: { main: { getWorldPoint: (x: number, y: number) => ({ x, y }) } } }
+  const scene = {
+    input,
+    game: { canvas },
+    events: { once: vi.fn(), off: vi.fn() },
+    anims: { exists: vi.fn(() => false) },
+    tweens: { add: vi.fn(() => ({ stop: vi.fn() })) },
+    cameras: { main: { getWorldPoint: (x: number, y: number) => ({ x, y }) } },
+  }
   const onDoor = vi.fn()
   const controller = createDefaultController({ scene, sprite, room, sheet: 'char_1', speed: 180, onDoor,
     isBlocked: (x: number, y: number) => collidesAt(room, x, y, 14, 10),

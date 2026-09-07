@@ -32,7 +32,7 @@ describe('TodayPanel', () => {
     expect(wrapper.text()).not.toContain('完整页面')
   })
 
-  it('lists today tasks and completes one with an idempotent request, celebrating through the bridge', async () => {
+  it('lists today tasks and records a planned task as done with an idempotent request', async () => {
     api.get.mockResolvedValue([{ publicId: 'schedule-1', taskTitle: '复习一章', plannedStartAt: new Date().toISOString(), status: 'PLANNED' }])
     api.post.mockResolvedValueOnce({ scheduleStatus: 'DONE' })
     const emit = vi.fn()
@@ -41,14 +41,16 @@ describe('TodayPanel', () => {
     await flushPromises()
     expect(wrapper.text()).toContain('复习一章')
 
-    const complete = wrapper.get('button[aria-label="完成"]')
+    await wrapper.get('.task-more summary').trigger('click')
+    const complete = wrapper.findAll('.task-more button').find(button => button.text().includes('已经做完，记下来'))!
     await complete.trigger('click')
     await complete.trigger('click')
     await flushPromises()
 
     expect(api.post).toHaveBeenCalledTimes(1)
     expect(api.post).toHaveBeenCalledWith('/task-schedules/schedule-1/events', { eventType: 'COMPLETED' }, { 'Idempotency-Key': '11111111-1111-4111-8111-111111111111' })
-    expect(emit).toHaveBeenCalledWith({ type: 'celebrate', publicId: 'schedule-1' })
+    // Celebrations now follow the authoritative town-model refresh, rather than a schedule ID bridge event.
+    expect(emit).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'celebrate' }))
     expect(wrapper.get('.feedback-banner').text().length).toBeGreaterThan(0)
   })
 
@@ -57,7 +59,8 @@ describe('TodayPanel', () => {
     api.post.mockRejectedValueOnce({ status: 409, code: 'DAILY_TASK_COMPLETION_LIMIT_REACHED', message: '' })
     const wrapper = mountPanel()
     await flushPromises()
-    await wrapper.get('button[aria-label="完成"]').trigger('click')
+    await wrapper.get('.task-more summary').trigger('click')
+    await wrapper.findAll('.task-more button').find(button => button.text().includes('已经做完，记下来'))!.trigger('click')
     await flushPromises()
     expect(wrapper.get('.error').text()).toContain('今天已完成 4 个任务')
   })
