@@ -1,6 +1,15 @@
-# 成长平台
+# 陪伴式小镇
 
-`更好的自己` 是一个基于 Vue 的单页应用，后端为 Spring Boot 模块化单体。MySQL 是权威数据存储，Redis 提供可丢弃的加速，MinIO 提供本地 S3 兼容对象存储。
+一个适合长时间打开、陪伴用户学习与生活的网页小镇。用户搬进已有居民和过去的小街，与一个自主小人共享部分日程，通过明确安排或偶尔的念头影响它的生活。
+
+当前正在从原有成长平台转向这一体验；新版 MVP 尚待实现与验证。
+
+- [当前进度](progress.md)：最近做了什么、接下来想做什么。
+- [01 我们想做的小镇](docs/01-requirements.md) · [02 代码怎么组织](docs/02-modules.md)：做什么、代码如何组织。
+- [文档导航](docs/README.md)：按编号查看全部资料；[agent.md](agent.md)记录简短开发约定。
+- [参考文献](references/README.md)：两篇研究论文原文与官方实现链接。
+
+现有应用基于 Vue 和 Spring Boot 模块化单体。MySQL 是权威数据存储，Redis 提供可丢弃的加速，MinIO 提供本地 S3 兼容对象存储。以下为现有代码的开发方式。
 
 ## 环境要求
 
@@ -42,7 +51,7 @@ pnpm dev
 python3 scripts/build-town-assets.py
 ```
 
-规则与数据映射见 `docs/成长小镇.md`。
+现有代码入口与新版差异见[现有系统说明](docs/02-modules.md)；素材规则见[素材说明](frontend/public/assets/town/README.md)。
 
 ## 共享开发服务器
 
@@ -58,7 +67,7 @@ scripts/dev-server.sh logs    # 跟日志，也可以 logs backend
 它和上面「本地启动」是**二选一**的关系：两套用的是同一批数据卷，数据互通，但端口会打架。
 切过去之前先停掉本机的 `pnpm dev` 和 `mvnw spring-boot:run`。
 
-完整说明（端口、远程调试怎么挂、数据怎么重置、给协作者的须知）见 `docs/开发服务器.md`。
+完整说明（端口、远程调试怎么挂、数据怎么重置、给协作者的须知）见[共享开发环境](docs/archive/2026-09-07/开发服务器.md)。
 
 ## 首位管理员
 
