@@ -40,6 +40,19 @@ describe('AiPanel', () => {
     expect(wrapper.text()).not.toContain('完整页面')
   })
 
+  it('offers the guide story in immersive without reading it until the player opens it', async () => {
+    const wrapper = mount(AiPanel)
+    await flushPromises()
+    expect(wrapper.get('.story-toggle').text()).toContain('小助的小故事')
+    expect(api.get).not.toHaveBeenCalledWith('/town/stories/GUIDE')
+    api.get.mockResolvedValueOnce({ npcCode: 'GUIDE', title: '窗边的一小格书架', heading: '一个小念头',
+      body: '小助想整理书架。', stage: 0, revision: 0, actions: [], completedAt: null })
+    await wrapper.get('.story-toggle').trigger('click')
+    await flushPromises()
+    expect(api.get).toHaveBeenCalledWith('/town/stories/GUIDE')
+    expect(wrapper.text()).toContain('小助想整理书架')
+  })
+
   it('streams a reply after sending a message', async () => {
     api.post.mockResolvedValueOnce({ publicId: 'session-1' })
     postSse.mockImplementation(async (_path, _body, onEvent) => {

@@ -15,12 +15,14 @@ import {
 } from '../../../friends/friends.logic'
 import { worldBridgeKey } from '../panel.types'
 import { openFullPage } from './shared'
+import TownVisits from '../../social/TownVisits.vue'
 import { TownMailbox } from '../../social'
+import TownStories from '../../TownStories.vue'
 
 const FULL_PAGE = '/friends/chat'
 
 const bridge = inject(worldBridgeKey, undefined)
-const channel = ref<'mailbox' | 'chat'>('mailbox')
+const channel = ref<'mailbox' | 'chat' | 'visits'>('mailbox')
 watch(channel, value => {
   if (value === 'chat') void convs.load(true)
   else {
@@ -161,8 +163,11 @@ onBeforeUnmount(() => {
     <nav class="panel-actions" aria-label="邮递员服务">
       <button class="secondary compact" type="button" :aria-pressed="channel === 'mailbox'" @click="channel = 'mailbox'">小镇信箱</button>
       <button class="secondary compact" type="button" :aria-pressed="channel === 'chat'" @click="channel = 'chat'">好友聊天</button>
+      <button class="secondary compact" type="button" :aria-pressed="channel === 'visits'" @click="channel = 'visits'">好友拜访</button>
     </nav>
-    <TownMailbox v-if="channel === 'mailbox'" @unread-change="bridge?.emit({ type: 'mail-count', count: $event })" />
+    <TownStories v-if="channel === 'mailbox'" npc-code="POSTMAN" />
+    <TownVisits v-if="channel === 'visits'" />
+    <TownMailbox v-else-if="channel === 'mailbox'" @unread-change="bridge?.emit({ type: 'mail-count', count: $event })" />
     <template v-else>
     <!-- 会话列表 -->
     <template v-if="view === 'list'">

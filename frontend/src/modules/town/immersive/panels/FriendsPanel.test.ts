@@ -28,6 +28,19 @@ describe('FriendsPanel', () => {
     expect(api.get).toHaveBeenCalledWith('/town/letters')
   })
 
+  it('offers the postman story separately from mail and fetches it only when opened', async () => {
+    const wrapper = mount(FriendsPanel)
+    await flushPromises()
+    expect(wrapper.get('.story-toggle').text()).toContain('邮递员的小故事')
+    expect(api.get).not.toHaveBeenCalledWith('/town/stories/POSTMAN')
+    api.get.mockResolvedValueOnce({ npcCode: 'POSTMAN', title: '邮包上的蓝色补丁', heading: '一个小念头',
+      body: '邮递员想修好邮包。', stage: 0, revision: 0, actions: [], completedAt: null })
+    await wrapper.get('.story-toggle').trigger('click')
+    await flushPromises()
+    expect(api.get).toHaveBeenCalledWith('/town/stories/POSTMAN')
+    expect(wrapper.text()).toContain('邮递员想修好邮包')
+  })
+
   it('mounts without a bridge and shows an empty state with no conversations', async () => {
     api.get.mockImplementation((path: string) => Promise.resolve(path === '/town/letters' ? { letters: [], unreadCount: 0 } : []))
     const wrapper = mount(FriendsPanel)

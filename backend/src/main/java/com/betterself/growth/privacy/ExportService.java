@@ -164,12 +164,19 @@ public class ExportService {
         try (ByteArrayOutputStream bytes = new ByteArrayOutputStream(); ZipOutputStream zip = new ZipOutputStream(bytes)) {
             add(zip, "manifest.json", objectMapper.writeValueAsString(Map.of(
                 "formatVersion", 1, "generatedAt", clock.instant().toString(),
-                "categories", List.of("profile", "goals", "task_events", "role_progress")
+                "categories", List.of("profile", "goals", "task_events", "role_progress", "town_experience")
             )));
             add(zip, "profile.json", objectMapper.writeValueAsString(profile));
             add(zip, "goals.csv", csv(goals));
             add(zip, "task_events.csv", csv(events));
             add(zip, "role_progress.csv", csv(roleProgress));
+            Map<String, Object> town = new LinkedHashMap<>();
+            town.put("stories", jdbc.queryForList("select npc_code,stage,revision,paused,participation,started_at,updated_at,completed_at from town_story_progress where town_user_id=?", userId));
+            town.put("sharing", jdbc.queryForList("select enabled,style,updated_at from town_visit_profile where user_id=?", userId));
+            town.put("displayed_mementos", jdbc.queryForList("select achievement_code from town_visit_memento where user_id=?", userId));
+            town.put("postcards", jdbc.queryForList("select public_id,body,created_at,owner_deleted,sender_deleted from town_visit_postcard where owner_user_id=? or sender_user_id=?", userId,userId));
+            town.put("events", jdbc.queryForList("select public_id,kind,venue,starts_at,ends_at,player_response,attended_at,cancelled_at from town_event where town_user_id=?", userId));
+            add(zip, "town_experience.json", objectMapper.writeValueAsString(town));
             zip.finish();
             return bytes.toByteArray();
         } catch (IOException exception) {

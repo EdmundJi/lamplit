@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { Send, X } from 'lucide-vue-next'
+import TownStories from './TownStories.vue'
 import { useNpcChatStore, type NpcAction, type NpcActionResult, type NpcCode, type NpcOption } from './npc-chat'
 
 const props = defineProps<{
@@ -207,6 +208,8 @@ onBeforeUnmount(() => { if (!closed) cleanup(props.npc) })
     <p v-if="actionFeedback" class="npc-action-feedback" role="status">{{ actionFeedback }}</p>
 
     <p v-if="error" class="error npc-error" role="alert">{{ error }}</p>
+
+    <TownStories :npc-code="npc" :disabled="composerBusy || actionBusy" />
 
     <form class="npc-composer" @submit.prevent="send()">
       <label class="sr-only" :for="`npc-input-${npc}`">给{{ displayName }}发消息</label>

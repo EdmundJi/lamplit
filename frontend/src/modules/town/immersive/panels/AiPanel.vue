@@ -5,6 +5,7 @@ import { api } from '../../../../shared/api/client'
 import { postSse, SseRequestError } from '../../../../shared/api/sse'
 import MarkdownDocument from '../../../../shared/ui/MarkdownDocument.vue'
 import AiNextStep from './AiNextStep.vue'
+import TownStories from '../../TownStories.vue'
 
 type ChatMessage = { role: 'USER' | 'ASSISTANT'; text: string }
 type SessionSummary = { publicId: string; scene: string; updatedAt: string; messageCount: number; lastMessage?: string | null }
@@ -200,6 +201,8 @@ onBeforeUnmount(() => {
         </div>
       </details>
     </div>
+
+    <TownStories npc-code="GUIDE" :disabled="busy || openingSession" />
 
     <p v-if="loadingHistory" role="status">正在加载历史对话…</p>
     <p v-if="historyError" class="error" role="alert">
