@@ -103,8 +103,30 @@ test.afterEach(async ({ page }, info) => {
   expect(observedErrors, 'No hidden runtime or resource errors').toEqual([])
 })
 
+/** Open the current shell's visible controls exactly as a visitor does. */
+async function revealDestinations(page: Page) {
+  const nav = page.locator('.town-wayfinder, .town-places')
+  if (!await nav.isVisible()) await page.getByRole('button', { name: '去哪里', exact: true }).click()
+  await expect(nav).toBeVisible()
+  return nav
+}
+async function visitDestination(page: Page, label: string) {
+  const nav = await revealDestinations(page)
+  await nav.getByRole('button', { name: label, exact: true }).click()
+}
+async function revealMore(page: Page) {
+  const actions = page.locator('.town-more-actions, #immersive-secondary-actions')
+  if (!await actions.isVisible()) await page.locator('.town-primary-actions, .immersive-topbar').getByRole('button', { name: '更多', exact: true }).click()
+  await expect(actions).toBeVisible()
+  return actions
+}
+async function moreAction(page: Page, label: string) {
+  const actions = await revealMore(page)
+  await actions.getByRole('button', { name: label, exact: true }).click()
+}
+
 test('现有街角露台设施真实交互与留痕', async ({ page }, info) => {
-  await page.getByRole('button', { name: '街角露台', exact: true }).click()
+  await visitDestination(page, '街角露台')
   await page.waitForFunction(() => (window as any).__townScene.travel?.place === 'terrace' && (window as any).__townScene.travel?.phase === 'arrived', null, { timeout: 30000 })
   await page.waitForTimeout(1200)
   await record(page, info, 'terrace-before')
@@ -117,12 +139,12 @@ test('现有街角露台设施真实交互与留痕', async ({ page }, info) => 
     await page.waitForFunction(key => (window as any).__townScene.facilities.snapshot().state[key] === true, key, { timeout: 10000 })
     expect((await page.evaluate(() => (window as any).__town.snapshot())).player.onWalkable).toBe(true)
   }
-  await page.getByRole('button', { name: '收起界面', exact: true }).click()
+  await moreAction(page, '收起界面')
   await record(page, info, 'terrace-scenic')
   await page.keyboard.press('Escape')
   await expect(page).toHaveURL(/town\/immersive/)
   await expect(page.getByRole('button', { name: '街角露台', exact: true })).toBeVisible()
-  await page.getByRole('button', { name: '咖啡馆', exact: true }).click()
+  await visitDestination(page, '咖啡馆')
   await expect(page.getByRole('button', { name: '回到街上', exact: true })).toBeVisible({ timeout: 15000 })
   await page.getByRole('button', { name: '回到街上', exact: true }).click()
   await page.waitForFunction(() => (window as any).__town.snapshot().activeScene === 'town')
@@ -139,7 +161,7 @@ test('真实场景中的居民共享设施并沿路返回日程', async ({ page 
   await page.route('**/api/v1/town/npcs', route => route.fulfill({ json: envelope({ npcs, initiativeBudget: { limit: 3, used: 3 } }) }))
   await page.reload()
   await page.waitForFunction(() => (window as any).__townScene?.facilities && (window as any).__townScene.walkers.some((w: any) => w.id === 'CAFE_READER'))
-  await page.getByRole('button', { name: '街角露台', exact: true }).click()
+  await visitDestination(page, '街角露台')
   const samples = await page.evaluate(async () => {
     const rows: { id: string; x: number; y: number; at: number }[][] = []
     for (let i = 0; i < 180; i++) {
@@ -170,7 +192,7 @@ test('可见世界、真实键盘、居民移动与观察镜头', async ({ page 
   const after = await page.evaluate(() => (window as any).__town.snapshot())
   expect(after.player.x).toBeGreaterThan(before.player.x + 20)
   expect(after.actors.some((a: any) => a.kind === 'npc' && a.x !== before.actors.find((b: any) => b.id === a.id)?.x)).toBe(true)
-  await page.getByRole('button', { name: '观察小镇', exact: true }).click()
+  await moreAction(page, '观察小镇')
   for (let i = 0; i < 3; i++) { await page.waitForTimeout(10_000); await record(page, info, `observation-${i}`) }
   expect(await page.evaluate(() => (window as any).__town.snapshot().world.observation)).toBe(true)
   await page.keyboard.press('Escape')
@@ -179,7 +201,7 @@ test('可见世界、真实键盘、居民移动与观察镜头', async ({ page 
 })
 
 test('走进家中再返回、面板最小化、窄屏布局', async ({ page }, info) => {
-  await page.getByRole('button', { name: '我的家', exact: true }).click()
+  await visitDestination(page, '我的家')
   await expect(page.getByRole('button', { name: '回到街上', exact: true })).toBeVisible({ timeout: 35_000 })
   await page.waitForFunction(() => { const s = (window as any).__townScene?.sys.game.scene.getScenes(true).at(-1); return s?.sys.settings.key.startsWith('interior:') && !s.cameras.main.fadeEffect.isRunning })
   await record(page, info, 'home')
@@ -222,12 +244,12 @@ async function useFurniture(page: Page, roomFile: string, action: string) {
 }
 
 test('公共建筑进入真实室内，点击家具使用功能', async ({ page }, info) => {
-  await page.locator('.run-toggle').click()
+  await (await revealMore(page)).locator('.run-toggle').click()
   for (const [place, label, file, action, panel] of [
     ['gym', '健身房', 'public-gym', 'gym.open-attributes', '属性'],
     ['cafe', '咖啡馆', 'cafe-interior', 'cafe.open-goals', '目标'],
   ]) {
-    await page.getByRole('button', { name: label, exact: true }).click()
+    await visitDestination(page, label)
     await page.waitForFunction(file => (window as any).__town.snapshot().activeScene === `interior:${file}`, file, { timeout: 30_000 })
     await page.waitForFunction(() => !(window as any).__townScene.sys.game.scene.getScenes(true).at(-1).cameras.main.fadeEffect.isRunning)
     await record(page, info, `${place}-interior`)
@@ -242,7 +264,7 @@ test('公共建筑进入真实室内，点击家具使用功能', async ({ page 
 
 test('淡入时立即离开、再次进屋后 Esc 返回仍可行走', async ({ page }, info) => {
   for (let i = 0; i < 2; i++) {
-    await page.getByRole('button', { name: '我的家', exact: true }).click()
+    await visitDestination(page, '我的家')
     await expect(page.getByRole('button', { name: '回到街上', exact: true })).toBeVisible({ timeout: 35_000 })
     if (i === 0) await page.getByRole('button', { name: '回到街上', exact: true }).click()
     else await page.keyboard.press('Escape')
@@ -262,6 +284,9 @@ test('普通小镇面板真正关闭，居民卡不溢出，健身房能进入',
   await page.setViewportSize({ width: 1280, height: 900 })
   await page.goto('/town')
   await page.waitForFunction(() => (window as any).__town?.snapshot().player?.controllable)
+  await expect(page.locator('#town-info-panel')).toHaveCount(0)
+  await revealDestinations(page)
+  await page.getByRole('button', { name: '打开面板', exact: true }).click()
   await expect(page.getByRole('complementary', { name: '小镇面板' })).toBeVisible()
   await page.getByRole('button', { name: '关闭面板', exact: true }).click()
   await expect(page.locator('#town-info-panel')).toHaveCount(0)
@@ -276,8 +301,8 @@ test('普通小镇面板真正关闭，居民卡不溢出，健身房能进入',
   expect(moment!.x + moment!.width).toBeLessThanOrEqual(stage!.x + stage!.width)
   await record(page, info, 'ordinary-npc-panel')
   await page.getByRole('button', { name: '关闭面板', exact: true }).click()
-  await page.locator('.run-toggle').click()
-  await page.getByRole('button', { name: '健身房', exact: true }).click()
+  await (await revealMore(page)).locator('.run-toggle').click()
+  await visitDestination(page, '健身房')
   await page.waitForFunction(() => (window as any).__town.snapshot().activeScene === 'interior:public-gym', null, { timeout: 30_000 })
   await record(page, info, 'ordinary-gym')
   await page.getByRole('button', { name: '回到小镇', exact: true }).click()
@@ -285,8 +310,8 @@ test('普通小镇面板真正关闭，居民卡不溢出，健身房能进入',
 })
 
 test('沿转角支路走进树荫公园', async ({ page }, info) => {
-  await page.locator('.run-toggle').click()
-  await page.getByRole('button', { name: '公园', exact: true }).click()
+  await (await revealMore(page)).locator('.run-toggle').click()
+  await visitDestination(page, '公园')
   await page.waitForFunction(() => { const p = (window as any).__town.snapshot().player; return p && p.y < 580 && p.state !== 'walk' }, null, { timeout: 40_000 })
   const snapshot = await page.evaluate(() => (window as any).__town.snapshot())
   expect(snapshot.player.onWalkable).toBe(true)
@@ -357,17 +382,28 @@ test('今天完成、伙伴切换互动、AI对话全程留在小镇', async ({ 
 })
 
 
-test('新手引导期间可真实移动并自动进入下一步', async ({ page }, info) => {
+test('新手入住连接布置与手账，并可以随时跳过', async ({ page }, info) => {
+  await revealMore(page)
   await page.getByTitle('重新打开新手引导', { exact: true }).click()
-  await page.getByRole('button', { name: '下一步', exact: false }).click()
-  await expect(page.getByRole('heading', { name: '四处走走', exact: true })).toBeVisible()
-  await page.keyboard.down('ArrowRight')
-  await page.waitForTimeout(900)
-  await page.keyboard.up('ArrowRight')
-  await expect(page.getByRole('heading', { name: '和 NPC 打个招呼', exact: true })).toBeVisible()
-  await record(page, info, 'onboarding-real-movement')
-  await page.getByRole('button', { name: '关闭引导', exact: true }).click()
+  const onboarding = page.getByRole('dialog', { name: '入住小镇', exact: true })
+  await expect(onboarding).toContainText('第 1 步，共 3 步')
+  await onboarding.getByRole('button', { name: '布置我的家', exact: true }).click()
+  await expect(page.locator('.town-style-panel')).toBeVisible()
+  await page.getByRole('button', { name: /草木清晨/ }).click()
+  await page.getByRole('button', { name: '保存布置', exact: true }).click()
+  await expect(onboarding.getByRole('heading', { name: '今天的一小步' })).toBeVisible()
+  await onboarding.getByRole('button', { name: '打开手账', exact: true }).click()
+  const today = page.getByRole('dialog', { name: '今天', exact: true })
+  await expect(today).toContainText('晚间复盘')
+  await today.getByRole('button', { name: '关闭', exact: true }).click()
+  await expect(onboarding.getByRole('heading', { name: '认识小助' })).toBeVisible()
+  await record(page, info, 'onboarding-real-actions')
+  await onboarding.getByRole('button', { name: '先逛逛', exact: true }).click()
   await expect(page.locator('.town-onboarding')).toHaveCount(0)
+  expect(await page.evaluate(id => localStorage.getItem(`better-self:town-onboarding:${id}:completed`), SELF_ID)).toBe('true')
+  const before = await page.evaluate(() => (window as any).__town.snapshot().player.x)
+  await page.keyboard.down('ArrowRight'); await page.waitForTimeout(500); await page.keyboard.up('ArrowRight')
+  expect(await page.evaluate(() => (window as any).__town.snapshot().player.x)).toBeGreaterThan(before + 10)
 })
 
 
@@ -375,12 +411,12 @@ test('健身房刷新室内位置后退出仍回到门口', async ({ page }, inf
   await page.goto('/town')
   await page.waitForFunction(() => (window as any).__town?.snapshot().player?.controllable)
   const entrance = await page.evaluate(() => (window as any).__townScene.entrances.get('gym'))
-  await page.locator('.run-toggle').click()
-  await page.getByRole('button', { name: '健身房', exact: true }).click()
+  await (await revealMore(page)).locator('.run-toggle').click()
+  await visitDestination(page, '健身房')
   await page.waitForFunction(() => (window as any).__town.snapshot().activeScene === 'interior:public-gym')
   // This is the real failure trigger: polling returns the coordinates most recently saved indoors.
   const refreshed = page.waitForResponse(r => new URL(r.url()).pathname === '/api/v1/town')
-  await page.getByRole('button', { name: '刷新', exact: true }).click()
+  await moreAction(page, '刷新')
   const response = await (await refreshed).json()
   expect(response.data.residents[0].presence.scene).toBe('interior:public-gym')
   await page.getByRole('button', { name: '回到小镇', exact: true }).click()
@@ -390,7 +426,7 @@ test('健身房刷新室内位置后退出仍回到门口', async ({ page }, inf
   expect(Math.hypot(after.x - entrance.x, after.y - entrance.y)).toBeLessThan(16)
   // A stale indoor response after exit must not drag the avatar back into the top-left corner.
   await page.route('**/api/v1/town', route => route.fulfill({ json: response }), { times: 1 })
-  await page.getByRole('button', { name: '刷新', exact: true }).click()
+  await moreAction(page, '刷新')
   await page.keyboard.down('ArrowRight'); await page.waitForTimeout(400); await page.keyboard.up('ArrowRight')
   expect(await page.evaluate(() => (window as any).__town.snapshot().player.x)).toBeGreaterThan(after.x + 15)
   await record(page, info, 'gym-exit-after-presence-refresh')
@@ -404,14 +440,14 @@ test('脱困清除卡住目标并回到安全位置，室内也可脱困', async
     scene.selfWalker.targetX = -9000
     scene.selfPath = [{ x: -9000, y: -9000 }]
   })
-  await page.getByRole('button', { name: '返回安全位置', exact: true }).click()
+  await moreAction(page, '返回安全位置')
   await page.waitForFunction(() => { const s = (window as any).__town.snapshot(); return s.player?.onWalkable && s.actors.find((a: any) => a.kind === 'self')?.visible })
   const safe = await page.evaluate(() => (window as any).__town.snapshot().player)
   await page.keyboard.down('ArrowRight'); await page.waitForTimeout(400); await page.keyboard.up('ArrowRight')
   expect(await page.evaluate(() => (window as any).__town.snapshot().player.x)).toBeGreaterThan(safe.x + 15)
-  await page.getByRole('button', { name: '我的家', exact: true }).click()
+  await visitDestination(page, '我的家')
   await page.waitForFunction(() => (window as any).__town.snapshot().activeScene?.startsWith('interior:'))
-  await page.getByRole('button', { name: '返回安全位置', exact: true }).click()
+  await moreAction(page, '返回安全位置')
   await page.waitForFunction(() => (window as any).__town.snapshot().activeScene === 'town')
   expect(await page.evaluate(() => (window as any).__town.snapshot().player.onWalkable)).toBe(true)
   await record(page, info, 'recovered-from-room')
@@ -439,11 +475,11 @@ test('加载房间时仍可脱困，迟到请求不能重建房间', async ({ pa
     await new Promise(resolve => setTimeout(resolve, 1500))
     await route.continue().catch(() => {}) // expected client abort when recovery cancels the load
   }, { times: 1 })
-  await page.locator('.run-toggle').click()
+  await (await revealMore(page)).locator('.run-toggle').click()
   const loading = page.waitForRequest(r => r.url().endsWith('/maps/public-gym.json'))
-  await page.getByRole('button', { name: '健身房', exact: true }).click()
+  await visitDestination(page, '健身房')
   await loading
-  await page.getByRole('button', { name: '返回安全位置', exact: true }).click()
+  await moreAction(page, '返回安全位置')
   await page.waitForTimeout(2200)
   const snapshot = await page.evaluate(() => (window as any).__town.snapshot())
   expect(snapshot.activeScene).toBe('town')
@@ -461,7 +497,7 @@ test('本轮结构化interrupt说明告别并释放NPC，正文命令不执行',
       : { status: 'COMPLETED', options: [], actions: [], control: { type: '/interrupt', reason: '学院那边还在等我，我先过去帮忙，回头聊。' } }
     await route.fulfill({ contentType: 'text/event-stream', body: `event: delta\ndata: ${JSON.stringify({ text: turn === 1 ? '你刚才提到的 /interrupt 只是文字。' : '学院那边还在等我，我先过去帮忙，回头聊。' })}\n\nevent: done\ndata: ${JSON.stringify(done)}\n\n` })
   })
-  await page.getByRole('button', { name: '找小助', exact: true }).click()
+  await moreAction(page, '找小助')
   const dialogue = page.getByRole('dialog', { name: '与小助对话', exact: true })
   await dialogue.getByPlaceholder('跟小助说点什么').fill('解释一下 /interrupt')
   await dialogue.getByRole('button', { name: '发送', exact: true }).click()
@@ -477,8 +513,8 @@ test('本轮结构化interrupt说明告别并释放NPC，正文命令不执行',
 })
 
 test('退出动画中脱困不会被旧回调拉回建筑门口', async ({ page }, info) => {
-  await page.locator('.run-toggle').click()
-  await page.getByRole('button', { name: '健身房', exact: true }).click()
+  await (await revealMore(page)).locator('.run-toggle').click()
+  await visitDestination(page, '健身房')
   await page.waitForFunction(() => (window as any).__town.snapshot().activeScene === 'interior:public-gym')
   // Freeze fade progression so both clicks deterministically happen before its completion.
   await page.evaluate(() => {
@@ -488,7 +524,7 @@ test('退出动画中脱困不会被旧回调拉回建筑门口', async ({ page 
     ;(window as any).__exitCamera = room.cameras.main
   })
   await page.getByRole('button', { name: '回到街上', exact: true }).click()
-  await page.getByRole('button', { name: '返回安全位置', exact: true }).click()
+  await moreAction(page, '返回安全位置')
   await page.waitForFunction(() => (window as any).__town.snapshot().activeScene === 'town')
   const safe = await page.evaluate(() => (window as any).__town.snapshot().player)
   await page.evaluate(() => (window as any).__exitCamera.emit('camerafadeoutcomplete'))
@@ -500,14 +536,14 @@ test('退出动画中脱困不会被旧回调拉回建筑门口', async ({ page 
 })
 
 test('学院停留后可主动走出，旧地图门内出生也不自动退出', async ({ page }, info) => {
-  await page.locator('.run-toggle').click()
+  await (await revealMore(page)).locator('.run-toggle').click()
   for (const legacy of [false, true]) {
     if (legacy) await page.route('**/maps/academy-study.json', async route => {
       const map = JSON.parse(readFileSync('public/assets/town/maps/academy-study.json', 'utf8'))
       map.spawn = { x: 320, y: 344 }
       await route.fulfill({ json: map })
     }, { times: 1 })
-    await page.getByRole('button', { name: '学院', exact: true }).click()
+    await visitDestination(page, '学院')
     await page.waitForFunction(() => (window as any).__town.snapshot().activeScene === 'interior:academy-study', null, { timeout: 30000 })
     await page.waitForTimeout(1500)
     expect(await page.evaluate(() => (window as any).__town.snapshot().activeScene)).toBe('interior:academy-study')
@@ -523,9 +559,9 @@ for (const mode of ['immersive', 'normal']) test(`${mode} 公园刷新布局不�
   if (mode === 'normal') {
     await page.goto('/town')
     await page.waitForFunction(() => (window as any).__town?.snapshot().player?.controllable)
-    await page.getByRole('button', { name: '开始奔跑', exact: true }).click()
-  } else await page.locator('.run-toggle').click()
-  await page.getByRole('button', { name: '公园', exact: true }).click()
+    await moreAction(page, '开始奔跑')
+  } else await (await revealMore(page)).locator('.run-toggle').click()
+  await visitDestination(page, '公园')
   await page.waitForFunction(() => { const p = (window as any).__town.snapshot().player; return p.y < 580 && p.state !== 'walk' }, null, { timeout: 40000 })
   if (await page.getByRole('button', { name: '关闭', exact: true }).count()) await page.getByRole('button', { name: '关闭', exact: true }).click()
   await page.waitForTimeout(2200)
@@ -561,8 +597,8 @@ for (const mode of ['immersive', 'normal']) test(`${mode} 公园刷新布局不�
 })
 
 test('公园下半区和入口停留时布局刷新保持镜头稳定', async ({ page }, info) => {
-  await page.locator('.run-toggle').click()
-  await page.getByRole('button', { name: '公园', exact: true }).click()
+  await (await revealMore(page)).locator('.run-toggle').click()
+  await visitDestination(page, '公园')
   await page.waitForFunction(() => { const p = (window as any).__town.snapshot().player; return p.y < 580 && p.state !== 'walk' }, null, { timeout: 40000 })
   if (await page.getByRole('button', { name: '关闭', exact: true }).count()) await page.getByRole('button', { name: '关闭', exact: true }).click()
   for (const [name, dx, y] of [['lower-park', 0, 552], ['park-entrance', 240, 600]] as const) {
@@ -599,7 +635,7 @@ test('M8 傍晚回家、家具走近、纪念跨刷新保留与无奖励休息',
   expect(await page.evaluate(() => (window as any).__townScene.runtime.soundscape.context)).toBeNull()
   await page.locator('.sound-toggle').click()
   await page.waitForFunction(() => (window as any).__townScene.runtime.soundscape.context?.state === 'running')
-  await page.getByRole('button', { name: '我的家', exact: true }).click()
+  await visitDestination(page, '我的家')
   await page.waitForFunction(() => (window as any).__town.snapshot().activeScene === 'interior:home-living-room')
   await page.waitForFunction(() => !(window as any).__townScene.sys.game.scene.getScenes(true).at(-1).cameras.main.fadeEffect.isRunning)
   await expect(page.getByRole('dialog')).toHaveCount(0)
@@ -644,8 +680,9 @@ test('M8 傍晚回家、家具走近、纪念跨刷新保留与无奖励休息',
 test('M8 窄屏安静界面的声音、退出与恢复入口可达', async ({ page }, info) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await page.waitForFunction(() => (window as any).__townScene?.cameras.main.width === 390)
-  await page.getByRole('button', { name: '操作', exact: true }).click()
-  await page.getByRole('button', { name: '收起界面', exact: true }).click()
+  await revealDestinations(page)
+  await revealMore(page)
+  await moreAction(page, '收起界面')
   await expect(page.getByRole('navigation', { name: '小镇地点' })).toHaveCount(0)
   for (const button of [page.getByRole('button', { name: '退出沉浸模式', exact: true }), page.locator('.sound-toggle'), page.locator('.scenic-restore')]) {
     await expect(button).toBeVisible()
@@ -673,7 +710,7 @@ test('M9 手账取信到带同一只伙伴去公园再回家', async ({ page }, 
   test.setTimeout(120000)
   const petWrites: string[] = []
   page.on('request', request => { if (request.method() === 'POST' && request.url().includes('/partners/')) petWrites.push(request.url()) })
-  await page.getByRole('button', { name: '我的家', exact: true }).click()
+  await visitDestination(page, '我的家')
   await waitForHome(page)
   await record(page, info, 'm9-home-objects')
   await homeObject(page, 'journal')
@@ -689,8 +726,8 @@ test('M9 手账取信到带同一只伙伴去公园再回家', async ({ page }, 
   await page.waitForFunction(() => (window as any).__town.snapshot().activeScene === 'town' && (window as any).__townScene.companion?.snapshot().position)
   expect(await page.evaluate(() => (window as any).__townScene.companion.snapshot().petId)).toBe('pet-1')
   await record(page, info, 'm9-out-the-door')
-  await page.locator('.run-toggle').click()
-  await page.getByRole('button', { name: '公园', exact: true }).click()
+  await (await revealMore(page)).locator('.run-toggle').click()
+  await visitDestination(page, '公园')
   const samples = await page.evaluate(async () => {
     const samples: any[] = []
     for (let i = 0; i < 32; i++) {
@@ -726,7 +763,7 @@ test('M9 手账取信到带同一只伙伴去公园再回家', async ({ page }, 
 })
 
 test('M9 伙伴刷新恢复、手机回家与无伙伴入口', async ({ page }, info) => {
-  await page.getByRole('button', { name: '我的家', exact: true }).click()
+  await visitDestination(page, '我的家')
   await waitForHome(page)
   await page.getByRole('button', { name: '拿牵引绳', exact: true }).click()
   await page.waitForFunction(() => (window as any).__townScene.companion?.snapshot().position)
@@ -742,7 +779,7 @@ test('M9 伙伴刷新恢复、手机回家与无伙伴入口', async ({ page }, 
   await page.route('**/api/v1/partners/profile', route => route.fulfill({ json: envelope({ pets: [], selectedPet: null, wallet: { coinBalance: 0, lifetimeCoins: 0 }, shopItems: [] }) }))
   await page.reload()
   await page.waitForFunction(() => (window as any).__town?.snapshot().player?.controllable)
-  await page.getByRole('button', { name: '我的家', exact: true }).click()
+  await visitDestination(page, '我的家')
   await waitForHome(page)
   await page.getByRole('button', { name: '选择伙伴', exact: true }).click()
   await expect(page.getByRole('dialog', { name: '伙伴', exact: true })).toBeVisible()
@@ -754,19 +791,19 @@ test('M9 伙伴刷新恢复、手机回家与无伙伴入口', async ({ page }, 
 test('M9 普通页物品操作与切换伙伴清理旧外出状态', async ({ page }, info) => {
   await page.goto('/town')
   await page.waitForFunction(() => (window as any).__town?.snapshot().player?.controllable)
-  await page.getByRole('button', { name: '我的家', exact: true }).click()
+  await visitDestination(page, '我的家')
   await waitForHome(page)
   await page.getByRole('button', { name: '翻手账', exact: true }).click()
   await expect(page.locator('#town-info-panel')).toContainText('晚间复盘')
   await page.getByRole('button', { name: '关闭面板', exact: true }).click()
   await page.getByRole('button', { name: '拿牵引绳', exact: true }).click()
   await page.waitForFunction(() => (window as any).__townScene.companion?.snapshot().position)
-  await page.getByRole('button', { name: '伙伴', exact: true }).click()
+  await (await revealDestinations(page)).getByRole('button', { name: '伙伴', exact: true }).click()
   await page.getByRole('button', { name: '切换到 花花', exact: true }).click()
   await page.waitForFunction(() => (window as any).__townScene.runtime.companionState.pet?.publicId === 'pet-2')
   expect(await page.evaluate(() => (window as any).__townScene.companion.snapshot().position)).toBeNull()
   await page.getByRole('button', { name: '关闭面板', exact: true }).click()
-  await page.getByRole('button', { name: '我的家', exact: true }).click()
+  await visitDestination(page, '我的家')
   await waitForHome(page)
   expect(await page.evaluate(() => (window as any).__townScene.sys.game.scene.getScenes(true).at(-1).petIdentity)).toContain('pet-2')
   await record(page, info, 'm9-normal-new-companion')

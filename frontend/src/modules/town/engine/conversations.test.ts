@@ -3,9 +3,14 @@ import { conversationsMethods } from './conversations'
 import type { TownSceneInstance } from './scene-core'
 import type { Walker } from './shared'
 
-function makeScene() {
+function makeScene(withTalkingPoints = true) {
   const actor = (id: string, x: number, targetX: number) => ({
-    id, sheet: id, npc: null, resident: null, frozenUntil: 0, npcActivity: null,
+    id, sheet: id,
+    // Spoken turns require acquainted NPCs with actual talking points. Background walkers
+    // deliberately greet silently after the social-pacing change; they have no fallback prose.
+    npc: withTalkingPoints ? { code: id, affinityToNpcs: { a: 0.4, b: 0.4 },
+      talkingPoints: [{ text: id === 'a' ? '书架整理好了。' : '公园花开了。' }] } : null,
+    resident: null, frozenUntil: 0, npcActivity: null,
     facing: 'right', state: 'walk', targetX, targetY: 100, speech: null, travelEmote: null,
     sprite: { x, y: 100, active: true, play: vi.fn() },
   }) as unknown as Walker
@@ -50,6 +55,19 @@ describe('paired in-world greeting', () => {
     scene.time.now = 1800; scene.detectGreetings(1800)
     expect(scene.saySomething).toHaveBeenCalledTimes(1)
   })
+  it('lets background walkers greet silently without inventing ambient dialogue', () => {
+    const { scene, a, b } = makeScene(false)
+    scene.triggerGreeting(a, b, 100)
+    expect(a.sprite.play).toHaveBeenCalledWith('a-idle-right', true)
+    expect(b.sprite.play).toHaveBeenCalledWith('b-idle-left', true)
+    scene.time.now = 450; scene.detectGreetings(450)
+    scene.time.now = 1750; scene.detectGreetings(1750)
+    scene.time.now = 4000; scene.detectGreetings(4000)
+    expect(scene.saySomething).not.toHaveBeenCalled()
+    expect(a.frozenUntil).toBeLessThanOrEqual(4000)
+    expect(b.frozenUntil).toBeLessThanOrEqual(4000)
+  })
+
   it('restores idle immediately when cancelling a same-character hand gesture', () => {
     const { scene, a, b } = makeScene()
     const stop = vi.fn(), setFrame = vi.fn()
