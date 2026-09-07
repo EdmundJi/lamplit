@@ -1,0 +1,7 @@
+CREATE TABLE town_companion_world (
+    user_id BIGINT UNSIGNED NOT NULL,
+    state_json JSON NOT NULL,
+    updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+    PRIMARY KEY (user_id),
+    CONSTRAINT fk_companion_world_user FOREIGN KEY (user_id) REFERENCES sys_user(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

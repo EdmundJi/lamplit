@@ -165,6 +165,17 @@ class QwenContractTest {
             .isEqualTo("AI_EMPTY_RESPONSE");
     }
 
+    @Test
+    void deepSeekV4UsesNonThinkingAndIgnoresReasoningContent() throws Exception {
+        AtomicReference<String> requestBody=new AtomicReference<>();
+        start(exchange->{requestBody.set(new String(exchange.getRequestBody().readAllBytes(),StandardCharsets.UTF_8));json(exchange,"{\"choices\":[{\"message\":{\"content\":\"{\\\"ok\\\":true}\",\"reasoning_content\":\"not part of the answer\"}}]}");});
+        var provider=new QwenHttpProvider(new ObjectMapper(),"http://127.0.0.1:"+server.getAddress().getPort()+"/v1","unit-test-provider-key","deepseek-v4-flash",Duration.ofSeconds(2));
+        var result=provider.generateStructured(new QwenProvider.StructuredPrompt("COMPANION_DIALOGUE","hello","{}"));
+        assertThat(new ObjectMapper().readTree(requestBody.get()).path("thinking").path("type").asText()).isEqualTo("disabled");
+        assertThat(result.json()).isEqualTo("{\"ok\":true}");
+        assertThat(result.json()).doesNotContain("not part of the answer");
+    }
+
     private QwenHttpProvider provider() {
         return new QwenHttpProvider(
             new ObjectMapper(), "http://127.0.0.1:" + server.getAddress().getPort() + "/v1",

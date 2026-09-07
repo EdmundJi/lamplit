@@ -223,6 +223,7 @@ public class QwenHttpProvider implements QwenProvider {
             body.put("messages", messages);
             body.put("temperature", 0.2);
             body.put("max_tokens", 2000);
+            if (model.startsWith("deepseek-v4-")) body.put("thinking", Map.of("type", "disabled"));
             if (jsonMode && this.jsonMode) {
                 body.put("response_format", Map.of("type", "json_object"));
             }
@@ -233,6 +234,7 @@ public class QwenHttpProvider implements QwenProvider {
             return HttpRequest.newBuilder(endpoint)
                 .timeout(stream ? streamTimeout : timeout)
                 .header("Authorization", "Bearer " + apiKey)
+                .header("User-Agent", "GrowthCompanion/0.0.1")
                 .header("Content-Type", "application/json")
                 .header("Accept", stream ? "text/event-stream" : "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(body)))

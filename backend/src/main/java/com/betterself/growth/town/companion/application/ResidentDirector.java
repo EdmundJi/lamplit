@@ -1,0 +1,126 @@
+package com.betterself.growth.town.companion.application;
+
+import com.betterself.growth.town.companion.domain.*;
+import com.betterself.growth.town.companion.domain.CompanionWorld.*;
+import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import jakarta.annotation.PreDestroy;
+import java.time.*;
+import java.util.*;
+import java.util.concurrent.*;
+
+/** Short operation reservation -> asynchronous model I/O -> identity-checked authoritative input. */
+@Service
+public class ResidentDirector {
+    private static final org.slf4j.Logger log=org.slf4j.LoggerFactory.getLogger(ResidentDirector.class);
+    private final WorldStore store;
+    private final ResidentMind mind;
+    private final Clock clock;
+    private final int dailyBudget;
+    private final Set<Long> inFlight=ConcurrentHashMap.newKeySet();
+    private final ThreadPoolExecutor executor=new ThreadPoolExecutor(2,2,30,TimeUnit.SECONDS,new ArrayBlockingQueue<>(8),r->{Thread t=new Thread(r,"companion-mind");t.setDaemon(true);return t;},new ThreadPoolExecutor.AbortPolicy());
+    public ResidentDirector(WorldStore store,ResidentMind mind,Clock clock){this(store,mind,clock,128);}
+    @Autowired public ResidentDirector(WorldStore store,ResidentMind mind,Clock clock,@Value("${app.town.companion-model-daily-budget:128}")int dailyBudget){this.store=store;this.mind=mind;this.clock=clock;this.dailyBudget=Math.max(1,dailyBudget);}
+    public boolean enabled(){return mind.enabled();}
+    public void consider(long userId,CompanionWorld snapshot){
+        if(!mind.enabled()||snapshot==null||snapshot.simulationVersion<2||!inFlight.add(userId))return;
+        Instant now=clock.instant();
+        if(snapshot.modelRetryAfter!=null&&now.isBefore(snapshot.modelRetryAfter)){inFlight.remove(userId);return;}
+        boolean dialogue=snapshot.conversations.stream().anyMatch(c->c.mode.equals("model")&&(c.status.equals("active")||c.summarizedParticipants.size()<c.participantIds.size()));
+        if(!dialogue&&snapshot.modelRequestedAt!=null&&Duration.between(snapshot.modelRequestedAt,now).getSeconds()<75){inFlight.remove(userId);return;}
+        try{executor.execute(()->run(userId));}catch(RejectedExecutionException e){inFlight.remove(userId);}
+    }
+    private record Work(String kind,ResidentMind.Context context,ConversationLifecycle.Operation operation,
+                        ResidentMind.DialogueRequest dialogue,ResidentMind.SummaryRequest summary,long sequence) {}
+    private void run(long userId){
+        final Work[] job={null};
+        try {
+            store.update(userId,null,w->{job[0]=reserve(w,clock.instant());return w;});
+            Work work=job[0];if(work==null)return;
+            // This call occurs after the reservation transaction committed. There is no open DB lock.
+            Object result=switch(work.kind()){
+                case "turn"->mind.generateTurn(work.dialogue());
+                case "summary"->mind.summarizeConversation(work.summary());
+                default->mind.decide(work.context());
+            };
+            store.update(userId,null,w->{
+                if(!w.id.equals(work.context().worldId()))return w;
+                w.modelConsecutiveFailures=0;w.modelRetryAfter=null;
+                boolean applied;
+                if(work.kind().equals("turn")) {
+                    var utterance=(ConversationLifecycle.Utterance)result;
+                    applied=utterance!=null&&evidenceWithin(utterance.evidenceIds(),work.context().memories())&&ConversationLifecycle.applyTurn(w,work.operation(),utterance,clock.instant());
+                    if(!applied)ConversationLifecycle.failTurn(w,work.operation(),clock.instant());
+                } else if(work.kind().equals("summary")) {
+                    var summary=(ConversationLifecycle.Recollection)result;
+                    applied=summary!=null&&evidenceWithin(summary.evidenceIds(),work.summary().conversationMemories())&&ConversationLifecycle.applySummary(w,work.operation(),summary,clock.instant());
+                    if(!applied)ConversationLifecycle.failSummary(w,work.operation(),clock.instant());
+                } else applied=applyDecision(w,work,(ResidentMind.Decision)result);
+                if(!applied){w.modelStatus="刚才的念头已经过时，继续眼前的生活";w.revision++;}
+                return w;
+            });
+        } catch(Exception e){
+            log.warn("Companion resident model fallback: {}",safeFailure(e));
+            if(job[0]!=null)try{store.update(userId,null,w->{
+                if(!w.id.equals(job[0].context().worldId()))return w;
+                if(job[0].kind().equals("turn"))ConversationLifecycle.failTurn(w,job[0].operation(),clock.instant());
+                if(job[0].kind().equals("summary"))ConversationLifecycle.failSummary(w,job[0].operation(),clock.instant());
+                w.modelCallsToday=Math.max(0,w.modelCallsToday-1);w.modelFailuresToday++;w.modelConsecutiveFailures++;
+                long delay=Math.min(600,75L*(1L<<Math.min(3,w.modelConsecutiveFailures-1)));
+                w.modelRetryAfter=clock.instant().plusSeconds(delay);w.modelStatus="暂时按自己的习惯生活，稍后再想新主意";w.revision++;return w;
+            });}catch(Exception ignored){/* A deleted world is never recreated by a late result. */}
+        } finally {inFlight.remove(userId);}
+    }
+    private Work reserve(CompanionWorld w,Instant now) {
+        if(w.modelRetryAfter!=null&&now.isBefore(w.modelRetryAfter))return null;
+        String day=now.atZone(ZoneId.of(w.timezone)).toLocalDate().toString();
+        if(!Objects.equals(w.modelBudgetDay,day)){w.modelBudgetDay=day;w.modelCallsToday=0;w.modelFailuresToday=0;w.modelConsecutiveFailures=0;}
+        if(w.modelCallsToday>=dailyBudget||w.modelFailuresToday>=32)return null;
+        for(Conversation c:w.conversations)if("model".equals(c.mode)&&"active".equals(c.status)) {
+            var operation=ConversationLifecycle.reserveTurn(w,c,now);if(operation==null)continue;
+            var context=perspective(w,operation.speakerId(),now,c.turns);
+            Project topic=ResidentSimulation.project(w,c.topicId);
+            var request=new ResidentMind.DialogueRequest(context,c.id,c.turnVersion,operation.operationId(),partnerName(w,c,operation.speakerId()),topic==null?"刚才的话题":topic.title);
+            return reserved(w,now,new Work("turn",context,operation,request,null,w.modelSequence+1));
+        }
+        for(Conversation c:w.conversations)if("model".equals(c.mode)&&"ended".equals(c.status)&&!c.turns.isEmpty()) {
+            for(String speaker:c.participantIds){
+                var operation=ConversationLifecycle.reserveSummary(w,c,speaker,now);if(operation==null)continue;
+                var context=perspective(w,speaker,now,List.of());
+                var ids=c.turnMemoryIds.getOrDefault(speaker,List.of());
+                var memories=w.memories.stream().filter(m->m.ownerId().equals(speaker)&&ids.contains(m.id())).toList();
+                var request=new ResidentMind.SummaryRequest(context,c.id,partnerName(w,c,speaker),new ArrayList<>(c.turns),memories);
+                return reserved(w,now,new Work("summary",context,operation,null,request,w.modelSequence+1));
+            }
+        }
+        if(w.modelRequestedAt!=null&&Duration.between(w.modelRequestedAt,now).getSeconds()<75)return null;
+        var candidates=w.residentStates.stream().filter(r->r.plan!=null&&!Set.of("travel","sleep").contains(r.plan.action())&&ResidentSimulation.activeConversation(w,r.id)==null).toList();
+        // Legacy rule worlds still allow plan decisions while talking, but their text is not a model turn.
+        if(candidates.isEmpty()&&!w.modelConversationsEnabled)candidates=w.residentStates.stream().filter(r->r.plan!=null&&!Set.of("travel","sleep").contains(r.plan.action())).toList();
+        if(candidates.isEmpty())return null;
+        ResidentState r=candidates.get(Math.floorMod((int)w.modelSequence,candidates.size()));
+        var conversation=ResidentSimulation.activeConversation(w,r.id);
+        var context=perspective(w,r.id,now,conversation==null?List.of():conversation.turns);
+        return reserved(w,now,new Work("decision",context,null,null,null,w.modelSequence+1));
+    }
+    private Work reserved(CompanionWorld w,Instant now,Work work){w.modelRequestedAt=now;w.modelCallsToday++;w.modelSequence++;w.modelStatus=work.kind().equals("turn")?""+work.context().self().name()+"正在想怎么接这句话":work.kind().equals("summary")?"有人在回想刚才的谈话":"有位居民正在想下一步";w.revision++;return work;}
+    private ResidentMind.Context perspective(CompanionWorld w,String residentId,Instant now,List<Turn> transcript){
+        var r=ResidentSimulation.state(w,residentId);Actor self=ResidentSimulation.actor(w,r.id);
+        var nearby=w.residents.stream().filter(a->!a.id().equals(r.id)&&a.place().equals(self.place())&&!a.activity().equals("walk")).toList();
+        var memories=CompanionRecall.retrieve(w.memories,r.id,r.goal+" "+r.thought,now,10);
+        var known=w.projects.stream().filter(p->ResidentSimulation.knows(w,r.id,p.id)).map(p->new ResidentMind.KnownProject(p.id,p.title,ResidentSimulation.knownPlace(r,p))).toList();
+        return new ResidentMind.Context(w.id,r.id,r.revision,w.intentRevision,now,now.atZone(ZoneId.of(w.timezone)).toLocalTime().toString(),w.weather,self,r.goal,r.mood,r.thought,r.energy,r.social,new LinkedHashMap<>(r.relationships),memories,nearby,w.objects.stream().filter(o->o.place().equals(self.place())).toList(),known,new ArrayList<>(transcript));
+    }
+    private boolean applyDecision(CompanionWorld w,Work work,ResidentMind.Decision decision){
+        var c=work.context();if(w.modelSequence!=work.sequence()||Duration.between(c.at(),clock.instant()).getSeconds()>90)return false;
+        boolean valid=decision!=null&&decision.action()!=null&&decision.place()!=null&&decision.evidenceIds()!=null&&!decision.evidenceIds().isEmpty()&&evidenceWithin(decision.evidenceIds(),c.memories());
+        return valid&&(decision.action().equals("propose")
+            ?ResidentSimulation.proposeDecision(w,c.residentId(),c.revision(),c.intentRevision(),decision.place(),decision.projectTitle(),decision.objectKind(),decision.reason(),decision.evidenceIds(),clock.instant())
+            :ResidentSimulation.applyDecision(w,c.residentId(),c.revision(),c.intentRevision(),decision.place(),decision.action(),decision.targetId(),decision.reason(),decision.speech(),decision.evidenceIds(),clock.instant()));
+    }
+    private static boolean evidenceWithin(List<String> ids,List<Memory> memories){return ids!=null&&ids.stream().allMatch(id->memories.stream().anyMatch(m->m.id().equals(id)));}
+    private static String partnerName(CompanionWorld w,Conversation c,String speaker){return ResidentSimulation.actor(w,c.participantIds.stream().filter(id->!id.equals(speaker)).findFirst().orElseThrow()).name();}
+    private static String safeFailure(Throwable failure){List<String> codes=new ArrayList<>();for(int i=0;failure!=null&&i<5;i++,failure=failure.getCause())codes.add(failure instanceof com.betterself.growth.shared.api.ApiException api?api.getClass().getSimpleName()+":"+api.code():failure.getClass().getSimpleName());return String.join(" -> ",codes);}
+    @PreDestroy void close(){executor.shutdownNow();}
+}

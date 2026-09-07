@@ -84,7 +84,7 @@ app:
     json-mode: ${QWEN_JSON_MODE:true}
     retention-days: ${AI_RETENTION_DAYS:30}
   town:
-    reflection-cron: ${TOWN_REFLECTION_CRON:0 15 3 * * *}
+    reflection-cron: "${TOWN_REFLECTION_CRON:-}"
     # 排在反思之后：两个 job 都要遍历活跃用户，错开半小时免得同时压数据库。
-    society-cron: ${TOWN_SOCIETY_CRON:0 45 3 * * *}
+    society-cron: "${TOWN_SOCIETY_CRON:-}"
     chat-stream-timeout: ${TOWN_CHAT_STREAM_TIMEOUT:PT130S}

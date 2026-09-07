@@ -63,12 +63,15 @@ class TownPrivacyIT {
 
     @Autowired JdbcTemplate jdbc;
     @Autowired ExportService exports;
+    @Autowired com.betterself.growth.town.companion.application.CompanionService companion;
     @Autowired DeletionService deletions;
     @Autowired com.betterself.growth.shared.id.PublicIdGenerator ids;
 
     @Test
     void exportsOnlyOwnedTownDataAndClearsNewPrivateStateOnDeletion() throws Exception {
         long owner=user("town-privacy-owner@example.test"), friend=user("town-privacy-friend@example.test"), other=user("town-privacy-other@example.test");
+        companion.join(owner,new com.betterself.growth.town.companion.application.CompanionService.Join("OWNED_COMPANION","Asia/Shanghai"));
+        companion.join(other,new com.betterself.growth.town.companion.application.CompanionService.Join("UNRELATED_COMPANION","Asia/Shanghai"));
         townData(owner,"meadow","GUIDE","OWNED_EVENT","OWNED_MEMENTO");
         townData(other,"dusk","POSTMAN","UNRELATED_EVENT","UNRELATED_MEMENTO");
         postcard(owner,friend,"RECEIVED_BY_OWNER");
@@ -76,19 +79,20 @@ class TownPrivacyIT {
         postcard(other,friend,"UNRELATED_POSTCARD");
         var export=exports.create(owner,"town-privacy-isolated");
         String json=entry(exports.content(owner,export.publicId()),"town_experience.json");
-        assertThat(json).contains("OWNED_EVENT","OWNED_MEMENTO","RECEIVED_BY_OWNER","SENT_BY_OWNER","GUIDE","meadow");
-        assertThat(json).doesNotContain("UNRELATED_EVENT","UNRELATED_MEMENTO","UNRELATED_POSTCARD","POSTMAN","dusk");
+        assertThat(json).contains("OWNED_COMPANION","OWNED_EVENT","OWNED_MEMENTO","RECEIVED_BY_OWNER","SENT_BY_OWNER","GUIDE","meadow");
+        assertThat(json).doesNotContain("UNRELATED_COMPANION","UNRELATED_EVENT","UNRELATED_MEMENTO","UNRELATED_POSTCARD","POSTMAN","dusk");
         org.junit.jupiter.api.Assertions.assertThrows(com.betterself.growth.shared.api.ApiException.class,()->exports.content(other,export.publicId()));
         deletions.create(owner);
         jdbc.update("update deletion_request set process_after='2000-01-01 00:00:00' where user_id=?",owner);
         deletions.processDue();
-        for(String table:List.of("town_visit_profile","town_visit_memento"))
+        for(String table:List.of("town_visit_profile","town_visit_memento","town_companion_world"))
             assertThat(jdbc.queryForObject("select count(*) from "+table+" where user_id=?",Integer.class,owner)).isZero();
         assertThat(jdbc.queryForObject("select count(*) from town_story_progress where town_user_id=?",Integer.class,owner)).isZero();
         assertThat(jdbc.queryForObject("select count(*) from town_visit_postcard where owner_user_id=? or sender_user_id=?",Integer.class,owner,owner)).isZero();
         assertThat(jdbc.queryForObject("select player_response from town_event where town_user_id=?",String.class,owner)).isEqualTo("UNDECIDED");
         assertThat(jdbc.queryForObject("select attended_at is null from town_event where town_user_id=?",Boolean.class,owner)).isTrue();
         assertThat(jdbc.queryForObject("select count(*) from town_visit_profile where user_id=?",Integer.class,other)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("select count(*) from town_companion_world where user_id=?",Integer.class,other)).isEqualTo(1);
         assertThat(jdbc.queryForObject("select count(*) from town_story_progress where town_user_id=?",Integer.class,other)).isEqualTo(1);
         assertThat(jdbc.queryForObject("select body from town_visit_postcard where owner_user_id=?",String.class,other)).isEqualTo("UNRELATED_POSTCARD");
         assertThat(jdbc.queryForObject("select player_response from town_event where town_user_id=?",String.class,other)).isEqualTo("GOING");

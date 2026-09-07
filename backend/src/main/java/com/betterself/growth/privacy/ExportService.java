@@ -171,6 +171,7 @@ public class ExportService {
             add(zip, "task_events.csv", csv(events));
             add(zip, "role_progress.csv", csv(roleProgress));
             Map<String, Object> town = new LinkedHashMap<>();
+            town.put("companion", jdbc.queryForList("select state_json,updated_at from town_companion_world where user_id=?", userId));
             town.put("stories", jdbc.queryForList("select npc_code,stage,revision,paused,participation,started_at,updated_at,completed_at from town_story_progress where town_user_id=?", userId));
             town.put("sharing", jdbc.queryForList("select enabled,style,updated_at from town_visit_profile where user_id=?", userId));
             town.put("displayed_mementos", jdbc.queryForList("select achievement_code from town_visit_memento where user_id=?", userId));
