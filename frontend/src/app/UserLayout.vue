@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { RouterLink, RouterView, useRoute } from 'vue-router'
+import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { Activity, Building2, Target, CalendarCheck2, ChartNoAxesColumnIncreasing, ArrowUpRight, Sparkles, Settings, PawPrint, UserRound, Users, X, Bell, PanelLeftClose } from 'lucide-vue-next'
 import { useAuthStore } from '../modules/auth/auth.store'
 import DesktopPet from '../modules/partners/DesktopPet.vue'
@@ -8,6 +8,17 @@ import WelcomeGuide from '../shared/ui/WelcomeGuide.vue'
 import GlobalUnreadBar from '../shared/ui/GlobalUnreadBar.vue'
 import OperationGuideBar from '../shared/ui/OperationGuideBar.vue'
 import { useDialogFocus } from '../shared/ui/use-dialog-focus'
+
+import { useWorkspaceModeStore } from '../shared/ui/workspace-mode.store'
+
+const mode = useWorkspaceModeStore()
+const router = useRouter()
+function changeMode(minimal: boolean) {
+  mode.setMinimal(minimal)
+  showWelcome.value = false
+  showMobileMore.value = false
+  void router.push('/today')
+}
 
 const nav = [
   { to: '/today', label: '今日', icon: CalendarCheck2, mobile: 'primary', group: '行动' },
@@ -32,7 +43,7 @@ const isDesktopCompanion = Boolean(window.betterSelfDesktop?.isDesktopApp)
 const showWelcome = ref(false)
 const showMobileMore = ref(false)
 useDialogFocus(() => showMobileMore.value, '.mobile-more-sheet', () => { showMobileMore.value = false })
-useDialogFocus(() => showWelcome.value, '.welcome-dialog', () => dismissWelcome())
+useDialogFocus(() => showWelcome.value && !mode.minimal, '.welcome-dialog', () => dismissWelcome())
 const quietWorkspace = computed(() => route.path === '/ai' || route.path.includes('/chat') || route.path.includes('/groups/') || route.path === '/town')
 const welcomeKey = computed(() => `better-self:welcome:${auth.user?.publicId ?? 'guest'}`)
 const mobileMoreActive = computed(() => mobileMoreNav.some(item => route.path === item.to || route.path.startsWith(`${item.to}/`)))
@@ -47,7 +58,7 @@ const brandInitial = computed(() => {
 })
 
 function shouldShowWelcome() {
-  return Boolean(auth.user?.publicId) && window.localStorage.getItem(welcomeKey.value) !== 'dismissed'
+  return !mode.minimal && Boolean(auth.user?.publicId) && window.localStorage.getItem(welcomeKey.value) !== 'dismissed'
 }
 
 function openWelcome() {
@@ -75,17 +86,19 @@ onBeforeUnmount(() => {
 })
 </script>
 <template>
-  <div class="shell">
+  <div class="shell" :class="{ 'shell--minimal': mode.minimal }">
     <a class="skip-link" href="#main-content">跳到主要内容</a>
-    <aside class="sidebar">
+    <aside v-if="!mode.minimal" class="sidebar">
       <RouterLink class="brand" to="/today"><span class="brand-mark" aria-hidden="true"><Building2 :size="23" /></span><span><strong>更好的自己</strong><small>一步一步，自成风景</small></span></RouterLink>
       <nav aria-label="主导航"><section v-for="group in groups" :key="group" class="nav-group"><p>{{ group }}</p><RouterLink v-for="item in nav.filter(item => item.group === group)" :key="item.to" :to="item.to"><component :is="item.icon" :size="19"/><span>{{ item.label }}</span><span v-if="route.path === item.to" class="nav-dot" /></RouterLink></section></nav>
       <RouterLink class="sidebar-note" to="/town"><span class="note-orbit" aria-hidden="true">✦</span><strong>让每一步，<br>长成看得见的生活。</strong><span>去小镇走走 <ArrowUpRight :size="15" /></span></RouterLink>
+      <button class="secondary mode-switch" @click="changeMode(true)">切换极简清单</button>
       <div class="sidebar-account"><RouterLink to="/profile"><span class="account-avatar">{{ brandInitial }}</span><span><strong>{{ auth.user?.displayName || '我的成长档案' }}</strong><small>今天完成一点，也很好</small></span></RouterLink><RouterLink class="account-settings" to="/settings" aria-label="设置"><Settings :size="18" /></RouterLink></div>
     </aside>
     <main id="main-content" class="workspace" tabindex="-1">
-      <header class="workspace-topbar"><span class="workspace-context"><PanelLeftClose :size="17" /><span>{{ currentNav?.group || '成长' }}</span><span class="context-slash">/</span><strong>{{ currentNav?.label || '更好的自己' }}</strong></span><div><RouterLink class="topbar-ai" to="/ai"><Sparkles :size="15" />和 AI 理一理</RouterLink><RouterLink class="icon-button" to="/friends/chat" aria-label="消息中心"><Bell :size="18" /></RouterLink></div></header>
-      <OperationGuideBar />
+      <header v-if="mode.minimal" class="minimal-topbar"><RouterLink to="/today" class="minimal-brand">我的清单</RouterLink><div><RouterLink to="/settings">设置</RouterLink><button type="button" @click="changeMode(false)">切换成长模式</button></div></header>
+      <header v-else class="workspace-topbar"><span class="workspace-context"><PanelLeftClose :size="17" /><span>{{ currentNav?.group || '成长' }}</span><span class="context-slash">/</span><strong>{{ currentNav?.label || '更好的自己' }}</strong></span><div><RouterLink class="topbar-ai" to="/ai"><Sparkles :size="15" />和 AI 理一理</RouterLink><RouterLink class="icon-button" to="/friends/chat" aria-label="消息中心"><Bell :size="18" /></RouterLink></div></header>
+      <OperationGuideBar v-if="!mode.minimal" />
       <RouterView v-slot="{ Component, route }">
         <Transition name="route-view" mode="out-in">
           <component :is="Component" :key="route.path" />
@@ -109,16 +122,25 @@ onBeforeUnmount(() => {
         </section>
       </div>
     </Transition>
-    <nav class="mobile-nav" aria-label="主导航">
+    <nav v-if="!mode.minimal" class="mobile-nav" aria-label="主导航">
       <RouterLink v-for="item in mobileNav" :key="item.to" :to="item.to"><component :is="item.icon" :size="20"/><span>{{ item.label }}</span></RouterLink>
       <button type="button" :class="{ 'is-active': mobileMoreActive }" :aria-expanded="showMobileMore" aria-controls="mobile-more-menu" @click="showMobileMore = !showMobileMore"><UserRound :size="20"/><span>我的</span></button>
     </nav>
-    <DesktopPet v-if="!isDesktopCompanion && !quietWorkspace" />
-    <GlobalUnreadBar v-if="!quietWorkspace" />
-    <WelcomeGuide v-if="showWelcome" @dismiss="dismissWelcome" />
+    <DesktopPet v-if="!mode.minimal && !isDesktopCompanion && !quietWorkspace" />
+    <GlobalUnreadBar v-if="!mode.minimal && !quietWorkspace" />
+    <WelcomeGuide v-if="showWelcome && !mode.minimal" @dismiss="dismissWelcome" />
   </div>
 </template>
 <style scoped>
+.shell.shell--minimal { padding-left: 0; }
+.shell--minimal .workspace { padding-bottom: 24px; }
+.minimal-topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; max-width: 840px; margin: auto; padding: 24px; border-bottom: 1px solid var(--border); }
+.minimal-topbar a { text-decoration: none; color: var(--muted); }
+.minimal-topbar .minimal-brand { color: var(--ink); font-weight: 700; }
+.minimal-topbar > div { display: flex; align-items: center; gap: 16px; font-size: 13px; }
+.minimal-topbar button { border: 0; background: transparent; color: var(--muted); padding: 10px 0; cursor: pointer; font: inherit; }
+.mode-switch { margin-bottom: 16px; }
+
 .shell { min-height: 100vh; padding-left: var(--sidebar); }
 .sidebar { position: fixed; inset: 0 auto 0 0; width: var(--sidebar); border-right: 1px solid var(--border); background: color-mix(in srgb, var(--surface) 96%, var(--canvas)); padding: 18px 14px; display: flex; flex-direction: column; z-index: 10; box-shadow: 7px 0 24px color-mix(in srgb, var(--ink) 5%, transparent); }
 .sidebar::before { content: ""; position: absolute; inset: 0 0 auto; height: 3px; background: var(--topline); }

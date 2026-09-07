@@ -67,7 +67,8 @@ class DatabaseMigrationIT {
         Integer achievements = jdbc.queryForObject("select count(*) from achievement", Integer.class);
         Integer titles = jdbc.queryForObject("select count(*) from title_def", Integer.class);
 
-        assertThat(version).isEqualTo("22");
+        assertThat(version).isEqualTo("25");
+        assertThat(jdbc.queryForObject("select is_nullable from information_schema.columns where table_schema = database() and table_name = 'user_task' and column_name = 'weekly_plan_id'", String.class)).isEqualTo("YES");
         assertThat(publishedTemplates).isEqualTo(200);
         assertThat(rolesWithFiftyTemplates).isEqualTo(4);
         assertThat(achievements).isEqualTo(20);

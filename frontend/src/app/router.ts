@@ -9,7 +9,7 @@ const routes = [
   { path: '/town/immersive', component: () => import('../modules/town/immersive/ImmersiveTown.vue') },
   { path: '/', component: () => import('./UserLayout.vue'), children: [
     { path: '', redirect: '/today' },
-    { path: 'today', component: () => import('../modules/today/TodayView.vue') },
+    { path: 'today', component: () => import('../modules/today/TodayEntry.vue') },
     { path: 'goals', component: () => import('../modules/goals/GoalsView.vue') },
     { path: 'partners', component: () => import('../modules/partners/PartnersView.vue') },
     { path: 'town', component: () => import('../modules/town/TownView.vue') },

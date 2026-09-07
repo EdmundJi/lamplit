@@ -193,7 +193,7 @@ public class DatabasePlanningService implements PlanningService {
         }
         TaskView current = task(userId, publicId);
         String title = command.title() == null ? current.title() : command.title().trim();
-        if (title.isBlank()) {
+        if (title.isBlank() || title.length() > 160) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_TASK_TITLE", "Task title is required");
         }
         int minutes = command.estimatedMinutes() == null ? current.estimatedMinutes() : command.estimatedMinutes();
@@ -290,8 +290,8 @@ public class DatabasePlanningService implements PlanningService {
                    t.role_code, t.title, t.notes, t.estimated_minutes,
                    t.difficulty, t.rrule, t.dimension_weights, t.planned_local_time,
                    t.active_from, t.active_until, t.active
-            from user_task t join weekly_plan p on p.id = t.weekly_plan_id
-            join growth_goal g on g.id = p.goal_id
+            from user_task t left join weekly_plan p on p.id = t.weekly_plan_id
+            left join growth_goal g on g.id = p.goal_id
             left join task_template tt on tt.id = t.source_template_id
             where t.user_id = ? and (? is null or p.public_id = ?) and (? is null or g.public_id = ?)
             order by t.active desc, t.active_from, t.created_at
@@ -315,8 +315,8 @@ public class DatabasePlanningService implements PlanningService {
                        t.role_code, t.title, t.notes, t.estimated_minutes,
                        t.difficulty, t.rrule, t.dimension_weights, t.planned_local_time,
                        t.active_from, t.active_until, t.active
-                from user_task t join weekly_plan p on p.id = t.weekly_plan_id
-                join growth_goal g on g.id = p.goal_id
+                from user_task t left join weekly_plan p on p.id = t.weekly_plan_id
+                left join growth_goal g on g.id = p.goal_id
                 left join task_template tt on tt.id = t.source_template_id
                 where t.user_id = ? and t.public_id = ?
                 """,

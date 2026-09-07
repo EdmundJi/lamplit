@@ -4,14 +4,14 @@ import { BatteryMedium, Check, Clock3, Gauge, Minimize2, Play, RotateCcw, SkipFo
 import TownPreview from '../../shared/ui/TownPreview.vue'
 import { taskStatusLabel } from '../../shared/task-status'
 import { useDialogFocus } from '../../shared/ui/use-dialog-focus'
-import { DAILY_COMPLETION_LIMIT, useTodayLogic } from './today.logic'
+import { useTodayLogic } from './today.logic'
 
 const {
   tasks, goals, loading, error, feedback, last,
   selected, completionPercent, deferredStart,
   checkMood, availableMinutes, checkSubmitted, showCheck, recoveryChoice,
   focusTask, focusRunning,
-  strainedTasks, activeGoals, completedTaskCount, remainingCompletions, dailyLimitReached,
+  strainedTasks, activeGoals, completedTaskCount,
   suggestedPlan, activeAdvice, recommendedTasks, recommendedPublicIds, dailyGuidance, focusMinutes, focusClock,
   prepare, canActOn, canComplete, applyCheck, applyRecovery, startFocus, toggleFocus, closeFocus,
   act, confirmAction, finishFocus, reverse,
@@ -93,14 +93,7 @@ async function submitCheck() {
       </div>
     </section>
 
-    <section v-if="!loading && tasks.length" class="task-quota" :data-limit-reached="dailyLimitReached" aria-live="polite">
-      <div class="quota-copy">
-        <span>今日完成额度</span>
-        <strong>{{ completedTaskCount }} / {{ DAILY_COMPLETION_LIMIT }}</strong>
-      </div>
-      <progress :value="Math.min(completedTaskCount, DAILY_COMPLETION_LIMIT)" :max="DAILY_COMPLETION_LIMIT" :aria-label="`今日已完成 ${completedTaskCount} 个任务，最多 ${DAILY_COMPLETION_LIMIT} 个`" />
-      <p>{{ dailyLimitReached ? '今日额度已用完，未完成的任务可以延期或留待明天。' : `还可以完成 ${remainingCompletions} 个任务。` }}</p>
-    </section>
+    <p v-if="!loading && completedTaskCount" class="completion-count">今天已完成 {{ completedTaskCount }} 项</p>
 
     <p v-if="loading" class="empty">正在整理今天的安排…</p>
     <template v-else-if="tasks.length">
@@ -122,7 +115,7 @@ async function submitCheck() {
             <button v-if="task.status === 'PLANNED'" class="secondary" title="开始" aria-label="开始" :disabled="!canActOn(task)" @click="act(task, 'STARTED')">
               <Play :size="16" />开始
             </button>
-            <button class="primary" :title="dailyLimitReached ? '今日完成额度已用完' : '完成'" aria-label="完成" :disabled="!canComplete(task)" @click="act(task, 'COMPLETED')">
+            <button class="primary" title="完成" aria-label="完成" :disabled="!canComplete(task)" @click="act(task, 'COMPLETED')">
               <Check :size="16" />完成
             </button>
             <details class="task-more"><summary aria-label="更多任务操作">更多</summary><div>
@@ -223,7 +216,7 @@ async function submitCheck() {
       <p class="muted">先让注意力停在这一件事上。时间到了也可以记录部分完成。</p>
       <div class="actions focus-actions">
         <button type="button" class="secondary" @click="toggleFocus">{{ focusRunning ? '暂停' : '开始' }}</button>
-        <button type="button" class="primary" :disabled="dailyLimitReached" @click="finishFocus('COMPLETED')">完成</button>
+        <button type="button" class="primary" @click="finishFocus('COMPLETED')">完成</button>
         <button type="button" class="secondary" @click="finishFocus('PARTIAL')">部分完成</button>
       </div>
       <small>当前专注片段：{{ focusMinutes }} 分钟</small>
@@ -296,14 +289,6 @@ async function submitCheck() {
 .recovery .muted { margin-bottom: 0; }
 .recovery-actions { display: flex; flex-wrap: wrap; gap: 9px; justify-content: flex-end; }
 .recovery-actions button[aria-pressed='true'] { border-color: var(--primary); color: var(--primary); font-weight: 700; }
-.task-quota { display: grid; grid-template-columns: max-content minmax(140px, 220px) minmax(0, 1fr); gap: 14px; align-items: center; padding: 12px 16px; border: 1px solid var(--border); border-radius: var(--radius); background: color-mix(in srgb, var(--surface) 90%, transparent); }
-.task-quota[data-limit-reached='true'] { border-color: color-mix(in srgb, var(--amber) 34%, var(--border)); background: color-mix(in srgb, var(--amber) 7%, var(--surface)); }
-.quota-copy { display: flex; align-items: baseline; gap: 9px; white-space: nowrap; }
-.quota-copy span { color: var(--muted); font-size: 13px; }
-.quota-copy strong { font-size: 16px; }
-.task-quota progress { width: 100%; height: 7px; accent-color: var(--primary); }
-.task-quota[data-limit-reached='true'] progress { accent-color: var(--amber); }
-.task-quota p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
 .task-list { display: grid; gap: 0; border-top: 1px solid var(--border); }
 .task-row { min-height: 100px; display: flex; align-items: center; justify-content: space-between; gap: 16px; border: 0; border-bottom: 1px solid var(--border); border-radius: 0; padding: 20px 8px; background: transparent; }
 .task-row:hover { background: var(--surface); border-color: color-mix(in srgb, var(--primary) 24%, var(--border)); box-shadow: var(--shadow-soft); }
@@ -349,7 +334,6 @@ async function submitCheck() {
   .check-result button { grid-column: 1 / -1; }
 }
 @media (max-width: 600px) {
-  .task-quota { grid-template-columns: 1fr; gap: 8px; }
   .task-row { align-items: flex-start; flex-direction: column; }
   .task-row .actions { width: 100%; display: flex; flex-wrap: wrap; gap: 8px; padding-top: 6px; justify-content: flex-start; }
   .task-row .actions > button, .task-row .actions .task-more { flex: 1 1 auto; min-width: 96px; }
@@ -376,9 +360,6 @@ async function submitCheck() {
 .task-row .primary { background: var(--primary-soft); color: var(--primary-strong); }
 .task-row .primary:hover { background: var(--primary); color: white; }
 .task-row .secondary, .task-more summary { background: transparent; border-color: transparent; font-size: 12px; }
-.task-quota { padding: 0 0 20px; border: 0; border-bottom: 1px solid var(--border); border-radius: 0; background: transparent; }
-.task-quota progress { height: 4px; }
-.quota-copy strong { font-variant-numeric: tabular-nums; font-weight: 500; }
 .goal-strip { gap: 20px; }
 .goal-strip article { background: transparent; box-shadow: none; border: 0; border-left: 2px solid var(--primary-soft); border-radius: 0; padding: 4px 18px; min-height: 100px; }
 .goal-strip p { font-size: 13px; }

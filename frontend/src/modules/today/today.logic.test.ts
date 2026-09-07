@@ -1,7 +1,7 @@
 import { effectScope } from 'vue'
 import { flushPromises } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { DAILY_COMPLETION_LIMIT, isDailyLimitError, useTodayLogic } from './today.logic'
+import { isDailyLimitError, useTodayLogic } from './today.logic'
 
 const api = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn() }))
 vi.mock('../../shared/api/client', () => ({ api }))
@@ -59,10 +59,10 @@ describe('useTodayLogic', () => {
     dispose()
   })
 
-  it('blocks completion once the daily quota is reached, without calling the API', async () => {
+  it('allows completion beyond four tasks', async () => {
     api.get.mockImplementation((path: string) => Promise.resolve(path.startsWith('/task-schedules')
       ? [
-          ...Array.from({ length: DAILY_COMPLETION_LIMIT }, (_, index) => ({
+          ...Array.from({ length: 4 }, (_, index) => ({
             publicId: `done-${index}`, taskTitle: `任务 ${index}`, plannedStartAt: new Date().toISOString(), status: 'DONE',
           })),
           { publicId: 'schedule-extra', taskTitle: '额外任务', plannedStartAt: new Date().toISOString(), status: 'PLANNED' },
@@ -71,11 +71,11 @@ describe('useTodayLogic', () => {
     const { logic, dispose } = await setup()
     await flushPromises()
 
-    expect(logic.dailyLimitReached.value).toBe(true)
+    api.post.mockResolvedValueOnce({ scheduleStatus: 'DONE', eventPublicId: 'extra-event' })
     const extra = logic.tasks.value.find(task => task.publicId === 'schedule-extra')!
     await logic.act(extra, 'COMPLETED')
-    expect(api.post).not.toHaveBeenCalled()
-    expect(logic.error.value).toContain('今天已完成 4 个任务')
+    expect(api.post).toHaveBeenCalled()
+    expect(extra.status).toBe('DONE')
     dispose()
   })
 

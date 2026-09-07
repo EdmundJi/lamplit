@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -26,11 +27,13 @@ public class TaskController {
     private final PlanningService planning;
     private final DatabasePlanningService queries;
     private final Clock clock;
+    private final QuickTaskService quickTasks;
 
-    public TaskController(PlanningService planning, DatabasePlanningService queries, Clock clock) {
+    public TaskController(PlanningService planning, DatabasePlanningService queries, Clock clock, QuickTaskService quickTasks) {
         this.planning = planning;
         this.queries = queries;
         this.clock = clock;
+        this.quickTasks = quickTasks;
     }
 
     @GetMapping
@@ -50,6 +53,16 @@ public class TaskController {
         HttpServletRequest request
     ) {
         return ResponseEntity.status(HttpStatus.CREATED).body(envelope(planning.createTask(user.id(), body), request));
+    }
+
+    @PostMapping("/quick")
+    ResponseEntity<ApiEnvelope<PlanningService.TaskView>> quick(
+        @AuthenticationPrincipal CurrentUser user,
+        @RequestHeader(name = "Idempotency-Key", required = false) String key,
+        @RequestBody QuickTaskService.Command body,
+        HttpServletRequest request
+    ) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(envelope(quickTasks.create(user.id(), key, body), request));
     }
 
     @GetMapping("/{taskId}")

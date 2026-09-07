@@ -32,7 +32,6 @@ import java.util.Map;
 @Service
 public class TaskExecutionService {
 
-    private static final int DAILY_COMPLETION_LIMIT = 4;
     private static final TypeReference<Map<String, Integer>> WEIGHTS_TYPE = new TypeReference<>() {
     };
     private static final List<String> TERMINAL_TYPES = List.of("COMPLETED", "PARTIAL", "DEFERRED", "SKIPPED", "CANCELLED", "EXPIRED");
@@ -88,12 +87,9 @@ public class TaskExecutionService {
             return idempotency.replay(begin, EventResult.class);
         }
         String nextStatus = stateMachine.next(schedule.status(), command.eventType());
-        if (command.eventType() == TaskEventType.COMPLETED) {
-            ensureDailyCompletionAvailable(userId, schedule.localDate());
-        }
         double ratio = validateRatio(command.eventType(), command.completionRatio());
         int remainingCap = remainingDailyExperience(userId, schedule.localDate());
-        int experience = experienceCalculator.earned(
+        int experience = schedule.dimensionWeights().isEmpty() ? 0 : experienceCalculator.earned(
             command.eventType(), schedule.estimatedMinutes(), schedule.difficulty(), ratio, remainingCap
         );
         RoleProgressionService.ProgressChange roleChange = roleProgression.apply(
@@ -172,12 +168,12 @@ public class TaskExecutionService {
         return jdbc.query(
             """
                 select s.public_id, t.public_id task_public_id, t.title, s.planned_start_at, s.planned_end_at,
-                       s.local_date, s.timezone, s.status, s.deferred_from_id, t.role_code, t.estimated_minutes, t.difficulty
+                       s.local_date, s.timezone, s.status, s.updated_at, s.deferred_from_id, t.role_code, t.estimated_minutes, t.difficulty
                 from task_schedule s join user_task t on t.id = s.task_id
-                join weekly_plan p on p.id = t.weekly_plan_id
-                join growth_goal g on g.id = p.goal_id
+                left join weekly_plan p on p.id = t.weekly_plan_id
+                left join growth_goal g on g.id = p.goal_id
                 where s.user_id = ? and (? is null or s.local_date = ?)
-                  and ((t.active = 1 and g.status = 'ACTIVE') or s.status not in ('PLANNED', 'IN_PROGRESS'))
+                  and ((t.active = 1 and (t.weekly_plan_id is null or g.status = 'ACTIVE')) or s.status not in ('PLANNED', 'IN_PROGRESS'))
                 order by s.planned_start_at
                 """,
             (rs, row) -> new ScheduleView(
@@ -187,7 +183,7 @@ public class TaskExecutionService {
                 rs.getDate("local_date").toLocalDate(), rs.getString("timezone"), rs.getString("status"),
                 rs.getObject("deferred_from_id") != null, rs.getString("role_code"),
                 CareerRole.valueOf(rs.getString("role_code")).displayName(),
-                rs.getInt("estimated_minutes"), rs.getInt("difficulty")
+                rs.getInt("estimated_minutes"), rs.getInt("difficulty"), rs.getTimestamp("updated_at").toInstant()
             ),
             userId, localDate == null ? null : Date.valueOf(localDate), localDate == null ? null : Date.valueOf(localDate)
         );
@@ -230,22 +226,6 @@ public class TaskExecutionService {
 
     private void lockUser(long userId) {
         jdbc.queryForObject("select id from sys_user where id = ? for update", Long.class, userId);
-    }
-
-    private void ensureDailyCompletionAvailable(long userId, java.time.LocalDate localDate) {
-        Integer completed = jdbc.queryForObject(
-            "select count(*) from task_schedule where user_id = ? and local_date = ? and status = 'DONE'",
-            Integer.class, userId, Date.valueOf(localDate)
-        );
-        int completedCount = completed == null ? 0 : completed;
-        if (completedCount >= DAILY_COMPLETION_LIMIT) {
-            throw new ApiException(
-                HttpStatus.CONFLICT,
-                "DAILY_TASK_COMPLETION_LIMIT_REACHED",
-                "每天最多完成 4 个任务",
-                Map.of("limit", DAILY_COMPLETION_LIMIT, "completed", completedCount, "localDate", localDate.toString())
-            );
-        }
     }
 
     private int remainingDailyExperience(long userId, java.time.LocalDate localDate) {
@@ -303,7 +283,7 @@ public class TaskExecutionService {
                 ) values (?, ?, ?, ?, ?, ?, ?, 'PLANNED', ?)
                 """,
             publicId, userId, schedule.taskId(), Timestamp.from(requestedStart),
-            Timestamp.from(requestedStart.plusSeconds(schedule.estimatedMinutes() * 60L)),
+            schedule.plannedEndAt() == null ? null : Timestamp.from(requestedStart.plusSeconds(schedule.estimatedMinutes() * 60L)),
             Date.valueOf(requestedStart.atZone(zone).toLocalDate()), schedule.timezone(), schedule.id()
         );
         return publicId;
@@ -458,7 +438,8 @@ public class TaskExecutionService {
         String roleCode,
         String roleName,
         int estimatedMinutes,
-        int difficulty
+        int difficulty,
+        Instant updatedAt
     ) {
     }
 

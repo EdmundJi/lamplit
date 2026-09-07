@@ -4,7 +4,7 @@ import { BatteryMedium, Check, Clock3, Gauge, Play, RefreshCw, SkipForward, Spar
 import { taskStatusLabel } from '../../../../shared/task-status'
 import { useDialogFocus } from '../../../../shared/ui/use-dialog-focus'
 import { worldBridgeKey } from '../panel.types'
-import { DAILY_COMPLETION_LIMIT, useTodayLogic, type Task, type TaskEventType } from '../../../today/today.logic'
+import { useTodayLogic, type Task, type TaskEventType } from '../../../today/today.logic'
 
 const bridge = inject(worldBridgeKey, undefined)
 
@@ -13,7 +13,7 @@ const {
   selected, completionPercent, deferredStart,
   checkMood, availableMinutes, checkSubmitted, showCheck,
   focusTask, focusRunning, focusClock,
-  completedTaskCount, remainingCompletions, dailyLimitReached,
+  completedTaskCount,
   suggestedPlan, recommendedTasks,
   load, prepare, canActOn, canComplete, applyCheck, startFocus, toggleFocus, closeFocus,
   act, confirmAction, finishFocus, reverse,
@@ -66,12 +66,7 @@ useDialogFocus(() => Boolean(selected.value || focusTask.value), '.today-panel-d
       </div>
     </section>
 
-    <div v-if="!loading && tasks.length" class="quota" :data-limit-reached="dailyLimitReached" aria-live="polite">
-      <span>今日完成额度 <strong>{{ completedTaskCount }} / {{ DAILY_COMPLETION_LIMIT }}</strong></span>
-      <progress :value="Math.min(completedTaskCount, DAILY_COMPLETION_LIMIT)" :max="DAILY_COMPLETION_LIMIT" :aria-label="`今日已完成 ${completedTaskCount} 个任务，最多 ${DAILY_COMPLETION_LIMIT} 个`" />
-      <p v-if="dailyLimitReached">今日额度已用完，未完成的任务可以延期或留待明天。</p>
-      <p v-else>还可以完成 {{ remainingCompletions }} 个任务。</p>
-    </div>
+    <p v-if="!loading && completedTaskCount" class="completion-count">今天已完成 {{ completedTaskCount }} 项</p>
 
     <p v-if="loading" class="empty">正在整理今天的安排…</p>
     <template v-else-if="tasks.length">
@@ -86,7 +81,7 @@ useDialogFocus(() => Boolean(selected.value || focusTask.value), '.today-panel-d
             <button v-if="task.status === 'PLANNED'" class="primary" title="开始这一步" aria-label="开始" :disabled="!canActOn(task)" @click="recordStep(task, 'STARTED')">
               <Play :size="15" />开始
             </button>
-            <button v-if="task.status === 'IN_PROGRESS'" class="primary" :title="dailyLimitReached ? '今日完成额度已用完' : '完成'" aria-label="完成" :disabled="!canComplete(task)" @click="recordStep(task, 'COMPLETED')">
+            <button v-if="task.status === 'IN_PROGRESS'" class="primary" title="完成" aria-label="完成" :disabled="!canComplete(task)" @click="recordStep(task, 'COMPLETED')">
               <Check :size="15" />完成
             </button>
             <details class="task-more">
@@ -143,7 +138,7 @@ useDialogFocus(() => Boolean(selected.value || focusTask.value), '.today-panel-d
         <div class="focus-clock" aria-live="polite">{{ focusClock }}</div>
         <div class="actions focus-actions">
           <button type="button" class="secondary" @click="toggleFocus">{{ focusRunning ? '暂停' : '开始' }}</button>
-          <button type="button" class="primary" :disabled="dailyLimitReached" @click="finishFocus('COMPLETED')">完成</button>
+          <button type="button" class="primary" @click="finishFocus('COMPLETED')">完成</button>
           <button type="button" class="secondary" @click="finishFocus('PARTIAL')">部分完成</button>
         </div>
       </section>
@@ -174,10 +169,6 @@ useDialogFocus(() => Boolean(selected.value || focusTask.value), '.today-panel-d
 .check-result { display: grid; gap: 4px; padding-top: 4px; border-top: 1px solid var(--border); font-size: 12px; }
 .check-result p { margin: 0; color: var(--muted); line-height: 1.5; }
 .check-result button { justify-self: start; margin-top: 2px; }
-.quota p { margin: 0; }
-.quota { display: grid; gap: 6px; font-size: 12px; color: var(--muted); }
-.quota progress { width: 100%; height: 6px; }
-.quota[data-limit-reached='true'] { color: var(--amber); }
 .task-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; max-height: 320px; overflow-y: auto; }
 .task-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 10px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
 .task-main { min-width: 0; display: grid; gap: 2px; }
