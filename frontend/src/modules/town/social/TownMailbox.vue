@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, useId, watch, inject } from 'vue'
+import TownEventInvitation from '../TownEventInvitation.vue'
+import { worldBridgeKey } from '../immersive/panel.types'
 import TownConfidantComposer from './TownConfidantComposer.vue'
 import { useTownSocialStore } from './social.store'
 import { letterKindLabels, type TownLetterKind } from './social.types'
@@ -7,6 +9,7 @@ import { letterKindLabels, type TownLetterKind } from './social.types'
 const emit = defineEmits<{ 'unread-change': [count: number] }>()
 const { letters, unreadCount, loaded, loading, loadError, reading, readErrors,
   draft, sending, sendError, feedback, canSend, refresh, markRead, send, dispose } = useTownSocialStore()
+const bridge = inject(worldBridgeKey, undefined)
 const filter = ref<TownLetterKind | 'ALL'>('ALL')
 const opened = ref<string | null>(null)
 const composing = ref(false)
@@ -61,6 +64,8 @@ onBeforeUnmount(dispose)
           </button>
           <article v-if="selected?.publicId === letter.publicId" :id="`${id}-letter-${letter.publicId}`" class="letter-body" aria-label="信件正文">
             <p>{{ letter.body }}</p>
+            <TownEventInvitation v-if="letter.kind === 'INVITE' && letter.eventPublicId" :event-id="letter.eventPublicId" @visit="bridge?.emit({ type: 'travel', place: $event })" />
+            <small v-else-if="letter.kind === 'INVITE'">这封旧请柬没有关联活动，可到公告栏看看今天的安排。</small>
             <small v-if="reading.has(letter.publicId)" role="status">正在保存已读状态…</small>
             <div v-if="readErrors[letter.publicId]" role="alert">
               {{ readErrors[letter.publicId] }}

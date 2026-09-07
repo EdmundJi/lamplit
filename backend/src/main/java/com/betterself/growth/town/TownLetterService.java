@@ -41,6 +41,12 @@ public class TownLetterService {
     /** 投递一封信。数据库有 CHECK 约束兜底，这里提前拦一次是为了让调用方的笔误在单测里就炸出来。 */
     public void deliver(long recipientUserId, String senderKind, String senderRef, String kind, String body,
                         LocalDateTime deliverAt) {
+        deliver(recipientUserId, senderKind, senderRef, kind, body, deliverAt, null);
+    }
+
+    public void deliver(long recipientUserId, String senderKind, String senderRef, String kind, String body,
+                        LocalDateTime deliverAt, String eventPublicId) {
+        if (eventPublicId != null && !"INVITE".equals(kind)) throw new IllegalArgumentException("Only invitations link events");
         if (!SENDER_KINDS.contains(senderKind)) {
             throw new IllegalArgumentException("unknown town letter sender kind: " + senderKind);
         }
@@ -57,11 +63,11 @@ public class TownLetterService {
         jdbc.update(
             """
                 insert into town_letter
-                    (public_id, recipient_user_id, sender_kind, sender_ref, kind, body, deliver_at, read_at, created_at)
-                values (?, ?, ?, ?, ?, ?, ?, null, ?)
+                    (public_id, recipient_user_id, sender_kind, sender_ref, kind, body, deliver_at, read_at, created_at, event_public_id)
+                values (?, ?, ?, ?, ?, ?, ?, null, ?, ?)
                 """,
             ids.next(), recipientUserId, senderKind, senderRef, kind, body,
-            Timestamp.from(deliverAt.atZone(clock.getZone()).toInstant()), Timestamp.from(clock.instant())
+            Timestamp.from(deliverAt.atZone(clock.getZone()).toInstant()), Timestamp.from(clock.instant()), eventPublicId
         );
     }
 
@@ -81,7 +87,7 @@ public class TownLetterService {
         LocalDateTime now = LocalDateTime.now(clock);
         List<LetterRow> rows = jdbc.query(
             """
-                select public_id, sender_kind, sender_ref, kind, body, deliver_at, read_at, created_at
+                select public_id, sender_kind, sender_ref, kind, body, deliver_at, read_at, created_at, event_public_id
                 from town_letter
                 where recipient_user_id = ? and deliver_at <= ?
                 order by deliver_at desc, id desc
@@ -91,7 +97,7 @@ public class TownLetterService {
                 rs.getString("kind"), rs.getString("body"),
                 rs.getTimestamp("deliver_at").toInstant(),
                 rs.getTimestamp("read_at") == null ? null : rs.getTimestamp("read_at").toInstant(),
-                rs.getTimestamp("created_at").toInstant()
+                rs.getTimestamp("created_at").toInstant(), rs.getString("event_public_id")
             ),
             userId, Timestamp.from(clock.instant())
         );
@@ -105,7 +111,7 @@ public class TownLetterService {
             }
             views.add(new LetterView(
                 row.publicId(), row.senderKind(), row.senderRef(), senderName(row, npcNames),
-                row.kind(), row.body(), row.deliverAt(), row.readAt(), row.createdAt()
+                row.kind(), row.body(), row.deliverAt(), row.readAt(), row.createdAt(), row.eventPublicId()
             ));
         }
         return new LetterInboxView(views, unread);
@@ -156,11 +162,11 @@ public class TownLetterService {
     }
 
     private record LetterRow(String publicId, String senderKind, String senderRef, String kind, String body,
-                             Instant deliverAt, Instant readAt, Instant createdAt) {
+                             Instant deliverAt, Instant readAt, Instant createdAt, String eventPublicId) {
     }
 
     public record LetterView(String publicId, String senderKind, String senderRef, String senderName, String kind,
-                             String body, Instant deliverAt, Instant readAt, Instant createdAt) {
+                             String body, Instant deliverAt, Instant readAt, Instant createdAt, String eventPublicId) {
     }
 
     public record LetterInboxView(List<LetterView> letters, int unreadCount) {

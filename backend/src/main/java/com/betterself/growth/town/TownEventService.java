@@ -1,6 +1,8 @@
 package com.betterself.growth.town;
 
 import com.betterself.growth.shared.id.PublicIdGenerator;
+import com.betterself.growth.shared.api.ApiException;
+import org.springframework.http.HttpStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -77,6 +79,8 @@ public class TownEventService {
             if (alreadyHostedToday(userId, localDate)) return;
             // Never create a retroactive party (or mail an invitation to yesterday's party).
             if (localDate.isBefore(daily.today(userId))) return;
+            // A late first visit cannot create an activity which should already have started.
+            if (!clock.instant().isBefore(localDate.atTime(EVENT_START_HOUR).atZone(daily.zone(userId)).toInstant())) return;
             List<HostCandidate> candidates = hostCandidates(userId, localDate);
             RandomGenerator rng = new SplittableRandom(seedFor(userId, localDate));
             pickHost(candidates, rng).ifPresent(code -> {
@@ -86,23 +90,85 @@ public class TownEventService {
         });
     }
 
-    /** Authenticated owner's local calendar day; no bonds, invitee identities or private state. */
+    /** Today's events alone feed the world renderer; history never changes NPC placement. */
     public List<EventView> today(long userId) {
         LocalDate date = daily.today(userId);
         runNightly(userId, date);
+        return between(userId, date, date.plusDays(1));
+    }
+
+    public List<EventView> recent(long userId) {
+        LocalDate date = daily.today(userId);
+        return between(userId, date.minusDays(7), date);
+    }
+
+    private List<EventView> between(long userId, LocalDate from, LocalDate until) {
+        return jdbc.query(EVENT_SELECT + " where e.town_user_id=? and e.starts_at>=? and e.starts_at<? order by e.starts_at desc,e.public_id",
+            (rs, row) -> eventView(userId, rs), userId, Timestamp.valueOf(from.atStartOfDay()), Timestamp.valueOf(until.atStartOfDay()));
+    }
+
+    private static final String EVENT_SELECT = """
+        select e.public_id,e.kind,e.venue,n.display_name,e.starts_at,e.ends_at,e.dimension,
+               e.player_response,e.attended_at,e.cancelled_at
+        from town_event e join town_npc n on n.town_user_id=e.town_user_id and n.npc_code=e.host_npc_code
+        """;
+
+    public EventView detail(long userId, String publicId) {
+        return jdbc.query(EVENT_SELECT + " where e.town_user_id=? and e.public_id=?",
+            (rs, row) -> eventView(userId, rs), userId, publicId).stream().findFirst()
+            .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "TOWN_EVENT_NOT_FOUND", "没有找到这场活动"));
+    }
+
+    private EventView eventView(long userId, java.sql.ResultSet rs) throws java.sql.SQLException {
         var zone = daily.zone(userId);
-        return jdbc.query("""
-            select e.public_id,e.kind,e.venue,n.display_name,e.starts_at,e.ends_at,e.dimension
-            from town_event e join town_npc n on n.town_user_id=e.town_user_id and n.npc_code=e.host_npc_code
-            where e.town_user_id=? and e.starts_at>=? and e.starts_at<? order by e.starts_at,e.public_id
-            """, (rs, row) -> new EventView(rs.getString(1),rs.getString(2),rs.getString(3),rs.getString(4),
-                rs.getTimestamp(5).toLocalDateTime().atZone(zone).toOffsetDateTime(),
-                rs.getTimestamp(6) == null ? null : rs.getTimestamp(6).toLocalDateTime().atZone(zone).toOffsetDateTime(),
-                rs.getString(7)), userId, Timestamp.valueOf(date.atStartOfDay()), Timestamp.valueOf(date.plusDays(1).atStartOfDay()));
+        var start = rs.getTimestamp("starts_at").toLocalDateTime().atZone(zone).toOffsetDateTime();
+        var end = rs.getTimestamp("ends_at") == null ? start.plusHours(2)
+            : rs.getTimestamp("ends_at").toLocalDateTime().atZone(zone).toOffsetDateTime();
+        String phase = rs.getTimestamp("cancelled_at") != null ? "CANCELLED"
+            : clock.instant().isBefore(start.toInstant()) ? "UPCOMING"
+            : clock.instant().isBefore(end.toInstant()) ? "ONGOING" : "ENDED";
+        var attended = rs.getTimestamp("attended_at");
+        return new EventView(rs.getString("public_id"), rs.getString("kind"), rs.getString("venue"), rs.getString("display_name"),
+            start, end, rs.getString("dimension"), phase, rs.getString("player_response"),
+            attended == null ? null : attended.toInstant(), clock.instant());
+    }
+
+    /** Intent is not attendance. Repeating a response is harmless and creates no reward. */
+    public EventView respond(long userId, String publicId, String response) {
+        if (!List.of("UNDECIDED", "GOING", "SKIPPED").contains(response == null ? "" : response))
+            throw new ApiException(HttpStatus.BAD_REQUEST, "TOWN_EVENT_RESPONSE_INVALID", "请选择参加、略过或稍后决定");
+        return tx.execute(status -> {
+            lockEvent(userId, publicId);
+            EventView event = detail(userId, publicId);
+            if (event.phase().equals("ENDED") || event.phase().equals("CANCELLED"))
+                throw new ApiException(HttpStatus.CONFLICT, "TOWN_EVENT_CLOSED", "这场活动已经结束或取消");
+            jdbc.update("update town_event set player_response=? where town_user_id=? and public_id=?", response, userId, publicId);
+            return detail(userId, publicId);
+        });
+    }
+
+    /** Explicit personal recollection during the event, never inferred from an RSVP. */
+    public EventView remember(long userId, String publicId) {
+        return tx.execute(status -> {
+            lockEvent(userId, publicId);
+            EventView event = detail(userId, publicId);
+            if (event.attendedAt() != null) return event;
+            if (!event.phase().equals("ONGOING"))
+                throw new ApiException(HttpStatus.CONFLICT, "TOWN_EVENT_NOT_ONGOING", "活动进行时才能记下参加经历");
+            jdbc.update("update town_event set attended_at=?,player_response='GOING' where town_user_id=? and public_id=? and attended_at is null",
+                Timestamp.from(clock.instant()), userId, publicId);
+            return detail(userId, publicId);
+        });
+    }
+
+    private void lockEvent(long userId, String publicId) {
+        var found = jdbc.queryForList("select id from town_event where town_user_id=? and public_id=? for update", userId, publicId);
+        if (found.isEmpty()) throw new ApiException(HttpStatus.NOT_FOUND, "TOWN_EVENT_NOT_FOUND", "没有找到这场活动");
     }
 
     public record EventView(String publicId, String kind, String venue, String hostName,
-                            java.time.OffsetDateTime startsAt, java.time.OffsetDateTime endsAt, String dimension) {}
+                            java.time.OffsetDateTime startsAt, java.time.OffsetDateTime endsAt, String dimension,
+                            String phase, String response, java.time.Instant attendedAt, java.time.Instant serverTime) {}
 
     private void hostEvent(long userId, LocalDate localDate, HostCandidate host, String venue) {
         LocalDateTime startsAt = localDate.atTime(EVENT_START_HOUR);
@@ -114,7 +180,7 @@ public class TownEventService {
                     (public_id, town_user_id, host_npc_code, kind, venue, dimension, starts_at, ends_at, created_at)
                 values (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-            eventPublicId, userId, host.npcCode(), EVENT_KIND, venue, host.dimension(),
+            eventPublicId, userId, host.npcCode(), eventKind(venue), venue, host.dimension(),
             Timestamp.valueOf(startsAt), Timestamp.valueOf(endsAt), Timestamp.valueOf(LocalDateTime.now(clock))
         );
         long eventId = jdbc.queryForObject(
@@ -137,10 +203,18 @@ public class TownEventService {
             );
             if ("PLAYER".equals(recipient.kind())) {
                 letters.deliver(userId, "NPC", host.npcCode(), "INVITE",
-                    inviteBody(host.displayName(), venue), deliveredAt);
+                    inviteBody(host.displayName(), venue), deliveredAt, eventPublicId);
             }
             rank++;
         }
+    }
+
+    private String eventKind(String venue) {
+        return switch (venue) {
+            case "park" -> "PARK_WALK";
+            case "cafe" -> "COFFEE_CHAT";
+            default -> "READING_CIRCLE";
+        };
     }
 
     private String inviteBody(String hostName, String venue) {

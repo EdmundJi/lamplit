@@ -242,8 +242,8 @@ export const worldMethods = {
   drawTownEvents(this: TownScene) {
       const runtime = this.runtime;
       const now = Date.now() + runtime.serverOffsetMs;
-      const active = runtime.townEvents.filter(e => now >= Date.parse(e.startsAt) - 30 * 60000 && now < Date.parse(e.endsAt ?? e.startsAt) + 30 * 60000);
-      const signature = active.map(e => e.publicId).join(',');
+      const active = runtime.townEvents.filter(e => e.phase !== 'CANCELLED' && now >= Date.parse(e.startsAt) - 30 * 60000 && now < Date.parse(e.endsAt ?? e.startsAt) + 30 * 60000);
+      const signature = active.map(e => `${e.publicId}:${e.venue}:${e.kind}:${e.startsAt}:${e.endsAt}`).join(',');
       if (signature === this.eventSignature)
           return;
       this.eventSignature = signature;

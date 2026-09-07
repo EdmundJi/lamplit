@@ -2,6 +2,7 @@
 export type TownLetterKind = 'LONG' | 'NOTE' | 'INVITE'
 export interface TownLetter {
   publicId: string
+  eventPublicId?: string | null
   senderKind: 'CONFIDANT' | 'NPC'
   senderRef: string | null
   senderName: string

@@ -975,7 +975,7 @@ public class TownSocietyService {
                 select e.venue, e.starts_at, e.ends_at, e.host_npc_code, i.recipient_ref
                 from town_event e
                 left join town_invitation i on i.event_id = e.id and i.recipient_kind = 'NPC'
-                where e.town_user_id = ? and e.starts_at >= ? and e.starts_at < ?
+                where e.town_user_id = ? and e.cancelled_at is null and e.starts_at >= ? and e.starts_at < ?
                 """,
             rs -> {
                 LocalDateTime startsAt = rs.getTimestamp("starts_at").toLocalDateTime();

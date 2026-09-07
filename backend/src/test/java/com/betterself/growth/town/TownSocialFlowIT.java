@@ -133,7 +133,7 @@ class TownSocialFlowIT {
     }
 
     @Test
-    void eventsEndpointIsOwnerScopedAndHasOnlyTheRenderingContract() throws Exception {
+    void eventsEndpointIsOwnerScopedAndIncludesExplicitPersonalActivityState() throws Exception {
         Session owner = register("town-events-contract@example.test");
         Session other = register("town-events-other@example.test");
         long id = userIdOf("town-events-contract@example.test");
@@ -149,7 +149,7 @@ class TownSocialFlowIT {
         var event = mapper.readTree(body(result)).path("data").get(0);
         var names = new java.util.HashSet<String>();
         event.fieldNames().forEachRemaining(names::add);
-        assertThat(names).containsExactlyInAnyOrder("publicId","kind","venue","hostName","startsAt","endsAt","dimension");
+        assertThat(names).containsExactlyInAnyOrder("publicId","kind","venue","hostName","startsAt","endsAt","dimension","phase","response","attendedAt","serverTime");
         assertThat(event.path("startsAt").asText()).endsWith("+08:00");
         assertThat(body(mvc.perform(get("/api/v1/town/events").cookie(other.access())).andExpect(status().isOk()).andReturn()))
             .doesNotContain(event.path("publicId").asText());
@@ -368,6 +368,79 @@ class TownSocialFlowIT {
     }
 
     // ---------------------------------------------------------------- helpers
+
+    @Test
+    void structuredInvitationAndEventChoicesAreOwnedIdempotentAndNeverAwardAttendanceFromRsvp() throws Exception {
+        Session owner = register("event-experience-owner@example.test");
+        Session other = register("event-experience-other@example.test");
+        long userId = userIdOf("event-experience-owner@example.test");
+        provisioner.ensurePopulated(userId);
+        String eventId = ids.next();
+        var now = java.time.LocalDateTime.ofInstant(clock.instant(), daily.zone(userId));
+        jdbc.update("""
+            insert into town_event(public_id,town_user_id,host_npc_code,kind,venue,starts_at,ends_at)
+            values (?,?,'KE_YUN','READING_CIRCLE','plaza',?,?)
+            """, eventId,userId,java.sql.Timestamp.valueOf(now.plusHours(1)),java.sql.Timestamp.valueOf(now.plusHours(2)));
+        letterService.deliver(userId,"NPC","KE_YUN","INVITE","邀请正文不用于猜测活动",java.time.LocalDateTime.now(clock).minusMinutes(1),eventId);
+        assertThat(letterService.inbox(userId).letters()).anySatisfy(letter -> assertThat(letter.eventPublicId()).isEqualTo(eventId));
+        mvc.perform(get("/api/v1/town/events/" + eventId).cookie(other.access())).andExpect(status().isNotFound());
+        mvc.perform(post("/api/v1/town/events/" + eventId + "/response").cookie(other.access(),other.csrf())
+            .header("X-CSRF-Token",other.csrf().getValue()).contentType("application/json").content("{\"response\":\"GOING\"}"))
+            .andExpect(status().isNotFound());
+        mvc.perform(post("/api/v1/town/events/" + eventId + "/response").cookie(owner.access(),owner.csrf())
+            .header("X-CSRF-Token",owner.csrf().getValue()).contentType("application/json").content("{\"response\":\"GOING\"}"))
+            .andExpect(status().isOk());
+        events.respond(userId,eventId,"GOING");
+        assertThat(events.detail(userId,eventId).attendedAt()).isNull();
+        assertThat(events.detail(userId,eventId).phase()).isEqualTo("UPCOMING");
+        mvc.perform(post("/api/v1/town/events/" + eventId + "/memory").cookie(owner.access(),owner.csrf())
+            .header("X-CSRF-Token",owner.csrf().getValue())).andExpect(status().isConflict());
+        jdbc.update("update town_event set starts_at=?,ends_at=? where public_id=?",
+            java.sql.Timestamp.valueOf(now.minusMinutes(10)),java.sql.Timestamp.valueOf(now.plusMinutes(30)),eventId);
+        int factsBefore = countFacts(userId);
+        var first = events.remember(userId,eventId);
+        assertThat(first.attendedAt()).isNotNull();
+        assertThat(events.remember(userId,eventId).attendedAt()).isEqualTo(first.attendedAt());
+        assertThat(countFacts(userId)).isEqualTo(factsBefore);
+        jdbc.update("update town_event set cancelled_at=? where public_id=?",java.sql.Timestamp.from(clock.instant()),eventId);
+        assertThat(events.detail(userId,eventId).phase()).isEqualTo("CANCELLED");
+        mvc.perform(post("/api/v1/town/events/" + eventId + "/response").cookie(owner.access(),owner.csrf())
+            .header("X-CSRF-Token",owner.csrf().getValue()).contentType("application/json").content("{\"response\":\"SKIPPED\"}"))
+            .andExpect(status().isConflict());
+    }
+
+    @Test
+    void pastEventsRemainReadableWithoutBeingMixedIntoTodaysWorld() throws Exception {
+        Session owner = register("event-experience-history@example.test");
+        long userId = userIdOf("event-experience-history@example.test");
+        provisioner.ensurePopulated(userId);
+        String eventId = ids.next();
+        var past = daily.today(userId).minusDays(2).atTime(18,0);
+        jdbc.update("""
+            insert into town_event(public_id,town_user_id,host_npc_code,kind,venue,starts_at,ends_at)
+            values (?,?,'KE_YUN','PARK_WALK','park',?,?)
+            """,eventId,userId,java.sql.Timestamp.valueOf(past),java.sql.Timestamp.valueOf(past.plusHours(2)));
+        assertThat(events.recent(userId)).anySatisfy(event -> {
+            assertThat(event.publicId()).isEqualTo(eventId);
+            assertThat(event.phase()).isEqualTo("ENDED");
+            assertThat(event.attendedAt()).isNull();
+        });
+        assertThat(events.today(userId)).noneSatisfy(event -> assertThat(event.publicId()).isEqualTo(eventId));
+        mvc.perform(get("/api/v1/town/events/history").cookie(owner.access())).andExpect(status().isOk());
+    }
+
+    @Test
+    void lateFirstVisitDoesNotManufactureAnExpiredInvitation() throws Exception {
+        register("event-late-arrival@example.test");
+        long userId = userIdOf("event-late-arrival@example.test");
+        provisioner.ensurePopulated(userId);
+        var date = daily.today(userId);
+        var lateClock = java.time.Clock.fixed(date.atTime(23,0).atZone(daily.zone(userId)).toInstant(), clock.getZone());
+        var lateEvents = new TownEventService(jdbc,tx,ids,letterService,lateClock,moods,daily);
+        lateEvents.runNightly(userId,date);
+        assertThat(countEvents(userId)).isZero();
+        assertThat(letterService.inbox(userId).letters()).noneSatisfy(letter -> assertThat(letter.kind()).isEqualTo("INVITE"));
+    }
 
     private double affinityToHost(long userId, String hostCode, String recipientRef) {
         if ("PLAYER".equals(recipientRef)) {

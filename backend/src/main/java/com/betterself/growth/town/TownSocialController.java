@@ -41,6 +41,32 @@ public class TownSocialController {
         return envelope(events.today(user.id()), request);
     }
 
+    @GetMapping("/events/history")
+    ApiEnvelope<java.util.List<TownEventService.EventView>> eventHistory(
+        @AuthenticationPrincipal CurrentUser user, HttpServletRequest request) {
+        return envelope(events.recent(user.id()), request);
+    }
+
+    @GetMapping("/events/{id}")
+    ApiEnvelope<TownEventService.EventView> eventDetail(@AuthenticationPrincipal CurrentUser user,
+        @PathVariable String id, HttpServletRequest request) {
+        return envelope(events.detail(user.id(), id), request);
+    }
+
+    @PostMapping("/events/{id}/response")
+    ApiEnvelope<TownEventService.EventView> eventResponse(@AuthenticationPrincipal CurrentUser user,
+        @PathVariable String id, @RequestBody EventResponse body, HttpServletRequest request) {
+        return envelope(events.respond(user.id(), id, body == null ? null : body.response()), request);
+    }
+
+    @PostMapping("/events/{id}/memory")
+    ApiEnvelope<TownEventService.EventView> eventMemory(@AuthenticationPrincipal CurrentUser user,
+        @PathVariable String id, HttpServletRequest request) {
+        return envelope(events.remember(user.id(), id), request);
+    }
+
+    public record EventResponse(String response) {}
+
     /** Count only: background map polling must not fetch private letters. */
     @GetMapping("/letters/unread")
     ApiEnvelope<TownLetterService.UnreadCountView> unreadLetters(
