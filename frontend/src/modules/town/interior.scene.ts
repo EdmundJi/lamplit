@@ -1,3 +1,4 @@
+import { HOME_STYLES, observeHomePreference } from './home-style'
 import { createHomeObjects, type HomeObjectState } from './home-objects'
 import { createCompanionVisual, type CompanionPet } from './companion-visual'
 /**
@@ -90,6 +91,7 @@ export type InteriorOptions = {
   metrics?: RoomMetrics
   /** Only real earned records supplied by the caller; no synthetic rewards. */
   memories?: InteriorMemory[]
+  homeAccountId?: string
   /** Live immersion setting shared with the street; inputs and physical objects stay active. */
   isQuiet?: () => boolean
   homeObjectState?: () => HomeObjectState
@@ -257,7 +259,7 @@ export function createInteriorScene(Phaser: typeof PhaserNs, options: InteriorOp
       this.spawnPlayer()
       createInteriorAtmosphere(this, room)
       const memoryBoard = room.furniture.find(piece => piece.interactive?.actionId === 'home.open-achievement-wall')
-      if (memoryBoard && options.memories?.length) createInteriorMemories(this, memoryBoard, options.memories, () => this.player)
+      if (memoryBoard && options.memories?.length) createInteriorMemories(this, memoryBoard, options.memories, () => this.player, options.homeAccountId)
       this.plate(worldWidth / 2, 8, room.title, '#fff4e8', '#35644f')
       this.setupCamera()
       this.setupInput()
@@ -300,7 +302,16 @@ export function createInteriorScene(Phaser: typeof PhaserNs, options: InteriorOp
 
     drawFurniture() {
       for (const piece of room.furniture) {
-        this.placeFurniture(piece.frame, piece.x, piece.y, piece.originX, piece.originY, piece.depth, piece.displayWidth, piece.displayHeight)
+        const visual = this.placeFurniture(piece.frame, piece.x, piece.y, piece.originX, piece.originY, piece.depth, piece.displayWidth, piece.displayHeight)
+        if (room.id === 'home-living-room' && options.homeAccountId) {
+          const part = piece.id === 'rug-living' ? 'rug' : piece.id === 'armchair' ? 'chair' : piece.id === 'floor-lamp' ? 'lamp' : null
+          if (part) {
+            const stop = observeHomePreference(options.homeAccountId, preference => {
+              visual.setTint(Number.parseInt(HOME_STYLES[preference.style][part].slice(1), 16))
+            })
+            this.events.once('shutdown', stop)
+          }
+        }
         if (piece.interactive && !(room.id === 'home-living-room' && piece.interactive.actionId === 'home.open-desk')) this.wireInteractive(piece)
       }
     }

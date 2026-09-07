@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Bookmark, Leaf } from 'lucide-vue-next'
+import { useAuthStore } from '../../../auth/auth.store'
+import { readHomePreference, saveHomePreference } from '../../home-style'
 import { api } from '../../../../shared/api/client'
 import { onDataChanged } from '../../../../shared/data-sync'
 import { growthIcon, type Achievement } from '../../../achievements/achievement.types'
@@ -8,6 +10,17 @@ import { useTownStore } from '../../town.store'
 import { earnedMementos, mementoDate } from '../../mementos'
 
 const town = useTownStore()
+const auth = useAuthStore()
+const account = computed(() => auth.user?.publicId ?? town.model?.residents.find(r => r.isSelf)?.publicId ?? '')
+const hidden = ref<string[]>([])
+const displayStatus = ref('')
+watch(account, id => { hidden.value = readHomePreference(id).hiddenMementos; displayStatus.value = '' }, { immediate: true })
+function toggleDisplay(code: string) {
+  const next = hidden.value.includes(code) ? hidden.value.filter(item => item !== code) : [...hidden.value, code]
+  if (saveHomePreference(account.value, { ...readHomePreference(account.value), hiddenMementos: next })) {
+    hidden.value = next; displayStatus.value = next.includes(code) ? '已收进纪念册，获得记录仍然保留。' : '已摆上纪念墙，家里会展示这段真实经历。'
+  } else displayStatus.value = '暂时无法保存摆放选择，请稍后重试。'
+}
 const timezone = computed(() => town.model?.residents.find(item => item.isSelf)?.timezone ?? 'Asia/Shanghai')
 const records = ref<Achievement[]>([])
 const loading = ref(true)
@@ -56,7 +69,10 @@ onBeforeUnmount(() => { request++; stopSync() })
         <h3>{{ selected.name }}</h3>
         <time v-if="selected.earnedAt" :datetime="selected.earnedAt">{{ mementoDate(selected.earnedAt, timezone) }}</time>
         <p>{{ selected.body }}</p>
-        <small v-if="selected.triggerText">{{ selected.triggerText }}</small>
+        <small v-if="selected.triggerText">获得缘由：{{ selected.triggerText }}</small>
+        <small v-else>来源：已获得的成就记录</small>
+        <div class="display-choice"><button type="button" :disabled="!account" :aria-pressed="!hidden.includes(selected.code)" @click="toggleDisplay(selected.code)">{{ hidden.includes(selected.code) ? '摆上纪念墙' : '收进纪念册' }}</button><span>家中轮流展示最近的四件已摆放纪念。选择按账号保存在当前浏览器。</span></div>
+        <p role="status">{{ displayStatus }}</p>
       </article>
     </template>
   </section>
@@ -83,5 +99,5 @@ onBeforeUnmount(() => { request++; stopSync() })
 .wall-state, .wall-empty { padding: 28px 16px; text-align: center; font-size: 13px; line-height: 1.8; }
 .wall-empty { border: 1px dashed #cabb9e; background: #faf5e9; color: #776e61; }
 .wall-empty p { font-size: 17px; color: #596b50; }.wall-empty span { display: block; max-width: 280px; margin: auto; }
-.wall-state button { padding: 8px 14px; border: 1px solid #cabb9e; border-radius: 6px; background: #faf5e9; color: #355b44; cursor: pointer; }
+.display-choice { margin-top: 14px; }.display-choice span { display: block; font-size: 11px; line-height: 1.8; color: #796e5e; margin-top: 8px; }.display-choice button, .wall-state button { padding: 8px 14px; border: 1px solid #cabb9e; border-radius: 6px; background: #faf5e9; color: #355b44; cursor: pointer; }
 </style>

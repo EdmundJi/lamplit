@@ -71,6 +71,7 @@ export function createRoomTransitions(runtime: TownRuntime) {
                 : extras.pet,
               homeObjectState: () => ({ hasPet: runtime.companionLoaded ? !!runtime.companionState.pet : !!extras.pet, outing: runtime.companionState.mode !== 'home', unread: runtime.letterUnread }),
               memories: extras.memories,
+              homeAccountId: roomId === 'home' ? self?.publicId : undefined,
               isQuiet: () => runtime.scenicMode,
               onExit: target => { if (target === 'town')
                   runtime.exitRoom(); },

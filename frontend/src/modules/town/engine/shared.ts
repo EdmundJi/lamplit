@@ -349,13 +349,13 @@ export function isInteriorPetSpecies(value: string): value is InteriorPetSpecies
  * 请求失败都不能把"走到门口就能进屋"这件事卡住，拿不到就按"没有"处理（成就墙按 0 算，
  * 宠物窝空着）。这两份数据都不在 TownModel/TownResident 上，只能各自问一次接口。
  */
-export async function fetchHomeExtras(timezone = 'Asia/Shanghai'): Promise<{ homeAchievements: number; pet?: InteriorPet; memories: { title: string; detail?: string }[] }> {
+export async function fetchHomeExtras(timezone = 'Asia/Shanghai'): Promise<{ homeAchievements: number; pet?: InteriorPet; memories: { code?: string; title: string; detail?: string }[] }> {
   const [achievements, profile] = await Promise.all([
     api.get<Achievement[]>('/achievements').catch(() => [] as Achievement[]),
     api.get<PartnerProfile>('/partners/profile').catch(() => null),
   ])
   const homeAchievements = achievements.filter(item => item.earned).length
-  const memories = earnedMementos(achievements).slice(0, 3).map(item => ({ title: item.name, detail: mementoDate(item.earnedAt, timezone) }))
+  const memories = earnedMementos(achievements).map(item => ({ code: item.code, title: item.name, detail: `${mementoDate(item.earnedAt, timezone)}${item.triggerText ? ` · ${item.triggerText}` : ''}` }))
   const selected = profile?.selectedPet
   const pet: InteriorPet | undefined = selected && isInteriorPetSpecies(selected.speciesCode)
     ? { id: selected.publicId, name: selected.name, species: selected.speciesCode, breed: selected.breed }
