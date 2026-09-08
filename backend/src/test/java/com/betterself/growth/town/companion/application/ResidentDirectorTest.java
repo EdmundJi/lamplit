@@ -50,8 +50,37 @@ class ResidentDirectorTest {
         finally{director.close();}
         var failedStore=new FakeStore(CompanionRules.join("model-fails","我","Asia/Shanghai",now));
         var unavailable=new ResidentDirector(failedStore,new ResidentMind(){public boolean enabled(){return true;}public Decision decide(Context c){throw new IllegalStateException("network unavailable");}},Clock.fixed(now,ZoneOffset.UTC));
-        try{unavailable.consider(1,failedStore.world);assertThat(failedStore.finished.await(2,TimeUnit.SECONDS)).isTrue();assertThat(failedStore.world.residentStates).allMatch(r->r.plan!=null);assertThat(failedStore.world.modelStatus).contains("习惯");}
+        try{unavailable.consider(1,failedStore.world);assertThat(failedStore.finished.await(2,TimeUnit.SECONDS)).isTrue();assertThat(failedStore.world.residentStates).filteredOn(r->!r.id.equals("self")).allMatch(r->r.plan!=null);assertThat(failedStore.world.modelStatus).contains("习惯");}
         finally{unavailable.close();}
+    }
+    @Test void avatarIsPerceivedByNearbyResidentsButNeverCarriesUserText()throws Exception {
+        var world=CompanionRules.join("avatar-nearby","我","Asia/Shanghai",now);
+        var intent=new CompanionWorld.Intent("secret-thought-01","thought","explicit",null,25,now);
+        intent.text="PRIVATE_TODO_DO_NOT_SHOW_NPC";intent.resolvedKind="visit"; // sends the avatar to "cafe"
+        CompanionRules.submit(world,intent,now);
+        assertThat(world.avatar.place()).isEqualTo("cafe");
+        assertThat(world.avatar.label()).doesNotContain("PRIVATE_TODO_DO_NOT_SHOW_NPC");
+        // Make "gardener" the sole, deterministic model-decision candidate, standing where the avatar now is.
+        for(int i=0;i<world.residents.size();i++) {
+            var a=world.residents.get(i);
+            if(a.id().equals("gardener"))world.residents.set(i,new CompanionWorld.Actor(a.id(),a.name(),a.role(),"cafe","observe","看看周围",a.x(),a.y(),now.plusSeconds(200)));
+        }
+        ResidentSimulation.state(world,"gardener").plan=new CompanionWorld.Plan("test-plan","observe","cafe",null,"看看周围",now,now.plusSeconds(200));
+        for(var r:world.residentStates)if(!r.id.equals("gardener")&&!r.id.equals("self"))r.plan=null;
+        var store=new FakeStore(world);
+        var captured=new ResidentMind.Context[1];
+        ResidentMind mind=new ResidentMind(){
+            public boolean enabled(){return true;}
+            public Decision decide(Context c){captured[0]=c;return new Decision("observe",c.self().place(),null,"先看看四周","",List.of(c.memories().getFirst().id()),null,null);}
+        };
+        var director=new ResidentDirector(store,mind,Clock.fixed(now,ZoneOffset.UTC));
+        try{director.consider(1,world);assertThat(store.finished.await(2,TimeUnit.SECONDS)).isTrue();}
+        finally{director.close();}
+        var context=captured[0];
+        assertThat(context).isNotNull();
+        assertThat(context.residentId()).isEqualTo("gardener");
+        assertThat(context.nearby()).anyMatch(a->a.id().equals("self")&&a.place().equals("cafe"));
+        assertThat(context.toString()).doesNotContain("PRIVATE_TODO_DO_NOT_SHOW_NPC");
     }
     @Test void modelUsageIsRecordedPerUserWorldDayAndCallType()throws Exception {
         var world=CompanionRules.join("model-usage","我","Asia/Shanghai",now);

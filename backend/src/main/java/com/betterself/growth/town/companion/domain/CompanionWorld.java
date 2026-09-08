@@ -30,14 +30,30 @@ public class CompanionWorld {
     public List<Conversation> conversations = new ArrayList<>();
     public List<WorldEvent> events = new ArrayList<>();
     public List<WorldObject> objects = new ArrayList<>();
+    /** The two-layer place model: locations (the street, the cafe, the garden, each resident's own
+     * home) contain positions (a seat, a bed, a table) that have an optional owner, a capacity and
+     * current occupants. Structure and ownership only - no pixel coordinates; the frontend maps ids
+     * to art on its own. See TownPlaces for the rules that read and write this state. */
+    public List<Location> locations = new ArrayList<>();
+    public List<Position> positions = new ArrayList<>();
     public static class ResidentState {
-        public String id, mood, goal, thought, desiredAction;
+        public String id, mood, goal, thought, desiredAction, positionId;
         public double energy, social, curiosity;
         public long revision;
         public Instant lastSocialAt, lastReflectionAt;
         public Plan plan;
         public Map<String,Integer> relationships = new LinkedHashMap<>();
         public Map<String,ProjectKnowledge> knownProjects = new LinkedHashMap<>();
+    }
+    /** A place a resident can be: the three shared places, or one resident's own home. `ownerId` is
+     * null for a shared place. */
+    public record Location(String id, String kind, String ownerId) {}
+    /** A specific spot inside a place - a bed, a window seat, a shared table. `ownerId` null means
+     * anyone can sit; capacity limits how many occupants fit at once. */
+    public static class Position {
+        public String id, place, kind, ownerId;
+        public int capacity;
+        public List<String> occupantIds = new ArrayList<>();
     }
     public record ProjectKnowledge(String id,String place,String status,int progress,Instant at,String sourceId) {}
     public record Plan(String id,String action,String place,String targetId,String reason,Instant startedAt,Instant endsAt) {}

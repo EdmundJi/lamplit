@@ -39,7 +39,7 @@ class CompanionRulesTest {
         assertThat(w.offlineSummary).isNotBlank();
         var tokyo=CompanionRules.join("a","我","Asia/Tokyo",Instant.parse("2026-09-08T16:00:00Z"));
         assertThat(tokyo.period).isEqualTo("night");
-        assertThat(tokyo.residents).anyMatch(r->r.place().equals("home"));
+        assertThat(tokyo.residents).anyMatch(r->TownPlaces.isHome(r.place()));
         assertThat(tokyo.residents).anyMatch(r->r.place().equals("cafe"));
     }
     @Test void aModelCannotActOnCancelledIntentOrSomeoneElsesEvidence(){
@@ -82,6 +82,54 @@ class CompanionRulesTest {
         assertThat(reflections).isNotEmpty();
         assertThat(reflections.stream().map(m->m.ownerId()+":"+m.text()).toList()).doesNotHaveDuplicates();
         assertThat(reflections).noneMatch(m->m.text().equals("我开始觉得，可以把自己的小愿望交给邻居们一起想；但这只是我现在的感觉。"));
+    }
+    @Test void eachResidentSleepsInTheirOwnHomeNotASharedOne(){
+        // Start just before a quiet night so the two non-night-owl residents (student, gardener)
+        // are forced home to sleep within the loop below, regardless of their current energy.
+        var start=Instant.parse("2026-09-08T14:50:00Z"); // 22:50 in Asia/Shanghai
+        var w=CompanionRules.join("sleep-world","我","Asia/Shanghai",start);
+        java.util.Map<String,String> sleepingAt=new java.util.HashMap<>();
+        for(int second=6;second<=3600;second+=6){
+            CompanionRules.advance(w,start.plusSeconds(second));
+            for(var r:w.residentStates)if(r.plan!=null&&r.plan.action().equals("sleep"))sleepingAt.put(r.id,ResidentSimulation.actor(w,r.id).place());
+        }
+        assertThat(sleepingAt).isNotEmpty();
+        // Each sleeper is in their own bedroom, never the single shared "home" the old bug produced.
+        sleepingAt.forEach((id,place)->assertThat(place).isEqualTo(TownPlaces.homeOf(id)));
+        assertThat(sleepingAt.values()).doesNotHaveDuplicates();
+    }
+    @Test void aPlaceThatIsFullChangesWhatAResidentDoesInsteadOfSteppingOnSomeone(){
+        var w=world();
+        for(var c:w.conversations)if(c.participantIds.contains("gardener"))c.status="ended";
+        // Stand the gardener in the cafe, which owns none of its two positions for them.
+        for(int i=0;i<w.residents.size();i++){var a=w.residents.get(i);
+            if(a.id().equals("gardener"))w.residents.set(i,new CompanionWorld.Actor(a.id(),a.name(),a.role(),"cafe","observe",a.label(),a.x(),a.y(),now.plusSeconds(200)));}
+        TownPlaces.position(w,"cafe-worktable").capacity=0; // the shared table is out
+        TownPlaces.claim(w,"student","cafe","seat",now); // the window seat's real owner is using it
+        var gardener=ResidentSimulation.state(w,"gardener");gardener.plan=null;
+        boolean applied=ResidentSimulation.applyDecision(w,"gardener",gardener.revision,w.intentRevision,"cafe","observe",null,"想去咖啡馆看看","",
+            java.util.List.of(w.memories.stream().filter(m->m.ownerId().equals("gardener")).findFirst().orElseThrow().id()),now);
+        assertThat(applied).isTrue();
+        // The whole cafe is genuinely full: the gardener waits rather than being placed on top of anyone.
+        assertThat(gardener.plan.action()).isEqualTo("wait");
+        assertThat(ResidentSimulation.actor(w,"gardener").place()).isEqualTo("cafe");
+        assertThat(gardener.positionId).isNull();
+    }
+    @Test void anOlderSaveWithoutPlacesOrAnAvatarStateIsRepairedOnTheNextAdvance(){
+        var w=world();
+        // Simulate a save written before this batch: no location/position catalog, no avatar state,
+        // and a resident still parked at the old single shared "home".
+        w.simulationVersion=2;w.locations.clear();w.positions.clear();
+        w.residentStates.removeIf(r->r.id.equals("self"));
+        for(int i=0;i<w.residents.size();i++){var a=w.residents.get(i);
+            if(a.id().equals("student"))w.residents.set(i,new CompanionWorld.Actor(a.id(),a.name(),a.role(),"home","sleep","睡着了",a.x(),a.y(),now.plusSeconds(200)));}
+        ResidentSimulation.state(w,"student").positionId=null;
+        CompanionRules.advance(w,now.plusSeconds(6));
+        assertThat(w.locations).isNotEmpty();
+        assertThat(w.positions).isNotEmpty();
+        assertThat(w.residentStates).anyMatch(r->r.id.equals("self"));
+        // The bug this fixes: everyone piling into one literal "home" place.
+        assertThat(ResidentSimulation.actor(w,"student").place()).isEqualTo("home-student");
     }
     @Test void duplicateSavedReflectionsAreCollapsedWithoutBreakingEvidence(){
         var w=world();

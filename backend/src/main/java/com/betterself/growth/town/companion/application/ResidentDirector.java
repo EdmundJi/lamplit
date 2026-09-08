@@ -18,19 +18,34 @@ public class ResidentDirector {
     private final ResidentMind mind;
     private final Clock clock;
     private final int dailyBudget;
+    private final long decisionThrottleSeconds;
     private final ModelUsageRecorder usageRecorder;
     private final Set<Long> inFlight=ConcurrentHashMap.newKeySet();
-    private final ThreadPoolExecutor executor=new ThreadPoolExecutor(2,2,30,TimeUnit.SECONDS,new ArrayBlockingQueue<>(8),r->{Thread t=new Thread(r,"companion-mind");t.setDaemon(true);return t;},new ThreadPoolExecutor.AbortPolicy());
-    public ResidentDirector(WorldStore store,ResidentMind mind,Clock clock){this(store,mind,clock,128);}
+    // Development-phase defaults: five residents each writing their own memory need real
+    // concurrency, and cost is not a constraint right now - see the constructor for the knobs.
+    private final ThreadPoolExecutor executor;
+    public ResidentDirector(WorldStore store,ResidentMind mind,Clock clock){this(store,mind,clock,100000);}
     public ResidentDirector(WorldStore store,ResidentMind mind,Clock clock,int dailyBudget){this(store,mind,clock,dailyBudget,(userId,day,callType,inputTokens,outputTokens)->{});}
-    @Autowired public ResidentDirector(WorldStore store,ResidentMind mind,Clock clock,@Value("${app.town.companion-model-daily-budget:128}")int dailyBudget,ModelUsageRecorder usageRecorder){this.store=store;this.mind=mind;this.clock=clock;this.dailyBudget=Math.max(1,dailyBudget);this.usageRecorder=usageRecorder;}
+    public ResidentDirector(WorldStore store,ResidentMind mind,Clock clock,int dailyBudget,ModelUsageRecorder usageRecorder){this(store,mind,clock,dailyBudget,usageRecorder,8,64,75);}
+    @Autowired
+    public ResidentDirector(WorldStore store,ResidentMind mind,Clock clock,
+                             @Value("${app.town.companion-model-daily-budget:100000}")int dailyBudget,
+                             ModelUsageRecorder usageRecorder,
+                             @Value("${app.town.companion-mind-pool-size:8}")int poolSize,
+                             @Value("${app.town.companion-mind-queue-size:64}")int queueSize,
+                             @Value("${app.town.companion-model-decision-throttle-seconds:75}")long decisionThrottleSeconds){
+        this.store=store;this.mind=mind;this.clock=clock;this.dailyBudget=Math.max(1,dailyBudget);this.usageRecorder=usageRecorder;
+        this.decisionThrottleSeconds=Math.max(0,decisionThrottleSeconds);
+        int workers=Math.max(1,poolSize);
+        this.executor=new ThreadPoolExecutor(workers,workers,30,TimeUnit.SECONDS,new ArrayBlockingQueue<>(Math.max(1,queueSize)),r->{Thread t=new Thread(r,"companion-mind");t.setDaemon(true);return t;},new ThreadPoolExecutor.AbortPolicy());
+    }
     public boolean enabled(){return mind.enabled();}
     public void consider(long userId,CompanionWorld snapshot){
         if(!mind.enabled()||snapshot==null||snapshot.simulationVersion<2||!inFlight.add(userId))return;
         Instant now=clock.instant();
         if(snapshot.modelRetryAfter!=null&&now.isBefore(snapshot.modelRetryAfter)){inFlight.remove(userId);return;}
         boolean dialogue=snapshot.conversations.stream().anyMatch(c->c.mode.equals("model")&&(c.status.equals("active")||c.summarizedParticipants.size()<c.participantIds.size()));
-        if(!dialogue&&snapshot.modelRequestedAt!=null&&Duration.between(snapshot.modelRequestedAt,now).getSeconds()<75){inFlight.remove(userId);return;}
+        if(!dialogue&&snapshot.modelRequestedAt!=null&&Duration.between(snapshot.modelRequestedAt,now).getSeconds()<decisionThrottleSeconds){inFlight.remove(userId);return;}
         try{executor.execute(()->run(userId));}catch(RejectedExecutionException e){inFlight.remove(userId);}
     }
     private record Work(String kind,ResidentMind.Context context,ConversationLifecycle.Operation operation,
@@ -100,10 +115,12 @@ public class ResidentDirector {
                 return reserved(w,now,new Work("summary",context,operation,null,request,w.modelSequence+1,day));
             }
         }
-        if(w.modelRequestedAt!=null&&Duration.between(w.modelRequestedAt,now).getSeconds()<75)return null;
-        var candidates=w.residentStates.stream().filter(r->r.plan!=null&&!Set.of("travel","sleep").contains(r.plan.action())&&ResidentSimulation.activeConversation(w,r.id)==null).toList();
+        if(w.modelRequestedAt!=null&&Duration.between(w.modelRequestedAt,now).getSeconds()<decisionThrottleSeconds)return null;
+        // The avatar ("self") shares this ResidentState list so it can be perceived and hold a
+        // position, but its activity is user-driven, never a model decision target.
+        var candidates=w.residentStates.stream().filter(r->!r.id.equals("self")&&r.plan!=null&&!Set.of("travel","sleep").contains(r.plan.action())&&ResidentSimulation.activeConversation(w,r.id)==null).toList();
         // Legacy rule worlds still allow plan decisions while talking, but their text is not a model turn.
-        if(candidates.isEmpty()&&!w.modelConversationsEnabled)candidates=w.residentStates.stream().filter(r->r.plan!=null&&!Set.of("travel","sleep").contains(r.plan.action())).toList();
+        if(candidates.isEmpty()&&!w.modelConversationsEnabled)candidates=w.residentStates.stream().filter(r->!r.id.equals("self")&&r.plan!=null&&!Set.of("travel","sleep").contains(r.plan.action())).toList();
         if(candidates.isEmpty())return null;
         ResidentState r=candidates.get(Math.floorMod((int)w.modelSequence,candidates.size()));
         var conversation=ResidentSimulation.activeConversation(w,r.id);
@@ -113,7 +130,11 @@ public class ResidentDirector {
     private Work reserved(CompanionWorld w,Instant now,Work work){w.modelRequestedAt=now;w.modelCallsToday++;w.modelSequence++;w.modelStatus=work.kind().equals("turn")?""+work.context().self().name()+"正在想怎么接这句话":work.kind().equals("summary")?"有人在回想刚才的谈话":"有位居民正在想下一步";w.revision++;return work;}
     private ResidentMind.Context perspective(CompanionWorld w,String residentId,Instant now,List<Turn> transcript){
         var r=ResidentSimulation.state(w,residentId);Actor self=ResidentSimulation.actor(w,r.id);
-        var nearby=w.residents.stream().filter(a->!a.id().equals(r.id)&&a.place().equals(self.place())&&!a.activity().equals("walk")).toList();
+        // The avatar is present in the world the same way any resident is: if it is standing in this
+        // place (and not mid-walk), it shows up here too. Its label/name only ever carry the fixed,
+        // pre-written phrases from CompanionRules - never anything the user typed.
+        var visible=new ArrayList<Actor>(w.residents);if(w.avatar!=null)visible.add(w.avatar);
+        var nearby=visible.stream().filter(a->!a.id().equals(r.id)&&a.place().equals(self.place())&&!a.activity().equals("walk")).toList();
         var memories=CompanionRecall.retrieve(w.memories,r.id,r.goal+" "+r.thought,now,10);
         var known=w.projects.stream().filter(p->ResidentSimulation.knows(w,r.id,p.id)).map(p->new ResidentMind.KnownProject(p.id,p.title,ResidentSimulation.knownPlace(r,p))).toList();
         return new ResidentMind.Context(w.id,r.id,r.revision,w.intentRevision,now,now.atZone(ZoneId.of(w.timezone)).toLocalTime().toString(),w.weather,self,r.goal,r.mood,r.thought,r.energy,r.social,new LinkedHashMap<>(r.relationships),memories,nearby,w.objects.stream().filter(o->o.place().equals(self.place())).toList(),known,new ArrayList<>(transcript));
