@@ -26,4 +26,12 @@ python3 scripts/build-companion-assets.py
 
 脚本从 `tmp/Modern_Farm_v1.2.zip` 和 `tmp/Modern_Office_Revamped_v1.2.zip`
 提取菜圃、小鸡、学习桌椅与台灯，生成被 Git 忽略的 `companion-atlas.png/json`。
+同时生成五位居民的 `characters/c01-actions.png`、`c03-actions.png`、
+`c06-actions.png`、`c09-actions.png`、`c12-actions.png`。每格 96×96，
+每行 14 帧，依次为写字、喝咖啡、浇水；脚底锚点统一为 (32, 80)。
+写字组合原版坐姿、伸手姿态、Office 纸本和 Farm 铅笔，喝咖啡组合原版抬手与
+Interiors 杯子，浇水使用 Farm 工具表的真实水流帧。保留每位居民原有的人物外观。
+场景中的 emoji 保留模型给出的话题，只统一外层气泡的像素描边、纸色和阴影。
+
+本地可打开 `/harness/companion-art.html` 检查白天、夜晚、动作与对话气泡。
 四个资源包均由 LimeZu 制作；页面保留署名，不重新分发原始或生成的授权素材。
