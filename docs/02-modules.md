@@ -49,7 +49,7 @@ interfaces/    HTTP API、定时任务等入口，调用 application
 
 前端将场景绘制数据与完整故事数据分开，稳定的绘制输入不会因日记或记忆刷新而重建场景。世界状态和任务结果由后端决定；Phaser 负责路径呈现和动画，DOM 负责清晰的资料与对话阅读。
 
-[后端 town](../backend/src/main/java/com/betterself/growth/town)已有日程、感知、社会模拟和模型适配；[前端 town](../frontend/src/modules/town)已有场景、寻路、面板和声景。
+旧的后端 town 模块与前端 `modules/town` 已经整体删除：它们不再可达，而且旧的单聊会把真实任务标题原文拼进模型提示词。仍在用的碰撞、寻路、行走和声景四个工具搬到了 `frontend/src/shared/scene`。
 
 先挑一条完整用例，把纯规则抽出来，通过接口复用现有存储和模型，再让 HTTP/任务入口调用它。不为了目录整齐一次重写整个系统；新旧推进逻辑也不要同时写同一个世界。
 

@@ -1,3 +1,10 @@
+/*
+ * Responsive breakpoints (documentation only — nothing here reads these values).
+ * Existing CSS keeps its own scattered max-width numbers; new code should target these three bands:
+ *   mobile  : <= 760px   (the existing de-facto baseline — 19 call sites already agree on it)
+ *   tablet  : 761px – 1099px
+ *   desktop : >= 1100px
+ */
 :root {
   color-scheme: light;
   --canvas: #f7f6f2;
@@ -16,6 +23,7 @@
   --danger: #b84248;
   --focus: #397758;
   --radius: 10px;
+  --radius-card: 14px;
   --radius-panel: 18px;
   --radius-scene: 24px;
   --control: 44px;
@@ -154,6 +162,7 @@
 
 :root[data-radius='crisp'] {
   --radius: 4px;
+  --radius-card: 6px;
   --radius-panel: 8px;
   --radius-scene: 12px;
 }

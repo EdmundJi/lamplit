@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>基础组件预览</title>
+<script type="module">
+  import '../src/styles/global.css'
+  import { createApp, h, ref, reactive } from 'vue'
+  import Button from '../src/shared/ui/Button.vue'
+  import Modal from '../src/shared/ui/Modal.vue'
+  import EmptyState from '../src/shared/ui/EmptyState.vue'
+  import Skeleton from '../src/shared/ui/Skeleton.vue'
+
+  const params = new URLSearchParams(location.search)
+  const state = reactive({
+    theme: params.get('theme') || 'light',
+    accent: params.get('accent') || 'forest',
+    dialog: params.get('dialog') || 'none',
+  })
+  function apply() {
+    document.documentElement.dataset.theme = state.theme
+    document.documentElement.dataset.accent = state.accent
+  }
+  apply()
+
+  createApp({
+    setup() {
+      const modalOpen = ref(state.dialog === 'modal')
+      const drawerOpen = ref(state.dialog === 'drawer')
+      return () => h('main', { class: 'harness' }, [
+        h('section', { class: 'block' }, [
+          h('h2', 'Button'),
+          h('div', { class: 'row' }, [
+            h(Button, { variant: 'primary' }, () => '主操作'),
+            h(Button, { variant: 'secondary' }, () => '次操作'),
+            h(Button, { variant: 'danger' }, () => '危险操作'),
+            h(Button, { variant: 'icon', ariaLabel: '关闭' }, () => '×'),
+            h(Button, { variant: 'primary', disabled: true }, () => '禁用'),
+          ]),
+        ]),
+        h('section', { class: 'block' }, [
+          h('h2', 'EmptyState'),
+          h('div', { class: 'row wrap' }, [
+            h(EmptyState, { title: '今天还没有任务', description: '可以从目标页安排一项小行动。' }, {
+              actions: () => h(Button, { variant: 'primary' }, () => '前往目标'),
+            }),
+          ]),
+        ]),
+        h('section', { class: 'block' }, [
+          h('h2', 'Skeleton'),
+          h('div', { class: 'row wrap skeleton-demo' }, [
+            h('div', { class: 'col' }, [h(Skeleton, { variant: 'text', lines: 3 })]),
+            h('div', { class: 'col' }, [h(Skeleton, { variant: 'circle' }), ]),
+            h('div', { class: 'col' }, [h(Skeleton, { variant: 'block', height: '120px' })]),
+          ]),
+        ]),
+        h('section', { class: 'block' }, [
+          h('h2', 'Modal (center)'),
+          h(Button, { variant: 'secondary', onClick: () => modalOpen.value = true }, () => '打开对话框'),
+          h(Modal, {
+            open: modalOpen.value,
+            title: '删除这个目标？',
+            placement: 'center',
+            onClose: () => modalOpen.value = false,
+          }, {
+            default: () => h('p', '删除后无法恢复，相关的周期任务也会一并移除。'),
+            footer: () => [
+              h(Button, { variant: 'secondary', onClick: () => modalOpen.value = false }, () => '取消'),
+              h(Button, { variant: 'danger', onClick: () => modalOpen.value = false }, () => '确认删除'),
+            ],
+          }),
+        ]),
+        h('section', { class: 'block' }, [
+          h('h2', 'Modal (drawer)'),
+          h(Button, { variant: 'secondary', onClick: () => drawerOpen.value = true }, () => '打开抽屉'),
+          h(Modal, {
+            open: drawerOpen.value,
+            title: '新建目标',
+            placement: 'drawer',
+            onClose: () => drawerOpen.value = false,
+          }, {
+            default: () => h('div', { class: 'field' }, [h('label', '目标名称'), h('input', { type: 'text', placeholder: '每天给自己留一点阅读时间' })]),
+            footer: () => [
+              h(Button, { variant: 'secondary', onClick: () => drawerOpen.value = false }, () => '取消'),
+              h(Button, { variant: 'primary', onClick: () => drawerOpen.value = false }, () => '创建'),
+            ],
+          }),
+        ]),
+      ])
+    },
+  }).mount('#app')
+</script>
+<style>
+  body { margin: 0; background: var(--canvas); color: var(--ink); font: 14px/1.6 "Avenir Next", Inter, system-ui, sans-serif; }
+  .harness { max-width: 1040px; margin: 0 auto; padding: 28px 24px 80px; display: grid; gap: 32px; }
+  .block { display: grid; gap: 12px; }
+  .block h2 { margin: 0; font-size: 15px; color: var(--muted); font-weight: 700; }
+  .row { display: flex; align-items: center; gap: 12px; }
+  .row.wrap { flex-wrap: wrap; align-items: flex-start; }
+  .skeleton-demo .col { width: 220px; }
+  .field { display: grid; gap: 6px; }
+  .field input { min-height: var(--control); border: 1px solid var(--border); border-radius: var(--radius); padding: 0 10px; background: var(--surface); color: var(--ink); }
+</style>
+<div id="app"></div>
+</html>
