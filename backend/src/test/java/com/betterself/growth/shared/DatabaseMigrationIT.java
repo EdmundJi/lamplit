@@ -53,7 +53,9 @@ class DatabaseMigrationIT {
             Integer.class
         );
 
-        assertThat(tableCount).isGreaterThanOrEqualTo(33);
+        // Batch1b-followup dropped 24 orphaned town_* tables (V31); the schema now has 53
+        // tables (52 migration-created + flyway_schema_history). Floor kept with headroom.
+        assertThat(tableCount).isGreaterThanOrEqualTo(50);
         assertThat(systemDimensions).isEqualTo(5);
         Integer publishedTemplates = jdbc.queryForObject(
             "select count(*) from task_template where review_status = 'PUBLISHED'",

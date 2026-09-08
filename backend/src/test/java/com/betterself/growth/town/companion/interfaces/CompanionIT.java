@@ -68,7 +68,6 @@ class CompanionIT {
         assertThat(service.get(a.id).world().intents.get(1).status).isEqualTo("done");
         assertThat(jdbc.queryForObject("select count(*) from task_event where user_id=?",Integer.class,a.id)).isZero();
         assertThat(jdbc.queryForObject("select status from task_schedule where user_id=?",String.class,a.id)).isEqualTo("PLANNED");
-        assertThat(jdbc.queryForObject("select count(*) from town_npc where town_user_id=?",Integer.class,a.id)).isZero();
         mvc.perform(get("/api/v1/town/companion").cookie(a.cookie)).andExpect(status().isOk()).andExpect(jsonPath("$.data.world.residents.length()").value(4));
     }
     private Session register(String email)throws Exception{

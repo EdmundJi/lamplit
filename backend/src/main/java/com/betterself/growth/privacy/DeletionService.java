@@ -88,12 +88,7 @@ public class DeletionService {
             jdbc.update("update ai_message set content = '[DELETED]', deleted_at = ? where user_id = ?", Timestamp.from(clock.instant()), userId);
             jdbc.update("update ai_memory set content = '[DELETED]', status = 'DELETED', deleted_at = ? where user_id = ?", Timestamp.from(clock.instant()), userId);
             jdbc.update("update attachment set scan_status = 'DELETED', deleted_at = ? where user_id = ?", Timestamp.from(clock.instant()), userId);
-            jdbc.update("delete from town_visit_postcard where owner_user_id=? or sender_user_id=?", userId, userId);
             jdbc.update("delete from town_companion_world where user_id=?", userId);
-            jdbc.update("delete from town_visit_memento where user_id=?", userId);
-            jdbc.update("delete from town_visit_profile where user_id=?", userId);
-            jdbc.update("delete from town_story_progress where town_user_id=?", userId);
-            jdbc.update("update town_event set player_response='UNDECIDED',attended_at=null where town_user_id=?", userId);
             String receipt = sha256("deletion:" + userId + ":" + clock.instant());
             jdbc.update(
                 "update deletion_request set status = 'COMPLETED', completed_at = ?, completion_receipt_hash = ? where user_id = ? and status = 'PROCESSING'",
