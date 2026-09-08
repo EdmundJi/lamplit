@@ -30,20 +30,31 @@ public final class TownPlaces {
     public static boolean isHome(String place) { return place != null && place.startsWith("home-"); }
     public static Set<String> places() { return PLACES; }
 
+    /** A position kind that cannot be borrowed even when nothing shared is free: the coffee machine
+     * and counter are the owner's tools, not a spare chair. See {@code claim()}'s fallback filter. */
+    private static final String EQUIPMENT = "equipment";
+
     /** Populate the location/position catalog once; a no-op on a world that already has one, so it
-     * is safe to call on every advance to repair an older save that predates this structure. */
+     * is safe to call on every advance to repair an older save that predates this structure.
+     * {@code ensureCounter} runs unconditionally afterward so a save from before the cafe counter
+     * existed still self-heals it, exactly like this method self-heals the rest of the catalog. */
     public static void seed(CompanionWorld w) {
-        if (!w.locations.isEmpty()) return;
-        w.locations.add(new Location("street", "street", null));
-        w.locations.add(new Location("cafe", "cafe", null));
-        w.locations.add(new Location("garden", "garden", null));
-        for (String id : RESIDENT_IDS) w.locations.add(new Location(homeOf(id), "home", id));
-        w.positions.add(position("street-bench", "street", "bench", null, 4));
-        w.positions.add(position("cafe-worktable", "cafe", "table", null, 4));
-        w.positions.add(position("cafe-window-seat", "cafe", "seat", "student", 1));
-        w.positions.add(position("garden-bench", "garden", "bench", null, 3));
-        w.positions.add(position("garden-plot", "garden", "plot", "gardener", 1));
-        for (String id : RESIDENT_IDS) w.positions.add(position(homeOf(id) + "-bed", homeOf(id), "bed", id, 1));
+        if (w.locations.isEmpty()) {
+            w.locations.add(new Location("street", "street", null));
+            w.locations.add(new Location("cafe", "cafe", null));
+            w.locations.add(new Location("garden", "garden", null));
+            for (String id : RESIDENT_IDS) w.locations.add(new Location(homeOf(id), "home", id));
+            w.positions.add(position("street-bench", "street", "bench", null, 4));
+            w.positions.add(position("cafe-worktable", "cafe", "table", null, 4));
+            w.positions.add(position("cafe-window-seat", "cafe", "seat", "student", 1));
+            w.positions.add(position("garden-bench", "garden", "bench", null, 3));
+            w.positions.add(position("garden-plot", "garden", "plot", "gardener", 1));
+            for (String id : RESIDENT_IDS) w.positions.add(position(homeOf(id) + "-bed", homeOf(id), "bed", id, 1));
+        }
+        ensureCounter(w);
+    }
+    private static void ensureCounter(CompanionWorld w) {
+        if (position(w, "cafe-counter") == null) w.positions.add(position("cafe-counter", "cafe", EQUIPMENT, "owner", 1));
     }
     private static Position position(String id, String place, String kind, String owner, int capacity) {
         Position p = new Position(); p.id = id; p.place = place; p.kind = kind; p.ownerId = owner; p.capacity = capacity; return p;
@@ -67,7 +78,10 @@ public final class TownPlaces {
     public static Outcome claim(CompanionWorld w, String residentId, String place, String kind, Instant now) {
         release(w, residentId);
         List<Position> here = at(w, place);
-        Position mine = here.stream().filter(p -> residentId.equals(p.ownerId)).findFirst().orElse(null);
+        // Matched by kind too (when the caller asked for one): an owner reclaims a specific spot of
+        // theirs - the counter when they mean to work it, a shared table when they don't - rather than
+        // always landing on whichever position they happen to own first at this place.
+        Position mine = here.stream().filter(p -> residentId.equals(p.ownerId) && (kind == null || kind.equals(p.kind))).findFirst().orElse(null);
         if (mine != null) {
             boolean displaced = !mine.occupantIds.isEmpty();
             List<String> displacedIds = new ArrayList<>(mine.occupantIds);
@@ -79,7 +93,12 @@ public final class TownPlaces {
         Comparator<Position> preference = Comparator
             .<Position>comparingInt(p -> p.ownerId == null ? 0 : 1)
             .thenComparingInt(p -> kind != null && kind.equals(p.kind) ? 0 : 1);
-        Position choice = here.stream().filter(p -> p.occupantIds.size() < p.capacity).sorted(preference).findFirst().orElse(null);
+        Position choice = here.stream().filter(p -> p.occupantIds.size() < p.capacity)
+            // An owned seat can be borrowed when nothing shared is free; an owned piece of equipment
+            // (the coffee machine, the counter) cannot - falling back onto someone else's tools is not
+            // the same thing as falling back onto their chair.
+            .filter(p -> p.ownerId == null || p.ownerId.equals(residentId) || !EQUIPMENT.equals(p.kind))
+            .sorted(preference).findFirst().orElse(null);
         if (choice != null) { seat(w, residentId, choice); return Outcome.SEATED; }
         return Outcome.WAITING;
     }

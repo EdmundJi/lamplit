@@ -69,6 +69,10 @@ public final class ResidentSimulation {
     }
     private static void step(CompanionWorld w,Instant at) {
         ConversationLifecycle.recoverSummaries(w,at);
+        // The coffee/water chain has its own clock, independent of whose plan is currently running:
+        // a request keeps waiting, gets picked up, or goes cold on real elapsed time even while its
+        // requester has already moved on to something else while they wait. See CafeService.
+        CafeService.tick(w,at);
         for(Conversation c:new ArrayList<>(w.conversations))if(c.status.equals("active"))continueConversation(w,c,at);
         for(ResidentState r:w.residentStates) {
             // The avatar's own state is present so it can be perceived and can hold a position, but
@@ -76,6 +80,10 @@ public final class ResidentSimulation {
             // choose()/complete() loop the four NPCs use.
             if(r.id.equals("self"))continue;
             perceive(w,r,at);
+            // The owner's sense of responsibility for the counter builds every tick someone is
+            // waiting, whatever else the owner is currently doing - not only when they are free to
+            // decide. See CafeService.accruePressure.
+            if(r.id.equals(CafeService.OWNER))CafeService.accruePressure(w,r,at);
             // Emotionally volatile residents swing harder in both directions; steady ones barely move.
             double intensity=Personality.of(r).intensity();
             boolean resting=r.plan!=null&&Set.of("rest","sleep").contains(r.plan.action());
@@ -98,7 +106,7 @@ public final class ResidentSimulation {
                 .max(Comparator.comparingInt(p->(!knows(w,partner.id,p.id)?50:0)+(p.ownerId.equals(r.id)?20:0)+(p.id.equals(r.goal)?15:0))).orElse(null);
             if(topic!=null){startConversation(w,r,partner,topic,at);break;}
         }
-        for(ResidentState r:w.residentStates){if(r.id.equals("self"))continue;reflect(w,r,at);newWish(w,r,at);}
+        for(ResidentState r:w.residentStates){if(r.id.equals("self"))continue;reflect(w,r,at);newWish(w,r,at);CafeService.reflectOnDuty(w,r,at);}
         syncLegacyObjects(w);
     }
     private static void choose(CompanionWorld w,ResidentState r,Instant at) {
@@ -110,6 +118,19 @@ public final class ResidentSimulation {
         if(r.energy<46){moveOrSchedule(w,r,"rest","cafe",null,"先喝口热水，别把想做的事变成负担",at,45);return;}
         Project current=project(w,r.goal);
         boolean unfinished=current!=null&&!Set.of("ready","celebrating").contains(current.status);
+        // Responsibility as pressure, not a rule: the owner never gets an "if someone is waiting, go
+        // serve them" branch. Every time the owner is free to choose, CafeService.decide() weighs the
+        // pressure that has been quietly accumulating against everything else pulling at them right
+        // now, and either side can win - see CafeService's own doc for the competition itself.
+        if(r.id.equals(CafeService.OWNER)) {
+            CafeService.Decision duty=CafeService.decide(w,r,personality,current,unfinished,at);
+            if(duty!=null) {
+                if(duty.interruptsOwnProject())CafeService.recordInterruption(w,r,current,at);
+                CafeService.beginPreparing(w,duty.requestId(),at);
+                moveOrSchedule(w,r,"tend","cafe",duty.requestId(),duty.reason(),at,CafeService.PREP_SECONDS);
+                return;
+            }
+        }
         // Low-conscientiousness residents sometimes drift away from their own unfinished project
         // before it is done, deterministically (a hash of who/what/when, never Math.random) rather
         // than always grinding a commitment through to the end.
@@ -201,6 +222,7 @@ public final class ResidentSimulation {
             }
         } else if(p.action().equals("rest")||p.action().equals("sleep")){r.energy=clamp(r.energy+18);r.mood="松弛";}
         else if(p.action().equals("observe")){r.curiosity=clamp(r.curiosity-16);r.social=clamp(r.social-5);}
+        else if(p.action().equals("tend")){CafeService.finishTending(w,r,p.targetId(),at);}
     }
     /** The same contribution is witnessed by everyone present, but what each observer actually
      * writes into their own memory depends on how much attention to detail they personally pay - not
@@ -224,8 +246,13 @@ public final class ResidentSimulation {
         } else schedule(w,r,action,place,target,reason,at,duration);
     }
     private static void schedule(CompanionWorld w,ResidentState r,String action,String place,String target,String reason,Instant at,int duration) {
+        // Wanting to rest at the cafe specifically (as opposed to at home) is where a coffee/water
+        // request is actually made - CafeService owns everything from here; this line only starts the
+        // chain. The resident's own energy recovery below is unrelated and unchanged either way, so a
+        // request that never gets fulfilled cannot strand anyone at low energy.
+        if(action.equals("rest")&&place.equals("cafe")&&!r.id.equals(CafeService.OWNER))CafeService.request(w,r,at);
         r.plan=new Plan("p-"+(++w.eventSequence),action,place,target,reason,at,at.plusSeconds(duration));r.revision++;r.thought=reason;
-        String label=switch(action){case "create","help"->"动手准备"+(project(w,target)==null?"手上的小事":"「"+project(w,target).title+"」");case "study"->"在窗边复习，想守住一点安静";case "invite"->reason;case "sleep"->"睡着了，给明天留一点精神";case "rest"->"捧着杯子歇一会儿";case "celebrate"->"想请大家看看一起做出来的东西";case "wait"->reason;default->reason;};
+        String label=switch(action){case "create","help"->"动手准备"+(project(w,target)==null?"手上的小事":"「"+project(w,target).title+"」");case "study"->"在窗边复习，想守住一点安静";case "invite"->reason;case "sleep"->"睡着了，给明天留一点精神";case "rest"->"捧着杯子歇一会儿";case "celebrate"->"想请大家看看一起做出来的东西";case "wait"->reason;case "tend"->"回到吧台，照应一下柜台前的人";default->reason;};
         replaceActor(w,r.id,place,action,label,r.plan.endsAt());
         TownPlaces.Outcome outcome=TownPlaces.claim(w,r.id,place,preferredKind(action,place),at);
         if(outcome==TownPlaces.Outcome.WAITING) {
@@ -241,6 +268,7 @@ public final class ResidentSimulation {
             case "study"->"seat";
             case "create","help","celebrate"->"table";
             case "sleep","rest"->TownPlaces.isHome(place)?"bed":null;
+            case "tend"->"equipment";
             default->null;
         };
     }

@@ -62,6 +62,44 @@ class TownPlacesTest {
         assertThat(ResidentSimulation.state(w, "artist").positionId).isEqualTo("cafe-worktable");
     }
 
+    @Test void anOwnedSeatCanBeBorrowedButAnOwnedPieceOfEquipmentCannot() {
+        var w = world();
+        // Asking specifically for equipment still lands on the unowned, unfull table instead - the
+        // counter is simply never a candidate for anyone but its owner.
+        assertThat(TownPlaces.claim(w, "artist", "cafe", "equipment", now)).isEqualTo(TownPlaces.Outcome.SEATED);
+        assertThat(ResidentSimulation.state(w, "artist").positionId).isEqualTo("cafe-worktable");
+        // Now fill every *borrowable* cafe spot (compare
+        // aFullSharedSpotMeansWaitingRatherThanBeingSeatedOnTopOfSomeone above, same technique): with
+        // the table full and the window seat taken, a latecomer still cannot fall back onto the
+        // owner's equipment the way they could fall back onto someone else's chair - they wait instead.
+        TownPlaces.position(w, "cafe-worktable").capacity = 1; // artist above already fills it
+        TownPlaces.claim(w, "student", "cafe", "seat", now); // fills their own window seat too
+        assertThat(TownPlaces.claim(w, "gardener", "cafe", null, now)).isEqualTo(TownPlaces.Outcome.WAITING);
+        assertThat(TownPlaces.position(w, "cafe-counter").occupantIds).isEmpty();
+    }
+
+    @Test void theOwnerReclaimsTheCounterOnDemandWhenAskingForItButNotWhenAskingForSomethingElse() {
+        var w = world();
+        // Asking specifically for equipment lands the owner on their own counter, same "let" moment as
+        // any other owned spot getting reclaimed.
+        assertThat(TownPlaces.claim(w, "owner", "cafe", "equipment", now)).isEqualTo(TownPlaces.Outcome.SEATED);
+        assertThat(TownPlaces.position(w, "cafe-counter").occupantIds).containsExactly("owner");
+        // Asking for their own project work instead (a table) lands them at the shared table, not
+        // hijacked onto the counter just because they happen to own something at this place too.
+        assertThat(TownPlaces.claim(w, "owner", "cafe", "table", now)).isEqualTo(TownPlaces.Outcome.SEATED);
+        assertThat(ResidentSimulation.state(w, "owner").positionId).isEqualTo("cafe-worktable");
+        assertThat(TownPlaces.position(w, "cafe-counter").occupantIds).isEmpty(); // released when they moved on
+    }
+
+    @Test void anOlderSaveWithoutTheCounterSelfHealsItOnTheNextSeedCall() {
+        var w = world(); // already has the full catalog, including the counter, from world()
+        w.positions.removeIf(p -> p.id.equals("cafe-counter")); // simulate a save from before it existed
+        assertThat(TownPlaces.position(w, "cafe-counter")).isNull();
+        TownPlaces.seed(w);
+        assertThat(TownPlaces.position(w, "cafe-counter")).isNotNull();
+        assertThat(TownPlaces.position(w, "cafe-counter").ownerId).isEqualTo("owner");
+    }
+
     @Test void releasingFreesTheSpotForSomeoneElse() {
         var w = world();
         TownPlaces.claim(w, "gardener", "garden", "plot", now);

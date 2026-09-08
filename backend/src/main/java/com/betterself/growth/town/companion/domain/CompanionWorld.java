@@ -36,6 +36,20 @@ public class CompanionWorld {
      * to art on its own. See TownPlaces for the rules that read and write this state. */
     public List<Location> locations = new ArrayList<>();
     public List<Position> positions = new ArrayList<>();
+    /** The coffee/water service chain (see {@link CafeService}): every request a resident has ever
+     * made of the owner, in real time, allowed to break at any link. Self-healing on an old save via
+     * the empty-list default - nobody had made a request yet. */
+    public List<ServiceRequest> serviceRequests = new ArrayList<>();
+    /** One resident's ask for a drink from the owner and everything that happened to it. `status`
+     * moves waiting -> preparing -> delivered -> consumed, or off the happy path to abandoned (gave up
+     * or left before being served) or cold (delivered but never picked up) - both broken-link outcomes
+     * are written only into memory, never announced as a WorldEvent. `proactive` marks a pour the
+     * owner offered before being asked, from a learned expectation that can itself be wrong. */
+    public static class ServiceRequest {
+        public String id, requesterId, kind, place, status;
+        public boolean proactive;
+        public Instant requestedAt, preparingAt, deliveredAt, resolvedAt;
+    }
     public static class ResidentState {
         public String id, mood, goal, thought, desiredAction, positionId;
         public double energy, social, curiosity;
@@ -61,6 +75,29 @@ public class CompanionWorld {
          * deserializes with the empty map below, same self-healing shape as `relationships`. */
         public Map<String,Boolean> affectionExpressed = new LinkedHashMap<>();
         public Map<String,ProjectKnowledge> knownProjects = new LinkedHashMap<>();
+        /** The owner's own accumulating sense of responsibility for the counter, read and written by
+         * {@link CafeService}. Zero is a genuinely correct starting value (nobody has been kept
+         * waiting yet), not a sentinel - unlike personality, this field needs no seeded flag. Present
+         * on every resident for simplicity, but only ever written for "owner". */
+        public double dutyPressure;
+        /** Bounded evidence for {@link CafeService#reflectOnDuty}: how many times since the last duty
+         * reflection someone waited too long and said so, and how many times duty pre-empted the
+         * owner's own unfinished project - the two opposite pieces of evidence that let
+         * conscientiousness drift up or down. Reset to zero each time reflectOnDuty consumes them. */
+        public int complaintsSinceDutyReflection, interruptionsSinceDutyReflection;
+        public Instant lastDutyReflectionAt;
+        public List<String> dutyComplaintEvidenceIds = new ArrayList<>();
+        public List<String> dutyInterruptionEvidenceIds = new ArrayList<>();
+        /** The owner's own learned-expectation bookkeeping (see {@link CafeService}): how many times in
+         * a row a customer has come back for another drink soon after the last one, whether that has
+         * crossed the (deliberately low, two-coincidences) threshold into a standing expectation the
+         * owner now acts on unprompted, and when each customer was last actually served or proactively
+         * poured for - all self-healing on an old save via the empty-map default, same as
+         * {@code relationships} above. */
+        public Map<String,Integer> repeatVisitStreak = new LinkedHashMap<>();
+        public Map<String,Boolean> anticipatesRefill = new LinkedHashMap<>();
+        public Map<String,Instant> lastServedAt = new LinkedHashMap<>();
+        public Map<String,Instant> lastProactiveAt = new LinkedHashMap<>();
     }
     /** A place a resident can be: the three shared places, or one resident's own home. `ownerId` is
      * null for a shared place. */
