@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
-import { companionPath } from './companion-navigation'
+import type { Point } from '../../shared/scene/collision'
+import { companionPath, freeStandPosition } from './companion-navigation'
 import { dominantDirection, stepTowardPoint, type Direction4 } from '../../shared/scene/walkers'
 import { conversationEmoji, residentStatus } from './companion-presentation'
 import { buildCompanionStage } from './companion-stage'
@@ -40,10 +41,16 @@ export function conversationPosition(place: string, index: number) {
 /**
  * Where a resident's feet land. The backend's positionId (a specific bed, desk seat or garden
  * plot - see TownPlaces.java) is authoritative once POSITION_SLOTS knows a pixel for it and for
- * `occupantIndex` within it; only fall back to the older place+index guess below for a save that
- * predates the two-layer place model, or a positionId nobody has placed pixels for yet.
+ * `occupantIndex` within it. Failing that, a handful of activities that visibly sit someone down
+ * at real furniture (sleeping, resting on the sofa, reading/creating/drinking at the cafe desks,
+ * tending a garden plot) still get their old furniture-anchored spot. Everyone else - which is
+ * now the common case, since "能站的地方都能去" (docs/04-decisions.md) - free-stands: `residentId`
+ * (never `index`, which shifts as other residents come and go) seeds a stable pixel inside the
+ * place's walkable area, spread apart from `occupied` (every other resident already settled
+ * there). Callers that omit `residentId` (unit tests, or an old caller) still get a valid,
+ * reachable point - just keyed off `location`+`index` instead of a real resident identity.
  */
-export function residentPosition(location: string, index: number, activity = '', action = '', positionId?: string | null, occupantIndex = 0) {
+export function residentPosition(location: string, index: number, activity = '', action = '', positionId?: string | null, occupantIndex = 0, residentId?: string, occupied: Point[] = []) {
   if (positionId) {
     const slots = POSITION_SLOTS[positionId]
     if (slots?.length) return slots[Math.min(Math.max(0, occupantIndex), slots.length - 1)]!
@@ -63,10 +70,7 @@ export function residentPosition(location: string, index: number, activity = '',
     return plots[slot]!
   }
   if (place === 'home' && /focus|study|read|专注|学习|读书/i.test(activity + action) && slot === 0) return { x: 270, y: 327 }
-  if (place === 'home') return { x: 112 + slot * 44, y: 320 }
-  if (place === 'cafe') return { x: 423 + slot * 60, y: 320 }
-  if (place === 'garden') return { x: 754 + slot * 36, y: 442 }
-  return { x: 260 + slot * 95, y: 401 + slot % 2 * 9 }
+  return freeStandPosition(place, residentId ?? `${location}#${index}`, occupied)
 }
 type Actor = { mode: string; sleeping: boolean; conversationId?: string; seatIndex?: number; positionId?: string; slot?: number; facing: Direction4; hovered?: boolean; root: Phaser.GameObjects.Container; sprite?: Phaser.GameObjects.Sprite; label: Phaser.GameObjects.Text; activity: Phaser.GameObjects.Text; location: string; action: string; sheet: string; target: { x: number; y: number }; path: { x: number; y: number }[] }
 
@@ -203,9 +207,14 @@ export class CompanionStreetScene extends Phaser.Scene {
         slot = actor?.positionId === knownPositionId && actor?.slot !== undefined ? actor.slot : ([...Array(capacity).keys()].find(seat => !usedSlots.has(seat)) ?? 0)
         target = residentPosition(location, index, resident.activity, resident.action, knownPositionId, slot)
       } else {
-        const usedSeats = new Set([...this.actors.entries()].filter(([id, other]) => id !== resident.id && scenePlace(other.location) === scenePlace(location)).map(([, other]) => other.seatIndex).filter(value => value !== undefined))
+        const peersHere = [...this.actors.entries()].filter(([id, other]) => id !== resident.id && scenePlace(other.location) === scenePlace(location))
+        const usedSeats = new Set(peersHere.map(([, other]) => other.seatIndex).filter(value => value !== undefined))
         seatIndex = atDesk ? (actor?.seatIndex !== undefined && scenePlace(actor.location) === scenePlace(location) ? actor.seatIndex : [0, 1, 2, 3, 4].find(seat => !usedSeats.has(seat)) ?? index) : undefined
-        target = residentPosition(location, seatIndex ?? index, resident.activity, resident.action)
+        // Free-standing (no seat matched): spread away from wherever every other resident
+        // already visible in this place has settled, whatever put them there - another
+        // free-standing pick, a bed, a desk seat, a garden plot.
+        const occupied = peersHere.map(([, other]) => other.target)
+        target = residentPosition(location, seatIndex ?? index, resident.activity, resident.action, undefined, 0, resident.id, occupied)
       }
       if (travelling) target = ({ home: { x: 204, y: 350 }, cafe: { x: 535, y: 350 }, garden: { x: 768, y: 396 }, street: { x: 480, y: 396 } })[scenePlace(location)]
       const conversation = !travelling ? state.conversations?.find(c => c.status === 'active' && scenePlace(c.place) === scenePlace(location) && (c.participantIds?.includes(resident.id) || c.turns.some(t => t.speakerId === resident.id))) : undefined
