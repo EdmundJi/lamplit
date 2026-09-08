@@ -3,7 +3,7 @@ import { companionPath } from './companion-navigation'
 import { dominantDirection, stepTowardPoint, type Direction4 } from '../../shared/scene/walkers'
 import { conversationEmoji, residentStatus } from './companion-presentation'
 import { buildCompanionStage } from './companion-stage'
-import { ACTION_FRAME, RESIDENT_ART, RESIDENT_ACTIONS, isArtAction } from './companion-art'
+import { ACTION_FRAME, RESIDENT_ART, RESIDENT_ACTIONS, isArtAction, CAFE_DESK_X } from './companion-art'
 
 export interface SceneResident { id: string; name: string; role?: string; location: string; action: string; activity?: string; destination?: string; objectKind?: string }
 export interface SceneProject { id: string; title: string; place: string; status: string; progress: number; objectKind: string }
@@ -40,7 +40,8 @@ export function residentPosition(location: string, index: number, activity = '',
   if (place === 'home' && visibleActivity(activity, action) === 'sleep') return [{ x: 108, y: 237 }, { x: 148, y: 237 }, { x: 252, y: 223 }, { x: 296, y: 223 }][Math.max(0, slot - 1)]!
   if (place === 'home' && slot === 0 && visibleActivity(activity, action) === 'rest') return { x: 128, y: 300 }
   if (place === 'cafe' && ['read', 'create', 'rest', 'drink'].includes(visibleActivity(activity, action))) {
-    const seats = [{ x: 440, y: 289 }, { x: 528, y: 289 }, { x: 616, y: 289 }, { x: 474, y: 319 }, { x: 668, y: 319 }]
+    // The first three seats sit at the study desks built in companion-stage.ts; keep the same x.
+    const seats = [...CAFE_DESK_X.map(x => ({ x, y: 289 })), { x: 474, y: 319 }, { x: 668, y: 319 }]
     return seats[slot]!
   }
   if (place === 'garden' && /garden|tend|plant|flowers|grow|花|园艺|种植|照料|浇水/i.test(activity + action)) {
