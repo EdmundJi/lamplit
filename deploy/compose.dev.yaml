@@ -111,10 +111,6 @@ services:
       QWEN_MODEL: ${QWEN_MODEL:-qwen-plus}
       QWEN_TIMEOUT: ${QWEN_TIMEOUT:-PT120S}
       QWEN_STREAM_TIMEOUT: ${QWEN_STREAM_TIMEOUT:-PT130S}
-      # 小镇的两个夜间 job 在开发环境跑得勤一点，不然要等到凌晨三点才有社会数据可看。
-      # 两个 job 都按 (用户, 当地日期) 幂等，跑多少次都不会重复累加。
-      TOWN_REFLECTION_CRON: ${DEV_TOWN_REFLECTION_CRON:-0 */5 * * * *}
-      TOWN_SOCIETY_CRON: ${DEV_TOWN_SOCIETY_CRON:-0 */5 * * * *}
       # devtools 靠轮询 target/classes 发现改动；bind mount 上 inotify 不通，轮询才是对的。
       SPRING_DEVTOOLS_RESTART_POLL_INTERVAL: 2s
       SPRING_DEVTOOLS_RESTART_QUIET_PERIOD: 1s

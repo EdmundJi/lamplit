@@ -1,8 +1,9 @@
 import Phaser from 'phaser'
 import { companionPath } from './companion-navigation'
-import { dominantDirection, stepTowardPoint, type Direction4 } from '../town/walkers'
+import { dominantDirection, stepTowardPoint, type Direction4 } from '../../shared/scene/walkers'
 import { conversationEmoji, residentStatus } from './companion-presentation'
 import { buildCompanionStage } from './companion-stage'
+import { ACTION_FRAME, RESIDENT_ART, RESIDENT_ACTIONS, isArtAction } from './companion-art'
 
 export interface SceneResident { id: string; name: string; role?: string; location: string; action: string; activity?: string; destination?: string; objectKind?: string }
 export interface SceneProject { id: string; title: string; place: string; status: string; progress: number; objectKind: string }
@@ -43,7 +44,9 @@ export function residentPosition(location: string, index: number, activity = '',
     return seats[slot]!
   }
   if (place === 'garden' && /garden|tend|plant|flowers|grow|花|园艺|种植|照料|浇水/i.test(activity + action)) {
-    const plots = [{ x: 770, y: 296 }, { x: 849, y: 296 }, { x: 770, y: 376 }, { x: 849, y: 376 }, { x: 911, y: 397 }]
+    // The native stream lands about 50px to the right and 10px below the feet.
+    // Keep its whole silhouette inside the default camera, including the last resident.
+    const plots = [{ x: 770, y: 276 }, { x: 849, y: 276 }, { x: 770, y: 356 }, { x: 849, y: 356 }, { x: 842, y: 421 }]
     return plots[slot]!
   }
   if (place === 'home' && /focus|study|read|专注|学习|读书/i.test(activity + action) && slot === 0) return { x: 270, y: 327 }
@@ -52,7 +55,7 @@ export function residentPosition(location: string, index: number, activity = '',
   if (place === 'garden') return { x: 754 + slot * 36, y: 442 }
   return { x: 260 + slot * 95, y: 401 + slot % 2 * 9 }
 }
-type Actor = { mode: string; props: Phaser.GameObjects.Graphics; sleeping: boolean; conversationId?: string; seatIndex?: number; facing: Direction4; hovered?: boolean; root: Phaser.GameObjects.Container; sprite?: Phaser.GameObjects.Sprite; label: Phaser.GameObjects.Text; activity: Phaser.GameObjects.Text; location: string; action: string; sheet: string; target: { x: number; y: number }; path: { x: number; y: number }[] }
+type Actor = { mode: string; sleeping: boolean; conversationId?: string; seatIndex?: number; facing: Direction4; hovered?: boolean; root: Phaser.GameObjects.Container; sprite?: Phaser.GameObjects.Sprite; label: Phaser.GameObjects.Text; activity: Phaser.GameObjects.Text; location: string; action: string; sheet: string; target: { x: number; y: number }; path: { x: number; y: number }[] }
 
 /** Animation projects server state. It never chooses a resident's next activity or destination. */
 export class CompanionStreetScene extends Phaser.Scene {
@@ -98,7 +101,11 @@ export class CompanionStreetScene extends Phaser.Scene {
     this.load.atlas('town', '/assets/town/town-atlas.png', '/assets/town/town-atlas.json')
     this.load.atlas('companion', '/assets/town/companion-atlas.png', '/assets/town/companion-atlas.json')
     this.load.atlas('interior', '/assets/town/interior-atlas.png', '/assets/town/interior-atlas.json')
-    for (const n of [1, 3, 6, 9, 12]) this.load.spritesheet(`companion-${n}`, `/assets/town/characters/c${String(n).padStart(2, '0')}.png`, { frameWidth: 32, frameHeight: 64 })
+    for (const n of RESIDENT_ART) {
+      const base = `/assets/town/characters/c${String(n).padStart(2, '0')}`
+      this.load.spritesheet(`companion-${n}`, `${base}.png`, { frameWidth: 32, frameHeight: 64 })
+      this.load.spritesheet(`companion-${n}-actions`, `${base}-actions.png`, { frameWidth: ACTION_FRAME.width, frameHeight: ACTION_FRAME.height })
+    }
   }
   create() {
     this.cameras.main.setBackgroundColor('#78857a')
@@ -132,20 +139,20 @@ export class CompanionStreetScene extends Phaser.Scene {
       const y = /poster|海报/.test(kind) ? 319 : /flower|花/.test(kind) ? 241 : 243
       const g = this.add.graphics()
       this.projectLayer.add(g)
+      const art = (atlas: string, frame: string, px: number, py: number, scale = 1) => {
+        if (!this.textures.exists(atlas) || !this.textures.get(atlas).has(frame)) return
+        this.projectLayer.add(this.add.image(px, py, atlas, frame).setOrigin(.5, 1).setScale(scale))
+      }
       if (/poster|海报/.test(kind)) {
-        g.fillStyle(0x715b43).fillRect(x - 22, y - 70, 44, 64).fillRect(x - 19, y - 8, 4, 10).fillRect(x + 15, y - 8, 4, 10)
-        g.fillStyle(0xf4e3b6).fillRect(x - 18, y - 65, 36, 52)
-        g.fillStyle(0xad8165).fillRect(x - 13, y - 59, 26, 3)
-        if (progress > 25) { g.fillStyle(0x7b977c).fillCircle(x, y - 39, 10); g.fillStyle(0xf4dfac).fillRect(x - 6, y - 44, 12, 12) }
-        if (progress > 60) for (let i = 0; i < 3; i++) g.fillStyle(0xa99270).fillRect(x - 12, y - 24 + i * 3, 24 - i * 4, 1)
+        art('companion', progress > 25 ? 'project_poster' : 'project_poster_blank', x, y)
       } else if (/flower|花/.test(kind)) {
-        g.fillStyle(0xa5815e).fillRoundedRect(x - 9, y - 20, 18, 20, 3)
-        for (let i = 0; i < Math.max(2, Math.ceil(progress / 15)); i++) { const dx = Math.sin(i * 2.4) * 13, dy = Math.cos(i * 2.4) * 8; g.lineStyle(2, 0x6a855b).lineBetween(x, y - 9, x + dx, y - 29 + dy); g.fillStyle(i % 2 ? 0xe8bc8a : 0xd5a3a4).fillCircle(x + dx, y - 29 + dy, 5) }
+        art('interior', 'plant_1', x, y, .5)
+        if (progress > 40) art('town', 'flowers_3', x, y - 18, .5)
       } else if (/book|书/.test(kind)) {
-        for (let i = 0; i < Math.max(1, Math.ceil(progress / 25)); i++) { g.fillStyle([0x82917b, 0xa97561, 0xc3a775, 0x7b91a1][i % 4]!).fillRect(x - 14 + i % 2 * 4, y - 8 - i * 6, 26, 5); g.fillStyle(0xebd9b2).fillRect(x - 11 + i % 2 * 4, y - 7 - i * 6, 22, 2) }
+        for (let i = 0; i < Math.max(1, Math.min(4, Math.ceil(progress / 25))); i++) art('interior', 'book_1', x - 10 + i * 7, y, .35)
       } else {
-        g.fillStyle(0xa37c54).fillEllipse(x, y - 7, 33, 12)
-        for (let i = 0; i < 3; i++) { g.fillStyle(0xf2dfb6).fillRoundedRect(x - 13 + i * 9, y - 16, 7, 9, 2); g.fillStyle(0x7e6243).fillEllipse(x - 9 + i * 9, y - 16, 6, 3) }
+        art('interior', 'coffee_table_wood', x, y + 10, .65)
+        for (let i = 0; i < 3; i++) art('interior', 'coffee_cup', x - 10 + i * 10, y - 8, .5)
       }
       const hit = this.add.zone(x, y - 30, 54, 74).setInteractive({ useHandCursor: true })
       hit.on('pointerdown', () => this.selectProject(object.projectId ?? object.id))
@@ -178,7 +185,7 @@ export class CompanionStreetScene extends Phaser.Scene {
       if (!actor) {
         const root = this.add.container(target.x, target.y)
         root.add(this.add.ellipse(0, -1, 29, 9, 0x4c5444, .2))
-        const sheet = `companion-${[1, 3, 6, 9, 12][index % 5]}`
+        const sheet = `companion-${RESIDENT_ART[index % RESIDENT_ART.length]}`
         let sprite: Phaser.GameObjects.Sprite | undefined
         if (this.textures.exists(sheet)) {
           const columns = Math.floor((this.textures.get(sheet).getSourceImage() as HTMLImageElement).width / 32)
@@ -190,11 +197,15 @@ export class CompanionStreetScene extends Phaser.Scene {
             }
           }
           if (!this.anims.exists(`${sheet}-read`)) this.anims.create({ key: `${sheet}-read`, frames: this.anims.generateFrameNumbers(sheet, { start: 7 * columns, end: 7 * columns + 5 }), frameRate: 5, repeat: -1 })
-          for (const [name, row, start, count] of [['sleep', 3, 0, 6], ['sit', 4, 0, 6], ['garden', 9, 0, 12]] as const) {
+          for (const [name, row, start, count] of [['sleep', 3, 0, 6], ['sit', 4, 0, 6]] as const) {
             const key = `${sheet}-${name}`
             if (!this.anims.exists(key)) this.anims.create({ key, frames: this.anims.generateFrameNumbers(sheet, { start: row * columns + start, end: row * columns + start + count - 1 }), frameRate: name === 'sleep' ? 2 : 5, repeat: -1 })
           }
-          sprite = this.add.sprite(0, 0, sheet).setOrigin(.5, 1).setScale(1.08)
+          if (this.textures.exists(`${sheet}-actions`)) for (const [name, action] of Object.entries(RESIDENT_ACTIONS)) {
+            const key = `${sheet}-${name}`
+            if (!this.anims.exists(key)) this.anims.create({ key, frames: action.frames.map(frame => ({ key: `${sheet}-actions`, frame })), frameRate: action.frameRate, repeat: -1 })
+          }
+          sprite = this.add.sprite(0, 0, sheet).setOrigin(.5, 1)
           root.add(sprite)
         } else {
           root.add(this.add.rectangle(0, -18, 19, 25, PALETTE[index % 5]).setStrokeStyle(2, 0xfff3dc))
@@ -206,8 +217,7 @@ export class CompanionStreetScene extends Phaser.Scene {
         root.add([label, activity]); root.setSize(64, 100).setInteractive(new Phaser.Geom.Rectangle(-32, -80, 64, 110), Phaser.Geom.Rectangle.Contains)
         root.on('pointerdown', () => this.select(resident.id))
         root.on('pointerover', () => { if (actor) actor.hovered = true }); root.on('pointerout', () => { if (actor) actor.hovered = false })
-        const props = this.add.graphics(); root.add(props)
-        actor = { mode: 'idle', sleeping: false, props, root, sprite, sheet, label, activity, location, action: resident.action, target, path: [], facing: 'down', seatIndex }
+        actor = { mode: 'idle', sleeping: false, root, sprite, sheet, label, activity, location, action: resident.action, target, path: [], facing: 'down', seatIndex }
         this.actors.set(resident.id, actor)
       }
       if (actor.target.x !== target.x || actor.target.y !== target.y) actor.path = companionPath(actor.root, target)
@@ -251,31 +261,12 @@ export class CompanionStreetScene extends Phaser.Scene {
       if (chatting) actor.facing = dominantDirection(peers[0]!.root.x - actor.root.x, peers[0]!.root.y - actor.root.y, actor.facing)
       actor.sleeping = !waypoint && !actor.conversationId && actor.mode === 'sleep' && scenePlace(actor.location) === 'home'
       const mode = waypoint || actor.conversationId ? 'idle' : actor.mode
-      const animation = waypoint ? `walk-${actor.facing}` : actor.sleeping ? 'sleep' : mode === 'read' ? 'read' : ['create', 'rest', 'drink'].includes(mode) ? 'sit' : mode === 'garden' ? 'garden' : `idle-${actor.facing}`
+      const nativeAction = isArtAction(mode) && this.anims.exists(`${actor.sheet}-${mode}`)
+      const animation = waypoint ? `walk-${actor.facing}` : actor.sleeping ? 'sleep' : nativeAction ? mode : mode === 'read' ? 'read' : mode === 'rest' ? 'sit' : `idle-${actor.facing}`
       // Sleep row is only a head. Its lower edge sits on the actual pillow above the blanket.
-      actor.sprite?.setPosition(0, actor.sleeping ? -40 : 0).setFlipX(false).play(`${actor.sheet}-${animation}`, true)
-      actor.props.clear()
-      const phase = time / 650
-      if (mode === 'create') {
-        actor.props.fillStyle(0xf4e6c8).fillRect(-17, -22, 32, 14)
-        actor.props.lineStyle(2, 0x967854).lineBetween(-8, -17, 8, -17)
-        const px = Math.sin(phase * 3) * 9
-        actor.props.lineStyle(3, 0xd8ae83).lineBetween(7, -28, px, -18)
-        actor.props.lineStyle(2, 0x6f7861).lineBetween(px, -18, px + 5, -26)
-      } else if (mode === 'drink') {
-        const lift = (Math.sin(phase) + 1) * 5
-        actor.props.lineStyle(4, 0xd8ae83).lineBetween(9, -22, 11, -24 - lift)
-        actor.props.fillStyle(0xf6e5bf).fillRoundedRect(7, -29 - lift, 10, 10, 2)
-        actor.props.lineStyle(2, 0xf6e5bf).strokeCircle(18, -25 - lift, 3)
-      } else if (mode === 'garden') {
-        actor.props.fillStyle(0x709ca2).fillRoundedRect(10, -17, 13, 12, 2)
-        actor.props.lineStyle(3, 0x709ca2).lineBetween(22, -12, 30, -28)
-        actor.props.lineStyle(2, 0x709ca2).strokeCircle(14, -19, 5)
-        for (let drop = 0; drop < 5; drop++) {
-          const flow = (time / 80 + drop * 3) % 14
-          actor.props.fillStyle(0xb7e1e9, .8).fillRect(30 + flow / 2, -27 + flow, 2, 3)
-        }
-      }
+      actor.sprite?.setPosition(0, actor.sleeping ? -40 : 0)
+        .setOrigin(nativeAction ? ACTION_FRAME.originX : .5, nativeAction ? ACTION_FRAME.originY : 1)
+        .setFlipX(false).play(`${actor.sheet}-${animation}`, true)
 
     }
     if (time >= this.nextLabelsAt) {

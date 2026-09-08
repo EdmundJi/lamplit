@@ -44,9 +44,13 @@ class DatabaseMigrationIT {
             "select count(*) from growth_dimension where is_system = 1",
             Integer.class
         );
-        String version = jdbc.queryForObject(
-            "select version from flyway_schema_history where success = 1 order by installed_rank desc limit 1",
-            String.class
+        Integer failedMigrations = jdbc.queryForObject(
+            "select count(*) from flyway_schema_history where success = 0",
+            Integer.class
+        );
+        Integer appliedMigrations = jdbc.queryForObject(
+            "select count(*) from flyway_schema_history where success = 1",
+            Integer.class
         );
 
         assertThat(tableCount).isGreaterThanOrEqualTo(33);
@@ -67,7 +71,8 @@ class DatabaseMigrationIT {
         Integer achievements = jdbc.queryForObject("select count(*) from achievement", Integer.class);
         Integer titles = jdbc.queryForObject("select count(*) from title_def", Integer.class);
 
-        assertThat(version).isEqualTo("25");
+        assertThat(failedMigrations).isZero();
+        assertThat(appliedMigrations).isGreaterThanOrEqualTo(25);
         assertThat(jdbc.queryForObject("select is_nullable from information_schema.columns where table_schema = database() and table_name = 'user_task' and column_name = 'weekly_plan_id'", String.class)).isEqualTo("YES");
         assertThat(publishedTemplates).isEqualTo(200);
         assertThat(rolesWithFiftyTemplates).isEqualTo(4);

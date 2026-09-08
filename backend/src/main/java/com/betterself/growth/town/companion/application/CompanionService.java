@@ -12,12 +12,15 @@ public class CompanionService {
     private final WorldStore store;
     private final Clock clock;
     private final ResidentDirector director;
-    public CompanionService(WorldStore store,Clock clock,ResidentDirector director){this.store=store;this.clock=clock;this.director=director;}
+    private final ModelUsageQuery usageQuery;
+    public CompanionService(WorldStore store,Clock clock,ResidentDirector director,ModelUsageQuery usageQuery){this.store=store;this.clock=clock;this.director=director;this.usageQuery=usageQuery;}
     public record View(boolean joined, CompanionWorld world) {}
     public record Join(String name,String timezone) {}
     public record Command(String id,String kind,String priority,String taskId,Integer durationMinutes,String text) {
         public Command(String id,String kind,String priority,String taskId,Integer durationMinutes){this(id,kind,priority,taskId,durationMinutes,null);}
     }
+    /** Today's model token spend for the caller's own world, broken down by call type. Read-only, no cost math. */
+    public record UsageToday(String day,List<ModelUsageQuery.DailyUsage> byCallType,long totalInputTokens,long totalOutputTokens,int totalCalls) {}
     public View get(long userId){return view(store.read(userId));}
     public View join(long userId,Join command){
         String name=command==null||command.name()==null||command.name().isBlank()?"我":command.name().strip();
@@ -49,6 +52,16 @@ public class CompanionService {
         }));
     }
     public View cancel(long userId,String id){return view(store.update(userId,null,w->{CompanionRules.cancel(w,id,clock.instant());return w;}));}
+    public UsageToday usageToday(long userId){
+        CompanionWorld world=store.read(userId);
+        String timezone=world!=null?world.timezone:store.timezone(userId);
+        String day=clock.instant().atZone(ZoneId.of(timezone)).toLocalDate().toString();
+        var byCallType=usageQuery.forDay(userId,day);
+        long inputTokens=byCallType.stream().mapToLong(ModelUsageQuery.DailyUsage::inputTokens).sum();
+        long outputTokens=byCallType.stream().mapToLong(ModelUsageQuery.DailyUsage::outputTokens).sum();
+        int calls=byCallType.stream().mapToInt(ModelUsageQuery.DailyUsage::callCount).sum();
+        return new UsageToday(day,byCallType,inputTokens,outputTokens,calls);
+    }
     private static String resolve(String text) {
         if(text.matches(".*(花|园|树|叶|种).*"))return "flowers";
         if(text.matches(".*(回家|住处|回去).*"))return "home";

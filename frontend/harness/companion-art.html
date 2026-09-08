@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>小街美术预览</title>
+<style>
+  body { margin: 0; padding: 24px; background: #eee9da; color: #52634b; font: 14px/1.6 system-ui; }
+  main { max-width: 1280px; margin: auto; }
+  h1 { font-size: 20px; font-weight: 500; margin: 0 0 12px; }
+  nav { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+  button { font: inherit; color: inherit; background: #fff8e9; border: 1px solid #bcc2a9; padding: 6px 14px; cursor: pointer; }
+  @media(max-width:600px) { body { padding: 10px; } }
+</style>
+<main id="preview"></main>
+<script type="module">
+  import { createApp, h, ref } from 'vue'
+  import CompanionScene from '/src/modules/companion/CompanionScene.vue'
+  createApp({ setup() {
+    const night = ref(false), chat = ref(false), overview = ref(false)
+    const residents = [
+      { id: 'self', name: '小满', role: 'user', location: 'cafe', activity: 'read', action: '读一会儿书' },
+      { id: 'ahe', name: '阿禾', role: '店主', location: 'cafe', activity: 'drink', action: '喝口咖啡' },
+      { id: 'achuan', name: '阿川', role: '插画师', location: 'cafe', activity: 'create', action: '写海报上的小故事' },
+      { id: 'xiaxia', name: '小夏', role: '邻居', location: 'home', activity: 'rest', action: '歇一会儿' },
+      { id: 'alin', name: '阿林', role: '园艺爱好者', location: 'garden', activity: 'garden', action: '给花圃浇水' },
+    ]
+    return () => [h('h1', '慢慢小街 · 午后的生活'), h('nav', [
+      h('button', { onClick: () => night.value = !night.value }, night.value ? '看白天' : '看夜晚'),
+      h('button', { onClick: () => chat.value = !chat.value }, chat.value ? '继续做事' : '聊聊海报'),
+      h('button', { onClick: () => overview.value = !overview.value }, overview.value ? '聚焦生活区' : '看看全街'),
+    ]), h(CompanionScene, { residents, minutes: night.value ? 1260 : 840, overview: overview.value,
+      projects: [
+        { id: 'poster', title: '窗边海报', place: 'cafe', status: 'working', progress: 75, objectKind: 'poster' },
+        { id: 'flowers', title: '一瓶小花', place: 'cafe', status: 'working', progress: 60, objectKind: 'flowers' },
+        { id: 'books', title: '共享书角', place: 'cafe', status: 'working', progress: 75, objectKind: 'books' },
+        { id: 'tea', title: '午后茶桌', place: 'cafe', status: 'working', progress: 50, objectKind: 'tea' },
+      ],
+      conversations: chat.value ? [{ id: 'art-chat', place: 'cafe', status: 'active', participantIds: ['ahe', 'achuan'], turns: [
+        { speakerId: 'ahe', emoji: '🎨', text: '你的海报画好了？我想把它放在窗边。', at: '2026-09-08T06:00:00Z' },
+        { speakerId: 'achuan', emoji: '☕', text: '还差几笔，喝完这杯咖啡就继续画。', at: '2026-09-08T06:00:10Z' },
+      ] }] : [] })]
+  } }).mount('#preview')
+</script>
+</html>

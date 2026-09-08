@@ -2,8 +2,8 @@ import { expect, it, vi } from 'vitest'
 vi.mock('phaser', () => ({ default: { Scene: class {} } }))
 import { companionPath, COMPANION_COLLISION } from './companion-navigation'
 import { residentPosition } from './companion-scene'
-import { canStand } from '../town/collision'
-import { clearSegment } from '../town/pathfinding'
+import { canStand } from '../../shared/scene/collision'
+import { clearSegment } from '../../shared/scene/pathfinding'
 
 it('every life destination is reachable through doors without crossing furniture', () => {
   const entrance = { x: 535, y: 396 }
