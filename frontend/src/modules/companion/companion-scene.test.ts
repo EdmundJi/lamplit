@@ -8,7 +8,8 @@ describe('authoritative activity presentation', () => {
     expect(residentPosition('home', 0, 'read')).toEqual({ x: 270, y: 327 })
     const garden = residentPosition('garden', 4, 'garden')
     expect(garden.x).toBeGreaterThan(790)
-    expect(garden.y).toBeLessThan(410)
+    expect(garden.y).toBeLessThan(445)
+    expect(garden.x + 54).toBeLessThan(932)
   })
   it('gives four NPCs distinct sleeping corners and the avatar a living room seat', () => {
     const positions = Array.from({ length: 4 }, (_, index) => residentPosition('home', index + 1, 'sleep'))

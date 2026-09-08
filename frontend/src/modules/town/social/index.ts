@@ -1,5 +1,0 @@
-export { default as TownMailbox } from './TownMailbox.vue'
-export { default as TownConfidantComposer } from './TownConfidantComposer.vue'
-export { useTownSocialStore } from './social.store'
-export { CONFIDANT_MAX_LENGTH, letterKindLabels } from './social.types'
-export type { TownLetter, TownLetterInbox, TownLetterKind } from './social.types'

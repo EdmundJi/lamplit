@@ -1,4 +1,5 @@
-import type { WeatherKind } from './atmosphere'
+/** Mirrors atmosphere.ts's WeatherKind without depending on the Phaser-heavy module. */
+export type WeatherKind = 'clear' | 'rain' | 'snow'
 
 export type SoundEnvironment = { weather: WeatherKind; minutes: number }
 /** Doorway attenuation: outdoor rain loses both volume and high frequencies. */

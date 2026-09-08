@@ -1,5 +1,5 @@
-import type { CollisionWorld, Point } from '../town/collision'
-import { findPath } from '../town/pathfinding'
+import type { CollisionWorld, Point } from '../../shared/scene/collision'
+import { findPath } from '../../shared/scene/pathfinding'
 /** Feet navigation mirrors the cutaway floors, open doorways and actual furniture footprint. */
 export const COMPANION_COLLISION: CollisionWorld = {
   walkable: [
