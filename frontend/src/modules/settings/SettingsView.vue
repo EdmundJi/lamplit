@@ -38,6 +38,15 @@ function restyle(event: Event, change: () => void) {
   void radialReveal(event, () => { change(); appearance.apply() })
 }
 
+// Same full-shell repaint as switching theme; reuse the same reveal so the
+// two kinds of "everything just changed" moments feel like one thing.
+function switchWorkspaceMode(event: Event) {
+  void radialReveal(event, () => {
+    mode.setMinimal(!mode.minimal)
+    void router.push('/today')
+  })
+}
+
 onMounted(() => load())
 
 async function retention(days: number) {
@@ -78,7 +87,7 @@ function replayWelcome() {
     <section class="band">
       <h2>使用模式</h2>
       <p>极简模式只保留执行清单。切换模式不会改变已有任务，偏好保存在当前设备。</p>
-      <button class="secondary" :aria-pressed="mode.minimal" @click="mode.setMinimal(!mode.minimal); router.push('/today')">{{ mode.minimal ? '切换成长模式' : '切换极简清单' }}</button>
+      <button class="secondary" :aria-pressed="mode.minimal" @click="switchWorkspaceMode($event)">{{ mode.minimal ? '切换成长模式' : '切换极简清单' }}</button>
     </section>
 
     <section class="band appearance-section">

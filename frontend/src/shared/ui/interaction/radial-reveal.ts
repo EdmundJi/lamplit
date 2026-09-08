@@ -1,4 +1,4 @@
-import { motionAllowed } from './motion'
+import { motionAllowed, motionDuration } from './motion'
 
 /**
  * Appearance changes repaint the whole page. Expanding the new look from the
@@ -47,6 +47,6 @@ export async function radialReveal(source: Event | null, apply: () => void) {
         `circle(${coverRadius(origin)}px at ${origin.x}px ${origin.y}px)`,
       ],
     },
-    { duration: 560, easing: 'cubic-bezier(.22,.75,.2,1)', pseudoElement: '::view-transition-new(root)' },
+    { duration: motionDuration('slow'), easing: 'cubic-bezier(.22,.75,.2,1)', pseudoElement: '::view-transition-new(root)' },
   )
 }

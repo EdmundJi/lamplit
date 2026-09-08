@@ -5,6 +5,7 @@ import { RadarChart } from 'echarts/charts'
 import { LegendComponent, TooltipComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 import { ArrowLeft, BadgeCheck, CalendarCheck2, MessageCircle, PawPrint, UserRound } from 'lucide-vue-next'
+import { motionAllowed } from '../../shared/ui/interaction/motion'
 import { computeBadges, type Badge } from '../insights/badges'
 import RivePet from '../partners/RivePet.vue'
 import { friendInitial, memberSinceLabel as memberSinceLabelOf, useFriendProfile } from './friends.logic'
@@ -49,7 +50,7 @@ function renderChart() {
   const surface = styles.getPropertyValue('--surface').trim() || '#fffdfa'
   const primary = styles.getPropertyValue('--primary-strong').trim() || '#255643'
   chart.setOption({
-    animation: !['off', 'reduced'].includes(document.documentElement.dataset.motion ?? '') && !window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches,
+    animation: motionAllowed(),
     animationDuration: 400,
     animationEasing: 'cubicOut',
     tooltip: {

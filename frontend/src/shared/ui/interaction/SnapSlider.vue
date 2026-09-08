@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onBeforeUnmount, ref, watch } from 'vue'
-import { motionAllowed } from './motion'
+import { motionAllowed, motionDuration } from './motion'
 import { projectRelease, releaseVelocity, snapToStep, type DragSample } from './snap-slider'
 
 /**
@@ -45,9 +45,10 @@ function glideTo(target: number) {
   settling = true
   // Timed from the first frame, so the clock always matches the one the frames carry.
   let began = 0
+  const duration = motionDuration('medium')
   const tick = (now: number) => {
     began ||= now
-    const progress = Math.min(1, (now - began) / 260)
+    const progress = Math.min(1, (now - began) / duration)
     const eased = 1 - (1 - progress) ** 3
     const value = Math.round(start + (target - start) * eased)
     if (value !== display.value) {

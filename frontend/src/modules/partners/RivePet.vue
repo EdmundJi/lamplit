@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Alignment, Fit, Layout, Rive, RuntimeLoader, StateMachineInputType, type StateMachineInput } from '@rive-app/canvas'
 import { ChevronUp, Palette, PawPrint, RotateCcw } from 'lucide-vue-next'
+import { motionAllowed } from '../../shared/ui/interaction/motion'
 import { petVariants, variantAt, variantCountFor, type PetInputSpec, type PetReaction, type PetVariant } from './pet-variants'
 
 RuntimeLoader.setWasmUrl('/assets/rive/rive.wasm')
@@ -38,8 +39,11 @@ let resizeObserver: ResizeObserver | null = null
 let reactionTimer: number | undefined
 let inputTimers: number[] = []
 let motionObserver: MutationObserver | null = null
+// Delegates to the shared interaction primitive instead of re-reading data-motion
+// and prefers-reduced-motion locally; kept as a same-named wrapper (inverted
+// polarity) so every call site below reads the same as before.
 function reduceMotion() {
-  return ['off', 'reduced'].includes(document.documentElement.dataset.motion ?? '') || (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false)
+  return !motionAllowed()
 }
 function syncPlayback() {
   if (!rive) return
@@ -376,7 +380,7 @@ defineExpose({ react })
 .variant-menu button > span:nth-child(2) { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .variant-menu button em { font-style: normal; color: #ffd9a0; font-size: 10px; opacity: .85; }
 
-.variant-menu-enter-active, .variant-menu-leave-active { transition: opacity 120ms ease, transform 120ms ease; }
+.variant-menu-enter-active, .variant-menu-leave-active { transition: opacity var(--motion-fast) ease, transform var(--motion-fast) ease; }
 .variant-menu-enter-from, .variant-menu-leave-to { opacity: 0; transform: translateY(5px); }
 
 @media (prefers-reduced-motion: no-preference) {

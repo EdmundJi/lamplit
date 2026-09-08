@@ -6,6 +6,7 @@ import { RadarChart } from 'echarts/charts'
 import { LegendComponent, TooltipComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 import { onDataChanged } from '../../shared/data-sync'
+import { motionAllowed } from '../../shared/ui/interaction/motion'
 import { attributeIcons, attributeProgress as progress, attributeTones, useAttributesOverview } from './attributes.logic'
 
 use([RadarChart, LegendComponent, TooltipComponent, CanvasRenderer])
@@ -26,7 +27,7 @@ function renderChart() {
   const surface = styles.getPropertyValue('--surface').trim() || '#fffdfa'
   const primary = styles.getPropertyValue('--primary-strong').trim() || '#255643'
   chart.setOption({
-    animation: !['off', 'reduced'].includes(document.documentElement.dataset.motion ?? '') && !window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches,
+    animation: motionAllowed(),
     animationDuration: 400,
     animationEasing: 'cubicOut',
     tooltip: {

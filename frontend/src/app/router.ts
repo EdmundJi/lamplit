@@ -4,6 +4,10 @@ import { useAuthStore } from '../modules/auth/auth.store'
 const routes = [
   { path: '/town/demo', redirect: '/town' },
   { path: '/town/immersive', redirect: '/town' },
+  // Standalone dev-only god view (docs/01-requirements.md "先跑给自己看") - deliberately outside
+  // UserLayout so it never touches /town's own transition/nav, and meant to be hidden wholesale
+  // before anything ships.
+  { path: '/town/debug', component: () => import('../modules/companion/debug/CompanionDebugView.vue') },
   { path: '/auth', component: () => import('../modules/auth/AuthView.vue'), meta: { public: true } },
   { path: '/desktop-pet', component: () => import('../modules/partners/DesktopPetWindow.vue') },
   { path: '/onboarding', component: () => import('../modules/onboarding/OnboardingView.vue') },

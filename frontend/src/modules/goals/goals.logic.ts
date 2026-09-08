@@ -57,6 +57,30 @@ export type PresetDraw = {
   refreshesRemaining: number
   items: Preset[]
 }
+/** Shape of the reactive goal-drawer form; extracted so drawer components can type their props. */
+export type GoalForm = {
+  dimensionPublicId: string
+  title: string
+  description: string
+  startDate: string
+  endDate: string
+}
+/** Shape of the reactive task-drawer form; extracted so drawer components can type their props. */
+export type TaskForm = {
+  goalPublicId: string
+  title: string
+  notes: string
+  estimatedMinutes: number
+  difficulty: number
+  rrule: string
+  plannedLocalTime: string
+  activeFrom: string
+  activeUntil: string
+  sourceTemplatePublicId: string
+  roleCode: RoleCode
+  dimensionCode: string
+  dimensionWeight: number
+}
 export type GoalTemplate = {
   roleCode: RoleCode
   title: string
@@ -210,14 +234,14 @@ export function useGoalsLogic(options: UseGoalsLogicOptions = {}) {
   /** 非空时，任务抽屉处于「编辑」而非「新建」模式。 */
   const editingTaskPublicId = ref<string | null>(null)
 
-  const goalForm = reactive({
+  const goalForm = reactive<GoalForm>({
     dimensionPublicId: '',
     title: '',
     description: '',
     startDate: today(),
     endDate: plusDays(today(), 27),
   })
-  const taskForm = reactive({
+  const taskForm = reactive<TaskForm>({
     goalPublicId: '',
     title: '',
     notes: '',

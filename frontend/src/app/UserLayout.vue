@@ -8,16 +8,22 @@ import WelcomeGuide from '../shared/ui/WelcomeGuide.vue'
 import GlobalUnreadBar from '../shared/ui/GlobalUnreadBar.vue'
 import OperationGuideBar from '../shared/ui/OperationGuideBar.vue'
 import { useDialogFocus } from '../shared/ui/use-dialog-focus'
+import { radialReveal } from '../shared/ui/interaction/radial-reveal'
 
 import { useWorkspaceModeStore } from '../shared/ui/workspace-mode.store'
 
 const mode = useWorkspaceModeStore()
 const router = useRouter()
-function changeMode(minimal: boolean) {
-  mode.setMinimal(minimal)
-  showWelcome.value = false
-  showMobileMore.value = false
-  void router.push('/today')
+// Switching between 极简清单 and 完整模式 replaces the whole shell (sidebar,
+// topbar, nav); grow the new one from the button pressed, same as an
+// appearance change, instead of snapping straight to it.
+function changeMode(event: Event, minimal: boolean) {
+  void radialReveal(event, () => {
+    mode.setMinimal(minimal)
+    showWelcome.value = false
+    showMobileMore.value = false
+    void router.push('/today')
+  })
 }
 
 const nav = [
@@ -92,11 +98,11 @@ onBeforeUnmount(() => {
       <RouterLink class="brand" to="/today"><span class="brand-mark" aria-hidden="true"><Building2 :size="23" /></span><span><strong>更好的自己</strong><small>一步一步，自成风景</small></span></RouterLink>
       <nav aria-label="主导航"><section v-for="group in groups" :key="group" class="nav-group"><p>{{ group }}</p><RouterLink v-for="item in nav.filter(item => item.group === group)" :key="item.to" :to="item.to"><component :is="item.icon" :size="19"/><span>{{ item.label }}</span><span v-if="route.path === item.to" class="nav-dot" /></RouterLink></section></nav>
       <RouterLink class="sidebar-note" to="/town"><span class="note-orbit" aria-hidden="true">✦</span><strong>让每一步，<br>长成看得见的生活。</strong><span>去小镇走走 <ArrowUpRight :size="15" /></span></RouterLink>
-      <button class="secondary mode-switch" @click="changeMode(true)">切换极简清单</button>
+      <button class="secondary mode-switch" @click="changeMode($event, true)">切换极简清单</button>
       <div class="sidebar-account"><RouterLink to="/profile"><span class="account-avatar">{{ brandInitial }}</span><span><strong>{{ auth.user?.displayName || '我的成长档案' }}</strong><small>今天完成一点，也很好</small></span></RouterLink><RouterLink class="account-settings" to="/settings" aria-label="设置"><Settings :size="18" /></RouterLink></div>
     </aside>
     <main id="main-content" class="workspace" tabindex="-1">
-      <header v-if="mode.minimal" class="minimal-topbar"><RouterLink to="/today" class="minimal-brand">我的清单</RouterLink><div><RouterLink to="/settings">设置</RouterLink><button type="button" @click="changeMode(false)">切换成长模式</button></div></header>
+      <header v-if="mode.minimal" class="minimal-topbar"><RouterLink to="/today" class="minimal-brand">我的清单</RouterLink><div><RouterLink to="/settings">设置</RouterLink><button type="button" @click="changeMode($event, false)">切换成长模式</button></div></header>
       <header v-else class="workspace-topbar"><span class="workspace-context"><PanelLeftClose :size="17" /><span>{{ currentNav?.group || '成长' }}</span><span class="context-slash">/</span><strong>{{ currentNav?.label || '更好的自己' }}</strong></span><div><RouterLink class="topbar-ai" to="/ai"><Sparkles :size="15" />和 AI 理一理</RouterLink><RouterLink class="icon-button" to="/friends/chat" aria-label="消息中心"><Bell :size="18" /></RouterLink></div></header>
       <OperationGuideBar v-if="!mode.minimal && route.path !== '/town'" />
       <RouterView v-slot="{ Component, route }">
