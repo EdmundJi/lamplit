@@ -2,6 +2,7 @@
 import { nextTick } from 'vue'
 import { BatteryMedium, Check, Clock3, Gauge, Minimize2, Play, RotateCcw, SkipForward, Sparkles, TimerReset, Undo2, X } from 'lucide-vue-next'
 import TownPreview from '../../shared/ui/TownPreview.vue'
+import SnapSlider from '../../shared/ui/interaction/SnapSlider.vue'
 import { taskStatusLabel } from '../../shared/task-status'
 import { useDialogFocus } from '../../shared/ui/use-dialog-focus'
 import { useTodayLogic } from './today.logic'
@@ -80,7 +81,7 @@ async function submitCheck() {
         </div>
         <label class="minutes-control" for="available-minutes">
           <span>{{ availableMinutes }} 分钟</span>
-          <input id="available-minutes" v-model.number="availableMinutes" type="range" min="10" max="90" step="5">
+          <SnapSlider id="available-minutes" v-model="availableMinutes" :min="10" :max="90" :step="5" :value-text="`${availableMinutes} 分钟`" />
         </label>
       </div>
       <div class="check-result">
@@ -194,7 +195,7 @@ async function submitCheck() {
     <section v-if="selected" class="action-panel today-dialog" role="dialog" aria-modal="true" tabindex="-1" :aria-label="selected.eventType === 'PARTIAL' ? '记录部分完成' : '选择延期时间'">
       <template v-if="selected.eventType === 'PARTIAL'">
         <label for="completion">完成比例：{{ completionPercent }}%</label>
-        <input id="completion" v-model.number="completionPercent" type="range" min="10" max="90" step="10">
+        <SnapSlider id="completion" v-model="completionPercent" :min="10" :max="90" :step="10" :value-text="`${completionPercent}%`" />
       </template>
       <template v-else>
         <label for="deferred">新的开始时间</label>

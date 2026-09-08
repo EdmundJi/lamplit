@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { ArrowLeft, ArrowRight, ChartNoAxesColumnIncreasing, Check, Paintbrush, ShieldCheck, Sparkles, Target, X } from 'lucide-vue-next'
+import StepperProgress from './interaction/StepperProgress.vue'
 
 type Slide = {
   eyebrow: string
@@ -91,16 +92,16 @@ function previous() {
       </div>
 
       <footer class="welcome-actions">
-        <div class="welcome-dots" aria-label="欢迎介绍进度">
-          <button
-            v-for="(_, slideIndex) in slides"
-            :key="slideIndex"
-            type="button"
-            :aria-label="`第 ${slideIndex + 1} 页`"
-            :aria-current="slideIndex === index"
-            @click="index = slideIndex"
-          ></button>
-        </div>
+        <StepperProgress
+          class="welcome-dots"
+          variant="dots"
+          selectable
+          :steps="slides.length"
+          :current="index + 1"
+          label="欢迎介绍进度"
+          :step-label="slide => `第 ${slide} 页`"
+          @select="index = $event - 1"
+        />
         <div class="actions">
           <button type="button" class="secondary" @click="emit('dismiss')">跳过</button>
           <button v-if="index > 0" type="button" class="secondary" aria-label="上一页" @click="previous">
@@ -269,24 +270,9 @@ function previous() {
   border-top: 1px solid var(--border);
 }
 
-.welcome-dots {
-  display: flex;
-  gap: 7px;
-}
-
-.welcome-dots button {
-  width: 9px;
-  height: 9px;
+.welcome-dots :deep(.stepper-step) {
   min-height: 0;
-  padding: 0;
-  border-radius: 50%;
   background: var(--border);
-}
-
-.welcome-dots button[aria-current='true'] {
-  width: 24px;
-  border-radius: 999px;
-  background: var(--primary);
 }
 
 [data-visual='signal'] .visual-bar {

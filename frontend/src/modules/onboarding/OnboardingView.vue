@@ -14,6 +14,8 @@ import {
   Route,
   Sparkles,
 } from 'lucide-vue-next'
+import SnapSlider from '../../shared/ui/interaction/SnapSlider.vue'
+import StepperProgress from '../../shared/ui/interaction/StepperProgress.vue'
 import { api, type ApiError } from '../../shared/api/client'
 import { notifyDataChanged } from '../../shared/data-sync'
 
@@ -60,7 +62,6 @@ const busy = ref(false)
 const error = ref('')
 const result = ref<SetupResult | null>(null)
 
-const progress = computed(() => Math.min(100, Math.round(step.value * 100 / 3)))
 const selectedScene = computed(() => scenes.find(item => item.code === form.scene) ?? scenes[0])
 
 function goBack() {
@@ -126,9 +127,7 @@ async function finish() {
       <span v-if="step < 4" class="step-count">{{ step }} / 3</span>
     </header>
 
-    <div v-if="step < 4" class="setup-progress" aria-label="入门设置进度">
-      <span :style="{ width: `${progress}%` }"></span>
-    </div>
+    <StepperProgress v-if="step < 4" class="setup-progress" :steps="3" :current="step" label="入门设置进度" />
 
     <p v-if="error" class="error" role="alert">{{ error }}</p>
 
@@ -162,11 +161,11 @@ async function finish() {
       <div class="rhythm-grid">
         <label class="range-field" for="daily-minutes">
           <span><strong>每天投入</strong><output for="daily-minutes">{{ form.dailyMinutes }} 分钟</output></span>
-          <input id="daily-minutes" v-model.number="form.dailyMinutes" type="range" min="5" max="120" step="5">
+          <SnapSlider id="daily-minutes" v-model="form.dailyMinutes" :min="5" :max="120" :step="5" :value-text="`${form.dailyMinutes} 分钟`" />
         </label>
         <label class="range-field" for="weekly-frequency">
           <span><strong>每周频次</strong><output for="weekly-frequency">{{ form.weeklyFrequency }} 次</output></span>
-          <input id="weekly-frequency" v-model.number="form.weeklyFrequency" type="range" min="1" max="7" step="1">
+          <SnapSlider id="weekly-frequency" v-model="form.weeklyFrequency" :min="1" :max="7" :step="1" :value-text="`每周 ${form.weeklyFrequency} 次`" />
         </label>
       </div>
       <fieldset class="difficulty-field">
@@ -227,8 +226,7 @@ async function finish() {
 .brand-lockup { display: flex; align-items: center; gap: 10px; }
 .brand-mark { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 12px 12px 12px 4px; background: var(--primary); color: white; font-size: 15px; font-weight: 900; }
 .step-count { color: var(--muted); font-size: 13px; font-weight: 800; }
-.setup-progress { height: 4px; margin: 18px 0 42px; background: var(--surface-muted); overflow: hidden; }
-.setup-progress span { display: block; height: 100%; background: var(--primary); }
+.setup-progress { margin: 18px 0 42px; }
 .setup-band { display: grid; gap: 28px; padding-bottom: 56px; }
 .setup-title { max-width: 650px; }
 .setup-title h1, .completion-band h1 { margin: 5px 0 0; font-size: 32px; letter-spacing: 0; }

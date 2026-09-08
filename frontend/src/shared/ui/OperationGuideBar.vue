@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { ChevronRight, ListChecks } from 'lucide-vue-next'
+import { disclose as vDisclose } from './interaction/disclose'
 import { useRoute } from 'vue-router'
 
 type Guide = {
@@ -42,7 +43,7 @@ const guide = computed(() => resolveGuide(route.path))
 </script>
 
 <template>
-  <details v-if="guide" class="operation-guide" :aria-label="guide.label">
+  <details v-if="guide" v-disclose class="operation-guide" :aria-label="guide.label">
     <summary><ListChecks :size="14" />{{ guide.label }} · 使用提示</summary>
     <div class="guide-inner">
       <div class="guide-label">

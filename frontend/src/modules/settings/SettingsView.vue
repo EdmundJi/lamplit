@@ -16,6 +16,7 @@ import {
   type RadiusStyle,
   type ThemeMode,
 } from '../../shared/ui/appearance.store'
+import { radialReveal } from '../../shared/ui/interaction/radial-reveal'
 import { channelHint, channelLabel, retentionOptions, useSettingsData } from './settings.logic'
 
 const { prefs, notifications, deletion, exportJob, error, load, setRetention, toggleNotification, createExport, requestDeletion, cancelDeletion } = useSettingsData()
@@ -30,6 +31,12 @@ const confirmingDeletion = ref(false)
 appearance.hydrate()
 
 const themeIcons: Record<ThemeMode, unknown> = { light: Sun, dark: Moon, system: Monitor }
+
+// Every appearance control repaints the page; the new look grows out of the
+// button that caused it, so the change reads as an answer to that press.
+function restyle(event: Event, change: () => void) {
+  void radialReveal(event, () => { change(); appearance.apply() })
+}
 
 onMounted(() => load())
 
@@ -92,7 +99,7 @@ function replayWelcome() {
               :key="option.value"
               type="button"
               :aria-pressed="appearance.theme === option.value"
-              @click="appearance.setTheme(option.value as ThemeMode)"
+              @click="restyle($event, () => appearance.setTheme(option.value as ThemeMode))"
             >
               <component :is="themeIcons[option.value]" :size="16" />
               {{ option.label }}
@@ -110,7 +117,7 @@ function replayWelcome() {
               :aria-label="option.label"
               :aria-pressed="appearance.accent === option.value"
               :style="{ '--preview-primary': option.swatch, '--preview-accent': option.accent, '--preview-surface': option.surface }"
-              @click="appearance.setAccent(option.value as AccentTone)"
+              @click="restyle($event, () => appearance.setAccent(option.value as AccentTone))"
             >
               <span class="theme-preview" aria-hidden="true">
                 <span class="preview-sidebar" />
@@ -129,7 +136,7 @@ function replayWelcome() {
               :key="option.value"
               type="button"
               :aria-pressed="appearance.density === option.value"
-              @click="appearance.setDensity(option.value as Density)"
+              @click="restyle($event, () => appearance.setDensity(option.value as Density))"
             >
               <PanelsTopLeft :size="16" />
               {{ option.label }}
@@ -145,7 +152,7 @@ function replayWelcome() {
               :key="option.value"
               type="button"
               :aria-pressed="appearance.motion === option.value"
-              @click="appearance.setMotion(option.value as MotionLevel)"
+              @click="restyle($event, () => appearance.setMotion(option.value as MotionLevel))"
             >
               <Zap :size="16" />
               {{ option.label }}
@@ -161,7 +168,7 @@ function replayWelcome() {
               :key="option.value"
               type="button"
               :aria-pressed="appearance.radius === option.value"
-              @click="appearance.setRadius(option.value as RadiusStyle)"
+              @click="restyle($event, () => appearance.setRadius(option.value as RadiusStyle))"
             >
               {{ option.label }}
             </button>
@@ -173,7 +180,7 @@ function replayWelcome() {
             <span :style="{ background: currentAccent.swatch }" aria-hidden="true" />
             <div><small>当前风格</small><strong>{{ currentAccent.label }}</strong></div>
           </div>
-          <button type="button" class="secondary" @click="appearance.reset">
+          <button type="button" class="secondary" @click="restyle($event, appearance.reset)">
             <RotateCcw :size="17" />
             恢复默认
           </button>

@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ArrowRight, ClipboardCheck, FileJson2, History, Loader2, Plus, Send, ShieldCheck, SlidersHorizontal, Sparkles, Timer } from 'lucide-vue-next'
+import { disclose as vDisclose } from '../../shared/ui/interaction/disclose'
 import { api } from '../../shared/api/client'
 import { postSse } from '../../shared/api/sse'
 import MarkdownDocument from '../../shared/ui/MarkdownDocument.vue'
@@ -329,7 +330,7 @@ onBeforeUnmount(() => {
                   <select v-model.number="task.difficulty" :aria-label="`起步任务 ${index + 1} 难度`"><option :value="1">难度 1</option><option :value="2">难度 2</option><option :value="3">难度 3</option></select>
                 </div>
               </div>
-              <details class="json-preview"><summary>查看 JSON</summary><pre>{{ goalDraftJson }}</pre></details>
+              <details v-disclose class="json-preview"><summary>查看 JSON</summary><pre>{{ goalDraftJson }}</pre></details>
               <div class="draft-actions"><button class="secondary" type="button" :disabled="generatingGoal" @click="generateGoalTemplate">重新生成</button><button class="primary" type="submit">一键填入<ArrowRight :size="16" /></button></div>
             </form>
             <p v-else-if="!messages.length" class="draft-empty">完成一段对话后即可生成。</p>

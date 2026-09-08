@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { nextTick, ref } from 'vue'
 import { Check, Plus, GripVertical, MoreHorizontal, ArrowUp, ArrowDown, Clock3, Trash2, Undo2 } from 'lucide-vue-next'
+import { useDragSort } from '../../shared/ui/interaction/use-drag-sort'
+import { disclose as vDisclose } from '../../shared/ui/interaction/disclose'
 import { useChecklist, type ChecklistTask } from './checklist.logic'
 
 const { tab, title, loading, saving, pending, error, loadError, notice, last, undoing, today, active, completed, load, add, act, tomorrow, undo, rename, move } = useChecklist()
@@ -8,8 +10,9 @@ const input = ref<HTMLInputElement | null>(null)
 const editing = ref<string | null>(null)
 const editTitle = ref('')
 const editInput = ref<HTMLInputElement[]>([])
-const dragging = ref<string | null>(null)
 const menu = ref<string | null>(null)
+const list = ref<HTMLElement | null>(null)
+const { draggingId, start } = useDragSort({ container: () => list.value, move })
 async function submit(event: KeyboardEvent) {
   if (event.isComposing || event.keyCode === 229) return
   event.preventDefault()
@@ -37,10 +40,6 @@ function shift(task: ChecklistTask, offset: number) {
   const target = active.value[active.value.findIndex(item => item.publicId === task.publicId) + offset]
   if (target) move(task.publicId, target.publicId)
 }
-function drop(task: ChecklistTask) {
-  if (dragging.value) move(dragging.value, task.publicId)
-  dragging.value = null
-}
 </script>
 
 <template>
@@ -64,9 +63,17 @@ function drop(task: ChecklistTask) {
 
     <p v-if="loading" class="list-empty" role="status">正在加载清单…</p>
     <template v-else>
-      <ul class="checklist-items" aria-label="待办事项">
-        <li v-for="(task, index) in active" :key="task.publicId" class="checklist-row" :class="{ 'is-dragging': dragging === task.publicId }" @dragover.prevent @drop.prevent="drop(task)">
-          <span class="drag-handle" draggable="true" aria-hidden="true" @dragstart="dragging = task.publicId; $event.dataTransfer?.setData('text/plain', task.publicId)" @dragend="dragging = null"><GripVertical :size="15" /></span>
+      <ul ref="list" class="checklist-items" aria-label="待办事项">
+        <li v-for="(task, index) in active" :key="task.publicId" class="checklist-row" :class="{ 'is-dragging': draggingId === task.publicId }" :data-sort-id="task.publicId">
+          <button
+            class="drag-handle"
+            type="button"
+            :aria-label="`调整顺序：${task.taskTitle}`"
+            aria-keyshortcuts="ArrowUp ArrowDown"
+            @pointerdown="start(task.publicId, $event)"
+            @keydown.up.prevent="shift(task, -1)"
+            @keydown.down.prevent="shift(task, 1)"
+          ><GripVertical :size="15" /></button>
           <button class="task-check" :aria-label="`完成：${task.taskTitle}`" :disabled="pending.has(task.publicId)" @click="act(task, 'COMPLETED')"><Check v-if="pending.has(task.publicId)" :size="14" /></button>
           <div class="task-text">
             <template v-if="editing === task.publicId">
@@ -88,7 +95,7 @@ function drop(task: ChecklistTask) {
         </li>
       </ul>
       <div v-if="!active.length && !loadError" class="list-empty"><Check v-if="completed.length" :size="27" /><p>{{ completed.length ? '都做好了。' : tab === 'today' ? '今天还没有待办。' : '清单是空的。' }}</p><span>{{ completed.length ? '有新的事情，随时记下来。' : '在上方写下第一件事。' }}</span></div>
-      <details v-if="completed.length" class="completed-list"><summary>已完成 {{ completed.length }} 项</summary><ul><li v-for="task in completed" :key="task.publicId"><Check :size="15" /><span>{{ task.taskTitle }}</span></li></ul></details>
+      <details v-if="completed.length" v-disclose class="completed-list"><summary>已完成 {{ completed.length }} 项</summary><ul><li v-for="task in completed" :key="task.publicId"><Check :size="15" /><span>{{ task.taskTitle }}</span></li></ul></details>
     </template>
   </section>
 </template>
@@ -110,10 +117,12 @@ button:disabled { opacity: .45; cursor: default; }
 .quick-add input { min-width: 0; flex: 1; border: 0; outline: none; box-shadow: none; padding: 10px 0; background: transparent; color: var(--ink); font-size: 15px; }
 .quick-add button { flex-shrink: 0; background: var(--primary); color: var(--on-primary, #fff); border: 0; border-radius: 7px; padding: 9px 14px; font-size: 13px; }
 .checklist-items, .completed-list ul { list-style: none; padding: 0; margin: 22px 0 0; }
-.checklist-row { display: flex; align-items: center; gap: 12px; min-height: 64px; border-bottom: 1px solid var(--border); padding: 10px 0; }
-.drag-handle { color: var(--muted); opacity: .35; cursor: grab; display: flex; width: 16px; flex-shrink: 0; }
-.checklist-row:hover .drag-handle { opacity: 1; }
-.is-dragging { opacity: .4; }
+.checklist-row { position: relative; display: flex; align-items: center; gap: 12px; min-height: 64px; border-bottom: 1px solid var(--border); padding: 10px 0; }
+.drag-handle { color: var(--muted); opacity: .35; cursor: grab; display: grid; place-items: center; width: 22px; height: 44px; min-height: 0; padding: 0; border: 0; border-radius: 6px; background: transparent; flex-shrink: 0; touch-action: none; }
+.checklist-row:hover .drag-handle, .drag-handle:focus-visible { opacity: 1; }
+/* The row being carried lifts above its neighbours while they slide aside underneath. */
+.is-dragging { z-index: 2; cursor: grabbing; border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow-soft); }
+.is-dragging .drag-handle { opacity: 1; cursor: grabbing; }
 .task-check { width: 24px; height: 24px; min-height: 24px; flex-shrink: 0; border: 1.5px solid var(--muted); border-radius: 50%; background: transparent; padding: 0; display: grid; place-items: center; color: var(--primary); position: relative; }
 .task-check::before { content: ''; position: absolute; inset: -10px; }
 .task-check:hover { border-color: var(--primary); background: var(--primary-soft); }
@@ -142,5 +151,5 @@ button:disabled { opacity: .45; cursor: default; }
 .completed-list ul { margin-top: 8px; }
 .completed-list li { display: flex; align-items: baseline; gap: 15px; padding: 12px 28px; }
 .completed-list li span { text-decoration: line-through; overflow-wrap: anywhere; }
-@media (max-width: 600px) { .checklist { padding: 32px 20px 72px; } .checklist-head { margin-bottom: 24px; } h1 { font-size: 28px; } .drag-handle { display: none; } .checklist-row { gap: 14px; } .list-tabs button { padding: 9px 12px; } }
+@media (max-width: 600px) { .checklist { padding: 32px 20px 72px; } .checklist-head { margin-bottom: 24px; } h1 { font-size: 28px; } .drag-handle { opacity: .6; } .checklist-row { gap: 14px; } .list-tabs button { padding: 9px 12px; } }
 </style>

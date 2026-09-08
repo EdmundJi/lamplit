@@ -95,3 +95,11 @@ button:disabled:hover { transform: none; }
 :root[data-motion='reduced'] *, :root[data-motion='reduced'] *::before, :root[data-motion='reduced'] *::after { animation: none !important; scroll-behavior: auto !important; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; scroll-behavior: auto !important; transition: none !important; } }
 @media (max-width: 760px) { .page-head { margin-bottom: 24px; } .page-head::before { display: none; } }
+
+/* Appearance changes expand from the pressed control instead of flashing the whole window. */
+::view-transition-old(root), ::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
+::view-transition-old(root) { z-index: 0; }
+::view-transition-new(root) { z-index: 1; }
+/* A list being reordered by pointer keeps the drag cursor and drops text selection. */
+.is-sorting { cursor: grabbing; user-select: none; }
+.is-sorting [data-sort-id] { will-change: transform; }
