@@ -82,6 +82,39 @@ class ResidentDirectorTest {
         assertThat(context.nearby()).anyMatch(a->a.id().equals("self")&&a.place().equals("cafe"));
         assertThat(context.toString()).doesNotContain("PRIVATE_TODO_DO_NOT_SHOW_NPC");
     }
+    @Test void privateAffectionAndWhetherItWasEverSaidAloudNeverReachAnotherResidentsContext()throws Exception {
+        var world=CompanionRules.join("private-affection","我","Asia/Shanghai",now);
+        // Student's own private feelings about a third resident, and whether she has ever let that
+        // show - only student's own future context should ever see these.
+        var student=ResidentSimulation.state(world,"student");
+        student.relationships.put("artist",97);
+        student.affectionExpressed.put("artist",true);
+        // Make "gardener" the sole, deterministic model-decision candidate, same setup as
+        // avatarIsPerceivedByNearbyResidentsButNeverCarriesUserText above.
+        for(int i=0;i<world.residents.size();i++) {
+            var a=world.residents.get(i);
+            if(a.id().equals("gardener"))world.residents.set(i,new CompanionWorld.Actor(a.id(),a.name(),a.role(),"cafe","observe","看看周围",a.x(),a.y(),now.plusSeconds(200)));
+        }
+        ResidentSimulation.state(world,"gardener").plan=new CompanionWorld.Plan("test-plan","observe","cafe",null,"看看周围",now,now.plusSeconds(200));
+        for(var r:world.residentStates)if(!r.id.equals("gardener")&&!r.id.equals("self"))r.plan=null;
+        var store=new FakeStore(world);
+        var captured=new ResidentMind.Context[1];
+        ResidentMind mind=new ResidentMind(){
+            public boolean enabled(){return true;}
+            public Decision decide(Context c){captured[0]=c;return new Decision("observe",c.self().place(),null,"先看看四周","",List.of(c.memories().getFirst().id()),null,null);}
+        };
+        var director=new ResidentDirector(store,mind,Clock.fixed(now,ZoneOffset.UTC));
+        try{director.consider(1,world);assertThat(store.finished.await(2,TimeUnit.SECONDS)).isTrue();}
+        finally{director.close();}
+        var context=captured[0];
+        assertThat(context).isNotNull();
+        assertThat(context.residentId()).isEqualTo("gardener");
+        // Gardener's own context carries only gardener's own relationships map (this world starts
+        // everyone below 97), never student's private number about a third resident, and the
+        // affection-expressed flag - a field Context never even declares - cannot surface either.
+        assertThat(context.relationships()).doesNotContainValue(97);
+        assertThat(context.toString()).doesNotContain("affectionExpressed");
+    }
     @Test void modelUsageIsRecordedPerUserWorldDayAndCallType()throws Exception {
         var world=CompanionRules.join("model-usage","我","Asia/Shanghai",now);
         var store=new FakeStore(world);

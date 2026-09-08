@@ -2,15 +2,15 @@ import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '../modules/auth/auth.store'
 
 const routes = [
-  { path: '/town', component: () => import('../modules/companion/CompanionView.vue') },
   { path: '/town/demo', redirect: '/town' },
+  { path: '/town/immersive', redirect: '/town' },
   { path: '/auth', component: () => import('../modules/auth/AuthView.vue'), meta: { public: true } },
   { path: '/desktop-pet', component: () => import('../modules/partners/DesktopPetWindow.vue') },
   { path: '/onboarding', component: () => import('../modules/onboarding/OnboardingView.vue') },
-  { path: '/town/immersive', redirect: '/town' },
   { path: '/', component: () => import('./UserLayout.vue'), children: [
     { path: '', redirect: '/today' },
     { path: 'today', component: () => import('../modules/today/TodayEntry.vue') },
+    { path: 'town', component: () => import('../modules/companion/CompanionView.vue') },
     { path: 'goals', component: () => import('../modules/goals/GoalsView.vue') },
     { path: 'partners', component: () => import('../modules/partners/PartnersView.vue') },
     { path: 'friends', component: () => import('../modules/friends/FriendsView.vue') },

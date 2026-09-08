@@ -6,9 +6,10 @@ import UserLayout from './UserLayout.vue'
 import { useWorkspaceModeStore } from '../shared/ui/workspace-mode.store'
 import { useAuthStore } from '../modules/auth/auth.store'
 
-vi.mock('../shared/ui/WelcomeGuide.vue', () => ({ default: { template: '<div />' } }))
-vi.mock('../modules/partners/DesktopPet.vue', () => ({ default: { template: '<div />' } }))
-vi.mock('../shared/ui/GlobalUnreadBar.vue', () => ({ default: { template: '<div />' } }))
+vi.mock('../shared/ui/WelcomeGuide.vue', () => ({ default: { name: 'WelcomeGuide', template: '<div />' } }))
+vi.mock('../modules/partners/DesktopPet.vue', () => ({ default: { name: 'DesktopPet', template: '<div />' } }))
+vi.mock('../shared/ui/GlobalUnreadBar.vue', () => ({ default: { name: 'GlobalUnreadBar', template: '<div />' } }))
+vi.mock('../shared/ui/OperationGuideBar.vue', () => ({ default: { name: 'OperationGuideBar', template: '<div />' } }))
 
 const routerLinkStub = {
   props: ['to'],
@@ -89,5 +90,41 @@ describe('UserLayout', () => {
     const wrapper = await mountLayout(createPinia(), '/friends')
 
     expect(wrapper.get('.mobile-nav button').classes()).toContain('is-active')
+  })
+
+  it('keeps /town as a quiet workspace: no welcome dialog, guide bar, desktop pet or unread bar', async () => {
+    Object.defineProperty(window, 'localStorage', {
+      value: { getItem: vi.fn(() => null), setItem: vi.fn(), removeItem: vi.fn() },
+      configurable: true,
+    })
+    const pinia = createPinia()
+    const auth = useAuthStore(pinia)
+    auth.user = { publicId: 'u3', email: 'ta@example.test', displayName: '阿禾', timezone: 'Asia/Shanghai', role: 'USER' }
+
+    const wrapper = await mountLayout(pinia, '/town')
+
+    expect(wrapper.findComponent({ name: 'WelcomeGuide' }).exists()).toBe(false)
+    expect(wrapper.findComponent({ name: 'OperationGuideBar' }).exists()).toBe(false)
+    expect(wrapper.findComponent({ name: 'DesktopPet' }).exists()).toBe(false)
+    expect(wrapper.findComponent({ name: 'GlobalUnreadBar' }).exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('shows the welcome dialog, guide bar, desktop pet and unread bar on an ordinary route', async () => {
+    Object.defineProperty(window, 'localStorage', {
+      value: { getItem: vi.fn(() => null), setItem: vi.fn(), removeItem: vi.fn() },
+      configurable: true,
+    })
+    const pinia = createPinia()
+    const auth = useAuthStore(pinia)
+    auth.user = { publicId: 'u4', email: 'ta@example.test', displayName: '阿禾', timezone: 'Asia/Shanghai', role: 'USER' }
+
+    const wrapper = await mountLayout(pinia, '/today')
+
+    expect(wrapper.findComponent({ name: 'WelcomeGuide' }).exists()).toBe(true)
+    expect(wrapper.findComponent({ name: 'OperationGuideBar' }).exists()).toBe(true)
+    expect(wrapper.findComponent({ name: 'DesktopPet' }).exists()).toBe(true)
+    expect(wrapper.findComponent({ name: 'GlobalUnreadBar' }).exists()).toBe(true)
+    wrapper.unmount()
   })
 })

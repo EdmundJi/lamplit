@@ -4,6 +4,38 @@ export const RESIDENT_ART = [1, 3, 6, 9, 12] as const
 /** The cafe's three study desks, shared by companion-stage.ts (furniture) and
  * companion-scene.ts (where a seated resident's feet land) so both stay in lockstep. */
 export const CAFE_DESK_X = [440, 528, 616] as const
+
+/**
+ * The single pixel truth for the backend's two-layer place model (TownPlaces.java): one entry per
+ * positionId, holding one seat per unit of that position's backend `capacity`, first-come order.
+ * The backend owns structure/ownership/capacity; this table owns where feet land. Every array here
+ * should be at least as long as the matching backend capacity so no occupant is left without a
+ * pixel. companion-scene.ts falls back to the older place+index guess (below, in residentPosition)
+ * for any positionId missing here - an old save, or a position the artist hasn't placed yet.
+ */
+export const POSITION_SLOTS: Record<string, { x: number; y: number }[]> = {
+  // Shared cafe worktable (backend capacity 4): the three visible desks plus one more spot at
+  // the same little reading nook already used for a fourth cafe seat.
+  'cafe-worktable': [...CAFE_DESK_X.map(x => ({ x, y: 289 })), { x: 474, y: 319 }],
+  // The student's own window seat (capacity 1) - a distinct single spot, not one of the desks.
+  'cafe-window-seat': [{ x: 668, y: 319 }],
+  // Public street bench (capacity 4).
+  'street-bench': [{ x: 260, y: 401 }, { x: 355, y: 410 }, { x: 450, y: 401 }, { x: 545, y: 410 }],
+  // Public garden bench (capacity 3), plus one spare seat in case more pile on.
+  'garden-bench': [{ x: 770, y: 276 }, { x: 849, y: 276 }, { x: 770, y: 356 }, { x: 842, y: 421 }],
+  // The gardener's own tended plot (capacity 1) - a specific bed of soil, not the shared bench.
+  'garden-plot': [{ x: 849, y: 356 }],
+  // Each of the five residents' own bed, in their own home - the fix for "everyone sleeps in the
+  // same bed": every id below is now a distinct, non-overlapping spot.
+  'home-owner-bed': [{ x: 108, y: 237 }],
+  'home-student-bed': [{ x: 148, y: 237 }],
+  'home-artist-bed': [{ x: 252, y: 223 }],
+  'home-gardener-bed': [{ x: 296, y: 223 }],
+  // The avatar is the newest, fifth resident; its home spot is the living-room sofa rather than a
+  // fifth bed sprite, so it never lands on top of one of the four owned beds.
+  'home-self-bed': [{ x: 128, y: 300 }],
+}
+
 export const RESIDENT_ACTIONS = {
   create: { frames: Array.from({ length: 14 }, (_, i) => i), frameRate: 5 },
   drink: { frames: Array.from({ length: 14 }, (_, i) => 14 + i), frameRate: 3 },

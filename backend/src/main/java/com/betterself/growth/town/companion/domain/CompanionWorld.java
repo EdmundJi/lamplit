@@ -39,10 +39,27 @@ public class CompanionWorld {
     public static class ResidentState {
         public String id, mood, goal, thought, desiredAction, positionId;
         public double energy, social, curiosity;
+        /** This resident's own personality: writable, per-instance state, exactly like energy/social/
+         * curiosity above - not a lookup by id. {@code personalitySeeded} is an explicit flag, not a
+         * sentinel value, precisely so a legitimately low score (e.g. the artist's low
+         * conscientiousness) is never mistaken for "not yet initialized" and overwritten. A future
+         * batch is expected to nudge these four fields slowly and boundedly out of reflect(); this
+         * batch only gives them a place to live. See {@link Personality#of} for the self-heal that
+         * fills them in once, from the initial-value table, the first time this flag is false - the
+         * same pattern {@code TownPlaces.seed()}/{@code reconcileLegacyPlaces()} use elsewhere. */
+        public double extroversion, conscientiousness, sensitivity, volatility;
+        public boolean personalitySeeded;
         public long revision;
         public Instant lastSocialAt, lastReflectionAt;
         public Plan plan;
         public Map<String,Integer> relationships = new LinkedHashMap<>();
+        /** Whether THIS resident has ever let their own private fondness for another show in
+         * something they actually said out loud - a private, one-way flag. Never assumed to be known
+         * by the other person, and never sent to the model as part of anyone else's nearby/perception
+         * context (see ResidentDirector.perspective(), which only ever exposes a resident's own
+         * relationships/affectionExpressed to that same resident). An old save without this field
+         * deserializes with the empty map below, same self-healing shape as `relationships`. */
+        public Map<String,Boolean> affectionExpressed = new LinkedHashMap<>();
         public Map<String,ProjectKnowledge> knownProjects = new LinkedHashMap<>();
     }
     /** A place a resident can be: the three shared places, or one resident's own home. `ownerId` is

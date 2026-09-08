@@ -3,9 +3,9 @@ import { companionPath } from './companion-navigation'
 import { dominantDirection, stepTowardPoint, type Direction4 } from '../../shared/scene/walkers'
 import { conversationEmoji, residentStatus } from './companion-presentation'
 import { buildCompanionStage } from './companion-stage'
-import { ACTION_FRAME, RESIDENT_ART, RESIDENT_ACTIONS, isArtAction, CAFE_DESK_X } from './companion-art'
+import { ACTION_FRAME, RESIDENT_ART, RESIDENT_ACTIONS, isArtAction, CAFE_DESK_X, POSITION_SLOTS } from './companion-art'
 
-export interface SceneResident { id: string; name: string; role?: string; location: string; action: string; activity?: string; destination?: string; objectKind?: string }
+export interface SceneResident { id: string; name: string; role?: string; location: string; action: string; activity?: string; destination?: string; objectKind?: string; positionId?: string | null }
 export interface SceneProject { id: string; title: string; place: string; status: string; progress: number; objectKind: string }
 export interface SceneConversation { id: string; place: string; status: string; topicId?: string; participantIds?: string[]; turns: { speakerId: string; text: string; at: string; emoji?: string | null }[] }
 export interface SceneObject { id: string; kind: string; place: string; label: string; state: string; projectId: string | null }
@@ -14,7 +14,9 @@ export interface SceneSnapshot { residents: SceneResident[]; weather: 'clear' | 
 const W = 960, H = 640
 const PALETTE = [0x688b82, 0xbd8765, 0x8185a4, 0xceaa65, 0x889b69]
 export function scenePlace(location: string) {
-  return (['home', 'cafe', 'garden', 'street'] as const).find(key => location === key || location.startsWith(`${key}.`) || location.startsWith(`${key}/`)) ?? 'street'
+  // The backend's TownPlaces gives each resident their own home location ("home-owner",
+  // "home-self", ...) instead of one shared "home", so a dash-prefixed id counts too.
+  return (['home', 'cafe', 'garden', 'street'] as const).find(key => location === key || location.startsWith(`${key}.`) || location.startsWith(`${key}/`) || location.startsWith(`${key}-`)) ?? 'street'
 }
 export function visibleActivity(activity = '', action = '', objectKind?: string) {
   if (['create', 'help'].includes(activity)) return objectKind === 'flowers' ? 'garden' : objectKind === 'tea' ? 'drink' : 'create'
@@ -35,7 +37,17 @@ export function conversationPosition(place: string, index: number) {
   const center = ({ home: { x: 194, y: 311 }, cafe: { x: 554, y: 314 }, garden: { x: 814, y: 412 }, street: { x: 480, y: 402 } })[scenePlace(place)]
   return { x: center.x + (index % 2 ? 21 : -21), y: center.y + Math.floor(index / 2) * 32 }
 }
-export function residentPosition(location: string, index: number, activity = '', action = '') {
+/**
+ * Where a resident's feet land. The backend's positionId (a specific bed, desk seat or garden
+ * plot - see TownPlaces.java) is authoritative once POSITION_SLOTS knows a pixel for it and for
+ * `occupantIndex` within it; only fall back to the older place+index guess below for a save that
+ * predates the two-layer place model, or a positionId nobody has placed pixels for yet.
+ */
+export function residentPosition(location: string, index: number, activity = '', action = '', positionId?: string | null, occupantIndex = 0) {
+  if (positionId) {
+    const slots = POSITION_SLOTS[positionId]
+    if (slots?.length) return slots[Math.min(Math.max(0, occupantIndex), slots.length - 1)]!
+  }
   const place = scenePlace(location), slot = index % 5
   if (place === 'home' && visibleActivity(activity, action) === 'sleep') return [{ x: 108, y: 237 }, { x: 148, y: 237 }, { x: 252, y: 223 }, { x: 296, y: 223 }][Math.max(0, slot - 1)]!
   if (place === 'home' && slot === 0 && visibleActivity(activity, action) === 'rest') return { x: 128, y: 300 }
@@ -56,7 +68,7 @@ export function residentPosition(location: string, index: number, activity = '',
   if (place === 'garden') return { x: 754 + slot * 36, y: 442 }
   return { x: 260 + slot * 95, y: 401 + slot % 2 * 9 }
 }
-type Actor = { mode: string; sleeping: boolean; conversationId?: string; seatIndex?: number; facing: Direction4; hovered?: boolean; root: Phaser.GameObjects.Container; sprite?: Phaser.GameObjects.Sprite; label: Phaser.GameObjects.Text; activity: Phaser.GameObjects.Text; location: string; action: string; sheet: string; target: { x: number; y: number }; path: { x: number; y: number }[] }
+type Actor = { mode: string; sleeping: boolean; conversationId?: string; seatIndex?: number; positionId?: string; slot?: number; facing: Direction4; hovered?: boolean; root: Phaser.GameObjects.Container; sprite?: Phaser.GameObjects.Sprite; label: Phaser.GameObjects.Text; activity: Phaser.GameObjects.Text; location: string; action: string; sheet: string; target: { x: number; y: number }; path: { x: number; y: number }[] }
 
 /** Animation projects server state. It never chooses a resident's next activity or destination. */
 export class CompanionStreetScene extends Phaser.Scene {
@@ -176,9 +188,25 @@ export class CompanionStreetScene extends Phaser.Scene {
       const travelling = Boolean(resident.destination) && (resident.activity === 'walk' || resident.activity === 'travel')
       const location = travelling ? resident.destination! : resident.location
       let actor = this.actors.get(resident.id)
-      const usedSeats = new Set([...this.actors.entries()].filter(([id, other]) => id !== resident.id && scenePlace(other.location) === scenePlace(location)).map(([, other]) => other.seatIndex).filter(value => value !== undefined))
-      let seatIndex = atDesk ? (actor?.seatIndex !== undefined && scenePlace(actor.location) === scenePlace(location) ? actor.seatIndex : [0, 1, 2, 3, 4].find(seat => !usedSeats.has(seat)) ?? index) : undefined
-      let target = residentPosition(location, seatIndex ?? index, resident.activity, resident.action)
+      // A recognised backend positionId wins outright - it says exactly which bed/seat/plot this
+      // resident holds. Only guess a seat from place+index (the old heuristic) when there is none,
+      // or POSITION_SLOTS has no pixel for it yet.
+      const knownPositionId = resident.positionId && POSITION_SLOTS[resident.positionId] ? resident.positionId : undefined
+      let seatIndex: number | undefined
+      let slot: number | undefined
+      let target: { x: number; y: number }
+      if (knownPositionId) {
+        const capacity = POSITION_SLOTS[knownPositionId]!.length
+        // Same-position occupants (e.g. four people at the shared cafe-worktable) are spread across
+        // its slots by first-come order, kept stable frame to frame like the old seatIndex below.
+        const usedSlots = new Set([...this.actors.entries()].filter(([id, other]) => id !== resident.id && other.positionId === knownPositionId).map(([, other]) => other.slot).filter(value => value !== undefined))
+        slot = actor?.positionId === knownPositionId && actor?.slot !== undefined ? actor.slot : ([...Array(capacity).keys()].find(seat => !usedSlots.has(seat)) ?? 0)
+        target = residentPosition(location, index, resident.activity, resident.action, knownPositionId, slot)
+      } else {
+        const usedSeats = new Set([...this.actors.entries()].filter(([id, other]) => id !== resident.id && scenePlace(other.location) === scenePlace(location)).map(([, other]) => other.seatIndex).filter(value => value !== undefined))
+        seatIndex = atDesk ? (actor?.seatIndex !== undefined && scenePlace(actor.location) === scenePlace(location) ? actor.seatIndex : [0, 1, 2, 3, 4].find(seat => !usedSeats.has(seat)) ?? index) : undefined
+        target = residentPosition(location, seatIndex ?? index, resident.activity, resident.action)
+      }
       if (travelling) target = ({ home: { x: 204, y: 350 }, cafe: { x: 535, y: 350 }, garden: { x: 768, y: 396 }, street: { x: 480, y: 396 } })[scenePlace(location)]
       const conversation = !travelling ? state.conversations?.find(c => c.status === 'active' && scenePlace(c.place) === scenePlace(location) && (c.participantIds?.includes(resident.id) || c.turns.some(t => t.speakerId === resident.id))) : undefined
       const participants = conversation?.participantIds ?? [...new Set(conversation?.turns.map(t => t.speakerId) ?? [])]
@@ -226,6 +254,8 @@ export class CompanionStreetScene extends Phaser.Scene {
       actor.conversationId = conversation?.id
       actor.location = location
       actor.seatIndex = seatIndex
+      actor.positionId = knownPositionId
+      actor.slot = slot
       actor.target = target; actor.action = resident.action; actor.label.setText(resident.name)
       actor.activity.setText(resident.action)
     })

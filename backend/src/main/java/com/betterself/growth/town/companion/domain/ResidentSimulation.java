@@ -76,18 +76,21 @@ public final class ResidentSimulation {
             // choose()/complete() loop the four NPCs use.
             if(r.id.equals("self"))continue;
             perceive(w,r,at);
+            // Emotionally volatile residents swing harder in both directions; steady ones barely move.
+            double intensity=Personality.of(r).intensity();
             boolean resting=r.plan!=null&&Set.of("rest","sleep").contains(r.plan.action());
-            r.energy=clamp(r.energy+(resting?1.8:-.16));r.social=clamp(r.social-.16);r.curiosity=clamp(r.curiosity+.18);
+            r.energy=clamp(r.energy+(resting?1.8*intensity:-.16*intensity));r.social=clamp(r.social-.16*intensity);r.curiosity=clamp(r.curiosity+.18);
             if(activeConversation(w,r.id)!=null)continue;
             if(r.plan!=null&&!at.isBefore(r.plan.endsAt())){Plan completed=r.plan;complete(w,r,at);if(r.plan==completed)r.plan=null;}
             if(r.plan==null)choose(w,r,at);
         }
         for(ResidentState r:w.residentStates) {
-            if(r.id.equals("self")||activeConversation(w,r.id)!=null||r.plan==null||Set.of("travel","sleep","rest").contains(r.plan.action())||Duration.between(r.lastSocialAt,at).getSeconds()<55)continue;
+            // Extroverts recover their appetite for company faster than introverts do.
+            if(r.id.equals("self")||activeConversation(w,r.id)!=null||r.plan==null||Set.of("travel","sleep","rest").contains(r.plan.action())||Duration.between(r.lastSocialAt,at).getSeconds()<Personality.of(r).socialRefractorySeconds())continue;
             Actor a=actor(w,r.id);
             ResidentState partner=w.residentStates.stream().filter(other->!other.id.equals(r.id)&&!other.id.equals("self")&&activeConversation(w,other.id)==null
                 && other.plan!=null&&!Set.of("travel","sleep","rest").contains(other.plan.action())
-                && actor(w,other.id).place().equals(a.place())&&Duration.between(other.lastSocialAt,at).getSeconds()>=55
+                && actor(w,other.id).place().equals(a.place())&&Duration.between(other.lastSocialAt,at).getSeconds()>=Personality.of(other).socialRefractorySeconds()
                 && w.projects.stream().anyMatch(p->canInvite(w,r,other,p,at)))
                 .max(Comparator.comparingDouble(other->r.relationships.getOrDefault(other.id,40)+(100-other.social)*.3)).orElse(null);
             if(partner==null||TownPlaces.isHome(a.place()))continue;
@@ -99,21 +102,31 @@ public final class ResidentSimulation {
         syncLegacyObjects(w);
     }
     private static void choose(CompanionWorld w,ResidentState r,Instant at) {
+        Personality personality=Personality.of(r);
         int hour=at.atZone(ZoneId.of(w.timezone)).getHour();
         boolean quietNight=hour<6||hour>=23;
         boolean nightOwl=r.id.equals("owner")||r.id.equals("artist");
         if(r.energy<28||quietNight&&!nightOwl&&hour!=5){moveOrSchedule(w,r,"sleep",TownPlaces.homeOf(r.id),null,"先睡一会儿，明天还想把自己的小事做好",at,100);return;}
         if(r.energy<46){moveOrSchedule(w,r,"rest","cafe",null,"先喝口热水，别把想做的事变成负担",at,45);return;}
-        Project goal=project(w,r.goal);
-        if(goal==null||knownStatus(r,goal.id).equals("celebrating")) {
-            goal=w.projects.stream().filter(p->knows(w,r.id,p.id)&&!knownStatus(r,p.id).equals("celebrating"))
-                .min(Comparator.comparingInt(p->r.knownProjects.getOrDefault(p.id,new ProjectKnowledge(p.id,p.place,"idea",0,at,r.id)).progress()-(p.members.contains(r.id)?35:0))).orElse(null);
-            if(goal!=null){r.goal=goal.id;r.thought="自己的事告一段落了，想看看能不能帮上"+actor(w,goal.ownerId).name()+"。";}
+        Project current=project(w,r.goal);
+        boolean unfinished=current!=null&&!Set.of("ready","celebrating").contains(current.status);
+        // Low-conscientiousness residents sometimes drift away from their own unfinished project
+        // before it is done, deterministically (a hash of who/what/when, never Math.random) rather
+        // than always grinding a commitment through to the end.
+        boolean givingUp=unfinished&&current.ownerId.equals(r.id)&&abandonsNow(w,r,current,personality,at);
+        Project goal=current;
+        if(current==null||knownStatus(r,current.id).equals("celebrating")||givingUp) {
+            goal=w.projects.stream().filter(p->knows(w,r.id,p.id)&&!knownStatus(r,p.id).equals("celebrating")&&!(givingUp&&p.id.equals(current.id)))
+                .min(Comparator.comparingInt(p->r.knownProjects.getOrDefault(p.id,new ProjectKnowledge(p.id,p.place,"idea",0,at,r.id)).progress()-(p.members.contains(r.id)?35:0))).orElse(givingUp?current:null);
+            if(goal!=null&&goal!=current){
+                if(givingUp)memory(w,r.id,r.id,"reflection",at,current.id,"手上的「"+current.title+"」还没做完，我又想去看看别的事了。",List.of(),5);
+                r.goal=goal.id;r.thought=givingUp?"心思飘到别处，先去看看"+actor(w,goal.ownerId).name()+"那边的事。":"自己的事告一段落了，想看看能不能帮上"+actor(w,goal.ownerId).name()+"。";
+            }
         }
         if(goal!=null&&knownStatus(r,goal.id).equals("ready")) {
             moveOrSchedule(w,r,"celebrate",knownPlace(r,goal),goal.id,"去看看大家一起做出来的"+goal.title,at,48);return;
         }
-        if(r.social<50||goal!=null&&goal.contributors.size()<goal.needed&&r.knownProjects.getOrDefault(goal.id,new ProjectKnowledge(goal.id,goal.place,"idea",0,at,r.id)).progress()>=45) {
+        if(r.social<personality.socialThreshold()||goal!=null&&goal.contributors.size()<goal.needed&&r.knownProjects.getOrDefault(goal.id,new ProjectKnowledge(goal.id,goal.place,"idea",0,at,r.id)).progress()>=45) {
             ResidentState friend=w.residentStates.stream().filter(o->!o.id.equals(r.id)&&!o.id.equals("self")&&!TownPlaces.isHome(actor(w,o.id).place())
                 &&w.projects.stream().anyMatch(p->canInvite(w,r,o,p,at)))
                 .max(Comparator.comparingInt(o->r.relationships.getOrDefault(o.id,40)+(goalNeeds(w,r,o)?100:0))).orElse(null);
@@ -132,6 +145,16 @@ public final class ResidentSimulation {
         moveOrSchedule(w,r,"observe",w.weather.equals("rain")?"cafe":"garden",null,"没有急事，想看看今天有哪些新变化",at,55);
     }
     private static boolean goalNeeds(CompanionWorld w,ResidentState r,ResidentState other){Project p=project(w,r.goal);return p!=null&&!p.contributors.contains(other.id);}
+    /** Deterministic stand-in for "did this resident's follow-through fail this time": a hash of the
+     * world, resident, project and a five-minute time bucket (so it does not flicker every 6-second
+     * tick) compared against the personality's own abandon threshold. Same inputs always give the
+     * same answer, so a replay of the same world produces the same choices. */
+    private static boolean abandonsNow(CompanionWorld w,ResidentState r,Project goal,Personality personality,Instant at) {
+        int threshold=personality.abandonThreshold();
+        if(threshold<=0)return false;
+        int hash=Math.floorMod((w.id+r.id+goal.id+(at.getEpochSecond()/300)).hashCode(),100);
+        return hash<threshold;
+    }
     private static void complete(CompanionWorld w,ResidentState r,Instant at) {
         Plan p=r.plan;
         if(p.action().equals("travel")){schedule(w,r,r.desiredAction,p.place(),p.targetId(),p.reason(),at,42);return;}
@@ -147,7 +170,10 @@ public final class ResidentSimulation {
             Project project=project(w,p.targetId());
             if(project!=null&&knows(w,r.id,project.id)&&actor(w,r.id).place().equals(project.place)&&!Set.of("ready","celebrating").contains(project.status)) {
                 boolean first=!project.contributors.contains(r.id);if(first)project.contributors.add(r.id);
-                int gain=first?25:12;
+                // A conscientious resident follows through a little more thoroughly once committed;
+                // the least conscientious does a little less per attempt. Never lets personality wipe
+                // out a contribution entirely.
+                int gain=Math.max(4,(first?25:12)+Personality.of(r).diligenceBonus());
                 // A communal project cannot finish through one resident's repeated work alone.
                 project.progress=Math.min(project.contributors.size()<project.needed?75:100,project.progress+gain);
                 project.status=project.progress==100?"ready":"active";
@@ -158,7 +184,7 @@ public final class ResidentSimulation {
                 String evidence=memory(w,r.id,r.id,"observed",at,project.id,text,List.of(),7);
                 event(w,at,"contribution",project.place,List.of(r.id),text,project.id);
                 for(ResidentState other:w.residentStates)if(!other.id.equals(r.id)&&!other.id.equals("self")&&actor(w,other.id).place().equals(project.place)&&!actor(w,other.id).activity().equals("walk"))
-                    memory(w,other.id,r.id,"observed",at,project.id,"我看见"+text,List.of(evidence),6);
+                    witnessContribution(w,other,r,project,text,evidence,at);
                 r.energy=clamp(r.energy-4);r.curiosity=clamp(r.curiosity-10);r.mood=first?"有点得意":"踏实";
                 if(project.progress==100){project.completedAt=at;event(w,at,"ready",project.place,new ArrayList<>(project.contributors),"「"+project.title+"」准备好了，和最初一个人的想法已经不太一样。",project.id);}
             }
@@ -167,10 +193,27 @@ public final class ResidentSimulation {
             if(project!=null&&project.status.equals("ready")) {
                 project.status="celebrating";r.mood="开心";r.social=clamp(r.social+20);
                 event(w,at,"celebration",project.place,new ArrayList<>(project.contributors),actor(w,r.id).name()+"招呼大家来看「"+project.title+"」。这一次，桌边多了几个熟悉的位置。",project.id);
-                for(String member:project.contributors)if(actor(w,member).place().equals(project.place)&&!actor(w,member).activity().equals("walk"))memory(w,member,r.id,"observed",at,project.id,"我亲眼看见，参与的「"+project.title+"」真的做出来了。",List.of(),9);
+                for(String member:project.contributors)if(actor(w,member).place().equals(project.place)&&!actor(w,member).activity().equals("walk")) {
+                    boolean detail=Personality.of(state(w,member)).sensitivity()>=65;
+                    String text=detail?"我亲眼看见，参与的「"+project.title+"」真的做出来了，连细节都跟当初说的差不多。":"我亲眼看见，参与的「"+project.title+"」真的做出来了。";
+                    memory(w,member,r.id,"observed",at,project.id,text,List.of(),9);
+                }
             }
         } else if(p.action().equals("rest")||p.action().equals("sleep")){r.energy=clamp(r.energy+18);r.mood="松弛";}
         else if(p.action().equals("observe")){r.curiosity=clamp(r.curiosity-16);r.social=clamp(r.social-5);}
+    }
+    /** The same contribution is witnessed by everyone present, but what each observer actually
+     * writes into their own memory depends on how much attention to detail they personally pay - not
+     * on the event itself, which is identical for all of them. Someone with a sharp eye keeps the
+     * concrete wording; someone in the middle keeps only the gist, at lower importance; someone not
+     * paying close attention writes nothing down at all - the event happened, but for them it left no
+     * trace. This is the mechanism the differentiated-memory tests exercise directly. */
+    private static void witnessContribution(CompanionWorld w,ResidentState observer,ResidentState actorState,Project project,String actorText,String actorEvidenceId,Instant at) {
+        int sensitivity=Personality.of(observer).sensitivity();
+        if(sensitivity<35)return;
+        boolean detail=sensitivity>=65;
+        String text=detail?"我看见"+actorText:"隐约感觉到"+actor(w,actorState.id).name()+"又在忙「"+project.title+"」，具体做了什么我没太看清。";
+        memory(w,observer.id,actorState.id,"observed",at,project.id,text,List.of(actorEvidenceId),detail?7:4);
     }
     private static void moveOrSchedule(CompanionWorld w,ResidentState r,String action,String place,String target,String reason,Instant at,int duration) {
         if(!actor(w,r.id).place().equals(place)) {
@@ -205,7 +248,9 @@ public final class ResidentSimulation {
         if(!knows(w,a.id,p.id)||knownStatus(a,p.id).equals("celebrating")||p.members.contains(b.id))return false;
         Instant previous=p.invitationHistory.get(pairKey(a.id,b.id));
         if(previous==null)previous=w.conversations.stream().filter(c->c.topicId.equals(p.id)&&c.participantIds.contains(a.id)&&c.participantIds.contains(b.id)).map(c->c.startedAt).max(Comparator.naturalOrder()).orElse(null);
-        return previous==null||Duration.between(previous,at).getSeconds()>=900;
+        // The inviter's own extroversion can only lengthen this cooldown (introverts wait longer to
+        // re-approach the same person), never shorten it below the 900-second baseline.
+        return previous==null||Duration.between(previous,at).getSeconds()>=Personality.of(a).inviteCooldownSeconds();
     }
     private static String pairKey(String a,String b){return a.compareTo(b)<0?a+":"+b:b+":"+a;}
     private static void startConversation(CompanionWorld w,ResidentState a,ResidentState b,Project p,Instant at) {
@@ -219,7 +264,14 @@ public final class ResidentSimulation {
             while(w.conversations.size()>24)w.conversations.removeFirst();return;
         }
         String invitation=switch(p.objectKind){case "poster"->"如果让你留下一种颜色，你会选什么？";case "flowers"->"这里的新芽，能不能也在你窗前住下来？";case "tea"->"一壶茶可以有几种泡法，想不想试试你的那一种？";default->"要不要带一本读到一半的书来，不一定非得读完才分享？";};
-        c.turns.add(new Turn(a.id,"我在琢磨「"+p.title+"」。"+(a.relationships.getOrDefault(b.id,40)>55?"想到你上次说的话了。":"要是你现在方便，")+invitation,at));
+        // A's own private fondness for b (never visible to b, and never sent to anyone else's model
+        // context - see ResidentDirector.perspective()) can let itself show once, the first time it
+        // is high enough; after that it does not keep repeating the same tell every single time.
+        boolean fond=a.relationships.getOrDefault(b.id,40)>55;
+        boolean alreadyShown=Boolean.TRUE.equals(a.affectionExpressed.get(b.id));
+        if(fond&&!alreadyShown)a.affectionExpressed.put(b.id,true);
+        String opener=fond&&!alreadyShown?"想到你上次说的话了。":"要是你现在方便，";
+        c.turns.add(new Turn(a.id,"我在琢磨「"+p.title+"」。"+opener+invitation,at));
         w.conversations.add(c);a.lastSocialAt=at;b.lastSocialAt=at;
         replaceActor(w,a.id,c.place,"talk",c.turns.getFirst().text(),at.plusSeconds(36));replaceActor(w,b.id,c.place,"talk","停下手里的事，听听对方",at.plusSeconds(36));
         var shared=a.knownProjects.get(p.id);if(shared!=null)b.knownProjects.put(p.id,new ProjectKnowledge(shared.id(),shared.place(),shared.status(),shared.progress(),at,a.id));
@@ -344,8 +396,16 @@ public final class ResidentSimulation {
     }
     private static void perceive(CompanionWorld w,ResidentState r,Instant now) {
         Actor a=actor(w,r.id);if(a.activity().equals("walk")||a.activity().equals("sleep"))return;
+        boolean detailSensitive=Personality.of(r).sensitivity()>=65;
         for(Project p:w.projects)if(p.place.equals(a.place())&&(p.progress>0||knows(w,r.id,p.id))) {
+            ProjectKnowledge prior=r.knownProjects.get(p.id);
+            boolean changed=prior!=null&&!prior.status().equals(p.status);
             r.knownProjects.put(p.id,new ProjectKnowledge(p.id,p.place,p.status,p.progress,now,r.id));
+            // Only residents who pay close attention to detail bother writing down an ambient change
+            // in something they were not part of; everyone else's private tracking above still
+            // updates, just silently and unrecorded - it never becomes a memory they can retrieve.
+            if(changed&&detailSensitive&&!p.contributors.contains(r.id))
+                memory(w,r.id,p.ownerId,"observed",now,p.id,"路过时注意到「"+p.title+"」的样子变了，好像又往前推进了一点。",List.of(),4);
         }
     }
     private static String knownStatus(ResidentState r,String id){ProjectKnowledge p=r.knownProjects.get(id);return p==null?"idea":p.status();}
@@ -362,7 +422,18 @@ public final class ResidentSimulation {
     public static Project project(CompanionWorld w,String id){return w.projects.stream().filter(p->p.id.equals(id)).findFirst().orElse(null);}
     public static boolean knows(CompanionWorld w,String id,String topic){return w.memories.stream().anyMatch(m->m.ownerId().equals(id)&&Objects.equals(m.topicId(),topic)&&!m.sourceType().equals("reflection"));}
     public static Conversation activeConversation(CompanionWorld w,String id){return w.conversations.stream().filter(c->c.status.equals("active")&&c.participantIds.contains(id)).findFirst().orElse(null);}
-    static void relation(ResidentState a,ResidentState b,int delta){a.relationships.compute(b.id,(k,v)->Math.max(0,Math.min(100,(v==null?40:v)+delta)));b.relationships.compute(a.id,(k,v)->Math.max(0,Math.min(100,(v==null?40:v)+delta)));}
+    /** Each side's own private affection number moves independently, scaled by that side's own
+     * emotional volatility - not by the same shared delta. A applies its own scaled change to its own
+     * view of B, and B applies its own (generally different) scaled change to its own view of A;
+     * neither ever reads or writes the other's number. Over many events with different partners and
+     * different histories this is enough for A's feeling about B and B's feeling about A to genuinely
+     * diverge - without hand-scripting who likes whom. */
+    static void relation(ResidentState a,ResidentState b,int delta){
+        bump(a,b.id,scaledDelta(a,delta));
+        bump(b,a.id,scaledDelta(b,delta));
+    }
+    private static void bump(ResidentState owner,String otherId,int delta){owner.relationships.compute(otherId,(k,v)->Math.max(0,Math.min(100,(v==null?40:v)+delta)));}
+    private static int scaledDelta(ResidentState owner,int delta){return (int)Math.round(delta*Personality.of(owner).intensity());}
     static void replaceActor(CompanionWorld w,String id,String place,String activity,String label,Instant until){for(int i=0;i<w.residents.size();i++){Actor a=w.residents.get(i);if(a.id().equals(id))w.residents.set(i,new Actor(id,a.name(),a.role(),place,activity,label,a.x(),a.y(),until));}}
     private static void project(CompanionWorld w,String id,String title,String kind,String place,String owner,String object,String description,int needed){Project p=new Project();p.id=id;p.title=title;p.kind=kind;p.place=place;p.ownerId=owner;p.objectKind=object;p.description=description;p.status="idea";p.needed=needed;p.members.add(owner);w.projects.add(p);}
     static String memory(CompanionWorld w,String owner,String source,String type,Instant at,String topic,String text,List<String> evidence,int importance){

@@ -34,4 +34,32 @@ describe('authoritative activity presentation', () => {
     expect(scenePlace('home.desk')).toBe('home')
     expect(scenePlace('unavailable')).toBe('street')
   })
+  it('maps every resident\'s own TownPlaces home ("home-<id>") to the home scene', () => {
+    for (const id of ['owner', 'student', 'artist', 'gardener', 'self']) expect(scenePlace(`home-${id}`)).toBe('home')
+  })
+})
+
+describe('positionId-authoritative placement (TownPlaces two-layer place model)', () => {
+  it('prefers a recognised positionId outright, ignoring the place+index guess entirely', () => {
+    expect(residentPosition('home-owner', 3, 'sleep', '', 'home-owner-bed')).toEqual({ x: 108, y: 237 })
+    expect(residentPosition('anything', 99, 'idle', '', 'home-student-bed')).toEqual({ x: 148, y: 237 })
+  })
+  it('gives each of the five residents\' own beds a distinct, non-overlapping spot', () => {
+    const beds = ['home-owner-bed', 'home-student-bed', 'home-artist-bed', 'home-gardener-bed', 'home-self-bed']
+      .map(id => residentPosition('home', 0, 'sleep', '', id))
+    expect(new Set(beds.map(p => `${p.x}:${p.y}`)).size).toBe(5)
+    for (const p of beds) { expect(p.x).toBeGreaterThanOrEqual(0); expect(p.x).toBeLessThanOrEqual(960); expect(p.y).toBeGreaterThanOrEqual(0); expect(p.y).toBeLessThanOrEqual(640) }
+  })
+  it('spreads multiple occupants of one shared position (e.g. the 4-seat cafe worktable) across distinct slots', () => {
+    const seats = [0, 1, 2, 3].map(occupant => residentPosition('cafe', 0, '', '', 'cafe-worktable', occupant))
+    expect(new Set(seats.map(p => `${p.x}:${p.y}`)).size).toBe(4)
+  })
+  it('clamps an occupant index beyond capacity instead of returning an undefined slot', () => {
+    expect(residentPosition('cafe', 0, '', '', 'cafe-window-seat', 7)).toEqual({ x: 668, y: 319 })
+  })
+  it('falls back to the place+index heuristic for an unrecognised positionId (old save, or unplaced position)', () => {
+    expect(residentPosition('cafe', 0, 'focus', '', 'some-future-position-id')).toEqual({ x: 440, y: 289 })
+    expect(residentPosition('cafe', 0, 'focus', '', null)).toEqual({ x: 440, y: 289 })
+    expect(residentPosition('cafe', 0, 'focus')).toEqual({ x: 440, y: 289 })
+  })
 })
