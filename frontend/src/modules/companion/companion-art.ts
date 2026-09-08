@@ -17,6 +17,9 @@ export const POSITION_SLOTS: Record<string, { x: number; y: number }[]> = {
   // Shared cafe worktable (backend capacity 4): the three visible desks plus one more spot at
   // the same little reading nook already used for a fourth cafe seat.
   'cafe-worktable': [...CAFE_DESK_X.map(x => ({ x, y: 289 })), { x: 474, y: 319 }],
+  // The owner's own counter (capacity 1, equipment): where coffee actually gets made. Added after
+  // the backend grew cafe-counter; without a slot here the owner falls back to the by-index layout.
+  'cafe-counter': [{ x: 1040, y: 250 }],
   // The student's own window seat (capacity 1) - a distinct single spot, not one of the desks.
   'cafe-window-seat': [{ x: 668, y: 319 }],
   // Public street bench (capacity 4).
