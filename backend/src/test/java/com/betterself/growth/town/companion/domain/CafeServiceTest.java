@@ -188,4 +188,50 @@ class CafeServiceTest {
         for (int i = 0; i < 10; i++) { at = at.plusSeconds(6); CafeService.accruePressure(w, owner, at); }
         assertThat(owner.dutyPressure).isLessThan(withQueue);
     }
+
+    // ---- end-to-end: the whole autonomous loop, not a hand-built scenario ---------------------
+
+    /** Every other test above hand-builds a scenario and drives CafeService's own methods directly.
+     * That is exactly the kind of test that can pass while the mechanism is dead in a real, running
+     * world - which is what actually happened: a batch of this same machinery shipped with green
+     * unit tests while a real world's serviceRequests were 3-for-3 abandoned, dutyPressure sat at 0,
+     * and lastDutyReflectionAt was null because {@link ResidentSimulation#choose} only ever ran
+     * between plans, never during one. This test drives nothing but the public entry point the app
+     * itself calls every tick - {@link CompanionRules#advance} - over a real multi-day span, and
+     * asserts the counters this whole batch is about actually moved on their own: requests get
+     * consumed (not just created and abandoned), dutyPressure is a genuinely live quantity,
+     * reflectOnDuty actually runs, and conscientiousness - the one field that proves this is
+     * reflection moving a trait rather than a memory - actually drifts away from its seed value. */
+    @Test void endToEndARealMultiDaySimulationActuallyMovesTheDutyCounters() {
+        CompanionWorld w = CompanionRules.join("cafe-e2e-lifecycle", "住客", "Asia/Shanghai", start);
+        ResidentState owner = ResidentSimulation.state(w, "owner");
+        double seeded = Personality.of(owner).conscientiousness();
+        boolean pressureEverPositive = false, reflectionRan = false;
+        int peakComplaints = 0, peakInterruptions = 0;
+        double conscientiousnessMin = seeded, conscientiousnessMax = seeded;
+        Instant at = start, end = start.plusSeconds(5L * 86400); // real advance() cadence
+        while (at.isBefore(end)) {
+            at = at.plusSeconds(60);
+            CompanionRules.advance(w, at);
+            pressureEverPositive |= owner.dutyPressure > 0;
+            peakComplaints = Math.max(peakComplaints, owner.complaintsSinceDutyReflection);
+            peakInterruptions = Math.max(peakInterruptions, owner.interruptionsSinceDutyReflection);
+            reflectionRan |= owner.lastDutyReflectionAt != null;
+            double c = Personality.of(owner).conscientiousness();
+            conscientiousnessMin = Math.min(conscientiousnessMin, c);
+            conscientiousnessMax = Math.max(conscientiousnessMax, c);
+        }
+        long total = w.serviceRequests.size();
+        long consumed = w.serviceRequests.stream().filter(r -> "consumed".equals(r.status)).count();
+        assertThat(total).isGreaterThan(0); // residents actually asked for a drink at some point
+        assertThat(consumed).isGreaterThan(0); // and duty actually won often enough to serve some of them
+        assertThat(pressureEverPositive).isTrue(); // dutyPressure is a real, moving number, not stuck at 0
+        // Evidence accumulated at some point, even if a given reflection window consumed it below the
+        // threshold - see the reflectOnDuty fix this batch makes: sub-threshold evidence must survive
+        // across windows rather than being silently discarded, or it can never reach the threshold.
+        assertThat(peakComplaints + peakInterruptions).isGreaterThan(0);
+        assertThat(reflectionRan).isTrue(); // reflectOnDuty's call site is actually reached and acts
+        // The decisive assertion: over a real run, conscientiousness itself is not frozen at 85.
+        assertThat(conscientiousnessMax - conscientiousnessMin).isGreaterThan(0);
+    }
 }

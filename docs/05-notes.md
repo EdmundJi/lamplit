@@ -56,6 +56,60 @@
 
 顺带一个命名陷阱：`QWEN_*` 那组变量**历史上指向的是 DeepSeek**。真的接进 Qwen 之后这个前缀会主动骗人，必须改成诚实的名字并保持向后兼容。
 
+### 接入 Qwen3.8-Flash 补充供应商：实现记录（2026-09-08）
+
+**命名。** `QWEN_*`（provider/base-url/api-key/model/timeout/stream-timeout/json-mode）改名为 `DEEPSEEK_*`，因为这组变量从一开始就指向 `https://api.deepseek.com`。向后兼容靠 Spring 占位符的嵌套默认值实现：`${DEEPSEEK_BASE_URL:${QWEN_BASE_URL:默认值}}`，application.yml 里 `app.ai.*` 这几项都是这个写法——读不到新名字就退到旧名字，两边同时存在时新名字赢。共享容器和本地环境里还留着的 `QWEN_*` 不用改也能继续跑。新增的 `QWEN3_*`（base-url/api-key/model/timeout/stream-timeout/json-mode）没有旧名字要兼容，直接是新变量。
+
+**两个供应商并存，不是替换。** `com.betterself.growth.ai.QwenHttpProvider` 还是原来那一个类（继续处理任意 OpenAI 兼容网关），但现在被实例化两次：一次是原有的 `app.ai.*` 单例（`@Primary`，供 `AiService`/`GoalTemplateService`/`SuggestionService` 和小镇的 deepseek 路线共用，行为完全不变），一次是 `CompanionModelConfig` 里手工 `new` 出来的 qwen3 实例，专供小镇用。qwen3 的凭证缺失时不会让应用起不来——落到 `UnavailableModelProvider`，调用即抛 `AI_PROVIDER_NOT_CONFIGURED`，和"配置了但网关挂了"走同一条失败路径，交给下面的降级处理。
+
+**`thinking` 开关是供应商无关的。** `QwenProvider.StructuredPrompt` 新增一个可空 `Boolean thinkingEnabled` 字段（4 参数构造器，3 参数的旧构造器保留，等价于传 `null` = 不表态，交给供应商自己的默认行为）。`QwenHttpProvider` 按自己被配置成的 `thinkingStyle`（`"qwen"` 或 `"deepseek"`，构造时指定）把这个布尔值翻译成对应的线上字段：Qwen 是顶层 `enable_thinking:false`，DeepSeek 是 `{"thinking":{"type":"disabled"}}`。调用方（`QwenResidentMind`）永远只说"要不要思考"，从不硬编码某一家的字段名。原来那行按模型名前缀（`deepseek-v4-*`）强制关闭思考的旧逻辑原样保留在它之后，两个已有测试还在断言它，没有削弱。
+
+**按调用类型配置 thinking，而不是按供应商固定。** 现有三种调用是 decision / turn（对白）/ summary（回忆），在 `ResidentDirector`/`ModelUsageRecorder` 里就是这三个 `callType`。配置项：
+
+```yaml
+app.town.companion-model.thinking.decision: ${COMPANION_MODEL_THINKING_DECISION:false}
+app.town.companion-model.thinking.turn: ${COMPANION_MODEL_THINKING_TURN:}      # 空 = 不表态
+app.town.companion-model.thinking.summary: ${COMPANION_MODEL_THINKING_SUMMARY:}
+```
+
+同一组值同时喂给 deepseek 和 qwen3 两个 `QwenResidentMind` 实例——不管路由把某次 decision 调用交给哪一家，思考都是关的；turn/summary 保持"不表态"，也就是两家各自的默认行为（当前观察都是思考开着）。默认只关 decision，是因为**两家实测关掉思考后耗时和 token 都数量级下降**（表见上一节），而对白/回忆是创作性任务，关闭思维链会不会伤质量还没有证据，**先不切**——这是等证据的保守选择，不是"DeepSeek 关不掉"（那个结论是错的，见上一节的更正）。
+
+**调用类型路由 + 跨供应商降级用同一份配置。**
+
+```yaml
+app.town.companion-model.routes.decision: ${COMPANION_MODEL_ROUTE_DECISION:qwen3,deepseek}
+app.town.companion-model.routes.turn: ${COMPANION_MODEL_ROUTE_TURN:deepseek,qwen3}
+app.town.companion-model.routes.summary: ${COMPANION_MODEL_ROUTE_SUMMARY:deepseek,qwen3}
+```
+
+`RoutingResidentMind`（新增，`ResidentDirector` 现在依赖的唯一 `ResidentMind` 实现，`@Primary`）对每种调用类型按这个列表顺序尝试：第一个失败就退到第二个，两个都失败才把异常抛给 `ResidentDirector`，让它原有的连续失败退避（`modelConsecutiveFailures` / `modelRetryAfter`，见 `application/ResidentDirector.java`）接手——那部分调度逻辑完全没动。这意味着"路由"和"降级"是同一张表：谁排第一是默认走谁，后面的名字就是它挂掉之后的退路。
+
+默认路由：decision 先 qwen3 后 deepseek（用户明确要求 Qwen 做主力）；turn/summary 先 deepseek 后 qwen3（现状不变，qwen3 只作为对白/回忆的兜底，而不是主力——万一失败也总比彻底没人说话强）。**这不是因为哪家关不掉思考**——两家现在都能关，见上一节的更正；纯粹是"创作性调用先不切换默认供应商，等有盲测证据再说"的保守选择。
+
+**用量统计分供应商，不改表结构。** `town_companion_model_usage` 的 `call_type` 是 `VARCHAR(16)`，这次改动不碰 `db/migration/`。做法：`ModelUsageRecorder` 新增一个默认方法 `record(..., String provider, ...)`，把供应商编码折进 `call_type` 里存，例如 `decision@q3`、`turn@ds`（`deepseek`→`ds`、`qwen3`→`q3`，编码表在 `ModelUsageQuery.PROVIDER_CODES`，短码是因为长度要留够——`summary@deepseek` 17 字符会超限，`summary@ds` 10 字符不会）。旧的四参数方法完全不变，没有 provider 信息的调用（没测过量的、mock、还没升级的老 `ResidentMind` 实现）继续写成不带 `@` 的原始 `call_type`，`JdbcModelUsage`、加速跑用的 `InMemoryModelUsage`（`tools/**`，本次不碰）都不需要改一行代码就自动兼容。读side `ModelUsageQuery.DailyUsage` 新增两个派生方法 `baseCallType()`/`provider()`，从同一个字符串解析回来，没有 `@` 就返回 `null` 供应商。
+
+**改了 `ResidentDirector.java` 的地方，仅此一行**（`recordUsage` 方法内）：
+
+```java
+// 改前
+usageRecorder.record(userId,day,callType,usage.inputTokens(),usage.outputTokens());
+// 改后
+usageRecorder.record(userId,day,callType,usage.provider(),usage.inputTokens(),usage.outputTokens());
+```
+
+调度决策逻辑（谁在什么时候被选中说话、`reserve`/`run`/退避计算）一行没动。
+
+**Bean 装配**：`QwenResidentMind` 不再是 `@Component`（两个供应商时不再有唯一默认实例可言），改成 `CompanionModelConfig`（新增 `@Configuration`）里手工装配的两个具名 bean（`deepseekResidentMind`/`qwen3ResidentMind`），外加新的 `RoutingResidentMind`（`@Primary`）。因为现在有两个 `QwenProvider` bean 并存，原来隐式拿到唯一实例的 `AiService`/`GoalTemplateService`/`SuggestionService` 会因为"多个候选、没有限定符"而装配失败——补的办法是给 `QwenHttpProvider`/`MockQwenProvider` 也标 `@Primary`（二者靠 `app.ai.provider` 互斥，不会同时存在，不冲突），保证所有不带限定符的注入点仍然解析到和以前一样的那个 bean。
+
+**真调用过两家，数字如下**（`CompanionModelLiveIT`，opt-in，`COMPANION_LIVE_MODEL_TEST=true` 才跑，真实的 decide() 调用，走完整 Context，decisionThinking=false）：
+
+| 供应商 | 模型 | 耗时 | 输入 token | 输出 token |
+| --- | --- | --- | --- | --- |
+| qwen3 | qwen3.8-flash | 1944ms | 1132 | 99 |
+| deepseek | deepseek-v4-flash | 1398ms | 1067 | 61 |
+
+这次是单样本、真实 Context（含记忆/可见物体等，比上面中位数测试用的最小 prompt 更大），不是那张中位数表的重复，只用来证明"两个供应商这次改动之后都真的能被调用"，数字比中位数表大属正常（prompt 更长）。两次调用都成功返回合法 JSON decision，`RoutingResidentMind` 的降级路径另有单元测试覆盖（`RoutingResidentMindTest`，用会抛异常的假 provider 模拟"挂了"，不打真实网络）。
+
 ### 视觉模型能不能给素材分类（负面结果，已测完）
 
 47 个人工标注样本，试过四种问法：开放提问、给定 12 类词表让它选、三档放大倍数、47 张拼成一张编号图一次问完。

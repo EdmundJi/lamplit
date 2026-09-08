@@ -99,6 +99,12 @@ class CompanionRulesTest {
         assertThat(sleepingAt.values()).doesNotHaveDuplicates();
     }
     @Test void aPlaceThatIsFullChangesWhatAResidentDoesInsteadOfSteppingOnSomeone(){
+        // Per 04-decisions.md's "能站的地方都能去": standing/observing/passing through no longer
+        // claims a named position at all (positionId just stays null), so it can never itself be
+        // turned away for lack of room - only the handful of actions that still need a genuinely
+        // owned, capacity-limited spot (a bed, the owner's counter, the student's window seat) can.
+        // "study" is this test's stand-in for that: same full-cafe setup as before, but through an
+        // action that still claims a seat, so "the whole place is genuinely full" is still reachable.
         var w=world();
         for(var c:w.conversations)if(c.participantIds.contains("gardener"))c.status="ended";
         // Stand the gardener in the cafe, which owns none of its two positions for them.
@@ -107,7 +113,7 @@ class CompanionRulesTest {
         TownPlaces.position(w,"cafe-worktable").capacity=0; // the shared table is out
         TownPlaces.claim(w,"student","cafe","seat",now); // the window seat's real owner is using it
         var gardener=ResidentSimulation.state(w,"gardener");gardener.plan=null;
-        boolean applied=ResidentSimulation.applyDecision(w,"gardener",gardener.revision,w.intentRevision,"cafe","observe",null,"想去咖啡馆看看","",
+        boolean applied=ResidentSimulation.applyDecision(w,"gardener",gardener.revision,w.intentRevision,"cafe","study",null,"想去咖啡馆看看","",
             java.util.List.of(w.memories.stream().filter(m->m.ownerId().equals("gardener")).findFirst().orElseThrow().id()),now);
         assertThat(applied).isTrue();
         // The whole cafe is genuinely full: the gardener waits rather than being placed on top of anyone.

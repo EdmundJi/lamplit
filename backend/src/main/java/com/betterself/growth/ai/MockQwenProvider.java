@@ -1,11 +1,16 @@
 package com.betterself.growth.ai;
 
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
 
 import java.util.Map;
 import java.util.function.Consumer;
 
+// @Primary for the same reason as QwenHttpProvider's (see its comment): a second QwenProvider bean
+// now exists for the companion town's qwen3 route, and every unqualified QwenProvider injection point
+// must still resolve to this one in mock mode. Mutually exclusive with QwenHttpProvider's @Primary.
+@Primary
 @Component
 @ConditionalOnProperty(name = "app.ai.provider", havingValue = "mock", matchIfMissing = true)
 public class MockQwenProvider implements QwenProvider {

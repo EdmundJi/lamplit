@@ -8,6 +8,10 @@ import static com.betterself.growth.town.companion.domain.CompanionWorld.*;
 public final class ResidentSimulation {
     private ResidentSimulation() {}
     private static final List<String> IDS=List.of("owner","student","artist","gardener");
+    /** Plan actions that make a resident ineligible to start or be pulled into a new conversation,
+     * whether as initiator or partner - see the "tend" doc comment at its one use site below for why
+     * "tend" belongs in this set even though it is not a passive/absent state like the other four. */
+    private static final Set<String> UNAVAILABLE_FOR_CONVERSATION = Set.of("travel","sleep","rest","away","tend");
     public static void initialize(CompanionWorld w,Instant now) {
         if(w.simulationVersion>=2)return;
         long initialRevision=w.revision;
@@ -89,15 +93,31 @@ public final class ResidentSimulation {
             boolean resting=r.plan!=null&&Set.of("rest","sleep").contains(r.plan.action());
             r.energy=clamp(r.energy+(resting?1.8*intensity:-.16*intensity));r.social=clamp(r.social-.16*intensity);r.curiosity=clamp(r.curiosity+.18);
             if(activeConversation(w,r.id)!=null)continue;
+            // Duty can pre-empt a plan already running, not only wait for the next natural decision
+            // point - this is what makes "他放下手上正在做的事去准备" actually happen instead of the
+            // owner only ever being free to serve once whatever else they were doing has run its
+            // course. See CafeService.decideInterrupt for the extra margin and cooldown that keep
+            // this from thrashing.
+            if(r.id.equals(CafeService.OWNER)&&r.plan!=null&&at.isBefore(r.plan.endsAt())&&!dutyCannotInterrupt(r))interruptForDuty(w,r,at);
             if(r.plan!=null&&!at.isBefore(r.plan.endsAt())){Plan completed=r.plan;complete(w,r,at);if(r.plan==completed)r.plan=null;}
             if(r.plan==null)choose(w,r,at);
         }
         for(ResidentState r:w.residentStates) {
             // Extroverts recover their appetite for company faster than introverts do.
-            if(r.id.equals("self")||activeConversation(w,r.id)!=null||r.plan==null||Set.of("travel","sleep","rest").contains(r.plan.action())||Duration.between(r.lastSocialAt,at).getSeconds()<Personality.of(r).socialRefractorySeconds())continue;
+            if(r.id.equals("self")||activeConversation(w,r.id)!=null||r.plan==null||UNAVAILABLE_FOR_CONVERSATION.contains(r.plan.action())||Duration.between(r.lastSocialAt,at).getSeconds()<Personality.of(r).socialRefractorySeconds())continue;
+            // "tend" is in UNAVAILABLE_FOR_CONVERSATION for a reason that is not obvious from its
+            // name alone: ConversationLifecycle.finish() unconditionally nulls out both
+            // participants' r.plan when a conversation ends. If the owner were pulled into a new
+            // conversation mid-"tend" (or mid-travel-to-tend), that null-out would silently discard
+            // the tend plan before complete()/finishTending() ever ran on it - the associated
+            // ServiceRequest would be stuck at "preparing" forever (there is no tick-based reaper for
+            // "preparing" the way there is for "waiting"/"delivered"), and CafeService.request()'s own
+            // "already has an open request" guard would then permanently block that resident from
+            // ever asking for another drink. This is exactly what an end-to-end multi-day run caught
+            // that no hand-built unit test could - see CafeServiceTest's own end-to-end test.
             Actor a=actor(w,r.id);
             ResidentState partner=w.residentStates.stream().filter(other->!other.id.equals(r.id)&&!other.id.equals("self")&&activeConversation(w,other.id)==null
-                && other.plan!=null&&!Set.of("travel","sleep","rest").contains(other.plan.action())
+                && other.plan!=null&&!UNAVAILABLE_FOR_CONVERSATION.contains(other.plan.action())
                 && actor(w,other.id).place().equals(a.place())&&Duration.between(other.lastSocialAt,at).getSeconds()>=Personality.of(other).socialRefractorySeconds()
                 && w.projects.stream().anyMatch(p->canInvite(w,r,other,p,at)))
                 .max(Comparator.comparingDouble(other->r.relationships.getOrDefault(other.id,40)+(100-other.social)*.3)).orElse(null);
@@ -109,12 +129,47 @@ public final class ResidentSimulation {
         for(ResidentState r:w.residentStates){if(r.id.equals("self"))continue;reflect(w,r,at);newWish(w,r,at);CafeService.reflectOnDuty(w,r,at);}
         syncLegacyObjects(w);
     }
+    /** True while duty has nothing left to pre-empt: the owner is already tending the counter or
+     * already travelling there, or - deliberately excluded from mid-plan interruption entirely -
+     * genuinely asleep. A sleeping person does not get woken up to pour coffee; sleep already stops a
+     * resident from being pulled into a conversation for the same reason (see step()'s invite loop),
+     * and duty follows the same rule rather than becoming the one thing that can reach through it. */
+    private static boolean dutyCannotInterrupt(ResidentState r){return "tend".equals(r.plan.action())||("travel".equals(r.plan.action())&&"tend".equals(r.desiredAction))||"sleep".equals(r.plan.action());}
+    /** The mid-plan half of the duty-vs-everything-else competition (see CafeService's own doc for
+     * the free-to-choose half, still run from choose() below): weighs the same dutyPressure against
+     * the same personalPull, but through the stricter decideInterrupt gate, and only actually cuts
+     * the current plan short if that gate says yes. Recording the interruption (when it costs the
+     * owner's own unfinished project something) and starting the walk back to the counter are exactly
+     * what choose() already does for the free-to-choose case - this just reaches the same outcome
+     * from mid-plan instead of from an empty plan. */
+    private static void interruptForDuty(CompanionWorld w,ResidentState r,Instant at) {
+        Project current=project(w,r.goal);
+        boolean unfinished=current!=null&&!Set.of("ready","celebrating").contains(current.status);
+        CafeService.Decision duty=CafeService.decideInterrupt(w,r,Personality.of(r),current,unfinished,at);
+        if(duty==null)return;
+        if(duty.interruptsOwnProject())CafeService.recordInterruption(w,r,current,at);
+        CafeService.beginPreparing(w,duty.requestId(),at);
+        r.lastDutyInterruptionAt=at;
+        moveOrSchedule(w,r,"tend","cafe",duty.requestId(),duty.reason(),at,CafeService.PREP_SECONDS);
+    }
     private static void choose(CompanionWorld w,ResidentState r,Instant at) {
         Personality personality=Personality.of(r);
         int hour=at.atZone(ZoneId.of(w.timezone)).getHour();
         boolean quietNight=hour<6||hour>=23;
         boolean nightOwl=r.id.equals("owner")||r.id.equals("artist");
         if(r.energy<28||quietNight&&!nightOwl&&hour!=5){moveOrSchedule(w,r,"sleep",TownPlaces.homeOf(r.id),null,"先睡一会儿，明天还想把自己的小事做好",at,100);return;}
+        // Away for work: the three non-owner residents each have their own deterministic, staggered
+        // daytime window (see WORK_WINDOW) during which they leave the shared street/cafe/garden
+        // entirely rather than crowding into them - "早上街空了，傍晚陆续回来". The owner is the one
+        // exception: their work already happens at the cafe, so they never leave this way (see the
+        // cafe bias on the idle default near the end of this method instead). This claims the same
+        // home bed nighttime sleep does - "地图外休眠当作在工作" - but the action is "away", not
+        // "sleep": they are awake and working, not resting, so this must NOT get the same tick's
+        // energy regeneration real sleep does (see the `resting` flag in step() above), or everyone's
+        // energy would stay pinned near 100 for good and the whole rest-at-cafe -> coffee-request
+        // chain this batch depends on would starve for lack of anyone ever running low on energy
+        // again - exactly what happened during this batch's own end-to-end verification run.
+        if(awayForWork(r.id,hour)){moveOrSchedule(w,r,"away",TownPlaces.homeOf(r.id),null,workReason(r.id),at,300);return;}
         if(r.energy<46){moveOrSchedule(w,r,"rest","cafe",null,"先喝口热水，别把想做的事变成负担",at,45);return;}
         Project current=project(w,r.goal);
         boolean unfinished=current!=null&&!Set.of("ready","celebrating").contains(current.status);
@@ -140,7 +195,7 @@ public final class ResidentSimulation {
             goal=w.projects.stream().filter(p->knows(w,r.id,p.id)&&!knownStatus(r,p.id).equals("celebrating")&&!(givingUp&&p.id.equals(current.id)))
                 .min(Comparator.comparingInt(p->r.knownProjects.getOrDefault(p.id,new ProjectKnowledge(p.id,p.place,"idea",0,at,r.id)).progress()-(p.members.contains(r.id)?35:0))).orElse(givingUp?current:null);
             if(goal!=null&&goal!=current){
-                if(givingUp)memory(w,r.id,r.id,"reflection",at,current.id,"手上的「"+current.title+"」还没做完，我又想去看看别的事了。",List.of(),5);
+                if(givingUp)memory(w,r.id,r.id,"reflection",at,current.id,"手上的「"+current.title+"」还没做完，我又想去看看别的事了。",ownEvidence(w,r.id,current.id),5);
                 r.goal=goal.id;r.thought=givingUp?"心思飘到别处，先去看看"+actor(w,goal.ownerId).name()+"那边的事。":"自己的事告一段落了，想看看能不能帮上"+actor(w,goal.ownerId).name()+"。";
             }
         }
@@ -163,7 +218,36 @@ public final class ResidentSimulation {
             moveOrSchedule(w,r,goal.ownerId.equals(r.id)?"create":"help",place,goal.id,
                 goal.ownerId.equals(r.id)?"把心里的小愿望往前做一点":"答应过的帮忙，想认真做完",at,42+Math.floorMod((w.id+r.id+w.eventSequence).hashCode(),20));return;
         }
-        moveOrSchedule(w,r,"observe",w.weather.equals("rain")?"cafe":"garden",null,"没有急事，想看看今天有哪些新变化",at,55);
+        // The owner's idle default leans toward the cafe during business hours - a soft bias on this
+        // one fallback branch, not a rule that forbids leaving (duty itself still runs entirely on
+        // dutyPressure vs. personalPull in CafeService). Off business hours, or for anyone else, the
+        // old rain/clear default is unchanged. See "店主的价值来自他偶尔不在" - occasional wandering
+        // stays possible through every other branch above (helping a neighbour, an invitation, rain),
+        // this just stops "no goal, clear weather" from defaulting him to the garden every time.
+        String defaultPlace=w.weather.equals("rain")?"cafe"
+            :r.id.equals(CafeService.OWNER)&&CafeService.businessHours(w,at)?"cafe":"garden";
+        moveOrSchedule(w,r,"observe",defaultPlace,null,"没有急事，想看看今天有哪些新变化",at,55);
+    }
+    /** Each non-owner resident's own daytime away-from-town window: [start, end) local hours,
+     * deterministic and staggered so they do not all leave or return together ("陆续回来"). The owner
+     * is deliberately absent from this table - their work is the cafe itself, see the cafe bias on
+     * the idle default above instead. */
+    private static final Map<String,int[]> WORK_WINDOW = Map.of(
+        "gardener", new int[]{8, 11},
+        "student",  new int[]{11, 14},
+        "artist",   new int[]{15, 18}
+    );
+    private static boolean awayForWork(String residentId, int hour) {
+        int[] window = WORK_WINDOW.get(residentId);
+        return window != null && hour >= window[0] && hour < window[1];
+    }
+    private static String workReason(String residentId) {
+        return switch (residentId) {
+            case "gardener" -> "一早去别处的花圃忙活，先不在家门口";
+            case "student" -> "去自习室待一段，晚点才回这条街";
+            case "artist" -> "出门写生、送稿子去了，暂时不在附近";
+            default -> "出门忙自己的事了";
+        };
     }
     private static boolean goalNeeds(CompanionWorld w,ResidentState r,ResidentState other){Project p=project(w,r.goal);return p!=null&&!p.contributors.contains(other.id);}
     /** Deterministic stand-in for "did this resident's follow-through fail this time": a hash of the
@@ -254,20 +338,32 @@ public final class ResidentSimulation {
         r.plan=new Plan("p-"+(++w.eventSequence),action,place,target,reason,at,at.plusSeconds(duration));r.revision++;r.thought=reason;
         String label=switch(action){case "create","help"->"动手准备"+(project(w,target)==null?"手上的小事":"「"+project(w,target).title+"」");case "study"->"在窗边复习，想守住一点安静";case "invite"->reason;case "sleep"->"睡着了，给明天留一点精神";case "rest"->"捧着杯子歇一会儿";case "celebrate"->"想请大家看看一起做出来的东西";case "wait"->reason;case "tend"->"回到吧台，照应一下柜台前的人";default->reason;};
         replaceActor(w,r.id,place,action,label,r.plan.endsAt());
-        TownPlaces.Outcome outcome=TownPlaces.claim(w,r.id,place,preferredKind(action,place),at);
+        // "能站的地方都能去" (04-decisions.md): a named position is only claimed for the handful of
+        // things that are genuinely owned and capacity-limited - a bed, the owner's coffee machine,
+        // the student's window seat. Standing, chatting, observing, creating at the shared table,
+        // inviting someone, celebrating - none of that needs a slot; positionId simply stays null and
+        // the resident is loosely "at" the place, exactly where the frontend's own walkable-area
+        // pathing already puts a standing actor. This is also why the garden's four named spots no
+        // longer force four people into a pile - most of what happens there never claims one.
+        String kind=preferredKind(action);
+        if(kind==null){TownPlaces.release(w,r.id);return;}
+        TownPlaces.Outcome outcome=TownPlaces.claim(w,r.id,place,kind,at);
         if(outcome==TownPlaces.Outcome.WAITING) {
-            // Every spot here is taken: stand by a moment instead of being placed on top of someone.
+            // Only sleep/tend/study ever reach here now, so this is the genuinely-scarce case: the
+            // one bed, the one counter, the one window seat is taken. Stand by a moment instead of
+            // being placed on top of someone.
             String waitReason="这里现在坐满了，先在旁边等一等";
             r.plan=new Plan("p-"+(++w.eventSequence),"wait",place,target,waitReason,at,at.plusSeconds(12));r.thought=waitReason;
             replaceActor(w,r.id,place,"wait",waitReason,r.plan.endsAt());
         }
     }
-    /** Which kind of position best fits this action, when it matters; null means any open spot will do. */
-    private static String preferredKind(String action,String place) {
+    /** Which actions still need a named, owned position claimed - see the "能站的地方都能去" note in
+     * schedule() above. Null means this action never claims one at all, not merely "any spot will
+     * do". */
+    private static String preferredKind(String action) {
         return switch(action) {
             case "study"->"seat";
-            case "create","help","celebrate"->"table";
-            case "sleep","rest"->TownPlaces.isHome(place)?"bed":null;
+            case "sleep","away"->"bed";
             case "tend"->"equipment";
             default->null;
         };
@@ -469,6 +565,15 @@ public final class ResidentSimulation {
         String id="m2-"+(++w.eventSequence);w.memories.add(new Memory(id,owner,source,type,at,text,topic,evidence,importance));while(w.memories.size()>200) {
             Set<String> referenced=new HashSet<>();
             for(Memory m:w.memories)if(m.evidenceIds()!=null)referenced.addAll(m.evidenceIds());
+            // CafeService.reflectOnDuty holds memory ids on the owner's own state
+            // (dutyComplaintEvidenceIds / dutyInterruptionEvidenceIds) between when they are recorded
+            // and when enough of them accumulate to actually be cashed into a reflection's evidence -
+            // now potentially several reflection windows later, since evidence below threshold is
+            // meant to keep accumulating rather than being wiped. Those ids are a real, live reference
+            // even though no memory's own evidenceIds names them yet; protect them the same way, or a
+            // held id can be evicted here and a later reflection ends up citing a memory that no
+            // longer exists.
+            for(ResidentState r:w.residentStates){referenced.addAll(r.dutyComplaintEvidenceIds);referenced.addAll(r.dutyInterruptionEvidenceIds);}
             Memory removable=w.memories.stream().filter(m->!m.id().equals(id)&&!referenced.contains(m.id())).findFirst().orElse(null);
             // Keep a source chain intact if all older memories are still cited by retained thoughts.
             if(removable==null)break;

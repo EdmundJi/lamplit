@@ -146,8 +146,12 @@ public class ResidentDirector {
             ?ResidentSimulation.proposeDecision(w,c.residentId(),c.revision(),c.intentRevision(),decision.place(),decision.projectTitle(),decision.objectKind(),decision.reason(),decision.evidenceIds(),clock.instant())
             :ResidentSimulation.applyDecision(w,c.residentId(),c.revision(),c.intentRevision(),decision.place(),decision.action(),decision.targetId(),decision.reason(),decision.speech(),decision.evidenceIds(),clock.instant()));
     }
+    // Tags usage with which provider actually served the call (see ResidentMind.Usage/ModelUsageRecorder's
+    // provider-aware overload) so spend can be broken down per supplier, not just per call type. A null
+    // provider (any ResidentMind that predates routing, or a call that was never attributed) falls back
+    // to the plain, untagged record path automatically - see ModelUsageQuery.encodeCallType.
     private void recordUsage(long userId,String day,String callType,ResidentMind.Usage usage){
-        try{usageRecorder.record(userId,day,callType,usage.inputTokens(),usage.outputTokens());}
+        try{usageRecorder.record(userId,day,callType,usage.provider(),usage.inputTokens(),usage.outputTokens());}
         catch(Exception e){log.warn("Companion model usage recording failed: {}",safeFailure(e));}
     }
     private static boolean evidenceWithin(List<String> ids,List<Memory> memories){return ids!=null&&ids.stream().allMatch(id->memories.stream().anyMatch(m->m.id().equals(id)));}

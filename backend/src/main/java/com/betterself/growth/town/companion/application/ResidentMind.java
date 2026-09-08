@@ -21,8 +21,15 @@ public interface ResidentMind {
     default Result<com.betterself.growth.town.companion.domain.ConversationLifecycle.Utterance> generateTurnMetered(DialogueRequest request){return new Result<>(generateTurn(request),null);}
     default Result<com.betterself.growth.town.companion.domain.ConversationLifecycle.Recollection> summarizeConversationMetered(SummaryRequest request){return new Result<>(summarizeConversation(request),null);}
 
-    /** Prompt/completion token counts for one model call. Null usage upstream means "not measured", never zero cost. */
-    record Usage(int inputTokens,int outputTokens) {}
+    /**
+     * Prompt/completion token counts for one model call. Null usage upstream means "not measured",
+     * never zero cost. {@code provider} names which backend actually served the call (e.g. "deepseek",
+     * "qwen3") so usage can be broken down per supplier, not just per call type - it is additive and
+     * may be null for any caller that predates multi-provider routing (test doubles included).
+     */
+    record Usage(int inputTokens,int outputTokens,String provider) {
+        public Usage(int inputTokens,int outputTokens){this(inputTokens,outputTokens,null);}
+    }
     record Result<T>(T value,Usage usage) {}
 
     record DialogueRequest(Context perspective,String conversationId,long turnVersion,String operationId,String partnerName,String topicTitle) {}

@@ -8,19 +8,30 @@
 #   scripts/run-accelerated-town.sh --days 5                 # 5 rule-only days
 #   scripts/run-accelerated-town.sh --model --days 0.02      # real DeepSeek calls, ~29 simulated minutes
 #   scripts/run-accelerated-town.sh --model --days 0.1 --out /tmp/my-run
+#   scripts/run-accelerated-town.sh --model --days 2 --resume-from /tmp/my-run/world-snapshot.json \
+#     --out /tmp/my-run-continued                            # pick up where a previous run left off
 #
 # --model reads QWEN_BASE_URL/QWEN_API_KEY/QWEN_MODEL/QWEN_TIMEOUT from .env.local (never printed
 # or written anywhere else). Without --model, no credentials are read and no network call is made.
 #
 # Output (default backend/target/accelerated-run, or backend/target/accelerated-run-model with
 # --model unless --out is given):
-#   manifest.json        run inputs (world id, start instant, days, tick size, seed) - for reruns
-#   timeline.json         every diary/event/memory/dialogue/relationship-change entry, chronological
-#   timeline.md            same, human-readable
-#   highlights.md           condensed human-readable read: dialogue/events/reflections only
-#   usage.json              token spend by day and call type (empty/zero without --model)
-#   blind-test/quiz.txt      ~20 lines with the speaker stripped, for the "guess who said it" test
-#   blind-test/answer-key.json   the stripped-out answers, kept separate from quiz.txt on purpose
+#   manifest.json              run inputs (world id, start instant, days, tick size, seed, resumedFrom) - for reruns
+#   timeline.json               every diary/event/memory/dialogue/relationship-change entry, chronological
+#   timeline.md                  same, human-readable
+#   highlights.md                 condensed human-readable read: dialogue/events/reflections only
+#   usage.json                    token spend by day and call type (empty/zero without --model)
+#   metrics.json / metrics.md     emergence metrics: service requests, personality drift, complaints,
+#                                  interruptions, reflections, learned expectations, relationship
+#                                  asymmetry, memory divergence, spatial clustering - see MetricsExporter
+#   world-snapshot.json           full world state at the end of this run - pass to --resume-from to continue it
+#   blind-test/quiz/quiz.txt      up to 20 lines (model-voiced dialogue only, deduped, balanced across
+#                                  the four residents) with the speaker stripped
+#   blind-test/quiz/quiz.json     same, machine-readable
+#   blind-test/key/answer-key.json   the stripped-out answers - a SEPARATE directory from quiz/ on
+#                                     purpose, so whoever takes the blind test is only ever handed quiz/
+#   blind-test/key/pool-stats.json   how many unique model-voiced lines were actually available per
+#                                     resident, so a thin quiz pool is visible instead of silently accepted
 
 set -e
 cd "$(dirname "$0")/.."
@@ -29,6 +40,7 @@ days=3
 model=false
 out=""
 world_id=""
+resume_from=""
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -36,6 +48,7 @@ while [ $# -gt 0 ]; do
     --model) model=true; shift ;;
     --out) out="$2"; shift 2 ;;
     --world-id) world_id="$2"; shift 2 ;;
+    --resume-from) resume_from="$2"; shift 2 ;;
     *) echo "Unknown argument: $1" >&2; exit 1 ;;
   esac
 done
@@ -49,6 +62,7 @@ export COMPANION_RUN_DAYS="$days"
 export COMPANION_RUN_MODEL="$model"
 export COMPANION_RUN_OUT="$out"
 if [ -n "$world_id" ]; then export COMPANION_RUN_WORLD_ID="$world_id"; fi
+if [ -n "$resume_from" ]; then export COMPANION_RUN_RESUME_FROM="$resume_from"; fi
 
 if [ "$model" = "true" ]; then
   set -a

@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.annotation.Primary;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 
@@ -21,6 +22,12 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
 
+// @Primary matters now that a second, independently-credentialed QwenProvider bean exists for the
+// companion town's qwen3 route (see CompanionModelConfig): every other unqualified QwenProvider
+// injection point (AiService, GoalTemplateService, SuggestionService, and the deepseek-side
+// ResidentMind) must keep resolving to this one, exactly as before. Never both @Primary at once -
+// this and MockQwenProvider are mutually exclusive via the same app.ai.provider switch.
+@Primary
 @Component
 @ConditionalOnProperty(name = "app.ai.provider", havingValue = "qwen")
 public class QwenHttpProvider implements QwenProvider {
@@ -33,6 +40,7 @@ public class QwenHttpProvider implements QwenProvider {
     private final Duration timeout;
     private final Duration streamTimeout;
     private final boolean jsonMode;
+    private final String thinkingStyle;
 
     public QwenHttpProvider(
         ObjectMapper objectMapper,
@@ -41,7 +49,7 @@ public class QwenHttpProvider implements QwenProvider {
         String model,
         Duration timeout
     ) {
-        this(objectMapper, baseUrl, apiKey, model, timeout, timeout, true);
+        this(objectMapper, baseUrl, apiKey, model, timeout, timeout, true, null);
     }
 
     @Autowired
@@ -56,7 +64,14 @@ public class QwenHttpProvider implements QwenProvider {
         @Value("${app.ai.stream-timeout:PT130S}") Duration streamTimeout,
         // Not every OpenAI-compatible gateway implements response_format; some hang on it.
         // Turning this off falls back to schema-in-the-prompt plus the repair pass below.
-        @Value("${app.ai.json-mode:true}") boolean jsonMode
+        @Value("${app.ai.json-mode:true}") boolean jsonMode,
+        // Which wire format StructuredPrompt.thinkingEnabled() (see QwenProvider) gets translated into:
+        // "deepseek" -> {"thinking":{"type":"enabled"|"disabled"}}, "qwen" -> enable_thinking:<bool>.
+        // Unrecognized/null means "no known vendor field, send nothing" - callers pass a vendor-agnostic
+        // on/off switch, this class is where it becomes a specific vendor's field name, never the other
+        // way around. Defaults to "deepseek" because this slot has always pointed at DeepSeek in
+        // practice (see docs/05-notes.md); override per environment if it ever points elsewhere.
+        @Value("${app.ai.thinking-style:deepseek}") String thinkingStyle
     ) {
         String normalizedApiKey = apiKey == null ? "" : apiKey.trim();
         if (normalizedApiKey.isBlank() || isPlaceholder(normalizedApiKey)) {
@@ -83,6 +98,7 @@ public class QwenHttpProvider implements QwenProvider {
         this.timeout = timeout;
         this.streamTimeout = streamTimeout;
         this.jsonMode = jsonMode;
+        this.thinkingStyle = thinkingStyle;
     }
 
     @Override
@@ -91,13 +107,13 @@ public class QwenHttpProvider implements QwenProvider {
         JsonNode root = call(List.of(
             Map.of("role", "system", "content", "Return only JSON matching this schema: " + prompt.schemaJson()),
             Map.of("role", "user", "content", prompt.instruction())
-        ), true);
+        ), true, prompt.thinkingEnabled());
         String content = stripCodeFence(root.path("choices").path(0).path("message").path("content").asText());
         if (!validJson(content)) {
             root = call(List.of(
                 Map.of("role", "system", "content", "Repair the following value into JSON only. Schema: " + prompt.schemaJson()),
                 Map.of("role", "user", "content", content)
-            ), true);
+            ), true, prompt.thinkingEnabled());
             content = stripCodeFence(root.path("choices").path(0).path("message").path("content").asText());
             if (!validJson(content)) {
                 throw unavailable("AI_INVALID_JSON");
@@ -145,7 +161,8 @@ public class QwenHttpProvider implements QwenProvider {
                 Map.of("role", "user", "content", prompt.userMessage())
             ),
             false,
-            true
+            true,
+            null
         );
         try {
             HttpResponse<Stream<String>> response = client.send(request, HttpResponse.BodyHandlers.ofLines());
@@ -188,9 +205,9 @@ public class QwenHttpProvider implements QwenProvider {
         }
     }
 
-    private JsonNode call(List<Map<String, String>> messages, boolean jsonMode) {
+    private JsonNode call(List<Map<String, String>> messages, boolean jsonMode, Boolean thinkingEnabled) {
         try {
-            HttpRequest request = request(messages, jsonMode, false);
+            HttpRequest request = request(messages, jsonMode, false, thinkingEnabled);
             HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
                 throw providerFailure(response.statusCode());
@@ -216,13 +233,17 @@ public class QwenHttpProvider implements QwenProvider {
             || normalized.equals("change-me");
     }
 
-    private HttpRequest request(List<Map<String, String>> messages, boolean jsonMode, boolean stream) {
+    private HttpRequest request(List<Map<String, String>> messages, boolean jsonMode, boolean stream, Boolean thinkingEnabled) {
         try {
             Map<String, Object> body = new java.util.LinkedHashMap<>();
             body.put("model", model);
             body.put("messages", messages);
             body.put("temperature", 0.2);
             body.put("max_tokens", 2000);
+            if (thinkingEnabled != null) applyThinkingSwitch(body, thinkingEnabled);
+            // Legacy, model-specific hardcode: kept exactly as-is (it wins over the generic switch
+            // above by being applied after it) because existing behavior/tests pin deepseek-v4-* to
+            // thinking-disabled unconditionally, independent of what any caller passes in.
             if (model.startsWith("deepseek-v4-")) body.put("thinking", Map.of("type", "disabled"));
             if (jsonMode && this.jsonMode) {
                 body.put("response_format", Map.of("type", "json_object"));
@@ -241,6 +262,19 @@ public class QwenHttpProvider implements QwenProvider {
                 .build();
         } catch (Exception exception) {
             throw unavailable("AI_PROVIDER_UNAVAILABLE");
+        }
+    }
+
+    /**
+     * Translates the vendor-agnostic on/off switch into whatever field this instance's configured
+     * vendor actually understands. An unrecognized thinkingStyle sends nothing - never guess a field
+     * name for a gateway we do not know.
+     */
+    private void applyThinkingSwitch(Map<String, Object> body, boolean enabled) {
+        if ("deepseek".equals(thinkingStyle)) {
+            body.put("thinking", Map.of("type", enabled ? "enabled" : "disabled"));
+        } else if ("qwen".equals(thinkingStyle)) {
+            body.put("enable_thinking", enabled);
         }
     }
 

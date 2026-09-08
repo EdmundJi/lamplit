@@ -98,43 +98,70 @@ public final class TimelineExporter {
         writeMarkdown(file, filtered, timezone);
     }
 
-    /** Lines that carry one person's own voice: an actual spoken turn, or a memory they wrote in
-     * their own words. Diary/event/relationship rows are third-person narration written the same
-     * way for everyone, so they would not test whether four residents sound different.
+    /** Lines that actually carry one person's own voice AS THE MODEL WROTE IT - the pool the blind
+     * test draws from. Two earlier, broader pools were both wrong in practice (see docs/05-notes.md
+     * "盲测抽样是错的" - twenty sampled lines turned out to be mostly rule-template narration and
+     * memory echoes of the same exchange, testing template diversity instead of personality):
      *
-     * Within memories, a "heard" one is deliberately excluded: its text is a listener's verbatim
-     * record of what someone ELSE said ("阿禾当面说：……"), so attributing it to the memory's owner
-     * (the listener) would test the wrong person's voice - the words themselves belong to whoever
-     * was quoted, not whoever wrote them down. "observed"/"reflection"/"seed" memories are all
-     * genuinely first-person, in that resident's own words. */
+     * <p>Only {@code dialogue} turns whose {@code extra.source == "model"} qualify. A dialogue turn's
+     * {@code source} field is set by the domain itself - "model" when {@link
+     * com.betterself.growth.town.companion.domain.ConversationLifecycle#applyTurn} committed a real
+     * model reply, "rules" for every fallback/timeout line (see {@code ConversationLifecycle.tick}'s
+     * {@code fallback()} and the two fixed lines in its "fallback" mode branch) - and those rule lines
+     * are, by construction, the same handful of fixed sentences for all four residents, so sampling
+     * them tests nothing about personality. Memory entries are excluded entirely, not filtered by
+     * sourceType: {@code Memory} carries no equivalent model/rule provenance field, and several
+     * "observed"/"reflection" memories are themselves rule-generated templates (e.g. ResidentSimulation's
+     * "…在…为「」添了一笔" project-progress line, or ConversationLifecycle's rule-driven conversation
+     * summaries) that would silently reintroduce the same problem under a different kind. */
     @SuppressWarnings("unchecked")
     public static List<Map<String, Object>> quotablePool(List<Map<String, Object>> entries) {
         return entries.stream()
-            .filter(e -> {
-                String kind = (String) e.get("kind");
-                if (kind.equals("dialogue")) return true;
-                if (!kind.equals("memory")) return false;
-                Map<String, Object> extra = (Map<String, Object>) e.getOrDefault("extra", Map.of());
-                return !"heard".equals(extra.get("sourceType"));
-            })
+            .filter(e -> "dialogue".equals(e.get("kind")))
             .filter(e -> !"self".equals(e.get("actorId"))) // the avatar is user-driven, not one of the four residents under test
+            .filter(e -> "model".equals(((Map<String, Object>) e.getOrDefault("extra", Map.of())).get("source")))
             .filter(e -> ((String) e.get("text")).length() >= 6)
             .toList();
     }
 
-    public record BlindTest(List<Map<String, Object>> quiz, List<Map<String, Object>> answerKey) {}
+    public record BlindTest(List<Map<String, Object>> quiz, List<Map<String, Object>> answerKey, Map<String, Object> poolStats) {}
 
     /**
-     * Deterministically samples {@code count} quotable lines (same {@code seed} -> same sample),
-     * masks any of the four residents' names that appear inside the text itself (a line that names
-     * another resident is fine; a line that names its own speaker would give the answer away), and
-     * splits the result into a quiz file (numbered lines only) and a separate answer key.
+     * Deterministically samples up to {@code count} quotable lines (same {@code seed} -> same
+     * sample), stratified evenly across the four residents (so the 25% random baseline in
+     * docs/04-decisions.md "验收" is actually clean - a pool skewed toward whichever resident talks
+     * most would let a guesser do better than chance without reading a single line), deduplicated by
+     * exact text (the same line - "同一句话" - must never appear twice), masks any of the four
+     * residents' names that appear inside the text itself, and splits the result into a quiz (numbered
+     * lines only) and a separate answer key. {@code poolStats} reports, per resident, how many unique
+     * model-sourced lines were actually available versus how many this sample asked for - an honest
+     * count rather than silently under-filling when a short or quiet run has not produced enough yet.
      */
     public static BlindTest buildBlindTest(List<Map<String, Object>> entries, int count, long seed) {
-        List<Map<String, Object>> pool = new ArrayList<>(quotablePool(entries));
+        List<Map<String, Object>> pool = quotablePool(entries);
+
+        // Dedupe by exact text, keeping the first (chronological) occurrence.
+        Map<String, Map<String, Object>> byText = new LinkedHashMap<>();
+        for (Map<String, Object> e : pool) byText.putIfAbsent((String) e.get("text"), e);
+
+        // Stratify by speaker.
+        Map<String, List<Map<String, Object>>> byActor = new LinkedHashMap<>();
+        for (Map<String, Object> e : byText.values())
+            byActor.computeIfAbsent((String) e.get("actorId"), k -> new ArrayList<>()).add(e);
+
+        int residentCount = Math.max(1, byActor.size());
+        int perResident = Math.max(1, count / residentCount);
         Random random = new Random(seed);
-        java.util.Collections.shuffle(pool, random);
-        List<Map<String, Object>> picked = pool.stream().limit(count).toList();
+        List<Map<String, Object>> picked = new ArrayList<>();
+        Map<String, Object> availablePerResident = new LinkedHashMap<>();
+        for (var e : byActor.entrySet()) {
+            List<Map<String, Object>> shuffled = new ArrayList<>(e.getValue());
+            java.util.Collections.shuffle(shuffled, random);
+            availablePerResident.put(e.getKey(), shuffled.size());
+            picked.addAll(shuffled.stream().limit(perResident).toList());
+        }
+        java.util.Collections.shuffle(picked, random); // mix speaking order so consecutive quiz numbers aren't grouped by resident
+        if (picked.size() > count) picked = picked.subList(0, count);
 
         List<Map<String, Object>> quiz = new ArrayList<>();
         List<Map<String, Object>> answerKey = new ArrayList<>();
@@ -156,7 +183,13 @@ public final class TimelineExporter {
             answerKey.add(a);
             n++;
         }
-        return new BlindTest(quiz, answerKey);
+        Map<String, Object> poolStats = new LinkedHashMap<>();
+        poolStats.put("requestedTotal", count);
+        poolStats.put("requestedPerResident", perResident);
+        poolStats.put("residentsRepresented", byActor.size());
+        poolStats.put("uniqueModelLinesAvailablePerResident", availablePerResident);
+        poolStats.put("pickedTotal", picked.size());
+        return new BlindTest(quiz, answerKey, poolStats);
     }
 
     private static String maskNames(String text) {

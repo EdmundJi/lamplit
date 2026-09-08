@@ -5,12 +5,14 @@ import com.betterself.growth.town.companion.domain.CompanionWorld.*;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 
 /**
  * Watches a {@link CompanionWorld} across many {@code advance()} calls and pulls out every diary
@@ -35,9 +37,31 @@ public final class TimelineCollector {
     private final List<Map<String, Object>> entries = new ArrayList<>();
     private String avatarName = "我";
 
+    /** Every {@link CompanionWorld.ServiceRequest} ever seen, keyed by id, always holding the latest
+     * snapshot of its mutable fields (status moves waiting -> preparing -> delivered -> consumed/
+     * abandoned/cold over many ticks). Needed for the same reason as everything else here: the domain
+     * caps {@code w.serviceRequests} to the most recent 60 (see CafeService#request), so a multi-day
+     * run would otherwise lose most of its service history to eviction. See MetricsExporter. */
+    private final Map<String, Map<String, Object>> serviceRequestsById = new LinkedHashMap<>();
+
+    /** How many of the four NPC residents (never the avatar - "四个人" in the requirements means the
+     * four residents) are standing in the same place, sampled once per {@link #capture}: the key is a
+     * group size (1-4), the value how many (tick, place) groups of that size were observed. A run
+     * where this histogram piles up at 3-4 is four people who never leave each other's side; spread
+     * across 1-2 is a town that actually disperses. See MetricsExporter's "同一时刻同一地点" metric. */
+    private final Map<Integer, Long> coLocationHistogram = new TreeMap<>();
+
     /** All entries captured so far, in capture order (not necessarily chronological - sort by "at" before export). */
     public List<Map<String, Object>> entries() {
         return entries;
+    }
+
+    public Collection<Map<String, Object>> serviceRequests() {
+        return serviceRequestsById.values();
+    }
+
+    public Map<Integer, Long> coLocationHistogram() {
+        return coLocationHistogram;
     }
 
     public void capture(CompanionWorld w) {
@@ -48,6 +72,8 @@ public final class TimelineCollector {
         captureMemories(w);
         captureDialogue(w);
         captureRelationshipChanges(w);
+        captureServiceRequests(w);
+        captureCoLocation(w);
     }
 
     private void captureDiary(CompanionWorld w) {
@@ -120,6 +146,33 @@ public final class TimelineCollector {
             }
             lastRelationships.put(r.id, new HashMap<>(r.relationships));
         }
+    }
+
+    private void captureServiceRequests(CompanionWorld w) {
+        for (ServiceRequest r : w.serviceRequests) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("id", r.id);
+            row.put("requesterId", r.requesterId);
+            row.put("requesterName", nameOf(r.requesterId));
+            row.put("kind", r.kind);
+            row.put("place", r.place);
+            row.put("status", r.status);
+            row.put("proactive", r.proactive);
+            row.put("requestedAt", r.requestedAt == null ? null : r.requestedAt.toString());
+            row.put("preparingAt", r.preparingAt == null ? null : r.preparingAt.toString());
+            row.put("deliveredAt", r.deliveredAt == null ? null : r.deliveredAt.toString());
+            row.put("resolvedAt", r.resolvedAt == null ? null : r.resolvedAt.toString());
+            serviceRequestsById.put(r.id, row); // overwrite: keep only the latest status for this id
+        }
+    }
+
+    private void captureCoLocation(CompanionWorld w) {
+        Map<String, Integer> byPlace = new HashMap<>();
+        for (Actor a : w.residents) {
+            if (a.activity().equals("walk")) continue; // mid-travel, not "at" a place
+            byPlace.merge(a.place(), 1, Integer::sum);
+        }
+        for (int count : byPlace.values()) coLocationHistogram.merge(count, 1L, Long::sum);
     }
 
     /** Call roughly once per simulated day: a snapshot of every resident's own writable personality

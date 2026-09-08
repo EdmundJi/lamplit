@@ -4,15 +4,40 @@ import com.betterself.growth.ai.QwenProvider;
 import com.betterself.growth.town.companion.application.ResidentMind;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Component;
 
-@Component
+/**
+ * Drives one resident's decide/turn/summary calls through a single {@link QwenProvider}. Despite the
+ * class name this is provider-agnostic - it is reused for both the deepseek and qwen3 beans, built
+ * explicitly in {@code CompanionModelConfig} (not an auto-detected {@code @Component}: with two
+ * providers there is no longer one obvious instance for Spring to wire up by default). Only the
+ * {@link QwenProvider} instance and {@code providerCode} passed in differ between the two. Call-type
+ * routing and cross-provider failover live one layer up, in {@code RoutingResidentMind}, which is what
+ * {@code ResidentDirector} actually depends on.
+ */
 public class QwenResidentMind implements ResidentMind {
     private final QwenProvider provider;
     private final ObjectMapper json;
     private final boolean enabled;
+    private final String providerCode;
+    private final Boolean decisionThinking;
+    private final Boolean turnThinking;
+    private final Boolean summaryThinking;
     public QwenResidentMind(QwenProvider provider,ObjectMapper json,@Value("${app.ai.provider:mock}")String name,
-                            @Value("${app.town.companion-model-enabled:true}")boolean enabled){this.provider=provider;this.json=json;this.enabled=enabled&&name.equals("qwen");}
+                            @Value("${app.town.companion-model-enabled:true}")boolean enabled){this(provider,json,name,enabled,null);}
+    /** providerCode tags every {@link Usage} this instance produces (e.g. "deepseek", "qwen3"); null keeps usage untagged. */
+    public QwenResidentMind(QwenProvider provider,ObjectMapper json,String name,boolean enabled,String providerCode){
+        this(provider,json,name,enabled,providerCode,null,null,null);}
+    /**
+     * decisionThinking/turnThinking/summaryThinking are the vendor-agnostic on/off switch (see
+     * {@link QwenProvider.StructuredPrompt}), one per call type, applied regardless of which vendor
+     * this instance wraps - each {@link QwenProvider} implementation is responsible for translating a
+     * non-null value into its own wire field. null means "no opinion, leave the provider's default
+     * alone", which is how every existing caller (and turn/summary by this class's own default) behaves.
+     */
+    public QwenResidentMind(QwenProvider provider,ObjectMapper json,String name,boolean enabled,String providerCode,
+                            Boolean decisionThinking,Boolean turnThinking,Boolean summaryThinking){
+        this.provider=provider;this.json=json;this.enabled=enabled&&name.equals("qwen");this.providerCode=providerCode;
+        this.decisionThinking=decisionThinking;this.turnThinking=turnThinking;this.summaryThinking=summaryThinking;}
     public boolean enabled(){return enabled;}
     @Override public com.betterself.growth.town.companion.domain.ConversationLifecycle.Utterance generateTurn(DialogueRequest request){
         return generateTurnMetered(request).value();
@@ -38,7 +63,7 @@ public class QwenResidentMind implements ResidentMind {
             返回JSON字段text,leave,feeling,stance,adjustment,evidenceIds,emoji。adjustment不用时为null。
             """,request,"""
             {"type":"object","required":["text","leave","feeling","stance","adjustment","evidenceIds","emoji"],"properties":{"text":{"type":"string"},"leave":{"type":"boolean"},"feeling":{"type":"string"},"stance":{"type":"string"},"adjustment":{"type":["string","null"]},"evidenceIds":{"type":"array","items":{"type":"string"}},"emoji":{"type":"string"}}}
-            """,com.betterself.growth.town.companion.domain.ConversationLifecycle.Utterance.class);
+            """,com.betterself.growth.town.companion.domain.ConversationLifecycle.Utterance.class,turnThinking);
     }
     @Override public com.betterself.growth.town.companion.domain.ConversationLifecycle.Recollection summarizeConversation(SummaryRequest request){
         return summarizeConversationMetered(request).value();
@@ -52,14 +77,11 @@ public class QwenResidentMind implements ResidentMind {
             feeling是这次交流留给你的简短感受。只返回JSON字段text,feeling,evidenceIds，不输出推理过程。
             """,request,"""
             {"type":"object","required":["text","feeling","evidenceIds"],"properties":{"text":{"type":"string"},"feeling":{"type":"string"},"evidenceIds":{"type":"array","items":{"type":"string"}}}}
-            """,com.betterself.growth.town.companion.domain.ConversationLifecycle.Recollection.class);
+            """,com.betterself.growth.town.companion.domain.ConversationLifecycle.Recollection.class,summaryThinking);
     }
-    private <T>T generate(String scene,String instructions,Object input,String schema,Class<T> resultType){
-        return generateMetered(scene,instructions,input,schema,resultType).value();
-    }
-    private <T>Result<T> generateMetered(String scene,String instructions,Object input,String schema,Class<T> resultType){
+    private <T>Result<T> generateMetered(String scene,String instructions,Object input,String schema,Class<T> resultType,Boolean thinking){
         try{
-            var result=provider.generateStructured(new QwenProvider.StructuredPrompt(scene,instructions+"\n输入："+json.writeValueAsString(input),schema));
+            var result=provider.generateStructured(new QwenProvider.StructuredPrompt(scene,instructions+"\n输入："+json.writeValueAsString(input),schema,thinking));
             T value=json.readValue(result.json(),resultType);
             return new Result<>(value,usageOf(result));
         }
@@ -90,10 +112,10 @@ public class QwenResidentMind implements ResidentMind {
                 """+json.writeValueAsString(context);
             var result=provider.generateStructured(new QwenProvider.StructuredPrompt("COMPANION_RESIDENT",instruction,"""
                 {"type":"object","required":["action","place","targetId","reason","speech","evidenceIds"],"properties":{"action":{"type":"string"},"place":{"type":"string"},"targetId":{"type":["string","null"]},"reason":{"type":"string"},"speech":{"type":"string"},"evidenceIds":{"type":"array","items":{"type":"string"}},"projectTitle":{"type":["string","null"]},"objectKind":{"type":["string","null"]}}}
-                """));
+                """,decisionThinking));
             Decision decision=json.readValue(result.json(),Decision.class);
             return new Result<>(decision,usageOf(result));
         }catch(Exception e){throw new IllegalStateException("Resident decision unavailable",e);}
     }
-    private static Usage usageOf(QwenProvider.StructuredResult result){return new Usage(result.inputTokens(),result.outputTokens());}
+    private Usage usageOf(QwenProvider.StructuredResult result){return new Usage(result.inputTokens(),result.outputTokens(),providerCode);}
 }

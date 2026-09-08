@@ -11,4 +11,15 @@ package com.betterself.growth.town.companion.application;
  */
 public interface ModelUsageRecorder {
     void record(long userId, String day, String callType, int inputTokens, int outputTokens);
+
+    /**
+     * Provider-aware variant: same counters, but the call type is tagged with which supplier
+     * (e.g. "deepseek", "qwen3") actually served the call - see {@link ModelUsageQuery#encodeCallType}.
+     * Additive on purpose: the default folds the tag into {@code callType} and forwards to the plain
+     * method above, so every existing implementation (JdbcModelUsage, the accelerated run's in-memory
+     * ledger, test fakes) keeps compiling and behaving unchanged unless it opts in by overriding this.
+     */
+    default void record(long userId, String day, String callType, String provider, int inputTokens, int outputTokens) {
+        record(userId, day, ModelUsageQuery.encodeCallType(callType, provider), inputTokens, outputTokens);
+    }
 }

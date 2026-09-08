@@ -44,6 +44,7 @@ final class CafeService {
     private static final int COMPLAINT_EVIDENCE_THRESHOLD = 2;
     private static final int INTERRUPTION_EVIDENCE_THRESHOLD = 3;
     private static final int CONSCIENTIOUSNESS_FLOOR = 15, CONSCIENTIOUSNESS_CEILING = 95;
+    private static final int MIN_INTERRUPTION_INTERVAL_SECONDS = 90;
 
     // ---- making a request --------------------------------------------------------------------
 
@@ -95,6 +96,29 @@ final class CafeService {
         return new Decision(waiting.getFirst().id, reason, interrupts);
     }
 
+    /** Same competition as {@link #decide}, but for pre-empting a plan already running rather than a
+     * resident who just became free to choose. Two extra guards keep this from thrashing: an added
+     * margin - scaled so a low-conscientiousness owner needs pressure to clear the pull by a much
+     * wider gap before an ongoing plan gets cut short, not just a hair over it, so "被打断的门槛应该
+     * 明显更高" is a matter of degree rather than a different rule - and a cooldown since the last
+     * interruption, so an owner who was just pulled off something is not immediately pulled off the
+     * next thing too (the "刚被打断又立刻被拉回原计划" case the task calls out). */
+    static Decision decideInterrupt(CompanionWorld w, ResidentState owner, Personality personality, Project current, boolean unfinished, Instant at) {
+        if (owner.lastDutyInterruptionAt != null && Duration.between(owner.lastDutyInterruptionAt, at).getSeconds() < MIN_INTERRUPTION_INTERVAL_SECONDS) return null;
+        Decision base = decide(w, owner, personality, current, unfinished, at);
+        if (base == null) return null;
+        double margin = interruptMargin(personality);
+        if (owner.dutyPressure <= personalPull(personality, current, unfinished, owner.id) + margin) return null;
+        return base;
+    }
+
+    /** How much further pressure must clear the competing pull before it is allowed to cut a plan
+     * already in progress short, on top of simply winning at a moment the owner was free anyway.
+     * Conscientious owners need barely any extra evidence; the least conscientious need a lot. */
+    private static double interruptMargin(Personality personality) {
+        return Math.max(4, (80 - personality.conscientiousness()) * 0.45);
+    }
+
     /** The pull toward *not* tending the counter right now: a baseline (there is always something
      * else one could be doing), a strong term when the owner's own project is unfinished and would be
      * set aside, and a term that grows as the owner's own conscientiousness has eroded - so the very
@@ -118,7 +142,11 @@ final class CafeService {
             : clamp(owner.dutyPressure - 2.5);
     }
 
-    private static boolean businessHours(CompanionWorld w, Instant at) {
+    // Package-visible (not private) so ResidentSimulation can give the owner's own idle default a
+    // soft business-hours bias toward the cafe - see the "店主的价值来自他偶尔不在" / "他长时间待在
+    // 花园，这本身就不对" requirement. Still just a bias on one fallback branch, not a rule that
+    // forbids leaving; duty itself still runs entirely on dutyPressure vs. personalPull above.
+    static boolean businessHours(CompanionWorld w, Instant at) {
         int hour = at.atZone(ZoneId.of(w.timezone)).getHour();
         return hour >= 8 && hour < 21;
     }
@@ -273,28 +301,38 @@ final class CafeService {
      * interruptions of the owner's own project nudges it down. Both require repeated evidence (a
      * single incident never moves anything), both are clamped to a small step and to a floor/ceiling
      * well short of 0/100 so the character never disappears entirely, and both consume (reset) the
-     * counters they read so evidence cannot be double-spent across reflections. */
+     * counters they read so evidence cannot be double-spent across reflections - but ONLY when they
+     * are actually acted on. Evidence below threshold (e.g. one complaint, or two interruptions) is
+     * left in place so it can keep accumulating across later reflection windows; the earlier version
+     * of this method reset both counters to zero on every check regardless of whether either had
+     * crossed its threshold, which meant evidence trickling in slower than one reflection window
+     * (every {@link #DUTY_REFLECTION_COOLDOWN_SECONDS}) was silently discarded and could never reach
+     * the threshold at all - this is the broken link that left conscientiousness stuck at its initial
+     * value even after real complaints and interruptions had happened. */
     static void reflectOnDuty(CompanionWorld w, ResidentState r, Instant at) {
         if (!r.id.equals(OWNER)) return;
         Personality.of(r); // ensure this resident's own personality fields are seeded before nudging them
         if (r.lastDutyReflectionAt != null && Duration.between(r.lastDutyReflectionAt, at).getSeconds() < DUTY_REFLECTION_COOLDOWN_SECONDS) return;
+        r.lastDutyReflectionAt = at;
         int complaints = r.complaintsSinceDutyReflection, interruptions = r.interruptionsSinceDutyReflection;
         if (complaints == 0 && interruptions == 0) return;
-        r.lastDutyReflectionAt = at;
-        r.complaintsSinceDutyReflection = 0; r.interruptionsSinceDutyReflection = 0;
         if (complaints >= COMPLAINT_EVIDENCE_THRESHOLD) {
             double before = r.conscientiousness;
             r.conscientiousness = Math.min(CONSCIENTIOUSNESS_CEILING, r.conscientiousness + Math.min(4, complaints));
             if (r.conscientiousness != before) ResidentSimulation.memory(w, r.id, r.id, "reflection", at, "duty",
                 "最近总有人等太久，我说了要更上心一点。", copy(r.dutyComplaintEvidenceIds), 8);
             r.dutyComplaintEvidenceIds.clear();
+            r.complaintsSinceDutyReflection = 0;
         } else if (interruptions >= INTERRUPTION_EVIDENCE_THRESHOLD) {
             double before = r.conscientiousness;
             r.conscientiousness = Math.max(CONSCIENTIOUSNESS_FLOOR, r.conscientiousness - Math.min(3, interruptions / 2 + 1));
             if (r.conscientiousness != before) ResidentSimulation.memory(w, r.id, r.id, "reflection", at, "duty",
                 "总是被叫回柜台，自己的事一拖再拖，我开始觉得，我为这家店牺牲太多了。", copy(r.dutyInterruptionEvidenceIds), 8);
             r.dutyInterruptionEvidenceIds.clear();
+            r.interruptionsSinceDutyReflection = 0;
         }
+        // else: real evidence exists but has not crossed either threshold yet - keep it and check
+        // again next window, rather than discarding it here.
     }
 
     // ---- small shared helpers -------------------------------------------------------------------

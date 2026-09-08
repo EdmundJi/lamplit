@@ -114,13 +114,41 @@ class QwenContractTest {
 
         QwenHttpProvider provider = new QwenHttpProvider(
             new ObjectMapper(), "http://127.0.0.1:" + server.getAddress().getPort() + "/v1",
-            "unit-test-provider-key", "qwen-contract", Duration.ofSeconds(2), Duration.ofSeconds(2), false
+            "unit-test-provider-key", "qwen-contract", Duration.ofSeconds(2), Duration.ofSeconds(2), false, null
         );
         provider.generateStructured(new QwenProvider.StructuredPrompt("STUDY", "create tasks", "{\"type\":\"object\"}"));
 
         assertThat(bodies).hasSize(1);
         assertThat(bodies.get(0)).doesNotContain("response_format");
         assertThat(bodies.get(0)).contains("\"model\":\"qwen-contract\"");
+    }
+
+    @Test
+    void thinkingSwitchIsVendorAgnosticAtTheCallSiteButVendorSpecificOnTheWire() throws Exception {
+        List<String> bodies = new ArrayList<>();
+        start(exchange -> {
+            bodies.add(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+            json(exchange, "{\"choices\":[{\"message\":{\"content\":\"{}\"}}]}");
+        });
+        String url = "http://127.0.0.1:" + server.getAddress().getPort() + "/v1";
+
+        // A caller with no opinion on thinking (the 3-arg StructuredPrompt) must behave exactly as
+        // before this switch existed: nothing sent, matching every gateway that predates it.
+        var qwenProvider = new QwenHttpProvider(new ObjectMapper(), url, "unit-test-provider-key", "qwen3-contract", Duration.ofSeconds(2), Duration.ofSeconds(2), true, "qwen");
+        qwenProvider.generateStructured(new QwenProvider.StructuredPrompt("COMPANION_RESIDENT", "hello", "{}"));
+        assertThat(bodies.get(0)).doesNotContain("enable_thinking").doesNotContain("\"thinking\"");
+
+        // Same vendor-agnostic Boolean, translated per vendor: qwen gets enable_thinking, deepseek gets
+        // {"thinking":{"type":...}} - the call site never names either field itself (see QwenProvider).
+        qwenProvider.generateStructured(new QwenProvider.StructuredPrompt("COMPANION_RESIDENT", "hello", "{}", false));
+        assertThat(bodies.get(1)).contains("\"enable_thinking\":false");
+
+        var deepseekProvider = new QwenHttpProvider(new ObjectMapper(), url, "unit-test-provider-key", "deepseek-contract", Duration.ofSeconds(2), Duration.ofSeconds(2), true, "deepseek");
+        deepseekProvider.generateStructured(new QwenProvider.StructuredPrompt("COMPANION_RESIDENT", "hello", "{}", false));
+        assertThat(bodies.get(2)).contains("\"thinking\":{\"type\":\"disabled\"}").doesNotContain("enable_thinking");
+
+        deepseekProvider.generateStructured(new QwenProvider.StructuredPrompt("COMPANION_RESIDENT", "hello", "{}", true));
+        assertThat(bodies.get(3)).contains("\"thinking\":{\"type\":\"enabled\"}");
     }
 
     @Test

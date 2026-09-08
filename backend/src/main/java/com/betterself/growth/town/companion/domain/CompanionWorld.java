@@ -86,6 +86,12 @@ public class CompanionWorld {
          * conscientiousness drift up or down. Reset to zero each time reflectOnDuty consumes them. */
         public int complaintsSinceDutyReflection, interruptionsSinceDutyReflection;
         public Instant lastDutyReflectionAt;
+        /** When the owner was last pulled off a plan already in progress by {@link CafeService#decideInterrupt}
+         * (as opposed to simply choosing to tend at a moment they were already free). Null is a
+         * genuinely correct "never interrupted yet" starting value, not a sentinel needing a seeded
+         * flag - same shape as {@code dutyPressure} above. Gates the cooldown that keeps duty from
+         * yanking the owner off whatever they just returned to every few ticks. */
+        public Instant lastDutyInterruptionAt;
         public List<String> dutyComplaintEvidenceIds = new ArrayList<>();
         public List<String> dutyInterruptionEvidenceIds = new ArrayList<>();
         /** The owner's own learned-expectation bookkeeping (see {@link CafeService}): how many times in
