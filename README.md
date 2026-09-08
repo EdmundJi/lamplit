@@ -49,7 +49,7 @@ pnpm install
 pnpm dev
 ```
 
-小镇使用已购买的四个 LimeZu 素材包，素材不进入版本库。首次运行前把 `modernexteriors-win.zip`、`moderninteriors-win.zip`、`Modern_Farm_v1.2.zip` 和 `Modern_Office_Revamped_v1.2.zip` 放到 `tmp/`，然后生成图集（需要 Pillow）：
+小镇使用已购买的四个 LimeZu 素材包，素材不进入版本库。首次运行前把 `modernexteriors-win.zip`、`moderninteriors-win.zip`、`Modern_Farm_v1.2.zip` 和 `Modern_Office_Revamped_v1.2.zip` 放到 `tmp/`，然后生成图集。脚本需要 Pillow；本机默认 `python3` 里没有的话，用 `uv run --with pillow python <脚本>` 即可，不必污染全局环境：
 
 ```bash
 python3 scripts/build-town-assets.py
