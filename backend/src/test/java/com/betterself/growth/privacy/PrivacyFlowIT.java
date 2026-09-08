@@ -24,6 +24,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
@@ -165,7 +166,16 @@ class PrivacyFlowIT {
         @Bean
         @Primary
         MutableClock mutableClock() {
-            return new MutableClock(Instant.parse("2026-07-31T12:00:00Z"));
+            // Anchored to real wall-clock time (not a fixed past instant): JwtService issues
+            // tokens using this injected Clock, but the jjwt parser validates "exp" against the
+            // JVM's real system clock. A frozen instant far in the past eventually drifts past
+            // the access-token TTL as real calendar time advances, expiring tokens before the
+            // test even reads them. Starting from Instant.now() keeps iat/exp aligned with the
+            // real clock while still letting the test deterministically advance() it afterwards.
+            // Truncated to millis so instants read back from a MySQL TIMESTAMP(3) column compare
+            // equal to the in-memory Instant (MySQL storage would otherwise drop sub-millisecond
+            // precision that Instant.now() carries, breaking the round-trip equality assertion).
+            return new MutableClock(Instant.now().truncatedTo(ChronoUnit.MILLIS));
         }
     }
 

@@ -53,6 +53,7 @@ class AdminGovernanceIT {
         jdbc.update("delete from ai_safety_event");
         jdbc.update("delete from ai_prompt_version where version > 1");
         jdbc.update("update ai_prompt_version set status = 'PUBLISHED' where version = 1");
+        jdbc.update("delete from notification_preference");
         jdbc.update("delete from sys_user");
 
         administrator = user("ADMIN", "admin", Timestamp.from(Instant.now()));
