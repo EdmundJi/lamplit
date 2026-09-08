@@ -55,7 +55,9 @@
 
 只取 **32x32 带阴影 singles**，去重后 **13132 条**：modern_exteriors 6221 / modern_interiors 5470 / modern_farm 1102 / modern_office 339。路径自带主题（`4_Bedroom_Singles`、`17_Garden_Singles` 等）。
 
-产物在 `frontend/public/assets/town/catalog/`（gitignored）：`asset-catalog.json`、`summary.json`、88 张联系表。脚本 `scripts/build-asset-catalog.py`。
+产物在 `frontend/public/assets/town/catalog/`（gitignored）：`asset-catalog.json`、`summary.json`、85 张联系表，以及一个生成的 `index.html`——里面有一张「按用途找」的表（桌子/椅子/床/书架/沙发/收纳柜/灯具……各自链到对应页），这是给人翻的入口。脚本 `scripts/build-asset-catalog.py`，可重复跑，同样输入产出同样 id。
+
+几何字段（尺寸、内容 bbox、底部接地宽度）经十条抽样独立重算，10/10 完全一致，可信。分类字段是从主题目录继承的，抽样里 2/10 可疑（消防车被归成家具、加油站价格牌数字被归成车辆），那些主题不在这条街的范围里，不值得追——实际挑出来用的那一两百个手工标即可。
 
 **目录的用途是让这一万三千个变得可翻**，不是自动打标签——见上面视觉模型那一节。这条小街真正会用到的大概一两百个，那些手工标又快又准。以前的做法是在脚本里手写数字索引，没人知道 195 号是什么，于是咖啡馆里摆了个立式衣柜当桌子、拿一丛灌木当书架。
 
