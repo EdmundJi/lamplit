@@ -1,7 +1,5 @@
-package com.betterself.growth.town;
+package com.betterself.growth.town.companion.domain;
 
-import com.betterself.growth.town.companion.domain.CompanionRules;
-import com.betterself.growth.town.companion.domain.CompanionWorld;
 import org.junit.jupiter.api.Test;
 import java.time.Instant;
 import java.util.HashSet;

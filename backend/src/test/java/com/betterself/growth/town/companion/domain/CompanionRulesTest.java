@@ -1,6 +1,5 @@
-package com.betterself.growth.town;
+package com.betterself.growth.town.companion.domain;
 
-import com.betterself.growth.town.companion.domain.*;
 import org.junit.jupiter.api.Test;
 import java.time.*;
 import static org.assertj.core.api.Assertions.*;

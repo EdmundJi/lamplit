@@ -1,6 +1,5 @@
-package com.betterself.growth.town;
+package com.betterself.growth.town.companion.domain;
 
-import com.betterself.growth.town.companion.domain.CompanionRecall;
 import com.betterself.growth.town.companion.domain.CompanionWorld.Memory;
 import org.junit.jupiter.api.Test;
 import java.time.Instant;

@@ -1,4 +1,4 @@
-package com.betterself.growth.town;
+package com.betterself.growth.town.companion.interfaces;
 
 import com.betterself.growth.town.companion.application.CompanionService;
 import com.betterself.growth.goal.QuickTaskService;

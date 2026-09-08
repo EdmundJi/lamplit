@@ -10,6 +10,21 @@ public interface ResidentMind {
     Decision decide(Context context);
     default com.betterself.growth.town.companion.domain.ConversationLifecycle.Utterance generateTurn(DialogueRequest request){throw new UnsupportedOperationException("Dialogue generation unavailable");}
     default com.betterself.growth.town.companion.domain.ConversationLifecycle.Recollection summarizeConversation(SummaryRequest request){throw new UnsupportedOperationException("Conversation recollection unavailable");}
+
+    /**
+     * Token-metered variants of the three calls above. Additive on purpose: implementations that only
+     * override the plain methods (every existing fake/mock ResidentMind, including test doubles) keep
+     * compiling unchanged and simply report no usage, which callers must treat as "nothing to record" -
+     * not as zero cost.
+     */
+    default Result<Decision> decideMetered(Context context){return new Result<>(decide(context),null);}
+    default Result<com.betterself.growth.town.companion.domain.ConversationLifecycle.Utterance> generateTurnMetered(DialogueRequest request){return new Result<>(generateTurn(request),null);}
+    default Result<com.betterself.growth.town.companion.domain.ConversationLifecycle.Recollection> summarizeConversationMetered(SummaryRequest request){return new Result<>(summarizeConversation(request),null);}
+
+    /** Prompt/completion token counts for one model call. Null usage upstream means "not measured", never zero cost. */
+    record Usage(int inputTokens,int outputTokens) {}
+    record Result<T>(T value,Usage usage) {}
+
     record DialogueRequest(Context perspective,String conversationId,long turnVersion,String operationId,String partnerName,String topicTitle) {}
     record SummaryRequest(Context perspective,String conversationId,String partnerName,List<Turn> transcript,List<Memory> conversationMemories) {}
     record Context(String worldId,String residentId,long revision,long intentRevision,Instant at,String localTime,

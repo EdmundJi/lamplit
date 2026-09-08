@@ -3,8 +3,11 @@ package com.betterself.growth.town.companion.application;
 import com.betterself.growth.town.companion.domain.*;
 import org.junit.jupiter.api.Test;
 import java.time.*;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.*;
 import static org.assertj.core.api.Assertions.*;
 
@@ -49,6 +52,46 @@ class ResidentDirectorTest {
         var unavailable=new ResidentDirector(failedStore,new ResidentMind(){public boolean enabled(){return true;}public Decision decide(Context c){throw new IllegalStateException("network unavailable");}},Clock.fixed(now,ZoneOffset.UTC));
         try{unavailable.consider(1,failedStore.world);assertThat(failedStore.finished.await(2,TimeUnit.SECONDS)).isTrue();assertThat(failedStore.world.residentStates).allMatch(r->r.plan!=null);assertThat(failedStore.world.modelStatus).contains("习惯");}
         finally{unavailable.close();}
+    }
+    @Test void modelUsageIsRecordedPerUserWorldDayAndCallType()throws Exception {
+        var world=CompanionRules.join("model-usage","我","Asia/Shanghai",now);
+        var store=new FakeStore(world);
+        List<Object[]> recorded=Collections.synchronizedList(new ArrayList<>());
+        ResidentMind mind=new ResidentMind(){
+            public boolean enabled(){return true;}
+            public Decision decide(Context c){throw new AssertionError("director must call the metered entry point");}
+            public Result<Decision> decideMetered(Context c){
+                var decision=new Decision("observe",c.self().place(),null,"先听完邻居的话","",List.of(c.memories().getFirst().id()),null,null);
+                return new Result<>(decision,new Usage(120,45));
+            }
+        };
+        ModelUsageRecorder recorder=(userId,day,callType,inputTokens,outputTokens)->recorded.add(new Object[]{userId,day,callType,inputTokens,outputTokens});
+        var director=new ResidentDirector(store,mind,Clock.fixed(now,ZoneOffset.UTC),128,recorder);
+        try{director.consider(7,world);assertThat(store.finished.await(2,TimeUnit.SECONDS)).isTrue();}
+        finally{director.close();}
+        assertThat(recorded).hasSize(1);
+        Object[] entry=recorded.get(0);
+        assertThat(entry[0]).isEqualTo(7L);
+        assertThat(entry[1]).isEqualTo(now.atZone(ZoneId.of("Asia/Shanghai")).toLocalDate().toString());
+        assertThat(entry[2]).isEqualTo("decision");
+        assertThat(entry[3]).isEqualTo(120);
+        assertThat(entry[4]).isEqualTo(45);
+    }
+    @Test void modelDecisionWithoutMeasuredUsageRecordsNothingAndDoesNotCrash()throws Exception {
+        // Mirrors both mock mode (never reaches the director at all) and any ResidentMind that only
+        // implements the plain, unmetered methods: usage stays null and must never be reported as spend.
+        var world=CompanionRules.join("model-no-usage","我","Asia/Shanghai",now);
+        var store=new FakeStore(world);
+        AtomicInteger recordCalls=new AtomicInteger();
+        ResidentMind mind=new ResidentMind(){
+            public boolean enabled(){return true;}
+            public Decision decide(Context c){return new Decision("observe",c.self().place(),null,"先听完邻居的话","",List.of(c.memories().getFirst().id()),null,null);}
+        };
+        ModelUsageRecorder recorder=(userId,day,callType,inputTokens,outputTokens)->recordCalls.incrementAndGet();
+        var director=new ResidentDirector(store,mind,Clock.fixed(now,ZoneOffset.UTC),128,recorder);
+        try{director.consider(9,world);assertThat(store.finished.await(2,TimeUnit.SECONDS)).isTrue();}
+        finally{director.close();}
+        assertThat(recordCalls).hasValue(0);
     }
     static class FakeStore implements WorldStore {
         CompanionWorld world;

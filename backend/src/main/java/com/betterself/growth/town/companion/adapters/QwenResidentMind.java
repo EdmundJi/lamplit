@@ -15,7 +15,10 @@ public class QwenResidentMind implements ResidentMind {
                             @Value("${app.town.companion-model-enabled:true}")boolean enabled){this.provider=provider;this.json=json;this.enabled=enabled&&name.equals("qwen");}
     public boolean enabled(){return enabled;}
     @Override public com.betterself.growth.town.companion.domain.ConversationLifecycle.Utterance generateTurn(DialogueRequest request){
-        return generate("COMPANION_DIALOGUE", """
+        return generateTurnMetered(request).value();
+    }
+    @Override public Result<com.betterself.growth.town.companion.domain.ConversationLifecycle.Utterance> generateTurnMetered(DialogueRequest request){
+        return generateMetered("COMPANION_DIALOGUE", """
             你是输入perspective.self中的这一个居民，现在轮到你说话。只生成你自己的这一轮，不能写旁白或代替对方回答。
             输入conversation是截至此刻真实说过的话。认真回应对方刚才的具体内容，不要重复开场邀请或机械地答应合作。
             你有自己的性格、好奇心和主见。可以分享生活观察、突发奇想、玩笑、喜恶，产生分歧、误解或意外的话题；不必始终温柔、配合或以合作项目为中心。
@@ -38,7 +41,10 @@ public class QwenResidentMind implements ResidentMind {
             """,com.betterself.growth.town.companion.domain.ConversationLifecycle.Utterance.class);
     }
     @Override public com.betterself.growth.town.companion.domain.ConversationLifecycle.Recollection summarizeConversation(SummaryRequest request){
-        return generate("COMPANION_RECOLLECTION","""
+        return summarizeConversationMetered(request).value();
+    }
+    @Override public Result<com.betterself.growth.town.companion.domain.ConversationLifecycle.Recollection> summarizeConversationMetered(SummaryRequest request){
+        return generateMetered("COMPANION_RECOLLECTION","""
             你是perspective.self中的这一个居民。谈话已经结束，请只从你自己的角度回想刚才真实发生的交流。
             用第一人称写60至140个汉字：对方实际说了什么让你记住，你喜欢/担心/还不确定什么，这是否改变了你原来的看法。
             不写泛泛的人生道理，不替对方断言内心感受，不把愿望/承诺写成已经完成的事；允许你觉得这次交流普通或仍有分歧。
@@ -49,10 +55,20 @@ public class QwenResidentMind implements ResidentMind {
             """,com.betterself.growth.town.companion.domain.ConversationLifecycle.Recollection.class);
     }
     private <T>T generate(String scene,String instructions,Object input,String schema,Class<T> resultType){
-        try{var result=provider.generateStructured(new QwenProvider.StructuredPrompt(scene,instructions+"\n输入："+json.writeValueAsString(input),schema));return json.readValue(result.json(),resultType);}
+        return generateMetered(scene,instructions,input,schema,resultType).value();
+    }
+    private <T>Result<T> generateMetered(String scene,String instructions,Object input,String schema,Class<T> resultType){
+        try{
+            var result=provider.generateStructured(new QwenProvider.StructuredPrompt(scene,instructions+"\n输入："+json.writeValueAsString(input),schema));
+            T value=json.readValue(result.json(),resultType);
+            return new Result<>(value,usageOf(result));
+        }
         catch(Exception e){throw new IllegalStateException("Resident generation unavailable",e);}
     }
     public Decision decide(Context context){
+        return decideMetered(context).value();
+    }
+    @Override public Result<Decision> decideMetered(Context context){
         try {
             String instruction="""
                 你是一个有自己生活的小街居民。只扮演输入的 self 这一个人，不替其他居民作答。
@@ -75,7 +91,9 @@ public class QwenResidentMind implements ResidentMind {
             var result=provider.generateStructured(new QwenProvider.StructuredPrompt("COMPANION_RESIDENT",instruction,"""
                 {"type":"object","required":["action","place","targetId","reason","speech","evidenceIds"],"properties":{"action":{"type":"string"},"place":{"type":"string"},"targetId":{"type":["string","null"]},"reason":{"type":"string"},"speech":{"type":"string"},"evidenceIds":{"type":"array","items":{"type":"string"}},"projectTitle":{"type":["string","null"]},"objectKind":{"type":["string","null"]}}}
                 """));
-            return json.readValue(result.json(),Decision.class);
+            Decision decision=json.readValue(result.json(),Decision.class);
+            return new Result<>(decision,usageOf(result));
         }catch(Exception e){throw new IllegalStateException("Resident decision unavailable",e);}
     }
+    private static Usage usageOf(QwenProvider.StructuredResult result){return new Usage(result.inputTokens(),result.outputTokens());}
 }

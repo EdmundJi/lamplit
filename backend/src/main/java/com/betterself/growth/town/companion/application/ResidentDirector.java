@@ -18,10 +18,12 @@ public class ResidentDirector {
     private final ResidentMind mind;
     private final Clock clock;
     private final int dailyBudget;
+    private final ModelUsageRecorder usageRecorder;
     private final Set<Long> inFlight=ConcurrentHashMap.newKeySet();
     private final ThreadPoolExecutor executor=new ThreadPoolExecutor(2,2,30,TimeUnit.SECONDS,new ArrayBlockingQueue<>(8),r->{Thread t=new Thread(r,"companion-mind");t.setDaemon(true);return t;},new ThreadPoolExecutor.AbortPolicy());
     public ResidentDirector(WorldStore store,ResidentMind mind,Clock clock){this(store,mind,clock,128);}
-    @Autowired public ResidentDirector(WorldStore store,ResidentMind mind,Clock clock,@Value("${app.town.companion-model-daily-budget:128}")int dailyBudget){this.store=store;this.mind=mind;this.clock=clock;this.dailyBudget=Math.max(1,dailyBudget);}
+    public ResidentDirector(WorldStore store,ResidentMind mind,Clock clock,int dailyBudget){this(store,mind,clock,dailyBudget,(userId,day,callType,inputTokens,outputTokens)->{});}
+    @Autowired public ResidentDirector(WorldStore store,ResidentMind mind,Clock clock,@Value("${app.town.companion-model-daily-budget:128}")int dailyBudget,ModelUsageRecorder usageRecorder){this.store=store;this.mind=mind;this.clock=clock;this.dailyBudget=Math.max(1,dailyBudget);this.usageRecorder=usageRecorder;}
     public boolean enabled(){return mind.enabled();}
     public void consider(long userId,CompanionWorld snapshot){
         if(!mind.enabled()||snapshot==null||snapshot.simulationVersion<2||!inFlight.add(userId))return;
@@ -32,18 +34,22 @@ public class ResidentDirector {
         try{executor.execute(()->run(userId));}catch(RejectedExecutionException e){inFlight.remove(userId);}
     }
     private record Work(String kind,ResidentMind.Context context,ConversationLifecycle.Operation operation,
-                        ResidentMind.DialogueRequest dialogue,ResidentMind.SummaryRequest summary,long sequence) {}
+                        ResidentMind.DialogueRequest dialogue,ResidentMind.SummaryRequest summary,long sequence,String day) {}
     private void run(long userId){
         final Work[] job={null};
         try {
             store.update(userId,null,w->{job[0]=reserve(w,clock.instant());return w;});
             Work work=job[0];if(work==null)return;
             // This call occurs after the reservation transaction committed. There is no open DB lock.
-            Object result=switch(work.kind()){
-                case "turn"->mind.generateTurn(work.dialogue());
-                case "summary"->mind.summarizeConversation(work.summary());
-                default->mind.decide(work.context());
-            };
+            Object result;
+            ResidentMind.Usage usage;
+            switch(work.kind()){
+                case "turn"->{var r=mind.generateTurnMetered(work.dialogue());result=r.value();usage=r.usage();}
+                case "summary"->{var r=mind.summarizeConversationMetered(work.summary());result=r.value();usage=r.usage();}
+                default->{var r=mind.decideMetered(work.context());result=r.value();usage=r.usage();}
+            }
+            // Tokens were already spent whether or not the reply below still applies to a fresher world.
+            if(usage!=null)recordUsage(userId,work.day(),work.kind(),usage);
             store.update(userId,null,w->{
                 if(!w.id.equals(work.context().worldId()))return w;
                 w.modelConsecutiveFailures=0;w.modelRetryAfter=null;
@@ -82,7 +88,7 @@ public class ResidentDirector {
             var context=perspective(w,operation.speakerId(),now,c.turns);
             Project topic=ResidentSimulation.project(w,c.topicId);
             var request=new ResidentMind.DialogueRequest(context,c.id,c.turnVersion,operation.operationId(),partnerName(w,c,operation.speakerId()),topic==null?"刚才的话题":topic.title);
-            return reserved(w,now,new Work("turn",context,operation,request,null,w.modelSequence+1));
+            return reserved(w,now,new Work("turn",context,operation,request,null,w.modelSequence+1,day));
         }
         for(Conversation c:w.conversations)if("model".equals(c.mode)&&"ended".equals(c.status)&&!c.turns.isEmpty()) {
             for(String speaker:c.participantIds){
@@ -91,7 +97,7 @@ public class ResidentDirector {
                 var ids=c.turnMemoryIds.getOrDefault(speaker,List.of());
                 var memories=w.memories.stream().filter(m->m.ownerId().equals(speaker)&&ids.contains(m.id())).toList();
                 var request=new ResidentMind.SummaryRequest(context,c.id,partnerName(w,c,speaker),new ArrayList<>(c.turns),memories);
-                return reserved(w,now,new Work("summary",context,operation,null,request,w.modelSequence+1));
+                return reserved(w,now,new Work("summary",context,operation,null,request,w.modelSequence+1,day));
             }
         }
         if(w.modelRequestedAt!=null&&Duration.between(w.modelRequestedAt,now).getSeconds()<75)return null;
@@ -102,7 +108,7 @@ public class ResidentDirector {
         ResidentState r=candidates.get(Math.floorMod((int)w.modelSequence,candidates.size()));
         var conversation=ResidentSimulation.activeConversation(w,r.id);
         var context=perspective(w,r.id,now,conversation==null?List.of():conversation.turns);
-        return reserved(w,now,new Work("decision",context,null,null,null,w.modelSequence+1));
+        return reserved(w,now,new Work("decision",context,null,null,null,w.modelSequence+1,day));
     }
     private Work reserved(CompanionWorld w,Instant now,Work work){w.modelRequestedAt=now;w.modelCallsToday++;w.modelSequence++;w.modelStatus=work.kind().equals("turn")?""+work.context().self().name()+"正在想怎么接这句话":work.kind().equals("summary")?"有人在回想刚才的谈话":"有位居民正在想下一步";w.revision++;return work;}
     private ResidentMind.Context perspective(CompanionWorld w,String residentId,Instant now,List<Turn> transcript){
@@ -118,6 +124,10 @@ public class ResidentDirector {
         return valid&&(decision.action().equals("propose")
             ?ResidentSimulation.proposeDecision(w,c.residentId(),c.revision(),c.intentRevision(),decision.place(),decision.projectTitle(),decision.objectKind(),decision.reason(),decision.evidenceIds(),clock.instant())
             :ResidentSimulation.applyDecision(w,c.residentId(),c.revision(),c.intentRevision(),decision.place(),decision.action(),decision.targetId(),decision.reason(),decision.speech(),decision.evidenceIds(),clock.instant()));
+    }
+    private void recordUsage(long userId,String day,String callType,ResidentMind.Usage usage){
+        try{usageRecorder.record(userId,day,callType,usage.inputTokens(),usage.outputTokens());}
+        catch(Exception e){log.warn("Companion model usage recording failed: {}",safeFailure(e));}
     }
     private static boolean evidenceWithin(List<String> ids,List<Memory> memories){return ids!=null&&ids.stream().allMatch(id->memories.stream().anyMatch(m->m.id().equals(id)));}
     private static String partnerName(CompanionWorld w,Conversation c,String speaker){return ResidentSimulation.actor(w,c.participantIds.stream().filter(id->!id.equals(speaker)).findFirst().orElseThrow()).name();}
