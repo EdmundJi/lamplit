@@ -1,4 +1,5 @@
 import type Phaser from 'phaser'
+import { CAFE_DESK_X } from './companion-art'
 
 /** A roofless, walkable small street. Objects use the four locally licensed LimeZu packs. */
 export function buildCompanionStage(scene: Phaser.Scene) {
@@ -50,8 +51,11 @@ export function buildCompanionStage(scene: Phaser.Scene) {
   image(190, 273, 'coffee_cup', .65, 'interior', 286)
   image(273, 286, 'office_desk', .88, 'companion')
   image(288, 266, 'office_lamp', .8, 'companion', 287)
-  image(258, 273, 'book_1', .7, 'interior', 287)
-  image(270, 319, 'office_chair', .8, 'companion')
+  image(259, 256, 'book_1', .3, 'interior', 287)
+  // Native size (not shrunk to .8): a scaled-down chair fits entirely inside the
+  // seated resident's own 32px-wide, 64px-tall silhouette and disappears behind them.
+  // At native size its back rises a few pixels above the resident's head instead.
+  image(270, 291, 'office_chair', 1, 'companion')
   image(103, 312, 'plant_1', .76)
   image(314, 315, 'floor_lamp_1', .72)
 
@@ -65,11 +69,14 @@ export function buildCompanionStage(scene: Phaser.Scene) {
   image(562, 111, 'cafe_cabinet', 1.3)
   image(651, 118, 'notice_1', .7)
   // Office pack: a communal long desk with lamps and varied chairs, clearly usable seats.
-  for (const x of [440, 528, 616]) {
+  for (const x of CAFE_DESK_X) {
     image(x, 253, 'office_table', .82, 'companion')
-    image(x - 13, 225, 'book_1', .75, 'interior', 254)
+    // A small stack of books resting on the desk, not a shelf-sized prop: book_1 is a
+    // tall side-on spine stack (20x62), and at the old .75 scale it read as a stray pole.
+    image(x - 13, 224, 'book_1', .3, 'interior', 254)
     image(x + 17, 223, 'office_lamp', .7, 'companion', 254)
-    image(x, 286, 'office_chair', .72, 'companion')
+    // Native size, see the matching comment by the home desk's chair above.
+    image(x, 255, 'office_chair', 1, 'companion')
   }
   image(704, 271, 'office_books', .8, 'companion')
   image(404, 311, 'plant_2', .75)
