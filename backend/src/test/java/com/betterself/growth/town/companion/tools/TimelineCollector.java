@@ -158,7 +158,6 @@ public final class TimelineCollector {
             row.put("kind", r.kind);
             row.put("place", r.place);
             row.put("status", r.status);
-            row.put("proactive", r.proactive);
             row.put("requestedAt", r.requestedAt == null ? null : r.requestedAt.toString());
             row.put("preparingAt", r.preparingAt == null ? null : r.preparingAt.toString());
             row.put("deliveredAt", r.deliveredAt == null ? null : r.deliveredAt.toString());

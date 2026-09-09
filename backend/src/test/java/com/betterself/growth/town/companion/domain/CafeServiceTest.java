@@ -101,7 +101,7 @@ class CafeServiceTest {
         assertThat(w.events).noneMatch(event->"complaint".equals(event.type()));
     }
 
-    @Test void anExplicitRequestIsAlwaysConsumedOnceDeliveredButAProactiveGuessCanGoColdUnwanted() {
+    @Test void aDeliveredDrinkIsConsumedWhenTheRequesterIsThereAndGoesColdWhenTheyHaveLeft() {
         CompanionWorld w = CompanionRules.join("cafe-cold", "住客", "Asia/Shanghai", start);
         ResidentState requester = ResidentSimulation.state(w, "student");
         ResidentSimulation.replaceActor(w, "student", "cafe", "study", "在窗边复习", start.plusSeconds(6000));
@@ -115,16 +115,16 @@ class CafeServiceTest {
         CafeService.tick(w, start.plusSeconds(6));
         assertThat(explicit.status).isEqualTo("consumed");
 
-        // A proactive guess, delivered while the requester is not currently low on energy, is not
-        // picked up - and after the cold window, it is written off, never consumed.
-        requester.energy = 90;
-        ServiceRequest guess = new ServiceRequest();
-        guess.id = "sr-guess"; guess.requesterId = "student"; guess.kind = "water"; guess.place = "cafe";
-        guess.status = "delivered"; guess.proactive = true; guess.requestedAt = start; guess.preparingAt = start; guess.deliveredAt = start;
-        w.serviceRequests.add(guess);
+        // The link is allowed to break at the last step too: a cup delivered to someone who has since
+        // walked out is never consumed on their behalf - after the cold window it is simply written off.
+        ResidentSimulation.replaceActor(w, "student", "garden", "observe", "去花园透口气", start.plusSeconds(6000));
+        ServiceRequest late = new ServiceRequest();
+        late.id = "sr-late"; late.requesterId = "student"; late.kind = "coffee"; late.place = "cafe";
+        late.status = "delivered"; late.requestedAt = start; late.preparingAt = start; late.deliveredAt = start;
+        w.serviceRequests.add(late);
         Instant at = start;
         for (int i = 0; i < 20; i++) { at = at.plusSeconds(6); CafeService.tick(w, at); }
-        assertThat(guess.status).isEqualTo("cold");
+        assertThat(late.status).isEqualTo("cold");
     }
 
     @Test void restingAtTheCafeDoesNotOrderADrinkUnlessTheModelChoosesThatAction(){
@@ -140,7 +140,7 @@ class CafeServiceTest {
         assertThat(student.plan).isSameAs(resting);assertThat(student.plan.endsAt()).isEqualTo(start.plusSeconds(1200));
     }
 
-    @Test void waitingDoesNotManufactureComplaintsReflectionsOrProactiveRefills() {
+    @Test void waitingDoesNotManufactureComplaintsReflectionsOrUnrequestedDrinks() {
         CompanionWorld w = CompanionRules.join("cafe-no-hidden-brain", "住客", "Asia/Shanghai", start);
         ResidentState owner=ResidentSimulation.state(w,"owner"),artist=ResidentSimulation.state(w,"artist");
         ResidentSimulation.replaceActor(w,"artist","cafe","observe","在咖啡馆里",start.plusSeconds(6000));
@@ -148,7 +148,9 @@ class CafeServiceTest {
         for(int second=6;second<=300;second+=6)CafeService.tick(w,start.plusSeconds(second));
         assertThat(w.serviceRequests.getFirst().status).isEqualTo("waiting");
         assertThat(owner.complaintsSinceDutyReflection).isZero();
-        assertThat(owner.anticipatesRefill).isEmpty();
+        // Nothing the rules can do adds a second request: a drink exists only because someone chose
+        // request_drink. There is no counter of repeat visits and no unprompted pour behind this.
+        assertThat(w.serviceRequests).hasSize(1);
         assertThat(w.events).noneMatch(event->"complaint".equals(event.type()));
         assertThat(w.memories).noneMatch(memory->memory.text().contains("下次想在她开口前"));
     }

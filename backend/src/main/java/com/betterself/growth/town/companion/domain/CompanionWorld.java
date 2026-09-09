@@ -61,11 +61,10 @@ public class CompanionWorld {
     /** One resident's ask for a drink from the owner and everything that happened to it. `status`
      * moves waiting -> preparing -> delivered -> consumed, or off the happy path to abandoned (gave up
      * or left before being served) or cold (delivered but never picked up) - both broken-link outcomes
-     * are written only into memory, never announced as a WorldEvent. `proactive` marks a pour the
-     * owner offered before being asked, from a learned expectation that can itself be wrong. */
+     * are written only into memory, never announced as a WorldEvent. A drink only ever exists because
+     * the requester chose request_drink; the rules never invent one on the operator's behalf. */
     public static class ServiceRequest {
         public String id, requesterId, kind, place, status;
-        public boolean proactive;
         public Instant requestedAt, preparingAt, deliveredAt, resolvedAt;
     }
     public static class ResidentState {
@@ -131,24 +130,8 @@ public class CompanionWorld {
          * conscientiousness drift up or down. Reset to zero each time reflectOnDuty consumes them. */
         public int complaintsSinceDutyReflection, interruptionsSinceDutyReflection;
         public Instant lastDutyReflectionAt;
-        /** When the owner was last pulled off a plan already in progress by {@link CafeService#decideInterrupt}
-         * (as opposed to simply choosing to tend at a moment they were already free). Null is a
-         * genuinely correct "never interrupted yet" starting value, not a sentinel needing a seeded
-         * flag - same shape as {@code dutyPressure} above. Gates the cooldown that keeps duty from
-         * yanking the owner off whatever they just returned to every few ticks. */
-        public Instant lastDutyInterruptionAt;
         public List<String> dutyComplaintEvidenceIds = new ArrayList<>();
         public List<String> dutyInterruptionEvidenceIds = new ArrayList<>();
-        /** The owner's own learned-expectation bookkeeping (see {@link CafeService}): how many times in
-         * a row a customer has come back for another drink soon after the last one, whether that has
-         * crossed the (deliberately low, two-coincidences) threshold into a standing expectation the
-         * owner now acts on unprompted, and when each customer was last actually served or proactively
-         * poured for - all self-healing on an old save via the empty-map default, same as
-         * {@code relationships} above. */
-        public Map<String,Integer> repeatVisitStreak = new LinkedHashMap<>();
-        public Map<String,Boolean> anticipatesRefill = new LinkedHashMap<>();
-        public Map<String,Instant> lastServedAt = new LinkedHashMap<>();
-        public Map<String,Instant> lastProactiveAt = new LinkedHashMap<>();
     }
     /** A sparse resident-owned purpose, separate from the timer-backed action currently underway. */
     public static class LifeIntent {

@@ -35,7 +35,6 @@ public final class MetricsExporter {
         metrics.put("serviceRequests", serviceRequestMetrics(collector));
         metrics.put("personality", personalityMetrics(sortedEntries, finalWorld));
         metrics.put("duty", dutyMetrics(sortedEntries));
-        metrics.put("learnedExpectations", learnedExpectationMetrics(collector, finalWorld));
         metrics.put("relationshipAsymmetry", relationshipAsymmetryMetrics(finalWorld));
         metrics.put("memories", memoryMetrics(sortedEntries));
         metrics.put("coLocation", coLocationMetrics(collector));
@@ -46,40 +45,14 @@ public final class MetricsExporter {
 
     private static Map<String, Object> serviceRequestMetrics(TimelineCollector collector) {
         var requests = collector.serviceRequests();
+        // byStatus is the whole story now: every request here was explicitly asked for by a
+        // resident, so "how many broke, and where" is the only thing worth counting. There is no
+        // unprompted pour to tally - see CafeService's class javadoc for why that was removed.
         Map<String, Integer> byStatus = new TreeMap<>();
-        int proactiveTotal = 0, proactiveMisfired = 0;
-        List<Object> misfireExamples = new ArrayList<>();
-        for (Map<String, Object> r : requests) {
-            String status = (String) r.get("status");
-            byStatus.merge(status, 1, Integer::sum);
-            boolean proactive = Boolean.TRUE.equals(r.get("proactive"));
-            if (proactive) {
-                proactiveTotal++;
-                if ("abandoned".equals(status) || "cold".equals(status)) {
-                    proactiveMisfired++;
-                    if (misfireExamples.size() < 5) {
-                        // LinkedHashMap, not Map.of(): Map.of()'s iteration order is randomized per
-                        // JVM run (JEP 271-style, deliberate) for a map with >1 entry, which would make
-                        // this metrics.json byte-diff between two otherwise-identical rule-only runs -
-                        // breaking the reproducibility docs/01-requirements.md requires (see the item-1
-                        // "同样输入跑两次计数完全一致" check this file was verified against).
-                        Map<String, Object> example = new LinkedHashMap<>();
-                        example.put("id", r.get("id"));
-                        example.put("requesterName", r.get("requesterName"));
-                        example.put("status", status);
-                        misfireExamples.add(example);
-                    }
-                }
-            }
-        }
+        for (Map<String, Object> r : requests) byStatus.merge((String) r.get("status"), 1, Integer::sum);
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("total", requests.size());
         out.put("byStatus", byStatus);
-        Map<String, Object> proactive = new LinkedHashMap<>();
-        proactive.put("total", proactiveTotal);
-        proactive.put("misfired", proactiveMisfired);
-        proactive.put("misfireExamples", misfireExamples);
-        out.put("proactive", proactive);
         return out;
     }
 
@@ -157,26 +130,6 @@ public final class MetricsExporter {
         byTopic.put("duty", dutyReflections);
         byTopic.put("other", reflections.size() - dutyReflections);
         out.put("reflectionsByTopic", byTopic);
-        return out;
-    }
-
-    // ---- learned expectations (anticipatesRefill) -------------------------------------------
-
-    private static Map<String, Object> learnedExpectationMetrics(TimelineCollector collector, CompanionWorld finalWorld) {
-        Map<String, Object> out = new LinkedHashMap<>();
-        List<String> targets = new ArrayList<>();
-        if (finalWorld != null) {
-            String operatorId = finalWorld.cafeOperatorId == null ? "owner" : finalWorld.cafeOperatorId;
-            ResidentState owner = finalWorld.residentStates.stream().filter(r -> operatorId.equals(r.id)).findFirst().orElse(null);
-            if (owner != null) owner.anticipatesRefill.forEach((k, v) -> { if (Boolean.TRUE.equals(v)) targets.add(k); });
-        }
-        out.put("learned", targets.size());
-        out.put("targets", targets);
-        long misfired = collector.serviceRequests().stream()
-            .filter(r -> Boolean.TRUE.equals(r.get("proactive")))
-            .filter(r -> "abandoned".equals(r.get("status")) || "cold".equals(r.get("status")))
-            .count();
-        out.put("proactiveMisfires", misfired);
         return out;
     }
 
@@ -294,8 +247,7 @@ public final class MetricsExporter {
         sb.append("## 服务请求\n\n");
         sb.append("- 总数：").append(sr.get("total")).append('\n');
         sb.append("- 按状态：").append(sr.get("byStatus")).append('\n');
-        Map<String, Object> proactive = (Map<String, Object>) sr.get("proactive");
-        sb.append("- 主动倒水：").append(proactive.get("total")).append(" 次，学错/落空 ").append(proactive.get("misfired")).append(" 次\n\n");
+        sb.append('\n');
 
         sb.append("## 人格漂移\n\n");
         for (Object rowObj : (List<Object>) metrics.get("personality")) {
@@ -313,11 +265,6 @@ public final class MetricsExporter {
         sb.append("- 被打断次数：").append(duty.get("interruptions")).append('\n');
         sb.append("- 反思实际触发次数：").append(duty.get("reflectionsTriggered"))
             .append("（按 topic：").append(duty.get("reflectionsByTopic")).append("）\n\n");
-
-        Map<String, Object> learned = (Map<String, Object>) metrics.get("learnedExpectations");
-        sb.append("## 学到的预期\n\n");
-        sb.append("- 已学到的预期条数：").append(learned.get("learned")).append("，对象：").append(learned.get("targets")).append('\n');
-        sb.append("- 学错/落空次数：").append(learned.get("proactiveMisfires")).append("\n\n");
 
         Map<String, Object> asym = (Map<String, Object>) metrics.get("relationshipAsymmetry");
         sb.append("## 关系矩阵不对称程度\n\n");

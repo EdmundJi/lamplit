@@ -11,11 +11,15 @@ import static com.betterself.growth.town.companion.domain.CompanionWorld.*;
  * waiting/preparing/delivered/consumed, and records objective failures such as leaving before a cup
  * arrives or closing with work still open.
  *
- * <p>It deliberately does not turn duty pressure, personality, familiarity, elapsed waiting time or
- * learned expectations into speech or actions. Those legacy helpers remain only for old controlled
- * compatibility tests and are not called by the production simulation loop. A visible wait may enter
- * one resident's model context as a qualitative fact; the resident still decides what it means and
- * what to do.
+ * <p>It deliberately turns nothing - not duty pressure, personality, familiarity nor elapsed waiting
+ * time - into speech or actions. An earlier batch did carry such helpers (a rule that counted two
+ * repeat visits into an {@code anticipatesRefill} flag and then poured unprompted, and a
+ * duty-vs-pull comparison that picked the owner's action for them); they had already been
+ * disconnected from the loop and are now deleted outright, because a pattern the rules detect on a
+ * resident's behalf is not the resident noticing it. A visible wait may enter one resident's model
+ * context as a qualitative fact; that resident still decides what it means and what to do, and any
+ * regularity ("this one always wants a refill") has to be reached through their own memory and
+ * reflection. See docs/04-decisions.md: 保留社会经历，让居民自己解释.
  */
 final class CafeService {
     private CafeService() {}
@@ -60,13 +64,10 @@ final class CafeService {
     static String oldestWaitingRequestId(CompanionWorld w){return w.serviceRequests.stream().filter(r->"waiting".equals(r.status)&&PLACE.equals(r.place)).min(Comparator.comparing(r->r.requestedAt)).map(r->r.id).orElse(null);}
     static final int PREP_SECONDS = 18;
     private static final int COLD_AFTER_SECONDS = 90;
-    private static final int FOLLOWUP_WINDOW_SECONDS = 600;
-    private static final int PROACTIVE_COOLDOWN_SECONDS = 400;
     private static final int DUTY_REFLECTION_COOLDOWN_SECONDS = 180;
     private static final int COMPLAINT_EVIDENCE_THRESHOLD = 2;
     private static final int INTERRUPTION_EVIDENCE_THRESHOLD = 3;
     private static final int CONSCIENTIOUSNESS_FLOOR = 15, CONSCIENTIOUSNESS_CEILING = 95;
-    private static final int MIN_INTERRUPTION_INTERVAL_SECONDS = 90;
 
     // ---- making a request --------------------------------------------------------------------
 
@@ -86,59 +87,6 @@ final class CafeService {
 
     // ---- the owner's side: duty vs. everything else -------------------------------------------
 
-    record Decision(String requestId, String reason, boolean interruptsOwnProject) {}
-
-    /** Every tick this resident is free to choose, for the owner only: does the responsibility of a
-     * waiting counter outweigh whatever else is pulling at them right now? Neither side is a fixed
-     * rule - dutyPressure is a running total that decays when nobody waits, and the competing pull
-     * grows both from an unfinished project of the owner's own and from how eroded their own
-     * conscientiousness has become. Returns null (duty loses, or there is nothing to do) or the
-     * request the owner will go tend to. */
-    static Decision decide(CompanionWorld w, ResidentState owner, Personality personality, Project current, boolean unfinished, Instant at) {
-        List<ServiceRequest> waiting = w.serviceRequests.stream().filter(r -> "waiting".equals(r.status) && PLACE.equals(r.place))
-            .sorted(Comparator.comparing(r -> r.requestedAt)).toList();
-        if (waiting.isEmpty()) return null;
-        double pull = personalPull(personality, current, unfinished, owner.id);
-        if (owner.dutyPressure <= pull) return null;
-        boolean interrupts = current != null && unfinished && current.ownerId.equals(owner.id);
-        String reason = interrupts ? "柜台上有人在等，手上的事先放一放" : "柜台上有人在等，回去看看";
-        return new Decision(waiting.getFirst().id, reason, interrupts);
-    }
-
-    /** Same competition as {@link #decide}, but for pre-empting a plan already running rather than a
-     * resident who just became free to choose. Two extra guards keep this from thrashing: an added
-     * margin - scaled so a low-conscientiousness owner needs pressure to clear the pull by a much
-     * wider gap before an ongoing plan gets cut short, not just a hair over it, so "被打断的门槛应该
-     * 明显更高" is a matter of degree rather than a different rule - and a cooldown since the last
-     * interruption, so an owner who was just pulled off something is not immediately pulled off the
-     * next thing too (the "刚被打断又立刻被拉回原计划" case the task calls out). */
-    static Decision decideInterrupt(CompanionWorld w, ResidentState owner, Personality personality, Project current, boolean unfinished, Instant at) {
-        if (owner.lastDutyInterruptionAt != null && Duration.between(owner.lastDutyInterruptionAt, at).getSeconds() < MIN_INTERRUPTION_INTERVAL_SECONDS) return null;
-        Decision base = decide(w, owner, personality, current, unfinished, at);
-        if (base == null) return null;
-        double margin = interruptMargin(personality);
-        if (owner.dutyPressure <= personalPull(personality, current, unfinished, owner.id) + margin) return null;
-        return base;
-    }
-
-    /** How much further pressure must clear the competing pull before it is allowed to cut a plan
-     * already in progress short, on top of simply winning at a moment the owner was free anyway.
-     * Conscientious owners need barely any extra evidence; the least conscientious need a lot. */
-    private static double interruptMargin(Personality personality) {
-        return Math.max(4, (80 - personality.conscientiousness()) * 0.45);
-    }
-
-    /** The pull toward *not* tending the counter right now: a baseline (there is always something
-     * else one could be doing), a strong term when the owner's own project is unfinished and would be
-     * set aside, and a term that grows as the owner's own conscientiousness has eroded - so the very
-     * same drift {@link #reflectOnDuty} produces feeds back into how easily duty loses next time. */
-    private static double personalPull(Personality personality, Project current, boolean unfinished, String ownerId) {
-        double base = 25;
-        double projectPull = current != null && unfinished && current.ownerId.equals(ownerId) ? 20 : 0;
-        double erosionPull = (100 - personality.conscientiousness()) * 0.4;
-        return base + projectPull + erosionPull;
-    }
-
     /** How much responsibility-pressure the owner is carrying right now: grows with how many people
      * are waiting, grows faster during business hours (an off-hours wait still counts, just less), and
      * decays gently on its own when the counter is clear. Called every tick regardless of what the
@@ -152,10 +100,9 @@ final class CafeService {
             : clamp(owner.dutyPressure - 2.5);
     }
 
-    // Package-visible (not private) so ResidentSimulation can give the owner's own idle default a
-    // soft business-hours bias toward the cafe - see the "店主的价值来自他偶尔不在" / "他长时间待在
-    // 花园，这本身就不对" requirement. Still just a bias on one fallback branch, not a rule that
-    // forbids leaving; duty itself still runs entirely on dutyPressure vs. personalPull above.
+    // Package-visible (not private) so ResidentSimulation can expose "到了平常营业的时间" as a
+    // qualitative cue. It is a fact the operator's own model may act on, never a rule that sends
+    // them back to the counter - see docs/04-decisions.md "给真实处境，不用责任感阈值派工".
     static boolean businessHours(CompanionWorld w, Instant at) {
         return scheduledOpen(w,at);
     }
@@ -247,8 +194,7 @@ final class CafeService {
     }
 
     /** The owner's "tend" plan has run its course: hand the request its drink, unless the customer has
-     * already left - in which case the link breaks quietly (a memory, no WorldEvent), not a shout.
-     * Also gives a learned regular one proactive pour, at most one per visit to the counter. */
+     * already left - in which case the link breaks quietly (a memory, no WorldEvent), not a shout. */
     static void finishTending(CompanionWorld w, ResidentState owner, String requestId, Instant at) {
         ServiceRequest req = find(w, requestId);
         if (req != null && "preparing".equals(req.status)) {
@@ -261,30 +207,6 @@ final class CafeService {
             }
         }
         // Further service is another decision. Completing one cup never silently creates the next.
-    }
-
-    /** Pours, unprompted, for at most one learned regular currently at the cafe with nothing already
-     * pending for them and the per-customer cooldown elapsed - the concrete form of "predicting the
-     * user's need" the requirements ask for. Whether it actually lands is judged later, in
-     * {@link #tick}: an explicit request is always wanted; a guess is only picked up if the customer
-     * still plausibly wants it, which is exactly what lets a learned rule misfire. */
-    private static void proactivelyServe(CompanionWorld w, ResidentState owner, Instant at) {
-        for (ResidentState other : w.residentStates) {
-            if (other.id.equals(operatorId(w)) || other.id.equals("self")) continue;
-            if (!Boolean.TRUE.equals(owner.anticipatesRefill.get(other.id))) continue;
-            if (!ResidentSimulation.actor(w, other.id).place().equals(PLACE)) continue;
-            Instant cooldown = owner.lastProactiveAt.get(other.id);
-            if (cooldown != null && Duration.between(cooldown, at).getSeconds() < PROACTIVE_COOLDOWN_SECONDS) continue;
-            if (w.serviceRequests.stream().anyMatch(r -> r.requesterId.equals(other.id) && open(r.status))) continue;
-            owner.lastProactiveAt.put(other.id, at);
-            ServiceRequest req = new ServiceRequest();
-            req.id = "sr-" + (++w.eventSequence); req.requesterId = other.id; req.kind = "water"; req.place = PLACE;
-            req.status = "delivered"; req.requestedAt = at; req.preparingAt = at; req.deliveredAt = at; req.proactive = true;
-            w.serviceRequests.add(req);
-            ResidentSimulation.memory(w, owner.id, owner.id, "observed", at, "service",
-                "没等" + ResidentSimulation.actor(w, other.id).name() + "开口，我先倒了一杯放过去。", List.of(), 5);
-            return;
-        }
     }
 
     // ---- ticking every request forward, or breaking the chain ---------------------------------
@@ -306,16 +228,6 @@ final class CafeService {
         if (!present) abandon(w, requester, req, at);
     }
 
-    /** How long this particular requester will wait before giving up: familiar people (a relationship
-     * above the neutral baseline) wait longer, and emotionally steady people wait a little longer than
-     * volatile ones - never the other way around for either factor. */
-    private static long patienceSeconds(ResidentState requester, int familiarity) {
-        Personality p = Personality.of(requester);
-        double familiarityBonus = Math.max(0, familiarity - 40) * 0.9;
-        double steadiness = (50 - p.volatility()) * 0.3;
-        return Math.max(18, Math.round(42 + familiarityBonus + steadiness));
-    }
-
     private static void abandon(CompanionWorld w, ResidentState requester, ServiceRequest req, Instant at) {
         req.status = "abandoned"; req.resolvedAt = at;
         if (requester == null) return;
@@ -325,10 +237,7 @@ final class CafeService {
     private static void resolveDelivered(CompanionWorld w, ServiceRequest req, Instant at) {
         ResidentState requester = ResidentSimulation.state(w, req.requesterId);
         boolean present = requester != null && ResidentSimulation.actor(w, req.requesterId).place().equals(req.place);
-        // An explicit ask is always wanted once it arrives; a proactive guess only lands if the
-        // customer still plausibly wants it - this is what lets a learned expectation misfire.
-        boolean stillWants = !req.proactive || requester.energy < 60;
-        if (present && stillWants) consume(w, requester, req, at);
+        if (present) consume(w, requester, req, at);
         else if (Duration.between(req.deliveredAt, at).getSeconds() > COLD_AFTER_SECONDS) goCold(w, req, at);
     }
 
@@ -336,14 +245,11 @@ final class CafeService {
         req.status = "consumed"; req.resolvedAt = at;
         ResidentState owner = ResidentSimulation.state(w, operatorId(w));
         if(owner==null)return;
-        owner.lastServedAt.put(requester.id, at);
         // A drink is a small immediate lift, not a substitute for sustained sleep.
         requester.energy = Math.min(100, requester.energy + 3);
-        ResidentSimulation.relation(owner, requester, req.proactive ? 5 : 3);
-        String text = req.proactive
-            ? "还没开口，" + ResidentSimulation.actor(w, owner.id).name() + "就端了一杯过来，像是记住了我的习惯。"
-            : ResidentSimulation.actor(w, owner.id).name() + "端来了一杯，等了一会儿，但还是很暖。";
-        ResidentSimulation.memory(w, requester.id, owner.id, "observed", at, "service", text, List.of(), req.proactive ? 7 : 5);
+        ResidentSimulation.relation(owner, requester, 3);
+        String text = ResidentSimulation.actor(w, owner.id).name() + "端来了一杯，等了一会儿，但还是很暖。";
+        ResidentSimulation.memory(w, requester.id, owner.id, "observed", at, "service", text, List.of(), 5);
     }
 
     private static void goCold(CompanionWorld w, ServiceRequest req, Instant at) {
