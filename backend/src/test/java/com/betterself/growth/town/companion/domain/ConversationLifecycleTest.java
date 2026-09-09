@@ -71,6 +71,68 @@ class ConversationLifecycleTest {
         assertThat(c.status).isEqualTo("ended");
     }
 
+    // ---- recollection and reflection are two different clocks ---------------------------------
+
+    private CompanionWorld.Conversation twoTurnConversation(CompanionWorld w,String place,String a,String b,Instant at){
+        var c=new CompanionWorld.Conversation();
+        c.id="conv-test-"+w.conversations.size()+"-"+at.toEpochMilli();
+        c.place=place;c.topicId="life";c.status="active";c.mode="model";
+        c.participantIds=new ArrayList<>(List.of(a,b));
+        c.startedAt=at;c.updatedAt=at;
+        c.turns.add(new CompanionWorld.Turn(a,"随口聊了两句家常",at,"model"));
+        c.turns.add(new CompanionWorld.Turn(b,"嗯，是这样",at.plusSeconds(3),"model"));
+        w.conversations.add(c);
+        return c;
+    }
+
+    /** The exact bug reported: applySummary used to also stamp r.lastReflectionAt, so an ordinary
+     * "I remember that exchange" recollection silently reset the same three-hour clock a real,
+     * evidence-gated reflection needs to clear. This asserts the two remain independent while
+     * everything else applySummary already did (thought, mood, the reflection-tier memory, the
+     * bookkeeping) still happens exactly as before. */
+    @Test void applyingAConversationSummaryUpdatesThoughtAndMoodButNeverAdvancesTheReflectionClock(){
+        var w=world();w.conversations.clear();
+        CompanionWorld.ResidentState artist=ResidentSimulation.state(w,"artist");
+        Instant baseline=now.minusSeconds(1800);
+        artist.lastReflectionAt=baseline;
+        var c=twoTurnConversation(w,"cafe","artist","owner",now);
+        ConversationLifecycle.finish(w,c,now.plusSeconds(6),"聊完了");
+        var op=reserveSummary(w,c,"artist",now.plusSeconds(7));
+        assertThat(op).isNotNull();
+        var evidence=c.turnMemoryIds.get("artist");
+        assertThat(evidence).isNotEmpty();
+        assertThat(applySummary(w,op,new Recollection("我记得随口聊了几句家常。","平常",evidence),now.plusSeconds(8))).isTrue();
+        assertThat(artist.thought).isEqualTo("我记得随口聊了几句家常。"); // unchanged: applySummary still writes the recollection as this resident's current thought
+        assertThat(artist.mood).isEqualTo("平常"); // unchanged
+        assertThat(artist.lastReflectionAt).isEqualTo(baseline); // changed: the reflection clock is no longer touched here
+        assertThat(w.memories).anyMatch(m->m.ownerId().equals("artist")&&"reflection".equals(m.sourceType())&&m.text().contains("随口聊了几句家常"));
+    }
+
+    /** The scenario the task asks for directly: a resident who talks far more often than once every
+     * three hours must still, eventually, actually reach the reflection threshold. Before the fix
+     * above, every one of these frequent summaries would have pushed lastReflectionAt forward to
+     * "now", so the three-hour gap needsReflection requires could never accumulate - a chatty
+     * resident could go a whole simulated day without ever being able to reflect on anything. */
+    @Test void aResidentWhoTalksOftenStillEventuallyReachesTheReflectionThreshold(){
+        var w=world();w.conversations.clear();
+        CompanionWorld.ResidentState artist=ResidentSimulation.state(w,"artist");
+        Instant baseline=now;
+        artist.lastReflectionAt=baseline;
+        // Isolate this test's own accounting from whatever the warm start already seeded.
+        w.memories=new ArrayList<>(w.memories.stream().filter(m->!(m.ownerId().equals("artist")&&m.at().isAfter(baseline))).toList());
+        Instant at=baseline;
+        for(int i=0;i<4;i++){
+            at=at.plusSeconds(3600); // a fresh conversation every hour - four times more often than the 3h reflection gap
+            var c=twoTurnConversation(w,"cafe","artist","owner",at);
+            ConversationLifecycle.finish(w,c,at.plusSeconds(6),"聊完了");
+            var op=reserveSummary(w,c,"artist",at.plusSeconds(7));
+            assertThat(applySummary(w,op,new Recollection("又聊了几句家常。","平常",c.turnMemoryIds.get("artist")),at.plusSeconds(8))).isTrue();
+            // Confirms the fix holds across repeated summaries, not just a single one.
+            assertThat(artist.lastReflectionAt).as("round %d",i).isEqualTo(baseline);
+        }
+        assertThat(ResidentSimulation.needsReflection(w,"artist",at.plusSeconds(9))).isTrue();
+    }
+
     @Test void fallbackRecollectionDoesNotAttributeYourOwnOnlyLineToTheOtherPerson(){
         var w=world();var c=active(w);var op=reserveTurn(w,c,now);
         failTurn(w,op,now.plusSeconds(1));tick(w,c,now.plusSeconds(10));

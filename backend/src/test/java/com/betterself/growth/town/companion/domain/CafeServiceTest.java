@@ -173,6 +173,102 @@ class CafeServiceTest {
         assertThat(owner.dutyPressure).isLessThan(withQueue);
     }
 
+    // ---- the full happy path: a real day actually produces a served, drunk cup -----------------
+
+    /** The task this test exists to prove: a normal business-hours stretch, with a resident who
+     * actually chooses request_drink and an owner who actually chooses to tend, can carry one cup
+     * all the way from "waiting" through "preparing" and "delivered" to "consumed" - the whole chain
+     * the day's own metrics never observed because nobody chose the first step. This drives every
+     * transition through the same public entry points a real decision loop uses (applyDecision for
+     * both the requester and the owner, then real advance() ticks for the timed parts), never calling
+     * CafeService's internal methods directly the way the narrower unit tests above do. */
+    @Test void aChosenRequestActuallyRunsWaitingThroughPreparingDeliveredToConsumed(){
+        CompanionWorld w = CompanionRules.join("cafe-full-cycle", "住客", "Asia/Shanghai", start);
+        w.conversations.stream().filter(c -> "active".equals(c.status)).forEach(c -> ConversationLifecycle.finish(w, c, start, "测试准备"));
+        ResidentState owner = ResidentSimulation.state(w, "owner");
+        ResidentState student = ResidentSimulation.state(w, "student");
+        ResidentSimulation.replaceActor(w, "owner", "cafe", "idle", "在吧台后面", start.plusSeconds(60)); owner.plan = null;
+        ResidentSimulation.replaceActor(w, "student", "cafe", "idle", "在窗边", start.plusSeconds(60)); student.plan = null;
+        w.serviceRequests.clear();
+
+        assertThat(ResidentSimulation.availableActions(w, "student", start)).contains("request_drink");
+        assertThat(ResidentSimulation.applyDecision(w, "student", student.revision, w.intentRevision, "cafe", "request_drink", null, "想喝点热的", null, List.of(), start)).isTrue();
+        ServiceRequest request = w.serviceRequests.get(w.serviceRequests.size() - 1);
+        assertThat(request.status).isEqualTo("waiting");
+
+        assertThat(ResidentSimulation.availableActions(w, "owner", start.plusSeconds(1))).contains("tend");
+        assertThat(ResidentSimulation.applyDecision(w, "owner", owner.revision, w.intentRevision, "cafe", "tend", request.id, "去照应柜台", null, List.of(), start.plusSeconds(1))).isTrue();
+        assertThat(request.status).isEqualTo("preparing");
+
+        Instant at = start.plusSeconds(1);
+        for (int i = 0; i < 6 && !"delivered".equals(request.status) && !"consumed".equals(request.status); i++) { at = at.plusSeconds(6); CompanionRules.advance(w, at); }
+        assertThat(List.of("delivered", "consumed")).contains(request.status); // PREP_SECONDS has elapsed: the cup is made
+
+        for (int i = 0; i < 6 && !"consumed".equals(request.status); i++) { at = at.plusSeconds(6); CompanionRules.advance(w, at); }
+        assertThat(request.status).isEqualTo("consumed"); // requester never left, so it is actually drunk, not left to go cold
+        assertThat(w.memories.stream().filter(m -> m.ownerId().equals("student") && "service".equals(m.topicId())))
+            .anySatisfy(m -> assertThat(m.text()).contains("端来了一杯"));
+    }
+
+    // ---- a legitimate, bounded reason to want one in the first place ---------------------------
+
+    /** request_drink was offered 32 times in a real run and never chosen once: nothing in a
+     * resident's own perceptions ever gave them a reason to want a drink, so nothing ever competed
+     * with whatever they were already doing. {@link CafeService#drinkWantCue} is a candidate
+     * sentence for that gap, built only from a signal already sanctioned elsewhere in salientPerceptions
+     * (energy translated to a qualitative "很累"), never a new hidden threshold. */
+    @Test void drinkWantCueOnlyFiresForATiredResidentActuallyStandingAtAnOpenCounter(){
+        CompanionWorld w = CompanionRules.join("cafe-want-cue", "住客", "Asia/Shanghai", start);
+        ResidentState student = ResidentSimulation.state(w, "student");
+        ResidentState owner = ResidentSimulation.state(w, "owner");
+        w.serviceRequests.clear();
+
+        // Not tired: no cue, even standing right at the open counter.
+        student.energy = 60;
+        assertThat(CafeService.drinkWantCue(w, student, "cafe", start)).isNull();
+
+        // Tired, but not at the cafe: no cue - this is not a hidden gauge that follows them everywhere.
+        student.energy = 15;
+        assertThat(CafeService.drinkWantCue(w, student, "street", start)).isNull();
+
+        // Tired and at the cafe while it is genuinely open and accepting orders: a real, bounded cue.
+        assertThat(CafeService.drinkWantCue(w, student, "cafe", start)).isNotNull().contains("很累");
+
+        // The operator is never nudged to want their own drink through this path.
+        owner.energy = 10;
+        assertThat(CafeService.drinkWantCue(w, owner, "cafe", start)).isNull();
+
+        // Already has an open request: nothing left to want.
+        CafeService.request(w, student, start);
+        assertThat(CafeService.drinkWantCue(w, student, "cafe", start)).isNull();
+
+        // Cafe not accepting orders: no cue regardless of tiredness.
+        w.serviceRequests.clear();
+        w.cafeOperating = false; CafeService.reconcileSchedule(w, start);
+        assertThat(CafeService.drinkWantCue(w, student, "cafe", start)).isNull();
+    }
+
+    /** The ordinary reason anyone orders anything in a cafe is not thirst - it is having sat there a
+     * while with nothing in front of you. Tiredness is the rarer second case; this is the common one,
+     * and it is the situation, not a body value, that produces it. */
+    @Test void sittingInTheCafeAWhileWithNothingInFrontOfYouIsItsOwnReason(){
+        CompanionWorld w = CompanionRules.join("cafe-settled-cue", "住客", "Asia/Shanghai", start);
+        ResidentState student = ResidentSimulation.state(w, "student");
+        w.serviceRequests.clear();
+        student.energy = 70; // wide awake: the tired branch cannot be what fires here
+
+        student.plan = new CompanionWorld.Plan("p-read","read","cafe",null,"看会儿书",start,start.plusSeconds(3600));
+        // Just sat down - nothing to notice yet.
+        assertThat(CafeService.drinkWantCue(w, student, "cafe", start.plusSeconds(60))).isNull();
+        // Twenty minutes in, looking up.
+        assertThat(CafeService.drinkWantCue(w, student, "cafe", start.plusSeconds(21*60)))
+            .isNotNull().contains("手边还什么都没有");
+
+        // Passing through rather than settled: no cue however long the clock has run.
+        student.plan = new CompanionWorld.Plan("p-walk","travel","cafe",null,"路过",start,start.plusSeconds(3600));
+        assertThat(CafeService.drinkWantCue(w, student, "cafe", start.plusSeconds(21*60))).isNull();
+    }
+
     // ---- no-model fallback --------------------------------------------------------------------
 
     /** With no resident mind configured, elapsed time may finish existing physical work but cannot

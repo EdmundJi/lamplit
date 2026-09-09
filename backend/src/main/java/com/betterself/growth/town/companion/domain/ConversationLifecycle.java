@@ -148,7 +148,13 @@ public final class ConversationLifecycle {
             ||!validEvidence(w,op.speakerId(),summary.evidenceIds())||summary.evidenceIds().isEmpty()
             ||!c.turnMemoryIds.getOrDefault(op.speakerId(),List.of()).containsAll(summary.evidenceIds()))return false;
         memory(w,op.speakerId(),c.id,"reflection",now,c.topicId,summary.text(),summary.evidenceIds(),8);
-        ResidentState r=state(w,op.speakerId());r.thought=summary.text();r.mood=summary.feeling();r.lastReflectionAt=now;
+        // "I remember that exchange" and "I looked back over a stretch of my life and concluded
+        // something" are different acts - see ResidentSimulation.needsReflection/applyReflection.
+        // This used to also set r.lastReflectionAt, which meant every ordinary conversation summary
+        // reset the same three-hour clock that gates a real reflection: a resident who simply talks
+        // often could push that clock forward indefinitely and never accumulate the gap needed to
+        // reach one. Only applyReflection may advance lastReflectionAt now.
+        ResidentState r=state(w,op.speakerId());r.thought=summary.text();r.mood=summary.feeling();
         c.summarizedParticipants.add(op.speakerId());c.recollectionSources.put(op.speakerId(),"model");c.summaryOperationId=null;c.summarySpeakerId=null;w.revision++;return true;
     }
     public static void failSummary(CompanionWorld w,Operation op,Instant now) {

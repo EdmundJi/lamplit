@@ -85,6 +85,46 @@ final class CafeService {
         while (w.serviceRequests.size() > 60) w.serviceRequests.removeFirst();
     }
 
+    /** A candidate qualitative cue for {@code ResidentSimulation.salientPerceptions}, exactly like
+     * the ones it already builds from {@link #mayTend} and {@link #oldestWaitingRequestId} - this
+     * class proposes a sentence, it never decides anything on the resident's behalf. It exists
+     * because request_drink was offered dozens of times in a real run and never once chosen: nothing
+     * in a resident's own perceptions ever gave them a reason to want a drink in the first place, and
+     * a resident with no such reason has no basis to pick it over whatever they were already doing.
+     * The fix is not a new hidden "thirst" gauge (that would be exactly the kind of internal number
+     * docs/04-decisions.md rules out) - it is a targeted phrasing of the one qualitative body signal
+     * already sanctioned and exposed elsewhere in salientPerceptions (r.energy translated to "很累"),
+     * scoped to the one place and moment where acting on it is actually possible. Returns null far
+     * more often than not: only when the resident is standing at an open counter with request_drink
+     * genuinely available to them AND their own already-disclosed tiredness is real. See this
+     * method's caller-side requirement in the PR notes for the one line ResidentSimulation.java needs
+     * to add to actually surface this - CafeService cannot add it there itself. */
+    /** How long someone has to have been settled in the cafe before having nothing in front of them
+     * is a fact worth noticing. Twenty minutes is about when a person who sat down to read looks up. */
+    private static final long SETTLED_SECONDS = 20*60;
+    /** A candidate sentence for {@code ResidentSimulation.salientPerceptions}, phrased the same way
+     * "柜台前有人在等" and "这杯已经等了一阵" already are: an external fact about the resident's own
+     * situation, never a hidden gauge and never an instruction.
+     * <p>The measured problem this exists for: across a simulated day {@code request_drink} was
+     * offered 32 times and chosen zero times, and the cafe served nobody. Nothing in a resident's
+     * context ever gave them a reason to want one - by design, since a "thirst" value is forbidden.
+     * <p>Two situations, in the order a person would actually notice them. The first is the ordinary
+     * one and the reason most drinks get ordered anywhere: you have been sitting in a cafe for a
+     * while with nothing in front of you. The second is the tired band {@code ResidentSimulation}
+     * already renders as "很累" - reused, not a second threshold invented here. Returns null far more
+     * often than not, never fires for whoever is working the counter, and never fires for someone who
+     * already has an order open. */
+    static String drinkWantCue(CompanionWorld w, ResidentState r, String place, Instant now) {
+        if (r == null || !PLACE.equals(place) || !acceptingOrders(w) || r.id.equals(operatorId(w))) return null;
+        if (w.serviceRequests.stream().anyMatch(req -> r.id.equals(req.requesterId) && open(req.status))) return null;
+        boolean settledAWhile = r.plan != null && PLACE.equals(r.plan.place()) && now != null
+            && Duration.between(r.plan.startedAt(), now).getSeconds() >= SETTLED_SECONDS
+            && Set.of("study","read","work","make","rest","observe").contains(r.plan.action());
+        if (settledAWhile) return "在店里坐了有一阵了，手边还什么都没有";
+        if (r.energy <= 20) return "很累，柜台那边说不定能弄点热的";
+        return null;
+    }
+
     // ---- the owner's side: duty vs. everything else -------------------------------------------
 
     /** How much responsibility-pressure the owner is carrying right now: grows with how many people
