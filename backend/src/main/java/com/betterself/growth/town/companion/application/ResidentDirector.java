@@ -347,14 +347,22 @@ public class ResidentDirector {
         }
         // Dead last, below even reflection: this is only ever asked when the town has run out of
         // things to do together, so nothing else can ever be starved by it.
-        if(!ventureUnavailable.get())for(ResidentState r:w.residentStates){
-            if(!ResidentSimulation.needsVenture(w,r.id,now))continue;
+        if(!ventureUnavailable.get()){
+            // Whoever has gone longest without being asked, not whoever happens to be first in the
+            // list - otherwise one resident is asked what they want every single time and the other
+            // five never are. Same fairness the ordinary decision candidate already gets.
+            ResidentState r=w.residentStates.stream()
+                .filter(candidate->ResidentSimulation.needsVenture(w,candidate.id,now))
+                .min(Comparator.comparing((ResidentState candidate)->candidate.lastVentureAt,Comparator.nullsFirst(Comparator.naturalOrder())))
+                .orElse(null);
+            if(r!=null){
             var context=perspective(w,r.id,now,List.of());
             var left=ResidentSimulation.sharedThingsLeft(w,r.id).stream()
                 .map(p->new ResidentMind.KnownProject(p.id,p.title,p.place,"还没做完",
                     r.id.equals(p.ownerId)?null:ResidentSimulation.actor(w,p.ownerId).name())).toList();
             return reserved(w,now,new Work("venture",w.id,r.revision,w.intentRevision,now,context,null,null,null,w.modelSequence+1,day,null,null,null,null,
                 new ResidentMind.VentureRequest(context,left)));
+            }
         }
         return null;
     }

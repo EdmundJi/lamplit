@@ -87,6 +87,79 @@ class ResidentExplainReflectDispatchTest {
         assertThat(ResidentSimulation.unexplainedDeeds(w, "owner")).isEmpty();
     }
 
+    /** A new call kind is exactly where this project keeps producing "compiles clean, feature is
+     * dead": six separate capabilities in this codebase had a completion path, a test, and no route
+     * from the dispatcher to them, and none was noticed until a full run was measured. So venture
+     * gets the same treatment as the rest - dispatched for real, applied through the real propose
+     * path, and visible to everybody afterwards. */
+    @Test void ventureIsDispatchedWhenTheTownHasNothingLeftToDoTogetherAndTheWishActuallyLands() throws Exception {
+        CompanionWorld w = world();
+        parkEveryoneElseAsleep(w, now, "weaver");
+        ResidentState weaver = ResidentSimulation.state(w, "weaver");
+        weaver.plan = new Plan("weaver-sleep", "sleep", "home-weaver", null, "睡着", now, now.plusSeconds(600));
+        for (CompanionWorld.Project p : w.projects) { p.status = "ready"; p.progress = 100; }
+        // Everyone else was asked recently, so the one who has waited longest is 阿满 - which is also
+        // what stops one resident being asked what they want every single time.
+        for (ResidentState other : w.residentStates)
+            if (!other.id.equals("weaver")) other.lastVentureAt = now.minusSeconds(60);
+        assertThat(ResidentSimulation.needsVenture(w, "weaver", now)).isTrue();
+        addRawMemory(w, "weaver", now.minusSeconds(600), 7);
+        String evidenceId = w.memories.stream().filter(m -> m.ownerId().equals("weaver"))
+            .reduce((a, b) -> b).orElseThrow().id();
+
+        var store = new CountingStore(w);
+        var captured = new ResidentMind.VentureRequest[1];
+        ResidentMind mind = new ResidentMind() {
+            public boolean enabled() { return true; }
+            public Decision decide(Context c) { throw new AssertionError("no ordinary decision should be needed here"); }
+            public VentureDraft venture(VentureRequest request) {
+                captured[0] = request;
+                return new VentureDraft("把街口那盏灯修好", "street", "poster", "总有人晚上看不清路", List.of(evidenceId));
+            }
+        };
+        var director = new ResidentDirector(store, mind, Clock.fixed(now, ZoneOffset.UTC));
+        try {
+            director.consider(1, w);
+            await(() -> store.updates.get() >= 2);
+        } finally { director.close(); }
+
+        assertThat(captured[0]).as("venture must actually have been invoked").isNotNull();
+        assertThat(captured[0].perspective().residentId()).isEqualTo("weaver");
+        assertThat(captured[0].sharedThingsLeft()).as("the emptiness is shown, not asserted at them").isEmpty();
+
+        var wish = w.projects.stream().filter(p -> "weaver".equals(p.ownerId)).reduce((a, b) -> b).orElseThrow();
+        assertThat(wish.title).isEqualTo("把街口那盏灯修好");
+        assertThat(wish.place).isEqualTo("street");
+        assertThat(wish.needed).as("a wish is a thing that needs somebody else").isGreaterThan(1);
+        // And it is on the board, or nobody could ever join it.
+        for (String id : List.of("owner", "student", "artist", "gardener", "fixer"))
+            assertThat(ResidentSimulation.knows(w, id, wish.id)).as(id).isTrue();
+        assertThat(ResidentSimulation.needsVenture(w, "weaver", now))
+            .as("asked is asked, whatever came of it").isFalse();
+    }
+
+    /** A mind with no venture of its own must degrade silently, exactly like explain and reflect -
+     * never counted as a real model failure, never able to starve anything else. */
+    @Test void aMindThatCannotVentureIsNotTreatedAsAFailure() throws Exception {
+        CompanionWorld w = world();
+        parkEveryoneElseAsleep(w, now, "weaver");
+        ResidentState weaver = ResidentSimulation.state(w, "weaver");
+        weaver.plan = new Plan("weaver-sleep", "sleep", "home-weaver", null, "睡着", now, now.plusSeconds(600));
+        for (CompanionWorld.Project p : w.projects) { p.status = "ready"; p.progress = 100; }
+
+        var store = new CountingStore(w);
+        ResidentMind mind = new ResidentMind() {
+            public boolean enabled() { return true; }
+            public Decision decide(Context c) { throw new AssertionError("no ordinary decision should be needed here"); }
+        };
+        var director = new ResidentDirector(store, mind, Clock.fixed(now, ZoneOffset.UTC));
+        try {
+            director.consider(1, w);
+            await(() -> store.updates.get() >= 1);
+        } finally { director.close(); }
+        assertThat(w.modelConsecutiveFailures).as("an unimplemented capability is not an outage").isZero();
+    }
+
     @Test void reflectFiresOnlyWhenNothingElseNeedsTheModelAndItsConclusionActuallyLands() throws Exception {
         CompanionWorld w = world();
         parkEveryoneElseAsleep(w, now, "artist");
