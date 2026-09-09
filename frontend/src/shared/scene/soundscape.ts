@@ -1,14 +1,20 @@
 /** Mirrors atmosphere.ts's WeatherKind without depending on the Phaser-heavy module. */
 export type WeatherKind = 'clear' | 'rain' | 'snow'
+export type SoundSpace = 'outdoor' | 'home' | 'cafe'
 
 export type SoundEnvironment = { weather: WeatherKind; minutes: number }
 /** Doorway attenuation: outdoor rain loses both volume and high frequencies. */
-export function soundMix(environment: SoundEnvironment, indoor: boolean) {
+export function soundMix(environment: SoundEnvironment, location: boolean | SoundSpace) {
+  const space: SoundSpace = typeof location === 'boolean' ? (location ? 'home' : 'outdoor') : location
+  const indoor = space !== 'outdoor'
   return {
     wind: indoor ? .004 : environment.weather === 'snow' ? .025 : .017,
     rain: environment.weather === 'rain' ? (indoor ? .028 : .075) : 0,
     cutoff: indoor ? 650 : 7200,
     birds: environment.minutes >= 360 && environment.minutes < 1140 && environment.weather === 'clear' && !indoor,
+    // The recording already sits around -20 dBFS. This gain, followed by the .42 master,
+    // keeps its speech-shaped murmur near -54 dBFS so it reads as room tone while studying.
+    cafe: space === 'cafe' ? .05 : 0,
   }
 }
 
@@ -16,19 +22,29 @@ export function soundMix(environment: SoundEnvironment, indoor: boolean) {
 export class TownSoundscape {
   private enabled = false
   private visible = true
-  private indoor = false
+  private space: SoundSpace = 'outdoor'
+  private cafeOpen = true
   private destroyed = false
   private context: AudioContext | null = null
   private master: GainNode | null = null
   private wind: GainNode | null = null
   private rain: GainNode | null = null
+  private cafe: GainNode | null = null
   private filter: BiquadFilterNode | null = null
   private sources = new Set<AudioScheduledSourceNode>()
   private nodes = new Set<AudioNode>()
   private timer: ReturnType<typeof setInterval> | null = null
   private nextBird = 0
 
-  constructor(private readonly environment: () => SoundEnvironment, private readonly createContext: () => AudioContext = () => new AudioContext()) {}
+  constructor(
+    private readonly environment: () => SoundEnvironment,
+    private readonly createContext: () => AudioContext = () => new AudioContext(),
+    private readonly loadCafeLoop: (context: AudioContext) => Promise<AudioBuffer> = async context => {
+      const response = await fetch('/assets/audio/cafe-roomtone.ogg')
+      if (!response.ok) throw new Error(`Cafe room tone unavailable (${response.status})`)
+      return context.decodeAudioData(await response.arrayBuffer())
+    },
+  ) {}
   private own<T extends AudioNode>(node: T): T { this.nodes.add(node); return node }
 
   private initialize() {
@@ -40,6 +56,11 @@ export class TownSoundscape {
     this.filter = this.own(context.createBiquadFilter())
     this.filter.type = 'lowpass'
     this.filter.connect(this.master)
+    this.cafe = this.own(context.createGain())
+    this.cafe.gain.value = 0
+    // The cafe recording is already band-limited; bypass the doorway filter so indoor
+    // weather can stay muffled without turning the room murmur into a bassy drone.
+    this.cafe.connect(this.master)
     const buffer = context.createBuffer(1, Math.ceil(context.sampleRate * 3), context.sampleRate)
     const samples = buffer.getChannelData(0)
     for (let i = 0; i < samples.length; i++) samples[i] = Math.random() * 2 - 1
@@ -53,11 +74,28 @@ export class TownSoundscape {
       this[kind] = gain
       this.sources.add(source); source.start()
     }
+    void this.initializeCafe(context)
+  }
+
+  private async initializeCafe(context: AudioContext) {
+    try {
+      const buffer = await this.loadCafeLoop(context)
+      if (this.destroyed || this.context !== context || !this.cafe) return
+      const source = this.own(context.createBufferSource())
+      source.buffer = buffer
+      source.loop = true
+      source.connect(this.cafe)
+      this.sources.add(source)
+      source.start()
+    } catch { /* Weather remains available when the optional recording cannot load. */ }
   }
 
   setEnabled(enabled: boolean) { if (!this.destroyed) { this.enabled = enabled; this.sync() } }
   setVisible(visible: boolean) { if (!this.destroyed) { this.visible = visible; this.sync() } }
-  setIndoor(indoor: boolean) { if (!this.destroyed) { this.indoor = indoor; this.refresh() } }
+  setIndoor(indoor: boolean) { this.setSpace(indoor ? 'home' : 'outdoor') }
+  setSpace(space: SoundSpace) { if (!this.destroyed) { this.space = space; this.refresh() } }
+  /** Set from authoritative world state; callers must not infer opening hours from the local clock. */
+  setCafeOpen(open: boolean) { if (!this.destroyed) { this.cafeOpen = open; this.refresh() } }
 
   private sync() {
     if (!this.enabled || !this.visible) {
@@ -82,10 +120,11 @@ export class TownSoundscape {
   refresh() {
     const context = this.context
     if (!context || this.destroyed || !this.enabled || !this.visible) return
-    const mix = soundMix(this.environment(), this.indoor)
+    const mix = soundMix(this.environment(), this.space)
     this.master?.gain.setTargetAtTime(.42, context.currentTime, .35)
     this.wind?.gain.setTargetAtTime(mix.wind, context.currentTime, .7)
     this.rain?.gain.setTargetAtTime(mix.rain, context.currentTime, .7)
+    this.cafe?.gain.setTargetAtTime(this.cafeOpen ? mix.cafe : 0, context.currentTime, .8)
     this.filter?.frequency.setTargetAtTime(mix.cutoff, context.currentTime, .45)
     if (mix.birds && context.state === 'running' && context.currentTime >= this.nextBird) {
       this.nextBird = context.currentTime + 14 + Math.random() * 16
@@ -119,7 +158,7 @@ export class TownSoundscape {
     for (const node of this.nodes) node.disconnect()
     this.sources.clear(); this.nodes.clear()
     if (this.context) void this.context.close().catch(() => {})
-    this.context = null; this.master = this.wind = this.rain = null; this.filter = null
+    this.context = null; this.master = this.wind = this.rain = this.cafe = null; this.filter = null
   }
   destroy() { if (!this.destroyed) { this.destroyed = true; this.releaseAudio() } }
 }

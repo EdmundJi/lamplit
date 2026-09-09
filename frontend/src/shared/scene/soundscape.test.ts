@@ -17,7 +17,12 @@ function audioDouble() {
     suspend: vi.fn(async () => { context.state = 'suspended' }),
     close: vi.fn(async () => { context.state = 'closed' }),
   }
-  return { context, nodes, factory: vi.fn(() => context as unknown as AudioContext) }
+  return {
+    context,
+    nodes,
+    factory: vi.fn(() => context as unknown as AudioContext),
+    cafeLoop: vi.fn(async () => ({ duration: 45 } as AudioBuffer)),
+  }
 }
 
 afterEach(() => { vi.useRealTimers() })
@@ -25,7 +30,7 @@ afterEach(() => { vi.useRealTimers() })
 describe('procedural town sound lifecycle', () => {
   it('allocates nothing until opt-in and remains silent when visibility changes', () => {
     vi.useFakeTimers()
-    const audio = audioDouble(), sound = new TownSoundscape(() => ({ weather: 'rain', minutes: 1080 }), audio.factory)
+    const audio = audioDouble(), sound = new TownSoundscape(() => ({ weather: 'rain', minutes: 1080 }), audio.factory, audio.cafeLoop)
     sound.refresh(); sound.setVisible(false); sound.setVisible(true); sound.setIndoor(true)
     expect(audio.factory).not.toHaveBeenCalled()
     expect(vi.getTimerCount()).toBe(0)
@@ -34,10 +39,10 @@ describe('procedural town sound lifecycle', () => {
 
   it('suspends hidden/disabled sound, resumes the same context, and releases every source/node/timer on destroy', async () => {
     vi.useFakeTimers()
-    const audio = audioDouble(), sound = new TownSoundscape(() => ({ weather: 'clear', minutes: 720 }), audio.factory)
+    const audio = audioDouble(), sound = new TownSoundscape(() => ({ weather: 'clear', minutes: 720 }), audio.factory, audio.cafeLoop)
     sound.setEnabled(true)
-    await Promise.resolve()
-    expect(audio.context.createBufferSource).toHaveBeenCalledTimes(2)
+    await Promise.resolve(); await Promise.resolve()
+    expect(audio.context.createBufferSource).toHaveBeenCalledTimes(3)
     expect(audio.context.createOscillator).toHaveBeenCalledTimes(1)
     expect(vi.getTimerCount()).toBe(1)
     sound.setVisible(false)
@@ -62,7 +67,7 @@ describe('procedural town sound lifecycle', () => {
 
   it('changes to muffled rain indoors and restores the outdoor filter after leaving', () => {
     vi.useFakeTimers()
-    const audio = audioDouble(), sound = new TownSoundscape(() => ({ weather: 'rain', minutes: 1100 }), audio.factory)
+    const audio = audioDouble(), sound = new TownSoundscape(() => ({ weather: 'rain', minutes: 1100 }), audio.factory, audio.cafeLoop)
     sound.setEnabled(true)
     const outputFilter = audio.context.createBiquadFilter.mock.results[0]!.value
     expect(outputFilter.frequency.setTargetAtTime).toHaveBeenLastCalledWith(7200, 0, .45)
@@ -71,6 +76,27 @@ describe('procedural town sound lifecycle', () => {
     sound.setIndoor(false)
     expect(outputFilter.frequency.setTargetAtTime).toHaveBeenLastCalledWith(7200, 0, .45)
     expect(audio.context.createOscillator).not.toHaveBeenCalled()
+    sound.destroy()
+  })
+
+  it('loads the local cafe loop only after opt-in and fades it with the viewed space', async () => {
+    vi.useFakeTimers()
+    const audio = audioDouble(), sound = new TownSoundscape(() => ({ weather: 'clear', minutes: 720 }), audio.factory, audio.cafeLoop)
+    sound.setSpace('cafe')
+    expect(audio.cafeLoop).not.toHaveBeenCalled()
+    sound.setEnabled(true)
+    await Promise.resolve(); await Promise.resolve()
+    expect(audio.cafeLoop).toHaveBeenCalledOnce()
+    const cafeGain = audio.context.createGain.mock.results[1]!.value
+    const cafeSource = audio.context.createBufferSource.mock.results[2]!.value
+    expect(cafeSource.loop).toBe(true)
+    expect(cafeGain.gain.setTargetAtTime).toHaveBeenLastCalledWith(.05, 0, .8)
+    sound.setCafeOpen(false)
+    expect(cafeGain.gain.setTargetAtTime).toHaveBeenLastCalledWith(0, 0, .8)
+    sound.setCafeOpen(true)
+    expect(cafeGain.gain.setTargetAtTime).toHaveBeenLastCalledWith(.05, 0, .8)
+    sound.setSpace('home')
+    expect(cafeGain.gain.setTargetAtTime).toHaveBeenLastCalledWith(0, 0, .8)
     sound.destroy()
   })
 
@@ -88,5 +114,7 @@ describe('environment sound mix', () => {
     for (const [weather, minutes, indoor] of [['clear', 1200, false], ['rain', 720, false], ['clear', 720, true]] as const)
       expect(soundMix({ weather, minutes }, indoor).birds).toBe(false)
     expect(soundMix({ weather: 'rain', minutes: 1000 }, true).rain).toBeLessThan(soundMix({ weather: 'rain', minutes: 1000 }, false).rain)
+    expect(soundMix({ weather: 'clear', minutes: 720 }, 'cafe').cafe).toBe(.05)
+    expect(soundMix({ weather: 'clear', minutes: 720 }, 'home').cafe).toBe(0)
   })
 })
