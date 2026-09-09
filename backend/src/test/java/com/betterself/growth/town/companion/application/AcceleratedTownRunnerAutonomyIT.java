@@ -107,7 +107,12 @@ class AcceleratedTownRunnerAutonomyIT {
                 assertThat(r.occupation).isNotBlank();
                 assertThat(r.careerIntent).isNotNull();
                 assertThat(r.lifeIntent).isNotNull();
-                assertThat(r.plan).isNotNull();
+                // Not r.plan: a null plan (nothing currently decided, waiting on a rule habit or a
+                // model decision - see ResidentSimulation.step's awaitDecision) is an ordinary resting
+                // state, not a self-heal failure. "plan" itself was never stripped from the legacy
+                // tree above, so whichever residents were already idle in `original` (this is normal -
+                // e.g. straight out of CompanionRules.join's own warm-start, before this test even
+                // touches JSON) round-trip with that same, legitimate null plan.
             });
     }
 
@@ -133,31 +138,66 @@ class AcceleratedTownRunnerAutonomyIT {
         CompanionRules.advance(world, eightInTown.plusSeconds(6));
 
         var gardener = ResidentSimulation.state(world, "gardener");
+        var gardenerActor = ResidentSimulation.actor(world, "gardener");
         assertThat(world.cafeOperatorId).isEqualTo("gardener");
         assertThat(gardener.occupation).isEqualTo("经营咖啡馆");
-        assertThat(gardener.plan.action()).isNotEqualTo("away");
-        assertThat(gardener.plan.reason()).doesNotContain("花圃");
+        // The cafe is not open yet (nobody has decided to unlock the door), so a brand-new operator
+        // with nothing else already decided is legitimately idle here - see ResidentSimulation.step's
+        // r.plan==null branch and awaitDecision, which is a normal resting state, not a bug. What this
+        // test actually guards is that the takeover does not silently resurrect the OLD occupation's
+        // fixed routine (garden work) instead of that ordinary idle wait.
+        if (gardener.plan != null) {
+            assertThat(gardener.plan.action()).isNotEqualTo("away");
+            assertThat(gardener.plan.reason()).doesNotContain("花圃");
+        }
+        assertThat(gardenerActor.activity()).isNotIn("away", "work");
+        assertThat(gardenerActor.label()).doesNotContain("花圃").doesNotContain("花园");
     }
 
-    @Test void anAcceptedHelperActuallyFinishesAWaitingRequestAndCanEndFutureAuthority() {
-        CompanionWorld world = CompanionRules.join("qa-helper-service", "我", "Asia/Shanghai", NOW);
+    @Test void anAcceptedHelperActuallyFinishesAWaitingRequestAndCanEndFutureAuthority() throws Exception {
+        CompanionWorld world = CompanionRules.join("qa-helper-service", "我", "Asia/Shanghai", NOW, true);
         world.conversations.clear();
         assertThat(ResidentSimulation.proposeWorkArrangement(world, "artist", "assist", "owner", "我来替一阵", NOW)).isTrue();
         String arrangementId = world.workArrangements.getLast().id;
         assertThat(ResidentSimulation.acceptWorkArrangement(world, "owner", arrangementId, NOW.plusSeconds(1))).isTrue();
 
+        // CafeService deliberately turns nothing - not dutyPressure, not elapsed waiting time - into
+        // an action on a resident's own behalf ("a pattern the rules detect on a resident's behalf is
+        // not the resident noticing it" - see CafeService's own class javadoc). Tending the counter in
+        // response to a waiting request is a real decision action now (ResidentSimulation.DECISION_ACTIONS,
+        // gated by availableActions' own "tend" candidate) that only the model ever chooses; the rules
+        // only ever surface the qualitative fact that someone is waiting. So this exercises that real
+        // decision path instead of asserting dutyPressure alone flips the plan by itself.
+        parkOtherResidents(world, "artist", NOW.plusSeconds(7_200));
+        // The student still has to be physically present at the cafe for the coffee to be delivered to
+        // them, even while parked out of decision-candidacy the same way parkOtherResidents already
+        // parks everyone else (CafeService only ever checks the requester's place, never activity).
+        ResidentSimulation.state(world, "student").plan = new CompanionWorld.Plan("qa-park-student", "sleep", "cafe", null, "QA隔离", NOW, NOW.plusSeconds(7_200));
+        moveActor(world, "student", "cafe", "sleep", "QA隔离", NOW.plusSeconds(7_200));
+
         moveActor(world, "artist", "cafe", "make", "继续手上的画", NOW.plusSeconds(300));
         var artist = ResidentSimulation.state(world, "artist");
         artist.plan = new CompanionWorld.Plan("qa-art", "make", "cafe", null, "继续手上的画", NOW, NOW.plusSeconds(300));
-        artist.dutyPressure = 100;
-        moveActor(world, "student", "cafe", "rest", "等一杯热饮", NOW.plusSeconds(300));
         var request = new CompanionWorld.ServiceRequest();
         request.id = "qa-request"; request.requesterId = "student"; request.kind = "coffee";
         request.place = "cafe"; request.status = "waiting"; request.requestedAt = NOW;
         world.serviceRequests.add(request);
 
-        CompanionRules.advance(world, NOW.plusSeconds(6));
-        assertThat(artist.plan.action()).isEqualTo("tend");
+        var store = new InMemoryWorldStore(); store.seed(41L, world);
+        var clock = new MutableClock(NOW.plusSeconds(6));
+        ResidentMind mind = new ResidentMind() {
+            @Override public boolean enabled() { return true; }
+            @Override public Decision decide(Context context) {
+                assertThat(context.residentId()).isEqualTo("artist");
+                return new Decision("tend", "cafe", null, "先去照应一下柜台，客人等着", "", List.of(), null, null);
+            }
+        };
+        var director = new ResidentDirector(store, mind, clock, 32, new InMemoryModelUsage());
+        try {
+            director.consider(41L, world);
+            await(() -> artist.plan != null && "tend".equals(artist.plan.action()));
+        } finally { director.close(); }
+
         assertThat(request.status).isEqualTo("preparing");
         assertThat(ResidentSimulation.endWorkArrangement(world, "artist", arrangementId, "ended", NOW.plusSeconds(7))).isTrue();
         assertThat(ResidentSimulation.mayTend(world, "artist")).isFalse();
@@ -179,12 +219,20 @@ class AcceleratedTownRunnerAutonomyIT {
         try {
             service.advance(21L);
             await(() -> store.read(21L).modelConsecutiveFailures > 0);
-            List<String> before = store.read(21L).residentStates.stream().filter(r -> !r.id.equals("self")).map(r -> r.plan.id()).toList();
+            // A resident with nothing currently decided (r.plan == null, waiting on either a rule
+            // habit or a model decision - see ResidentSimulation.step's awaitDecision) is an ordinary,
+            // common resting state, not a corruption; two of the four seeded residents are already
+            // sitting there straight out of CompanionRules.join's own warm-start. What this test is
+            // actually pinning is that a failing model does not corrupt or reshuffle the resident
+            // roster or their plan identities - so compare plan identity (present-or-absent) rather
+            // than assuming every plan slot is populated.
+            List<String> before = store.read(21L).residentStates.stream().filter(r -> !r.id.equals("self"))
+                .map(r -> r.plan == null ? null : r.plan.id()).toList();
             clock.advanceTo(NOW.plusSeconds(6));
             CompanionWorld after = service.advance(21L).world();
             assertThat(after.modelRetryAfter).isNotNull();
-            assertThat(after.residentStates).filteredOn(r -> !r.id.equals("self")).allMatch(r -> r.plan != null);
-            assertThat(after.residentStates.stream().filter(r -> !r.id.equals("self")).map(r -> r.plan.id()).toList()).hasSize(before.size());
+            assertThat(after.residentStates.stream().filter(r -> !r.id.equals("self"))
+                .map(r -> r.plan == null ? null : r.plan.id()).toList()).isEqualTo(before);
         } finally { director.close(); }
     }
 

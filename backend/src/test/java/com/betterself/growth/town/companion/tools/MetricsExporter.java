@@ -38,6 +38,7 @@ public final class MetricsExporter {
         metrics.put("relationshipAsymmetry", relationshipAsymmetryMetrics(finalWorld));
         metrics.put("memories", memoryMetrics(sortedEntries));
         metrics.put("coLocation", coLocationMetrics(collector));
+        metrics.put("jointAction", jointActionMetrics(collector, sortedEntries));
         return metrics;
     }
 
@@ -230,6 +231,51 @@ public final class MetricsExporter {
         return out;
     }
 
+    // ---- doing one thing together ---------------------------------------------------------------
+
+    /** How often two people actually did one thing together, split by how much each kind is worth.
+     * The headline is {@code chosen} - a shared project, or somebody going over to sit with somebody -
+     * because those are the only ones where a resident picked a person. {@code sameActivity} is
+     * reported beside it and deliberately kept out of the total: everybody's place habits point at
+     * the cafe, so two people reading in the same room is mostly the map, not a decision.
+     * <p>Episodes shorter than {@link #JOINT_MIN_MINUTES} are dropped. Walking past somebody who is
+     * doing what you are doing is not doing it with them. */
+    private static final long JOINT_MIN_MINUTES = 5;
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> jointActionMetrics(TimelineCollector collector, List<Map<String, Object>> entries) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        Map<String, Integer> byKind = new TreeMap<>();
+        Map<String, Integer> chosenPerDay = new TreeMap<>();
+        List<Object> kept = new ArrayList<>();
+        int chosen = 0;
+        for (Map<String, Object> e : collector.jointEpisodes()) {
+            long minutes = ((Number) e.get("minutes")).longValue();
+            if (minutes < JOINT_MIN_MINUTES) continue;
+            String kind = (String) e.get("kind");
+            byKind.merge(kind, 1, Integer::sum);
+            kept.add(e);
+            if (!"sameActivity".equals(kind)) {
+                chosen++;
+                chosenPerDay.merge(((String) e.get("startedAt")).substring(0, 10), 1, Integer::sum);
+            }
+        }
+        out.put("byKind", byKind);
+        out.put("chosenTotal", chosen);
+        out.put("chosenPerDay", chosenPerDay);
+        // The target this whole line of work is aimed at, stated in the metric itself so a run either
+        // meets it or visibly does not - see docs/04 for why it is three and not some larger number.
+        out.put("targetPerDay", 3);
+        out.put("daysMeetingTarget", chosenPerDay.values().stream().filter(n -> n >= 3).count());
+        out.put("distinctDays", chosenPerDay.size());
+        out.put("episodes", kept);
+        // Context, never part of the total: conversations are together too, but the town already
+        // makes plenty and folding them in would let the number pass without anything changing.
+        long conversations = entries.stream().filter(e -> "dialogue".equals(e.get("kind"))).count();
+        out.put("dialogueTurnsForContext", conversations);
+        return out;
+    }
+
     private static double round2(double v) { return Math.round(v * 100) / 100.0; }
 
     // ---- writing -----------------------------------------------------------------------------
@@ -282,6 +328,24 @@ public final class MetricsExporter {
         sb.append("## 同一时刻同一地点人数分布\n\n");
         sb.append("- 分组规模直方图（key=同一地点人数，value=样本数）：").append(colo.get("groupSizeHistogram")).append('\n');
         sb.append("- 采样点总数：").append(colo.get("totalPlaceSamples")).append('\n');
+        sb.append('\n');
+
+        Map<String, Object> joint = (Map<String, Object>) metrics.get("jointAction");
+        sb.append("## 两个人一起做同一件事\n\n");
+        sb.append("- 主动的（共同项目 + 主动过去坐下）：").append(joint.get("chosenTotal"))
+          .append("，按天：").append(joint.get("chosenPerDay")).append('\n');
+        sb.append("- 达标天数（每天≥").append(joint.get("targetPerDay")).append("）：")
+          .append(joint.get("daysMeetingTarget")).append(" / ").append(joint.get("distinctDays")).append('\n');
+        sb.append("- 分类计数：").append(joint.get("byKind"))
+          .append("（sameActivity 是碰巧同处一室做同类事，不计入上面的主动数）\n");
+        for (Object rowObj : (List<Object>) joint.get("episodes")) {
+            Map<String, Object> row = (Map<String, Object>) rowObj;
+            if ("sameActivity".equals(row.get("kind"))) continue;
+            sb.append("  - ").append(row.get("startedAt")).append(' ').append(row.get("kind"))
+              .append(" @").append(row.get("place")).append("：").append(row.get("residentNames"))
+              .append("，").append(row.get("subject")).append("，持续 ").append(row.get("minutes")).append(" 分钟\n");
+        }
+        sb.append('\n');
 
         Files.createDirectories(file.getParent());
         Files.writeString(file, sb.toString(), StandardCharsets.UTF_8);

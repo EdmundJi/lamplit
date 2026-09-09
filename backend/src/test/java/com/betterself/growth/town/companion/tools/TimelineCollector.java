@@ -51,6 +51,24 @@ public final class TimelineCollector {
      * across 1-2 is a town that actually disperses. See MetricsExporter's "同一时刻同一地点" metric. */
     private final Map<Integer, Long> coLocationHistogram = new TreeMap<>();
 
+    /** Every stretch of time in which two or more residents were doing one thing together, keyed by
+     * episode id and holding who, where, what, and how long. Co-location is not this: four people who
+     * happen to be in the cafe are four people in a room. What is counted here is a shared subject -
+     * the same project under two pairs of hands, or one person having gone over to sit with another -
+     * and it is counted once per episode, not once per tick, so a long afternoon together is one
+     * thing that happened and not three hundred.
+     * <p>The reason this exists as its own metric: a full measured day produced zero project
+     * completions, because a communal project caps at 75% until it has as many contributors as it
+     * needs (see ResidentSimulation's create/help branch) and nobody ever put their hands on somebody
+     * else's. "Two people doing one thing" is the thinnest line in this town, and a thin line that is
+     * not measured is a thin line nobody notices staying thin. */
+    private final Map<String, Map<String, Object>> jointEpisodes = new LinkedHashMap<>();
+    /** Open episode id per subject key, plus when that key was last seen, so consecutive ticks extend
+     * one episode and a real gap starts a new one. */
+    private final Map<String, String> openEpisodeId = new HashMap<>();
+    private final Map<String, Instant> openEpisodeLastSeen = new HashMap<>();
+    private int jointEpisodeSequence;
+
     /** All entries captured so far, in capture order (not necessarily chronological - sort by "at" before export). */
     public List<Map<String, Object>> entries() {
         return entries;
@@ -64,6 +82,10 @@ public final class TimelineCollector {
         return coLocationHistogram;
     }
 
+    public Collection<Map<String, Object>> jointEpisodes() {
+        return jointEpisodes.values();
+    }
+
     public void capture(CompanionWorld w) {
         if (w == null) return;
         avatarName = w.name;
@@ -75,6 +97,118 @@ public final class TimelineCollector {
         captureRelationshipChanges(w);
         captureServiceRequests(w);
         captureCoLocation(w);
+        captureJointAction(w);
+    }
+
+    /** How long a shared subject may go unseen before the next sighting counts as a new episode
+     * rather than a continuation - generously more than one tick (8 simulated seconds with a model,
+     * 60 without), so a single missed sample does not split one afternoon in two. */
+    private static final long JOINT_EPISODE_GAP_SECONDS = 300;
+    /** Actions that are joinable work: doing one of these next to somebody doing the same is the
+     * weak, coincidental tier of togetherness (see "sameActivity" below), never the headline. */
+    private static final Set<String> SHARED_ACTIVITIES = Set.of("study", "read", "work", "make", "create", "help", "observe", "rest", "tend");
+
+    /** One tick's worth of "who is doing one thing with whom". Three tiers, deliberately kept apart
+     * because they are worth very different amounts:
+     * <ul>
+     * <li>{@code sharedProject} - two or more people with their hands on the SAME project at the same
+     *     place. This is the unambiguous reading of "两个人一起做同一件事" and the one the town has
+     *     never managed.
+     * <li>{@code satTogether} - somebody chose to go and sit with somebody else ({@code join}). Real
+     *     togetherness, weaker: being beside someone is not doing their thing with them.
+     * <li>{@code sameActivity} - two people in one place doing the same kind of thing, neither of the
+     *     above. Mostly coincidence: everybody's place habits point at the cafe, so this fires without
+     *     anybody having chosen anybody. Counted so it can be SUBTRACTED from the impression the other
+     *     two give, never added to it.
+     * </ul>
+     * Conversations are not counted at all. Talking is together, but the town already produces
+     * conversations by the dozen and folding them in here would make the number meaningless.
+     */
+    private void captureJointAction(CompanionWorld w) {
+        Instant at = w.simulatedAt == null ? w.updatedAt : w.simulatedAt;
+        if (at == null) return;
+        Map<String, ResidentState> byId = new HashMap<>();
+        for (ResidentState r : w.residentStates) byId.put(r.id, r);
+        Map<String, Actor> actors = new HashMap<>();
+        for (Actor a : w.residents) actors.put(a.id(), a);
+        if (w.avatar != null) actors.put(w.avatar.id(), w.avatar);
+
+        Set<String> claimed = new HashSet<>(); // ids already counted in a stronger tier this tick
+
+        // Tier 1: the same project under more than one pair of hands.
+        Map<String, List<String>> byProject = new LinkedHashMap<>();
+        for (var e : byId.entrySet()) {
+            ResidentState r = e.getValue();
+            Actor a = actors.get(r.id);
+            if (r.plan == null || a == null || a.activity().equals("walk")) continue;
+            if (!Set.of("create", "help").contains(r.plan.action()) || r.plan.targetId() == null) continue;
+            if (!a.place().equals(r.plan.place())) continue;
+            byProject.computeIfAbsent(r.plan.targetId() + "@" + a.place(), k -> new ArrayList<>()).add(r.id);
+        }
+        for (var e : byProject.entrySet()) {
+            if (e.getValue().size() < 2) continue;
+            claimed.addAll(e.getValue());
+            String projectId = e.getKey().substring(0, e.getKey().lastIndexOf('@'));
+            String place = e.getKey().substring(e.getKey().lastIndexOf('@') + 1);
+            noteJointEpisode(w, "sharedProject", place, projectId, e.getValue(), at);
+        }
+
+        // Tier 2: somebody went over and sat with somebody else.
+        for (var e : byId.entrySet()) {
+            ResidentState r = e.getValue();
+            Actor a = actors.get(r.id);
+            if (r.plan == null || a == null || !"join".equals(r.plan.action()) || r.plan.targetId() == null) continue;
+            Actor other = actors.get(r.plan.targetId());
+            if (other == null || !other.place().equals(a.place())) continue;
+            if (claimed.contains(r.id)) continue;
+            claimed.add(r.id); claimed.add(other.id());
+            noteJointEpisode(w, "satTogether", a.place(), r.plan.targetId(), List.of(r.id, other.id()), at);
+        }
+
+        // Tier 3: the coincidental one - same place, same kind of thing, nobody chose anybody.
+        Map<String, List<String>> byPlaceActivity = new LinkedHashMap<>();
+        for (var e : byId.entrySet()) {
+            Actor a = actors.get(e.getKey());
+            if (a == null || claimed.contains(a.id()) || !SHARED_ACTIVITIES.contains(a.activity())) continue;
+            byPlaceActivity.computeIfAbsent(a.place() + "|" + a.activity(), k -> new ArrayList<>()).add(a.id());
+        }
+        for (var e : byPlaceActivity.entrySet()) {
+            if (e.getValue().size() < 2) continue;
+            String[] parts = e.getKey().split("\\|", 2);
+            noteJointEpisode(w, "sameActivity", parts[0], parts[1], e.getValue(), at);
+        }
+    }
+
+    /** Opens a new episode for this (kind, place, subject, cast) or extends the open one. The cast is
+     * part of the key on purpose: a third person joining two others is a different thing happening,
+     * and collapsing it into the first would hide exactly the growth this metric exists to see. */
+    private void noteJointEpisode(CompanionWorld w, String kind, String place, String subject, List<String> ids, Instant at) {
+        List<String> cast = ids.stream().distinct().sorted().toList();
+        String key = kind + "|" + place + "|" + subject + "|" + String.join(",", cast);
+        Instant lastSeen = openEpisodeLastSeen.get(key);
+        boolean continues = lastSeen != null && java.time.Duration.between(lastSeen, at).getSeconds() <= JOINT_EPISODE_GAP_SECONDS;
+        if (!continues) {
+            String id = "je-" + (++jointEpisodeSequence);
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("id", id);
+            row.put("kind", kind);
+            row.put("place", place);
+            row.put("subject", subject);
+            row.put("residentIds", cast);
+            row.put("residentNames", cast.stream().map(this::nameOf).toList());
+            row.put("startedAt", at.toString());
+            row.put("endedAt", at.toString());
+            row.put("minutes", 0L);
+            jointEpisodes.put(id, row);
+            openEpisodeId.put(key, id);
+        } else {
+            Map<String, Object> row = jointEpisodes.get(openEpisodeId.get(key));
+            if (row != null) {
+                row.put("endedAt", at.toString());
+                row.put("minutes", java.time.Duration.between(Instant.parse((String) row.get("startedAt")), at).toMinutes());
+            }
+        }
+        openEpisodeLastSeen.put(key, at);
     }
 
     private void captureDiary(CompanionWorld w) {
