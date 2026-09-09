@@ -75,56 +75,42 @@ app:
     access-key: ${OBJECT_STORAGE_ACCESS_KEY:}
     secret-key: ${OBJECT_STORAGE_SECRET_KEY:}
   ai:
-    # DEEPSEEK_* are the honest names: this slot has always pointed at DeepSeek (api.deepseek.com), the
-    # QWEN_* prefix was a historical misnomer. QWEN_* is kept as a fallback for shared containers and
-    # local envs that have not been updated yet - see docs/05-notes.md - and is not itself deprecated
-    # in a way that stops working; it is just no longer the name anything new should be written against.
-    provider: ${DEEPSEEK_PROVIDER:${QWEN_PROVIDER:mock}}
-    base-url: ${DEEPSEEK_BASE_URL:${QWEN_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}}
-    api-key: ${DEEPSEEK_API_KEY:${QWEN_API_KEY:}}
-    model: ${DEEPSEEK_MODEL:${QWEN_MODEL:qwen-plus}}
-    timeout: ${DEEPSEEK_TIMEOUT:${QWEN_TIMEOUT:PT120S}}
-    stream-timeout: ${DEEPSEEK_STREAM_TIMEOUT:${QWEN_STREAM_TIMEOUT:PT130S}}
-    json-mode: ${DEEPSEEK_JSON_MODE:${QWEN_JSON_MODE:true}}
-    # Which wire format the vendor-agnostic thinking switch (app.town.companion-model.thinking.* below)
-    # gets translated into for this shared slot - see QwenHttpProvider.applyThinkingSwitch. Defaults to
-    # "deepseek" because this slot has always pointed at DeepSeek in practice (docs/05-notes.md);
-    # DeepSeek's own field shape is {"thinking":{"type":"enabled"|"disabled"}}, not Qwen's enable_thinking.
-    thinking-style: ${DEEPSEEK_THINKING_STYLE:deepseek}
+    # Qwen3.8-Flash is the app-wide primary model. QWEN3_* remains a compatibility source for local
+    # environments created while Qwen was a town-only second provider; new configuration uses QWEN_*.
+    provider: ${QWEN_PROVIDER:mock}
+    base-url: ${QWEN_BASE_URL:${QWEN3_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}}
+    api-key: ${QWEN_API_KEY:${QWEN3_API_KEY:}}
+    model: ${QWEN_MODEL:${QWEN3_MODEL:qwen3.8-flash}}
+    timeout: ${QWEN_TIMEOUT:${QWEN3_TIMEOUT:PT60S}}
+    stream-timeout: ${QWEN_STREAM_TIMEOUT:${QWEN3_STREAM_TIMEOUT:PT70S}}
+    json-mode: ${QWEN_JSON_MODE:${QWEN3_JSON_MODE:true}}
+    # Qwen's OpenAI-compatible endpoint expects enable_thinking, never DeepSeek's thinking object.
+    thinking-style: ${QWEN_THINKING_STYLE:qwen}
+    thinking-enabled: ${QWEN_THINKING_ENABLED:false}
     retention-days: ${AI_RETENTION_DAYS:30}
 
   town:
     companion-model:
-      # The companion town's second provider (qwen3.8-flash via DashScope's OpenAI-compatible endpoint).
-      # Supplements the deepseek slot above rather than replacing it - see CompanionModelConfig and
-      # RoutingResidentMind for how the two are chosen between per call type, with failover. Its wire
-      # format for the thinking switch is fixed to "qwen" (enable_thinking) in CompanionModelConfig -
-      # this bean is always DashScope/Qwen by construction, unlike the shared slot above.
-      qwen3:
-        base-url: ${QWEN3_BASE_URL:}
-        api-key: ${QWEN3_API_KEY:}
-        model: ${QWEN3_MODEL:qwen3.8-flash}
-        timeout: ${QWEN3_TIMEOUT:PT60S}
-        stream-timeout: ${QWEN3_STREAM_TIMEOUT:PT70S}
-        json-mode: ${QWEN3_JSON_MODE:true}
-      # Vendor-agnostic thinking on/off, one switch per call type, applied to whichever provider ends
-      # up serving that call type (see QwenResidentMind/QwenHttpProvider - each provider translates a
-      # non-null value into its own wire field). Measured, not assumed (see docs/05-notes.md): turning
-      # thinking off is a large latency/token win on both deepseek and qwen3 for decision-shaped calls,
-      # so that is the default. turn/summary are left at "no opinion" (unset -> provider default,
-      # currently thinking-on) because dialogue/recollection are creative, in-character text and
-      # whether disabling thinking there holds up on quality has not been measured yet - moving them
-      # without evidence would be exactly the regression this change is meant to avoid.
+      # DeepSeek is isolated to the companion fallback route. It no longer occupies app.ai, so other
+      # AI features and the town's primary route both use the same real Qwen configuration above.
+      deepseek:
+        base-url: ${DEEPSEEK_BASE_URL:}
+        api-key: ${DEEPSEEK_API_KEY:}
+        model: ${DEEPSEEK_MODEL:deepseek-v4-flash}
+        timeout: ${DEEPSEEK_TIMEOUT:PT120S}
+        stream-timeout: ${DEEPSEEK_STREAM_TIMEOUT:PT130S}
+        json-mode: ${DEEPSEEK_JSON_MODE:true}
+      # Vendor-agnostic thinking switches. The Qwen primary runs all resident calls without thinking;
+      # QwenHttpProvider translates false to the real enable_thinking:false request field.
       thinking:
         decision: ${COMPANION_MODEL_THINKING_DECISION:false}
-        turn: ${COMPANION_MODEL_THINKING_TURN:}
-        summary: ${COMPANION_MODEL_THINKING_SUMMARY:}
+        turn: ${COMPANION_MODEL_THINKING_TURN:false}
+        summary: ${COMPANION_MODEL_THINKING_SUMMARY:false}
       # Which provider answers each call type, in try-order (first entry tried first, later entries are
-      # the failover path if an earlier one throws - see RoutingResidentMind). Decisions default to
-      # qwen3 first per the user's "Qwen as primary" request; deepseek is the configured fallback there
-      # (and the reverse for turn/summary, which stay on deepseek first) - this is a configuration
-      # choice, not a claim that deepseek cannot also turn thinking off (it can, see above).
+      # the failover path if an earlier one throws - see RoutingResidentMind). Qwen3.8-Flash is the
+      # primary for the resident's decisions, dialogue, and recollections. DeepSeek stays available as
+      # an explicit production failure fallback; Qwen-only evaluations set a one-entry qwen route.
       routes:
-        decision: ${COMPANION_MODEL_ROUTE_DECISION:qwen3,deepseek}
-        turn: ${COMPANION_MODEL_ROUTE_TURN:deepseek,qwen3}
-        summary: ${COMPANION_MODEL_ROUTE_SUMMARY:deepseek,qwen3}
+        decision: ${COMPANION_MODEL_ROUTE_DECISION:qwen,deepseek}
+        turn: ${COMPANION_MODEL_ROUTE_TURN:qwen,deepseek}
+        summary: ${COMPANION_MODEL_ROUTE_SUMMARY:qwen,deepseek}

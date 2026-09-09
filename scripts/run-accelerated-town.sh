@@ -6,13 +6,14 @@
 # Usage:
 #   scripts/run-accelerated-town.sh                          # 3 rule-only days, no model, no tokens spent
 #   scripts/run-accelerated-town.sh --days 5                 # 5 rule-only days
-#   scripts/run-accelerated-town.sh --model --days 0.02      # real DeepSeek calls, ~29 simulated minutes
+#   scripts/run-accelerated-town.sh --model --days 0.02      # real Qwen3.8-Flash calls, ~29 simulated minutes
+#   scripts/run-accelerated-town.sh --model --provider deepseek --days 0.02  # explicit fallback probe
 #   scripts/run-accelerated-town.sh --model --days 0.1 --out /tmp/my-run
 #   scripts/run-accelerated-town.sh --model --days 2 --resume-from /tmp/my-run/world-snapshot.json \
 #     --out /tmp/my-run-continued                            # pick up where a previous run left off
 #
-# --model reads QWEN_BASE_URL/QWEN_API_KEY/QWEN_MODEL/QWEN_TIMEOUT from .env.local (never printed
-# or written anywhere else). Without --model, no credentials are read and no network call is made.
+# --model defaults to the QWEN_* group. --provider deepseek explicitly selects DEEPSEEK_* instead.
+# One run uses one provider and never silently falls back. Without --model, no credentials are read.
 #
 # Output (default backend/target/accelerated-run, or backend/target/accelerated-run-model with
 # --model unless --out is given):
@@ -41,11 +42,13 @@ model=false
 out=""
 world_id=""
 resume_from=""
+model_provider="qwen"
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --days) days="$2"; shift 2 ;;
     --model) model=true; shift ;;
+    --provider) model_provider="$2"; shift 2 ;;
     --out) out="$2"; shift 2 ;;
     --world-id) world_id="$2"; shift 2 ;;
     --resume-from) resume_from="$2"; shift 2 ;;
@@ -60,6 +63,7 @@ fi
 export COMPANION_RUN=true
 export COMPANION_RUN_DAYS="$days"
 export COMPANION_RUN_MODEL="$model"
+export COMPANION_RUN_MODEL_PROVIDER="$model_provider"
 export COMPANION_RUN_OUT="$out"
 if [ -n "$world_id" ]; then export COMPANION_RUN_WORLD_ID="$world_id"; fi
 if [ -n "$resume_from" ]; then export COMPANION_RUN_RESUME_FROM="$resume_from"; fi

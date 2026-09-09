@@ -25,34 +25,40 @@ class RoutingResidentMindTest {
     private static final Instant NOW = Instant.parse("2026-09-08T06:00:00Z");
     private static final ObjectMapper JSON = new ObjectMapper().findAndRegisterModules();
 
-    @Test void decisionRoutesToQwen3FirstByDefault() {
-        var qwen3 = residentMind("qwen3", decisionJson(), 10, 5);
+    @Test void decisionRoutesToQwenFirstByDefault() {
+        var qwen = residentMind("qwen", decisionJson(), 10, 5);
         var deepseek = residentMind("deepseek", decisionJson(), 999, 999);
-        var routing = routing(deepseek, qwen3, "qwen3,deepseek", "deepseek,qwen3", "deepseek,qwen3");
+        var routing = routing(deepseek, qwen, "qwen,deepseek", "qwen,deepseek", "qwen,deepseek");
 
         var result = routing.decideMetered(context());
 
-        assertThat(result.usage().provider()).isEqualTo("qwen3");
+        assertThat(result.usage().provider()).isEqualTo("qwen");
         assertThat(result.usage().inputTokens()).isEqualTo(10);
     }
 
-    @Test void turnRoutesToDeepseekFirstByDefault() throws Exception {
+    @Test void turnAndSummaryRouteToQwenFirstByDefault() throws Exception {
         var utteranceJson = JSON.writeValueAsString(
             new ConversationLifecycle.Utterance("路过看看。", false, "平静", "none", null, List.of(), "🙂"));
         var deepseek = residentMind("deepseek", utteranceJson, 40, 20);
-        var qwen3 = residentMind("qwen3", utteranceJson, 999, 999);
-        var routing = routing(deepseek, qwen3, "qwen3,deepseek", "deepseek,qwen3", "deepseek,qwen3");
+        var qwen = residentMind("qwen", utteranceJson, 12, 6);
+        var routing = routing(deepseek, qwen, "qwen,deepseek", "qwen,deepseek", "qwen,deepseek");
 
         var result = routing.generateTurnMetered(new ResidentMind.DialogueRequest(context(), "c1", 0, "op1", "阿禾", "随口聊聊"));
 
-        assertThat(result.usage().provider()).isEqualTo("deepseek");
+        assertThat(result.usage().provider()).isEqualTo("qwen");
         assertThat(result.value().text()).isEqualTo("路过看看。");
+
+        String summaryJson=JSON.writeValueAsString(new ConversationLifecycle.Recollection("记得路过时说了一句。","平静",List.of()));
+        var summaryRouting=routing(residentMind("deepseek",summaryJson,40,20),residentMind("qwen",summaryJson,13,7),"qwen,deepseek","qwen,deepseek","qwen,deepseek");
+        var summary=summaryRouting.summarizeConversationMetered(new ResidentMind.SummaryRequest(context(),"c1","阿禾",List.of(),List.of()));
+        assertThat(summary.usage().provider()).isEqualTo("qwen");
+        assertThat(summary.value().text()).contains("路过");
     }
 
     @Test void fallsOverToTheNextProviderWhenTheFirstOneFails() {
         var failing = failingMind();
         var healthy = residentMind("deepseek", decisionJson(), 30, 15);
-        var routing = routing(failing, healthy, "qwen3,deepseek", "qwen3,deepseek", "qwen3,deepseek");
+        var routing = routing(healthy, failing, "qwen,deepseek", "qwen,deepseek", "qwen,deepseek");
 
         var result = routing.decideMetered(context());
 
@@ -61,10 +67,21 @@ class RoutingResidentMindTest {
     }
 
     @Test void propagatesTheFailureWhenEveryProviderInTheRouteFails() {
-        var routing = routing(failingMind(), failingMind(), "qwen3,deepseek", "qwen3,deepseek", "qwen3,deepseek");
+        var routing = routing(failingMind(), failingMind(), "qwen,deepseek", "qwen,deepseek", "qwen,deepseek");
 
         assertThatThrownBy(() -> routing.decideMetered(context()))
             .isInstanceOf(RuntimeException.class);
+    }
+
+    @Test void qwenOnlyEvaluationNeverSilentlyUsesAHealthyDeepseekFallback() {
+        var routing=routing(residentMind("deepseek",decisionJson(),20,10),failingMind(),"qwen","qwen","qwen");
+
+        assertThatThrownBy(()->routing.decideMetered(context())).isInstanceOf(RuntimeException.class);
+    }
+
+    @Test void historicalQwen3RouteNameStillSelectsTheQwenMindButReportsCanonicalSupplier() {
+        var routing=routing(failingMind(),residentMind("qwen",decisionJson(),10,5),"qwen3","qwen3","qwen3");
+        assertThat(routing.decideMetered(context()).usage().provider()).isEqualTo("qwen");
     }
 
     @Test void unknownProviderNamesInTheRouteAreSkippedNotFatal() {
@@ -83,8 +100,8 @@ class RoutingResidentMindTest {
         assertThat(new RoutingResidentMind(mind, mind, "qwen", false, "deepseek", "deepseek", "deepseek").enabled()).isFalse();
     }
 
-    private static RoutingResidentMind routing(QwenResidentMind deepseek, QwenResidentMind qwen3, String decisionRoute, String turnRoute, String summaryRoute) {
-        return new RoutingResidentMind(deepseek, qwen3, "qwen", true, decisionRoute, turnRoute, summaryRoute);
+    private static RoutingResidentMind routing(QwenResidentMind deepseek, QwenResidentMind qwen, String decisionRoute, String turnRoute, String summaryRoute) {
+        return new RoutingResidentMind(deepseek, qwen, "qwen", true, decisionRoute, turnRoute, summaryRoute);
     }
 
     private static String decisionJson() {

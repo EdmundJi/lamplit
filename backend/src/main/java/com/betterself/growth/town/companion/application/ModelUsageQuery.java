@@ -10,12 +10,13 @@ public interface ModelUsageQuery {
     /**
      * Short codes for the provider tag folded into a stored call_type (see {@link #encodeCallType}).
      * Kept short on purpose: the persisted column is VARCHAR(16) and a migration is out of scope for
-     * this change, so "deepseek"/"qwen3" become "ds"/"q3" rather than growing the schema.
+     * this change, so "deepseek"/"qwen" become "ds"/"q3" rather than growing the schema. The old
+     * "qwen3" provider tag maps to the same Qwen code for stored-history compatibility.
      */
-    Map<String, String> PROVIDER_CODES = Map.of("deepseek", "ds", "qwen3", "q3");
+    Map<String, String> PROVIDER_CODES = Map.of("deepseek", "ds", "qwen", "q3", "qwen3", "q3");
 
     /**
-     * Folds a provider tag into a call type for storage, e.g. ("decision","qwen3") -> "decision@q3".
+     * Folds a provider tag into a call type for storage, e.g. ("decision","qwen") -> "decision@q3".
      * A null/blank provider (usage that was never attributed to a specific supplier - the mock
      * provider, an unmeasured call, a pre-routing recorder) leaves the call type untouched.
      */
@@ -36,11 +37,11 @@ public interface ModelUsageQuery {
             int at = callType.indexOf('@');
             if (at < 0) return null;
             String code = callType.substring(at + 1);
-            return PROVIDER_CODES.entrySet().stream()
-                .filter(e -> e.getValue().equals(code))
-                .map(Map.Entry::getKey)
-                .findFirst()
-                .orElse(code);
+            return switch(code) {
+                case "q3" -> "qwen"; // includes rows written under the historical qwen3 tag
+                case "ds" -> "deepseek";
+                default -> code;
+            };
         }
     }
 }

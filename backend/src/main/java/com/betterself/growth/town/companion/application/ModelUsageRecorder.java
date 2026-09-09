@@ -14,7 +14,7 @@ public interface ModelUsageRecorder {
 
     /**
      * Provider-aware variant: same counters, but the call type is tagged with which supplier
-     * (e.g. "deepseek", "qwen3") actually served the call - see {@link ModelUsageQuery#encodeCallType}.
+     * (e.g. "qwen", "deepseek") actually served the call - see {@link ModelUsageQuery#encodeCallType}.
      * Additive on purpose: the default folds the tag into {@code callType} and forwards to the plain
      * method above, so every existing implementation (JdbcModelUsage, the accelerated run's in-memory
      * ledger, test fakes) keeps compiling and behaving unchanged unless it opts in by overriding this.

@@ -38,8 +38,13 @@ public interface QwenProvider {
         String requestId,
         int inputTokens,
         int outputTokens,
-        long latencyMs
+        long latencyMs,
+        boolean reasoningContentPresent,
+        int reasoningTokens
     ) {
+        public StructuredResult(String json,String model,String requestId,int inputTokens,int outputTokens,long latencyMs) {
+            this(json,model,requestId,inputTokens,outputTokens,latencyMs,false,0);
+        }
     }
 
     record StreamMetadata(String model, String requestId, int inputTokens, int outputTokens, long latencyMs) {

@@ -23,9 +23,9 @@ import java.util.function.Consumer;
 import java.util.stream.Stream;
 
 // @Primary matters now that a second, independently-credentialed QwenProvider bean exists for the
-// companion town's qwen3 route (see CompanionModelConfig): every other unqualified QwenProvider
-// injection point (AiService, GoalTemplateService, SuggestionService, and the deepseek-side
-// ResidentMind) must keep resolving to this one, exactly as before. Never both @Primary at once -
+// companion town's DeepSeek fallback (see CompanionModelConfig): every unqualified QwenProvider
+// injection point (AiService, GoalTemplateService, SuggestionService, and the Qwen-side
+// ResidentMind) resolves to this app-wide Qwen primary. Never both @Primary at once -
 // this and MockQwenProvider are mutually exclusive via the same app.ai.provider switch.
 @Primary
 @Component
@@ -41,6 +41,7 @@ public class QwenHttpProvider implements QwenProvider {
     private final Duration streamTimeout;
     private final boolean jsonMode;
     private final String thinkingStyle;
+    private final Boolean defaultThinking;
 
     public QwenHttpProvider(
         ObjectMapper objectMapper,
@@ -49,7 +50,12 @@ public class QwenHttpProvider implements QwenProvider {
         String model,
         Duration timeout
     ) {
-        this(objectMapper, baseUrl, apiKey, model, timeout, timeout, true, null);
+        this(objectMapper, baseUrl, apiKey, model, timeout, timeout, true, null, null);
+    }
+
+    public QwenHttpProvider(ObjectMapper objectMapper,String baseUrl,String apiKey,String model,Duration timeout,
+                            Duration streamTimeout,boolean jsonMode,String thinkingStyle) {
+        this(objectMapper,baseUrl,apiKey,model,timeout,streamTimeout,jsonMode,thinkingStyle,null);
     }
 
     @Autowired
@@ -69,9 +75,11 @@ public class QwenHttpProvider implements QwenProvider {
         // "deepseek" -> {"thinking":{"type":"enabled"|"disabled"}}, "qwen" -> enable_thinking:<bool>.
         // Unrecognized/null means "no known vendor field, send nothing" - callers pass a vendor-agnostic
         // on/off switch, this class is where it becomes a specific vendor's field name, never the other
-        // way around. Defaults to "deepseek" because this slot has always pointed at DeepSeek in
-        // practice (see docs/05-notes.md); override per environment if it ever points elsewhere.
-        @Value("${app.ai.thinking-style:deepseek}") String thinkingStyle
+        // way around. The app-wide primary is Qwen, so its default is the enable_thinking wire style.
+        @Value("${app.ai.thinking-style:qwen}") String thinkingStyle,
+        // The primary Qwen runs without reasoning unless a call explicitly opts in. Nullable keeps
+        // manually constructed compatibility clients free to leave the vendor default untouched.
+        @Value("${app.ai.thinking-enabled:false}") Boolean defaultThinking
     ) {
         String normalizedApiKey = apiKey == null ? "" : apiKey.trim();
         if (normalizedApiKey.isBlank() || isPlaceholder(normalizedApiKey)) {
@@ -99,6 +107,7 @@ public class QwenHttpProvider implements QwenProvider {
         this.streamTimeout = streamTimeout;
         this.jsonMode = jsonMode;
         this.thinkingStyle = thinkingStyle;
+        this.defaultThinking = defaultThinking;
     }
 
     @Override
@@ -123,7 +132,9 @@ public class QwenHttpProvider implements QwenProvider {
             content,
             root.path("model").asText(model), root.path("id").asText(),
             root.path("usage").path("prompt_tokens").asInt(), root.path("usage").path("completion_tokens").asInt(),
-            Duration.ofNanos(System.nanoTime() - started).toMillis()
+            Duration.ofNanos(System.nanoTime() - started).toMillis(),
+            root.path("choices").path(0).path("message").has("reasoning_content"),
+            root.path("usage").path("completion_tokens_details").path("reasoning_tokens").asInt()
         );
     }
 
@@ -240,7 +251,8 @@ public class QwenHttpProvider implements QwenProvider {
             body.put("messages", messages);
             body.put("temperature", 0.2);
             body.put("max_tokens", 2000);
-            if (thinkingEnabled != null) applyThinkingSwitch(body, thinkingEnabled);
+            Boolean effectiveThinking=thinkingEnabled==null?defaultThinking:thinkingEnabled;
+            if (effectiveThinking != null) applyThinkingSwitch(body, effectiveThinking);
             // Legacy, model-specific hardcode: kept exactly as-is (it wins over the generic switch
             // above by being applied after it) because existing behavior/tests pin deepseek-v4-* to
             // thinking-disabled unconditionally, independent of what any caller passes in.

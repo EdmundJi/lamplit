@@ -43,7 +43,9 @@ class QwenContractTest {
                 {"id":"provider-request","model":"qwen-contract","choices":[{"message":{"content":"%s"}}],"usage":{"prompt_tokens":12,"completion_tokens":7}}
                 """.formatted(content.replace("\"", "\\\"")));
         });
-        QwenHttpProvider provider = provider();
+        String url="http://127.0.0.1:"+server.getAddress().getPort()+"/v1";
+        QwenHttpProvider provider = new QwenHttpProvider(new ObjectMapper(),url,"unit-test-provider-key","qwen-contract",
+            Duration.ofSeconds(2),Duration.ofSeconds(2),true,"qwen",false);
 
         QwenProvider.StructuredResult result = provider.generateStructured(
             new QwenProvider.StructuredPrompt("STUDY", "create tasks", "{\"type\":\"object\"}")
@@ -86,7 +88,9 @@ class QwenContractTest {
             exchange.getResponseBody().write("data: [DONE]\n\n".getBytes(StandardCharsets.UTF_8));
             exchange.close();
         });
-        QwenHttpProvider provider = provider();
+        String url="http://127.0.0.1:"+server.getAddress().getPort()+"/v1";
+        QwenHttpProvider provider = new QwenHttpProvider(new ObjectMapper(),url,"unit-test-provider-key","qwen-contract",
+            Duration.ofSeconds(2),Duration.ofSeconds(2),true,"qwen",false);
         List<String> deltas = new ArrayList<>();
 
         QwenProvider.StreamMetadata result = provider.stream(
@@ -95,6 +99,7 @@ class QwenContractTest {
 
         assertThat(requestBody.get()).contains("\"stream\":true");
         assertThat(requestBody.get()).contains("\"include_usage\":true");
+        assertThat(requestBody.get()).contains("\"enable_thinking\":false");
         assertThat(deltas).containsExactly("你好，", "今天先做一步。");
         assertThat(result.model()).isEqualTo("qwen-stream");
         assertThat(result.requestId()).isEqualTo("stream-request");
@@ -149,6 +154,29 @@ class QwenContractTest {
 
         deepseekProvider.generateStructured(new QwenProvider.StructuredPrompt("COMPANION_RESIDENT", "hello", "{}", true));
         assertThat(bodies.get(3)).contains("\"thinking\":{\"type\":\"enabled\"}");
+
+        // The app-wide Qwen primary defaults to non-thinking even for older callers using the
+        // three-argument prompt. An explicit per-call value still takes precedence above.
+        var defaultOffQwen = new QwenHttpProvider(new ObjectMapper(),url,"unit-test-provider-key","qwen3.8-flash",
+            Duration.ofSeconds(2),Duration.ofSeconds(2),true,"qwen",false);
+        defaultOffQwen.generateStructured(new QwenProvider.StructuredPrompt("GOAL_TEMPLATE","hello","{}"));
+        assertThat(bodies.get(4)).contains("\"enable_thinking\":false").doesNotContain("\"thinking\"");
+    }
+
+    @Test
+    void structuredResultReportsReasoningFieldsFromTheActualProviderResponse() throws Exception {
+        start(exchange -> json(exchange,"""
+            {"model":"qwen3.8-flash","choices":[{"message":{"content":"{}","reasoning_content":"internal"}}],
+             "usage":{"prompt_tokens":9,"completion_tokens":6,"completion_tokens_details":{"reasoning_tokens":4}}}
+            """));
+        String url="http://127.0.0.1:"+server.getAddress().getPort()+"/v1";
+        var provider=new QwenHttpProvider(new ObjectMapper(),url,"unit-test-provider-key","qwen3.8-flash",Duration.ofSeconds(2),Duration.ofSeconds(2),true,"qwen");
+
+        var result=provider.generateStructured(new QwenProvider.StructuredPrompt("COMPANION_RESIDENT","hello","{}",false));
+
+        assertThat(result.model()).isEqualTo("qwen3.8-flash");
+        assertThat(result.reasoningContentPresent()).isTrue();
+        assertThat(result.reasoningTokens()).isEqualTo(4);
     }
 
     @Test

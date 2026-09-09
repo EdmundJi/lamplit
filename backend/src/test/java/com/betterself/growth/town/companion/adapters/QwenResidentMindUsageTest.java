@@ -44,7 +44,9 @@ class QwenResidentMindUsageTest {
         var turnMind = new QwenResidentMind(fakeProvider(utteranceJson, 88, 40), json, "qwen", true);
         var turnResult = turnMind.generateTurnMetered(
             new ResidentMind.DialogueRequest(context, "conversation-1", 0, "operation-1", "阿禾", "随口聊聊"));
-        assertThat(turnResult.usage()).isEqualTo(new ResidentMind.Usage(88, 40));
+        assertThat(turnResult.usage().inputTokens()).isEqualTo(88);
+        assertThat(turnResult.usage().outputTokens()).isEqualTo(40);
+        assertThat(turnResult.usage().model()).isEqualTo("fake-model");
         assertThat(turnResult.value().text()).isEqualTo("我们去看看花吧。");
 
         String recollectionJson = json.writeValueAsString(
@@ -52,7 +54,9 @@ class QwenResidentMindUsageTest {
         var summaryMind = new QwenResidentMind(fakeProvider(recollectionJson, 50, 30), json, "qwen", true);
         var summaryResult = summaryMind.summarizeConversationMetered(
             new ResidentMind.SummaryRequest(context, "conversation-1", "阿禾", List.of(), List.of()));
-        assertThat(summaryResult.usage()).isEqualTo(new ResidentMind.Usage(50, 30));
+        assertThat(summaryResult.usage().inputTokens()).isEqualTo(50);
+        assertThat(summaryResult.usage().outputTokens()).isEqualTo(30);
+        assertThat(summaryResult.usage().model()).isEqualTo("fake-model");
         assertThat(summaryResult.value().text()).isEqualTo("聊得挺好。");
     }
 

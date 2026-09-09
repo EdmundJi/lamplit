@@ -17,20 +17,14 @@ import java.util.function.Function;
 
 /**
  * The one {@link ResidentMind} bean {@code ResidentDirector} actually depends on. It does not talk to
- * any provider itself - it holds one {@link QwenResidentMind} per named provider ("deepseek", "qwen3")
+ * any provider itself - it holds one {@link QwenResidentMind} per named provider ("qwen", "deepseek")
  * and, for each call type (decision/turn/summary), tries them in the configured order, falling back to
  * the next provider on failure. Routing and failover are therefore the same list: "the order to try
  * providers in" doubles as "what to fail over to".
  *
- * Default routes (see docs/05-notes.md for the measurements behind this):
- * - decision: qwen3 first, deepseek second - qwen3 as the requested primary, deepseek as its backup.
- *   With thinking off (see app.town.companion-model.thinking.*) the two are measured near-identical on
- *   latency/tokens, so this is a configuration choice (the user's "Qwen as primary" request), not a
- *   claim that one is faster than the other - both can disable thinking, each via its own wire field.
- * - turn / summary: deepseek first, qwen3 second (unchanged from before this change). These are the
- *   creative, in-character calls (dialogue, first-person recollection); whether disabling thinking
- *   holds up on quality there is untested for either provider, so neither the default provider nor the
- *   default thinking setting for these call types moves without evidence.
+ * Qwen3.8-Flash is the primary for every companion call type. DeepSeek remains the explicit second
+ * entry so a production outage can degrade rather than stop the town. Evaluation runs can configure
+ * a one-entry {@code qwen} route to measure Qwen itself without silently substituting DeepSeek.
  *
  * All of this is overridable via app.town.companion-model.routes.* / COMPANION_MODEL_ROUTE_* so the
  * defaults are a recommendation, not a constraint baked into the code.
@@ -46,16 +40,17 @@ public class RoutingResidentMind implements ResidentMind {
 
     public RoutingResidentMind(
         @Qualifier("deepseekResidentMind") QwenResidentMind deepseek,
-        @Qualifier("qwen3ResidentMind") QwenResidentMind qwen3,
+        @Qualifier("qwenResidentMind") QwenResidentMind qwen,
         @Value("${app.ai.provider:mock}") String providerName,
         @Value("${app.town.companion-model-enabled:true}") boolean modelEnabled,
-        @Value("${app.town.companion-model.routes.decision:qwen3,deepseek}") String decisionRoute,
-        @Value("${app.town.companion-model.routes.turn:deepseek,qwen3}") String turnRoute,
-        @Value("${app.town.companion-model.routes.summary:deepseek,qwen3}") String summaryRoute
+        @Value("${app.town.companion-model.routes.decision:qwen,deepseek}") String decisionRoute,
+        @Value("${app.town.companion-model.routes.turn:qwen,deepseek}") String turnRoute,
+        @Value("${app.town.companion-model.routes.summary:qwen,deepseek}") String summaryRoute
     ) {
         this.mindsByProvider = new LinkedHashMap<>();
         this.mindsByProvider.put("deepseek", deepseek);
-        this.mindsByProvider.put("qwen3", qwen3);
+        this.mindsByProvider.put("qwen", qwen);
+        this.mindsByProvider.put("qwen3", qwen); // compatibility for an older explicit route value
         this.routes = Map.of(
             "decision", parseRoute(decisionRoute),
             "turn", parseRoute(turnRoute),
@@ -69,7 +64,7 @@ public class RoutingResidentMind implements ResidentMind {
 
     private static List<String> parseRoute(String csv) {
         List<String> order = Arrays.stream(csv.split(",")).map(String::trim).filter(s -> !s.isBlank()).toList();
-        return order.isEmpty() ? List.of("deepseek") : order;
+        return order.isEmpty() ? List.of("qwen") : order;
     }
 
     @Override public boolean enabled() { return enabled; }
@@ -95,7 +90,7 @@ public class RoutingResidentMind implements ResidentMind {
      * propagates, which is exactly what ResidentDirector's existing consecutive-failure backoff expects.
      */
     private <T> Result<T> attempt(String callType, Function<QwenResidentMind, Result<T>> call) {
-        List<String> order = routes.getOrDefault(callType, List.of("deepseek"));
+        List<String> order = routes.getOrDefault(callType, List.of("qwen"));
         RuntimeException last = null;
         for (int i = 0; i < order.size(); i++) {
             String providerKey = order.get(i);

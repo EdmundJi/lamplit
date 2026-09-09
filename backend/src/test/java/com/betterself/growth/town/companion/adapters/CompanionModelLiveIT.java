@@ -15,8 +15,7 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Opt-in live contract probe for BOTH companion model providers - deepseek (the existing "QWEN_"-
- * named slot) and qwen3 (the new one). Credentials stay in the environment, never JVM properties,
+ * Opt-in live contract probe for both companion model providers. Credentials stay in the environment, never JVM properties,
  * arguments, or logs; only latency, token counts, and the model's own (non-secret) reply text are
  * printed. This is the "did we actually call both providers for real" evidence for docs/05-notes.md -
  * run it locally with COMPANION_LIVE_MODEL_TEST=true and the relevant *_BASE_URL/*_API_KEY/*_MODEL
@@ -28,9 +27,9 @@ class CompanionModelLiveIT {
     private static final Instant NOW = Instant.parse("2026-09-08T06:00:00Z");
 
     @Test void deepseekAnswersADecisionCallForReal() throws Exception {
-        String baseUrl = firstNonBlank(System.getenv("DEEPSEEK_BASE_URL"), System.getenv("QWEN_BASE_URL"));
-        String apiKey = firstNonBlank(System.getenv("DEEPSEEK_API_KEY"), System.getenv("QWEN_API_KEY"));
-        String model = firstNonBlank(System.getenv("DEEPSEEK_MODEL"), System.getenv("QWEN_MODEL"));
+        String baseUrl = System.getenv("DEEPSEEK_BASE_URL");
+        String apiKey = System.getenv("DEEPSEEK_API_KEY");
+        String model = System.getenv("DEEPSEEK_MODEL");
         assumeConfigured("deepseek", baseUrl, apiKey, model);
 
         var provider = new QwenHttpProvider(JSON, baseUrl, apiKey, model, Duration.ofSeconds(35), Duration.ofSeconds(35), true, "deepseek");
@@ -41,16 +40,19 @@ class CompanionModelLiveIT {
         report("deepseek", model, timedDecision(mind));
     }
 
-    @Test void qwen3AnswersADecisionCallForReal() throws Exception {
-        String baseUrl = System.getenv("QWEN3_BASE_URL");
-        String apiKey = System.getenv("QWEN3_API_KEY");
-        String model = System.getenv("QWEN3_MODEL");
-        assumeConfigured("qwen3", baseUrl, apiKey, model);
+    @Test void qwenAnswersADecisionCallWithoutReasoningForReal() throws Exception {
+        String baseUrl = firstNonBlank(System.getenv("QWEN_BASE_URL"), System.getenv("QWEN3_BASE_URL"));
+        String apiKey = firstNonBlank(System.getenv("QWEN_API_KEY"), System.getenv("QWEN3_API_KEY"));
+        String model = firstNonBlank(System.getenv("QWEN_MODEL"), System.getenv("QWEN3_MODEL"));
+        assumeConfigured("qwen", baseUrl, apiKey, model);
 
         var provider = new QwenHttpProvider(JSON, baseUrl, apiKey, model, Duration.ofSeconds(35), Duration.ofSeconds(35), true, "qwen");
-        var mind = new QwenResidentMind(provider, JSON, "qwen", true, "qwen3", false, null, null);
+        var mind = new QwenResidentMind(provider, JSON, "qwen", true, "qwen", false, false, false);
 
-        report("qwen3", model, timedDecision(mind));
+        var timed=timedDecision(mind);
+        assertThat(timed.result().usage().model()).isEqualTo(model);
+        assertThat(timed.result().usage().reasoningTokens()).isZero();
+        report("qwen", model, timed);
     }
 
     private record Timed(ResidentMind.Result<ResidentMind.Decision> result, long millis) {}
@@ -66,10 +68,13 @@ class CompanionModelLiveIT {
     private void report(String provider, String model, Timed timed) throws Exception {
         System.out.println("Live companion model contract: " + JSON.writeValueAsString(Map.of(
             "provider", provider,
-            "model", model,
+            "configuredModel", model,
+            "actualModel", timed.result().usage() == null ? "unmeasured" : timed.result().usage().model(),
             "latencyMs", timed.millis(),
             "inputTokens", timed.result().usage() == null ? -1 : timed.result().usage().inputTokens(),
             "outputTokens", timed.result().usage() == null ? -1 : timed.result().usage().outputTokens(),
+            "reasoningContentPresent", timed.result().usage() != null && timed.result().usage().reasoningContentPresent(),
+            "reasoningTokens", timed.result().usage() == null ? -1 : timed.result().usage().reasoningTokens(),
             "action", timed.result().value().action(),
             "reason", timed.result().value().reason()
         )));
