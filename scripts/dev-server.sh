@@ -92,7 +92,13 @@ case "${1:-up}" in
         echo "已停止。数据卷保留，下次 up 还在。"
         ;;
     restart)
-        "${COMPOSE[@]}" restart "${2:-backend}"
+        # up -d，不是 restart。`docker compose restart` 只重启容器里的进程，不会拿
+        # compose 文件重新比对配置——所以给某个服务加了环境变量或挂载之后 restart
+        # 一次，看起来重启成功了，实际跑的还是旧容器、旧配置。
+        # 这不是假想：后端曾经因此起不来，容器里既没有 COMPANION_MEMORY_ROOT 也没有
+        # 记忆卷，日志里报的是 sqlite 打不开——查了半天才发现文件里配置一直是对的，
+        # 只是运行中的容器从来没吃到过。up -d 在配置没变时是空操作，变了才重建。
+        "${COMPOSE[@]}" up -d "${2:-backend}"
         ;;
     logs)
         if [[ -n "${2:-}" ]]; then "${COMPOSE[@]}" logs -f --tail=200 "$2"; else "${COMPOSE[@]}" logs -f --tail=100; fi
@@ -125,7 +131,7 @@ case "${1:-up}" in
         [[ "$confirm" == "yes" ]] || { echo "已取消。"; exit 0; }
         "${COMPOSE[@]}" exec -T mysql sh -c \
             'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot -e "drop database if exists '"${MYSQL_DATABASE:-growth}"'; create database '"${MYSQL_DATABASE:-growth}"' character set utf8mb4;"'
-        "${COMPOSE[@]}" restart backend
+        "${COMPOSE[@]}" up -d backend
         echo "库已重建，后端重启后 Flyway 会把 V1~V22 重新跑一遍。"
         ;;
     *)
