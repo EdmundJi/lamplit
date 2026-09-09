@@ -95,13 +95,13 @@ class RoutingResidentMindTest {
 
     @Test void enabledOnlyWhenTheGeneralProviderIsQwenAndTheTownToggleIsOn() {
         var mind = residentMind("deepseek", decisionJson(), 1, 1);
-        assertThat(new RoutingResidentMind(mind, mind, "qwen", true, "deepseek", "deepseek", "deepseek", "deepseek").enabled()).isTrue();
-        assertThat(new RoutingResidentMind(mind, mind, "mock", true, "deepseek", "deepseek", "deepseek", "deepseek").enabled()).isFalse();
-        assertThat(new RoutingResidentMind(mind, mind, "qwen", false, "deepseek", "deepseek", "deepseek", "deepseek").enabled()).isFalse();
+        assertThat(new RoutingResidentMind(mind, mind, "qwen", true, "deepseek", "deepseek", "deepseek", "deepseek", "deepseek").enabled()).isTrue();
+        assertThat(new RoutingResidentMind(mind, mind, "mock", true, "deepseek", "deepseek", "deepseek", "deepseek", "deepseek").enabled()).isFalse();
+        assertThat(new RoutingResidentMind(mind, mind, "qwen", false, "deepseek", "deepseek", "deepseek", "deepseek", "deepseek").enabled()).isFalse();
     }
 
     private static RoutingResidentMind routing(QwenResidentMind deepseek, QwenResidentMind qwen, String decisionRoute, String turnRoute, String summaryRoute) {
-        return new RoutingResidentMind(deepseek, qwen, "qwen", true, decisionRoute, turnRoute, summaryRoute, decisionRoute);
+        return new RoutingResidentMind(deepseek, qwen, "qwen", true, decisionRoute, turnRoute, summaryRoute, decisionRoute, decisionRoute);
     }
 
     private static String decisionJson() {

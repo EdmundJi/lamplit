@@ -204,6 +204,12 @@ class AcceleratedTownRunnerAutonomyIT {
         moveActor(world, "owner", "cafe", "observe", "想聊聊工作", NOW.plusSeconds(300));
 
         CompanionRules.advance(world, NOW.plusSeconds(6));
+        // The rules only put the two of them face to face; saying something is the resident's own
+        // answer now (see ResidentSimulation.applyReaction). This test is about what happens once a
+        // conversation is under way, so it gives that answer directly instead of relying on a model.
+        var noticed = world.pendingEncounters.stream().findFirst().orElseThrow();
+        assertThat(ResidentSimulation.applyReaction(world, noticed.id, ResidentSimulation.state(world, noticed.residentId).revision,
+            "greet", "在店里碰上了，说两句", List.of(), NOW.plusSeconds(6))).isTrue();
         var conversation = world.conversations.stream().filter(c -> c.status.equals("active") && c.topicId.equals("life")).findFirst().orElseThrow();
 
         AtomicInteger turns = new AtomicInteger();

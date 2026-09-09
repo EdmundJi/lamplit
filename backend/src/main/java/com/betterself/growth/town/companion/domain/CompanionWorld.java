@@ -46,6 +46,21 @@ public class CompanionWorld {
      * bookkeeping - a timestamp, never sent to any model - self-healing on an old save via the empty
      * map default, exactly like {@link #serviceRequests} above. */
     public Map<String,Instant> encounterCooldowns = new LinkedHashMap<>();
+    /** Face-to-face facts waiting for the resident to decide what, if anything, to do about them.
+     * The rules put two people in front of each other and stop there (docs/04's 相遇是外部事实); this
+     * queue is that fact, not a decision. Generative Agents asks the same question of every
+     * observation - "should X react to this, and if so how" - and lets the model answer; the earlier
+     * version of this file skipped the question and started the conversation itself, which is the one
+     * place this town was more forceful than the paper it is modelled on. Bounded, and cleared
+     * whenever the two are no longer standing together. */
+    public List<PendingEncounter> pendingEncounters = new ArrayList<>();
+    /** One resident noticing one other person, at one moment. {@code residentId} is whose decision it
+     * is; {@code otherId} is who they are looking at. */
+    public static class PendingEncounter {
+        public String id, residentId, otherId, place;
+        public Instant at;
+        public long residentRevision;
+    }
     /** Bounded diagnostic history of why a resident decision was actually dispatched to the model -
      * plan ended, an interruption, a rule-detected encounter, a perceivable environment change, a body
      * signal, a time anchor, or low-frequency, unexplained drift. Never read by any model; it exists so

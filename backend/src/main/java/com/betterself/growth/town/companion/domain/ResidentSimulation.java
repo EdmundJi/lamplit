@@ -158,6 +158,7 @@ public final class ResidentSimulation {
         }
         // The model is each resident's decision-maker. Rule-only fallback completes already approved
         // physical work but does not manufacture a reflection, social choice or new intention.
+        expirePendingEncounters(w,at);
         CafeService.finishClosingIfEmpty(w,at);
         syncLegacyObjects(w);
     }
@@ -596,11 +597,100 @@ public final class ResidentSimulation {
             Instant last=w.encounterCooldowns.get(key);
             if(last!=null&&Duration.between(last,at).getSeconds()<ENCOUNTER_COOLDOWN_SECONDS)continue;
             w.encounterCooldowns.put(key,at);
-            startLifeConversation(w,resident,other,at);
+            // The rules stop here. Standing in front of someone is a fact; what to do about it is the
+            // resident's own call, answered by a model through applyReaction below.
+            CompanionWorld.PendingEncounter pending=new CompanionWorld.PendingEncounter();
+            pending.id="pe-"+(++w.eventSequence);pending.residentId=resident.id;pending.otherId=other.id;
+            pending.place=place;pending.at=at;pending.residentRevision=resident.revision;
+            w.pendingEncounters.add(pending);
+            while(w.pendingEncounters.size()>12)w.pendingEncounters.removeFirst();
             recordDecisionTrigger(w,resident.id,"encounter",at);
-            recordDecisionTrigger(w,other.id,"encounter",at);
             return; // one encounter at a time; the others are still standing there next tick
         }
+    }
+    /** How long a face-to-face fact stays worth answering. Past this the moment has gone: you do not
+     * walk up to someone ten minutes after noticing them. Also the window inside which a rule-only
+     * world (no model at all) falls back to greeting on the resident's behalf. */
+    private static final long PENDING_ENCOUNTER_TTL_SECONDS = 90;
+    /** After deciding NOT to approach someone, this is how long before the rules will point the same
+     * pair out to each other again - much shorter than {@link #ENCOUNTER_COOLDOWN_SECONDS}, because
+     * "not right now" is a smaller statement than "we just talked". */
+    public static final long DECLINED_ENCOUNTER_COOLDOWN_SECONDS = 12*60;
+
+    /** Drops face-to-face facts that reality has overtaken: one of them walked off, one of them is
+     * already talking to somebody, or nobody got round to answering in time. A model outage must not
+     * make the town silent, so a world running without a model greets on the resident's behalf rather
+     * than letting every encounter expire unanswered - the fallback is deliberately the sociable one. */
+    private static void expirePendingEncounters(CompanionWorld w,Instant at){
+        for(CompanionWorld.PendingEncounter pending:new ArrayList<>(w.pendingEncounters)){
+            ResidentState resident=state(w,pending.residentId),other=state(w,pending.otherId);
+            boolean stale=resident==null||other==null
+                ||!actor(w,pending.residentId).place().equals(pending.place)
+                ||!actor(w,pending.otherId).place().equals(pending.place)
+                ||activeConversation(w,pending.residentId)!=null||activeConversation(w,pending.otherId)!=null
+                ||resident.revision!=pending.residentRevision;
+            boolean expired=Duration.between(pending.at,at).getSeconds()>=PENDING_ENCOUNTER_TTL_SECONDS;
+            if(!stale&&expired&&!w.modelConversationsEnabled){startLifeConversation(w,resident,other,at);w.pendingEncounters.remove(pending);continue;}
+            if(stale||expired)w.pendingEncounters.remove(pending);
+        }
+    }
+    /** The fallback when nothing can answer "do you say anything?" - a mind that does not implement
+     * reactions at all, or a rule-only world. Greeting is chosen over silence on purpose: a missing
+     * capability should degrade to the town this project is trying to be, not to the empty one it
+     * measured before encounters existed. */
+    public static void greetWithoutDeciding(CompanionWorld w,String pendingId,Instant now){
+        CompanionWorld.PendingEncounter pending=pendingEncounter(w,pendingId);
+        if(pending==null)return;
+        w.pendingEncounters.remove(pending);
+        ResidentState resident=state(w,pending.residentId),other=state(w,pending.otherId);
+        if(resident==null||other==null)return;
+        if(!actor(w,resident.id).place().equals(pending.place)||!actor(w,other.id).place().equals(pending.place))return;
+        if(activeConversation(w,resident.id)!=null||activeConversation(w,other.id)!=null)return;
+        startLifeConversation(w,resident,other,now);
+    }
+    public static CompanionWorld.PendingEncounter pendingEncounter(CompanionWorld w,String id){
+        return w.pendingEncounters.stream().filter(p->p.id.equals(id)).findFirst().orElse(null);
+    }
+    /** Lands the resident's own answer to "someone is standing in front of you". Three answers only,
+     * and the model picks: walk up and say something, sit down near them without opening your mouth,
+     * or let them be. Declining is a real, recorded outcome - noticing someone and choosing not to
+     * approach them is a thing people do all day, and this town has never been able to represent it.
+     * The rules never author a word of what gets said; "greet" only opens the conversation, exactly
+     * as a resident's own "invite" already does. */
+    public static boolean applyReaction(CompanionWorld w,String pendingId,long residentRevision,String reaction,String reason,List<String> evidence,Instant now){
+        CompanionWorld.PendingEncounter pending=pendingEncounter(w,pendingId);
+        if(pending==null||!Set.of("greet","join","none").contains(reaction))return false;
+        ResidentState resident=state(w,pending.residentId),other=state(w,pending.otherId);
+        if(resident==null||other==null||resident.revision!=residentRevision)return false;
+        if(reason==null||reason.isBlank()||reason.length()>160)return false;
+        if(evidence==null||evidence.stream().anyMatch(id->w.memories.stream().noneMatch(m->m.id().equals(id)&&m.ownerId().equals(resident.id))))return false;
+        boolean stillTogether=actor(w,resident.id).place().equals(pending.place)&&actor(w,other.id).place().equals(pending.place)
+            &&activeConversation(w,resident.id)==null&&activeConversation(w,other.id)==null;
+        w.pendingEncounters.remove(pending);
+        if(!stillTogether)return false;
+        String otherName=actor(w,other.id).name();
+        switch(reaction){
+            case "greet"->{
+                startLifeConversation(w,resident,other,now);
+                event(w,now,"greeting",pending.place,List.of(resident.id,other.id),actor(w,resident.id).name()+"走过去和"+otherName+"打了个招呼。",null);
+            }
+            case "join"->{
+                // Sitting down near someone without speaking. Deliberately not a conversation: the
+                // town has never been able to show two people quietly sharing a table.
+                if(resident.plan!=null)suspend(resident,now);
+                schedule(w,resident,"join",pending.place,other.id,reason,now,900);
+                memory(w,resident.id,resident.id,"observed",now,null,"我在"+placeName(pending.place)+"看见"+otherName+"，没说话，就在旁边坐了下来。",evidence,5);
+            }
+            default->{
+                // Not approaching is still something that happened to this resident, and it is the
+                // resident's own reason for it that gets written down, not a rule's guess.
+                w.encounterCooldowns.put(pairKey(resident.id,other.id),now.plusSeconds(DECLINED_ENCOUNTER_COOLDOWN_SECONDS-ENCOUNTER_COOLDOWN_SECONDS));
+                memory(w,resident.id,resident.id,"observed",now,null,"在"+placeName(pending.place)+"遇见"+otherName+"，"+reason,evidence,4);
+            }
+        }
+        resident.revision++;w.revision++;
+        w.modelStatus="模型刚决定了"+actor(w,resident.id).name()+"要不要开口";
+        return true;
     }
     /** End-of-day reconciliation for a resident's coarse day plan (item 4): once the local calendar
      * date has moved past the day this plan was formed for, any segment still "pending" (or somehow

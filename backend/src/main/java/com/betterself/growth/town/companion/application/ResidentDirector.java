@@ -55,13 +55,17 @@ public class ResidentDirector {
         // waited long enough since the last decision, whoever it was for". reserve() re-checks each
         // candidate's own cooldown precisely inside the transaction; this is only an optimization.
         boolean anyResidentReady=snapshot.residentStates.stream().anyMatch(r->r.lastDecisionRequestedAt==null||Duration.between(r.lastDecisionRequestedAt,now).getSeconds()>=decisionThrottleSeconds);
-        if(!dialogue&&!anyResidentReady){inFlight.remove(userId);return;}
+        // A queued face-to-face fact is time-limited and ignores the per-resident cooldown, so it has
+        // to be able to wake the executor on its own - otherwise the cheap pre-check above throws away
+        // exactly the dispatch the encounter was waiting for.
+        boolean encounter=!snapshot.pendingEncounters.isEmpty();
+        if(!dialogue&&!anyResidentReady&&!encounter){inFlight.remove(userId);return;}
         try{executor.execute(()->run(userId));}catch(RejectedExecutionException e){inFlight.remove(userId);}
     }
     private record Work(String kind,String worldId,long residentRevision,long intentRevision,Instant at,
                         ResidentMind.Context context,ConversationLifecycle.Operation operation,
                         ResidentMind.DialogueRequest dialogue,ResidentMind.SummaryRequest summary,long sequence,String day,
-                        ResidentMind.DayPlanRequest dayPlan) {}
+                        ResidentMind.DayPlanRequest dayPlan,ResidentMind.ReactRequest react) {}
     private void run(long userId){
         final Work[] job={null};
         try {
@@ -74,6 +78,7 @@ public class ResidentDirector {
                 case "turn"->{var r=mind.generateTurnMetered(work.dialogue());result=r.value();usage=r.usage();}
                 case "summary"->{var r=mind.summarizeConversationMetered(work.summary());result=r.value();usage=r.usage();}
                 case "dayplan"->{var r=mind.planDayMetered(work.dayPlan());result=r.value();usage=r.usage();}
+                case "react"->{var r=mind.reactMetered(work.react());result=r.value();usage=r.usage();}
                 default->{var r=mind.decideMetered(work.context());result=r.value();usage=r.usage();}
             }
             // Tokens were already spent whether or not the reply below still applies to a fresher world.
@@ -90,6 +95,11 @@ public class ResidentDirector {
                     var summary=(ConversationLifecycle.Recollection)result;
                     applied=summary!=null&&evidenceWithin(summary.evidenceIds(),work.summary().conversationMemories())&&ConversationLifecycle.applySummary(w,work.operation(),summary,clock.instant());
                     if(!applied)ConversationLifecycle.failSummary(w,work.operation(),clock.instant());
+                } else if(work.kind().equals("react")) {
+                    var draft=(ResidentMind.ReactDraft)result;
+                    applied=draft!=null&&evidenceWithin(draft.evidenceIds()==null?List.of():draft.evidenceIds(),work.context().memories())
+                        &&ResidentSimulation.applyReaction(w,work.react().pendingId(),work.residentRevision(),draft.reaction(),draft.reason(),
+                            draft.evidenceIds()==null?List.of():draft.evidenceIds(),clock.instant());
                 } else if(work.kind().equals("dayplan")) {
                     var draft=(ResidentMind.DayPlanDraft)result;
                     applied=draft!=null&&evidenceWithin(draft.evidenceIds()==null?List.of():draft.evidenceIds(),work.context().memories())
@@ -108,6 +118,14 @@ public class ResidentDirector {
                 // real failure: it must never consume the shared model-failure backoff budget, or one
                 // resident's unsupported morning day-plan request would silently starve every other
                 // resident's ordinary decisions and every conversation turn for the whole retry window.
+                // A mind with no opinion about encounters must not make the town silent: fall back to
+                // the sociable answer, the same one a rule-only world uses, rather than dropping the
+                // moment. Not a real failure, so it never touches the backoff budget.
+                if(job[0].kind().equals("react")&&e instanceof UnsupportedOperationException){
+                    w.modelCallsToday=Math.max(0,w.modelCallsToday-1);
+                    ResidentSimulation.greetWithoutDeciding(w,job[0].react().pendingId(),clock.instant());
+                    return w;
+                }
                 if(job[0].kind().equals("dayplan")&&e instanceof UnsupportedOperationException){
                     w.modelCallsToday=Math.max(0,w.modelCallsToday-1);
                     ResidentSimulation.markDayPlanUnavailableForToday(w,job[0].context().residentId(),clock.instant());
@@ -132,7 +150,7 @@ public class ResidentDirector {
             Project topic=ResidentSimulation.project(w,c.topicId);
             String topicTitle=topic==null?"眼前的生活和工作":topic.title;
             var request=new ResidentMind.DialogueRequest(context,c.id,c.turnVersion,operation.operationId(),partnerName(w,c,operation.speakerId()),topicTitle);
-            return reserved(w,now,new Work("turn",w.id,ResidentSimulation.state(w,operation.speakerId()).revision,w.intentRevision,now,context,operation,request,null,w.modelSequence+1,day,null));
+            return reserved(w,now,new Work("turn",w.id,ResidentSimulation.state(w,operation.speakerId()).revision,w.intentRevision,now,context,operation,request,null,w.modelSequence+1,day,null,null));
         }
         for(Conversation c:w.conversations)if("model".equals(c.mode)&&"ended".equals(c.status)&&!c.turns.isEmpty()) {
             for(String speaker:c.participantIds){
@@ -141,8 +159,23 @@ public class ResidentDirector {
                 var ids=c.turnMemoryIds.getOrDefault(speaker,List.of());
                 var memories=w.memories.stream().filter(m->m.ownerId().equals(speaker)&&ids.contains(m.id())).toList();
                 var request=new ResidentMind.SummaryRequest(context,c.id,partnerName(w,c,speaker),new ArrayList<>(c.turns),ResidentMind.memoryViews(memories));
-                return reserved(w,now,new Work("summary",w.id,ResidentSimulation.state(w,speaker).revision,w.intentRevision,now,context,operation,null,request,w.modelSequence+1,day,null));
+                return reserved(w,now,new Work("summary",w.id,ResidentSimulation.state(w,speaker).revision,w.intentRevision,now,context,operation,null,request,w.modelSequence+1,day,null,null));
             }
+        }
+        // A person standing in front of you outranks re-picking what to do with your afternoon: the
+        // moment passes (see PENDING_ENCOUNTER_TTL_SECONDS) while an ordinary decision keeps. Placed
+        // below dialogue turns so an encounter can never interrupt a conversation already underway,
+        // and deliberately NOT subject to the per-resident decision cooldown - the cooldown paces a
+        // resident's own restlessness, not their answer to something that just happened to them.
+        for(CompanionWorld.PendingEncounter pending:new ArrayList<>(w.pendingEncounters)){
+            ResidentState r=ResidentSimulation.state(w,pending.residentId);
+            if(r==null||r.revision!=pending.residentRevision)continue;
+            if(r.id.equals("self")&&!ResidentSimulation.selfIsFree(w))continue;
+            if(ResidentSimulation.activeConversation(w,r.id)!=null||ResidentSimulation.activeConversation(w,pending.otherId)!=null)continue;
+            Actor other=ResidentSimulation.actor(w,pending.otherId);
+            var context=perspective(w,r.id,now,List.of());
+            var request=new ResidentMind.ReactRequest(context,pending.id,other.id(),other.name(),other.activity(),pending.place);
+            return reserved(w,now,new Work("react",w.id,r.revision,w.intentRevision,now,context,null,null,null,w.modelSequence+1,day,null,request));
         }
         // Per-resident decision throttling (item 1): replaces the old world-global modelRequestedAt
         // gate below candidates so each resident thinks on their own clock - the town's decision
@@ -172,7 +205,7 @@ public class ResidentDirector {
             var conversation=ResidentSimulation.activeConversation(w,r.id);
             var context=perspective(w,r.id,now,conversation==null?List.of():conversation.turns);
             ResidentSimulation.recordDecisionTrigger(w,r.id,classifyTrigger(w,r,now),now);
-            return reserved(w,now,new Work("decision",w.id,r.revision,w.intentRevision,now,context,null,null,null,w.modelSequence+1,day,null));
+            return reserved(w,now,new Work("decision",w.id,r.revision,w.intentRevision,now,context,null,null,null,w.modelSequence+1,day,null,null));
         }
         // Recursive day plan (item 4): one call per resident per local morning. Deliberately the LOWEST
         // priority, checked only once no ordinary decision is needed anywhere in town - a ResidentMind
@@ -186,7 +219,7 @@ public class ResidentDirector {
             if(ResidentSimulation.activeConversation(w,r.id)!=null)continue;
             if(!needsDayPlan(w,r,now))continue;
             var context=perspective(w,r.id,now,List.of());
-            return reserved(w,now,new Work("dayplan",w.id,r.revision,w.intentRevision,now,context,null,null,null,w.modelSequence+1,day,new ResidentMind.DayPlanRequest(context)));
+            return reserved(w,now,new Work("dayplan",w.id,r.revision,w.intentRevision,now,context,null,null,null,w.modelSequence+1,day,new ResidentMind.DayPlanRequest(context),null));
         }
         return null;
     }
@@ -278,7 +311,10 @@ public class ResidentDirector {
         var perceptions=new ArrayList<>(ResidentSimulation.salientPerceptions(w,r.id,now));
         for(Actor person:nearby){int relation=r.relationships.getOrDefault(person.id(),40);if(relation>=80)perceptions.add("看到"+person.name()+"时，我自然会多一分亲近和信任。");else if(relation<=20)perceptions.add(person.name()+"在场时，我会有些戒备。");}
         var paused=ResidentSimulation.pausedAction(w,r.id,now);var portable=ResidentSimulation.portableAction(w,r.id,now);
-        return new ResidentMind.Context(r.id,now.atZone(ZoneId.of(w.timezone)).toLocalTime().toString(),w.weather,ResidentMind.actorView(self),r.goal,List.copyOf(perceptions),ResidentSimulation.routineCues(w,r.id,now),ResidentMind.memoryViews(memories),ResidentMind.actorViews(nearby),ResidentMind.objectViews(w.objects.stream().filter(o->o.place().equals(self.place())).toList()),knownPlaces,known,ResidentMind.turnViews(transcript),intentView(r.lifeIntent),intentView(r.careerIntent),ResidentMind.planView(r.plan,now),arrangements,r.occupation,personaView(r.id),ResidentSimulation.availableActions(w,r.id,now),ResidentSimulation.cafeOperatorId(w),cafeRoleFacts,ResidentSimulation.mayTend(w,r.id),requests,w.cafeStatus,ResidentSimulation.cafeScheduleCue(w,r.id,now),ResidentSimulation.cafeNotice(w,r.id),paused==null?null:new ResidentMind.PausedActionView(paused.action(),TownPlaces.isHome(paused.place())?"home":paused.place(),paused.reason(),paused.remainingSeconds()),portable==null?null:new ResidentMind.PortableActionView(portable.action(),portable.reason(),portable.remainingSeconds()));
+        var peopleHere=nearby.stream().filter(person->!person.id().equals("self")||ResidentSimulation.selfIsFree(w))
+            .map(person->new ResidentMind.PersonHereView(person.id(),person.name(),closeness(r.relationships.getOrDefault(person.id(),40)),
+                memories.stream().filter(m->m.text()!=null&&m.text().contains(person.name())||person.id().equals(m.sourceId())).map(Memory::id).toList())).toList();
+        return new ResidentMind.Context(r.id,now.atZone(ZoneId.of(w.timezone)).toLocalTime().toString(),w.weather,ResidentMind.actorView(self),r.goal,List.copyOf(perceptions),ResidentSimulation.routineCues(w,r.id,now),ResidentMind.memoryViews(memories),ResidentMind.actorViews(nearby),ResidentMind.objectViews(w.objects.stream().filter(o->o.place().equals(self.place())).toList()),peopleHere,knownPlaces,known,ResidentMind.turnViews(transcript),intentView(r.lifeIntent),intentView(r.careerIntent),ResidentMind.planView(r.plan,now),arrangements,r.occupation,personaView(r.id),ResidentSimulation.availableActions(w,r.id,now),ResidentSimulation.cafeOperatorId(w),cafeRoleFacts,ResidentSimulation.mayTend(w,r.id),requests,w.cafeStatus,ResidentSimulation.cafeScheduleCue(w,r.id,now),ResidentSimulation.cafeNotice(w,r.id),paused==null?null:new ResidentMind.PausedActionView(paused.action(),TownPlaces.isHome(paused.place())?"home":paused.place(),paused.reason(),paused.remainingSeconds()),portable==null?null:new ResidentMind.PortableActionView(portable.action(),portable.reason(),portable.remainingSeconds()));
     }
     /** Copies {@link ResidentSeed#narrative} straight into {@code ResidentMind.Context} - text only,
      * never a gate: {@code null} for the avatar ("self") and any resident this batch never authored
@@ -292,6 +328,17 @@ public class ResidentDirector {
         return narrative==null?null:new ResidentMind.PersonaView(narrative.wantSelf(),narrative.oughtSelf(),narrative.actingSelf(),narrative.memoryBias(),narrative.looseningNote());
     }
     private static ResidentMind.LifeIntentView intentView(LifeIntent intent){return intent==null?null:new ResidentMind.LifeIntentView(intent.id,intent.goalId,intent.purpose,intent.status,instant(intent.formedAt),instant(intent.updatedAt),instant(intent.lastActedAt));}
+    /** The relationship number turned into the kind of thing a person would actually say to
+     * themselves. The number itself never leaves the rules engine (see docs/04: internal values must
+     * not enter a model context) - Humanoid Agents does the same with its own closeness score,
+     * rendering it as a phrase like "John Lin is feeling close to Eddy Lin" rather than a value. */
+    private static String closeness(int relation){
+        if(relation>=80)return "很亲近，看到就放松";
+        if(relation>=60)return "熟，处得来";
+        if(relation>=35)return "认识，谈不上深";
+        if(relation>=20)return "有点生分";
+        return "见了会有些戒备";
+    }
     private static String instant(Instant value){return value==null?null:value.toString();}
     private static String projectStage(String status,int progress){if(Set.of("ready","celebrating").contains(status))return "已经完成";return progress<=0?"刚开始":progress<45?"做了一些":progress<80?"进行中":"大体完成";}
     private static List<ResidentMind.KnownPlaceView> knownPlaces(){return List.of(

@@ -46,7 +46,8 @@ public class RoutingResidentMind implements ResidentMind {
         @Value("${app.town.companion-model.routes.decision:qwen,deepseek}") String decisionRoute,
         @Value("${app.town.companion-model.routes.turn:qwen,deepseek}") String turnRoute,
         @Value("${app.town.companion-model.routes.summary:qwen,deepseek}") String summaryRoute,
-        @Value("${app.town.companion-model.routes.dayplan:qwen,deepseek}") String dayPlanRoute
+        @Value("${app.town.companion-model.routes.dayplan:qwen,deepseek}") String dayPlanRoute,
+        @Value("${app.town.companion-model.routes.react:qwen,deepseek}") String reactRoute
     ) {
         this.mindsByProvider = new LinkedHashMap<>();
         this.mindsByProvider.put("deepseek", deepseek);
@@ -61,7 +62,8 @@ public class RoutingResidentMind implements ResidentMind {
             // provider failure, it burns the shared backoff budget and starves every ordinary
             // decision. That is not hypothetical: it livelocked a real accelerated run to zero model
             // calls before the routing existed.
-            "dayplan", parseRoute(dayPlanRoute)
+            "dayplan", parseRoute(dayPlanRoute),
+            "react", parseRoute(reactRoute)
         );
         // Matches the pre-routing gate exactly: the companion model as a whole is only ever "on" when
         // the general AI provider is the real one (app.ai.provider=qwen) and the town toggle allows it.
@@ -89,6 +91,11 @@ public class RoutingResidentMind implements ResidentMind {
     @Override public ConversationLifecycle.Recollection summarizeConversation(SummaryRequest request) { return summarizeConversationMetered(request).value(); }
     @Override public Result<ConversationLifecycle.Recollection> summarizeConversationMetered(SummaryRequest request) {
         return attempt("summary", mind -> mind.summarizeConversationMetered(request));
+    }
+
+    @Override public ReactDraft react(ReactRequest request) { return reactMetered(request).value(); }
+    @Override public Result<ReactDraft> reactMetered(ReactRequest request) {
+        return attempt("react", mind -> mind.reactMetered(request));
     }
 
     @Override public DayPlanDraft planDay(DayPlanRequest request) { return planDayMetered(request).value(); }

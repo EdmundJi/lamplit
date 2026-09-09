@@ -295,6 +295,12 @@ public final class AcceleratedTownRunner {
             Map<String,Object> input=new LinkedHashMap<>();input.put("perspective",request.perspective());input.put("partnerName",request.partnerName());input.put("topicTitle",request.topicTitle());
             return capture("turn",input,()->delegate.generateTurnMetered(request));
         }
+        public ReactDraft react(ReactRequest request){return reactMetered(request).value();}
+        public Result<ReactDraft> reactMetered(ReactRequest request){
+            Map<String,Object> input=new LinkedHashMap<>();input.put("residentId",request.perspective().residentId());
+            input.put("otherName",request.otherName());input.put("otherActivity",request.otherActivity());input.put("place",request.place());
+            return capture("react",input,()->delegate.reactMetered(request));
+        }
         public DayPlanDraft planDay(DayPlanRequest request){return planDayMetered(request).value();}
         public Result<DayPlanDraft> planDayMetered(DayPlanRequest request){
             // Forwarded like every other call, and for a specific reason: ResidentMind.planDay has a

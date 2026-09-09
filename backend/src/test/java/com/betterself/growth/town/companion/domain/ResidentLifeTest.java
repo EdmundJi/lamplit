@@ -67,7 +67,9 @@ class ResidentLifeTest {
         // advance() steps in fixed 6-second increments, so the target instant must clear the next
         // 6-second boundary past the travel's own end, not merely be one second after it.
         advanceTo(w,arrival.plusSeconds(8));
-        assertThat(w.conversations).anyMatch(c->"active".equals(c.status)&&c.participantIds.contains("owner")&&c.participantIds.contains("gardener"));
+        // The rules record the face-to-face fact and stop. Whether it becomes a conversation is the
+        // resident's own answer - see EncounterReactionTest and ResidentSimulation.applyReaction.
+        assertThat(w.pendingEncounters).anyMatch(p->List.of(p.residentId,p.otherId).containsAll(List.of("owner","gardener")));
         assertThat(w.encounterCooldowns).isNotEmpty();
     }
 
@@ -89,9 +91,14 @@ class ResidentLifeTest {
         assertThat(ResidentSimulation.actor(w,"gardener").activity()).isEqualTo("walk");
         w.updatedAt=now;w.simulatedAt=now;
         advanceTo(w,now.plusSeconds(30));
-        assertThat(w.conversations).as("two people on the same street at the same time have crossed paths")
-            .anyMatch(c->"active".equals(c.status)&&c.participantIds.contains("owner")&&c.participantIds.contains("gardener"));
-        // Neither of them has forgotten where they were going.
+        var crossing=w.pendingEncounters.stream().filter(p->List.of(p.residentId,p.otherId).containsAll(List.of("owner","gardener"))).findFirst();
+        assertThat(crossing).as("two people on the same street at the same time have crossed paths").isPresent();
+        assertThat(crossing.get().place).isEqualTo("street");
+        // And if the one who noticed decides to say something, neither of them forgets where they
+        // were going: an interrupted journey is resumed, not thrown away.
+        var noticer=ResidentSimulation.state(w,crossing.get().residentId);
+        assertThat(ResidentSimulation.applyReaction(w,crossing.get().id,noticer.revision,"greet","路上碰见了，打个招呼",List.of(),now.plusSeconds(30))).isTrue();
+        assertThat(w.conversations).anyMatch(c->"active".equals(c.status)&&c.participantIds.contains("owner")&&c.participantIds.contains("gardener"));
         assertThat(owner.suspendedAction).isNotNull();
         assertThat(owner.suspendedAction.plan.action()).isEqualTo("travel");
         assertThat(gardener.suspendedAction).isNotNull();
@@ -109,11 +116,12 @@ class ResidentLifeTest {
         ResidentSimulation.replaceActor(w,"gardener","garden","observe","看看花园",now.plusSeconds(600));
         w.updatedAt=now;w.simulatedAt=now;
         advanceTo(w,now.plusSeconds(60));
-        assertThat(w.conversations).noneMatch(c->"active".equals(c.status));
-        // Once the quiet stretch is over, the same two people standing in the same garden do meet.
+        assertThat(w.pendingEncounters).isEmpty();
+        // Once the quiet stretch is over, the same two people standing in the same garden do notice
+        // each other - what they then do about it is theirs to decide.
         owner.lastSocialAt=now.minusSeconds(3600);
         advanceTo(w,now.plusSeconds(120));
-        assertThat(w.conversations).anyMatch(c->"active".equals(c.status)&&c.participantIds.contains("owner")&&c.participantIds.contains("gardener"));
+        assertThat(w.pendingEncounters).anyMatch(p->List.of(p.residentId,p.otherId).containsAll(List.of("owner","gardener")));
     }
 
     @Test void joinLetsAResidentSitDownWithSomeoneAlreadyThere(){

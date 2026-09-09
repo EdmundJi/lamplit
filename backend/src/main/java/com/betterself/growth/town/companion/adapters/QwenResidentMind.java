@@ -141,6 +141,24 @@ public class QwenResidentMind implements ResidentMind {
         }catch(Exception e){throw new IllegalStateException("Resident decision unavailable",e);}
     }
     private Usage usageOf(QwenProvider.StructuredResult result){return new Usage(result.inputTokens(),result.outputTokens(),providerCode,result.model(),result.reasoningContentPresent(),result.reasoningTokens());}
+    @Override public ReactDraft react(ReactRequest request){return reactMetered(request).value();}
+    @Override public Result<ReactDraft> reactMetered(ReactRequest request){
+        return generateMetered("COMPANION_RESIDENT_REACT","""
+            你是perspective.self这一个居民。刚才你注意到otherName就在同一个地方，他正在otherActivity。
+            只回答一件事：你现在要不要为这件事做点什么。
+            reaction只能是greet/join/none三选一。greet=走过去开口说话；join=不说话，在他旁边坐下或站着；none=看见了，继续做自己的事。
+            三个答案都是正常的。看见熟人而没有走过去，是人每天都在做的事，不是失败——手上正忙、不想被打断、刚才才聊过、或者单纯此刻不想说话，都是充分的理由。
+            perspective.peopleHere里有你和在场每个人的关系与你记得的关于他的事；closeness是你自己的感觉，不是一个可以拿来讨价还价的分数。
+            perspective.persona如果存在：actingSelf决定你会用什么方式接近人（有人靠动手、有人先开口、有人宁可等对方先说），oughtSelf是你给自己定的规矩而不是命令。
+            currentPlan是你手上的事。它重要不代表不能放下，也不代表必须放下。
+            reason写你自己此刻的想法，一句话，不要总结人生道理，也不要解释你的性格。
+            evidenceIds从perspective.memories里选0至3条真正影响了这个判断的记忆；只是打个招呼可以为空。
+            只返回JSON字段reaction,reason,evidenceIds，不输出推理过程。
+            """,new ReactInput(request.perspective(),request.otherName(),request.otherActivity(),request.place()),"""
+            {"type":"object","required":["reaction","reason","evidenceIds"],"properties":{"reaction":{"type":"string","enum":["greet","join","none"]},"reason":{"type":"string"},"evidenceIds":{"type":"array","items":{"type":"string"}}}}
+            """,ReactDraft.class,decisionThinking);
+    }
+    private record ReactInput(Context perspective,String otherName,String otherActivity,String place) {}
     @Override public DayPlanDraft planDay(DayPlanRequest request){return planDayMetered(request).value();}
     @Override public Result<DayPlanDraft> planDayMetered(DayPlanRequest request){
         return generateMetered("COMPANION_DAY_PLAN","""
