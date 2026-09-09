@@ -256,6 +256,37 @@ class ResidentHabitTest {
             .as("there is nothing unfinished to put a hand on").isFalse();
     }
 
+    /** The payoff, which was unreachable. "celebrate" had a completion branch that flips a project to
+     * celebrating, writes everyone who helped a high-importance memory of having seen it real, and
+     * steadies them all a notch - and it was in no menu, in no DECISION_ACTIONS, and scheduled by
+     * nothing anywhere. A thing that got finished could never be shown to anybody. */
+    @Test void afterTwoPeopleFinishAThingSomebodyCanActuallyCallTheOthersOverToSeeIt() {
+        CompanionWorld w = world("celebrate-reachable");
+        CompanionWorld.Project done = w.projects.stream().filter(p -> "cafe".equals(p.place)).findFirst().orElseThrow();
+        done.status = "ready"; done.progress = 100; done.completedAt = DAY;
+        done.contributors.clear(); done.contributors.add("owner"); done.contributors.add("fixer");
+        for (String id : List.of("owner", "fixer")) ResidentSimulation.replaceActor(w, id, "cafe", "observe", "在店里", DAY);
+
+        assertThat(ResidentSimulation.availableActions(w, "owner", DAY))
+            .as("whoever helped make it, standing where it is").contains("celebrate");
+        assertThat(ResidentSimulation.availableActions(w, "student", DAY))
+            .as("not somebody who had no hand in it").doesNotContain("celebrate");
+        ResidentSimulation.replaceActor(w, "fixer", "garden", "observe", "在花园", DAY);
+        assertThat(ResidentSimulation.availableActions(w, "fixer", DAY))
+            .as("you do not call people over to something in another building").doesNotContain("celebrate");
+
+        ResidentState owner = ResidentSimulation.state(w, "owner");
+        owner.plan = new Plan("celebrate-p", "celebrate", "cafe", done.id, "想请大家看看", DAY, DAY.plusSeconds(60));
+        Instant t = DAY;
+        for (int minute = 0; minute < 10 && !"celebrating".equals(done.status); minute++) {
+            t = t.plusSeconds(60);
+            ResidentSimulation.step(w, t);
+        }
+        assertThat(done.status).isEqualTo("celebrating");
+        assertThat(w.events).anyMatch(e -> "celebration".equals(e.type()) && done.id.equals(e.projectId()));
+        assertThat(w.memories).anyMatch(m -> m.ownerId().equals("owner") && m.text().contains("真的做出来了"));
+    }
+
     // ---- the other half of item 3: a resident has to be able to NAME the habit ---------------------
 
     /** The damping rule above could already read a belief filed under "habit:<居民>:<习惯>". Nothing

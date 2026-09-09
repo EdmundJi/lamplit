@@ -1417,6 +1417,14 @@ public final class ResidentSimulation {
         if(r.plan!=null&&!("cafe".equals(actor(w,residentId).place())&&!"open".equals(w.cafeStatus)))actions.add("continue");
         if(w.projects.stream().anyMatch(p->knows(w,residentId,p.id)&&!Set.of("ready","celebrating").contains(p.status)))actions.add("create");
         if(w.projects.stream().anyMatch(p->knows(w,residentId,p.id)&&p.members.contains(residentId)&&!Set.of("ready","celebrating").contains(p.status)))actions.add("help");
+        // Showing people the finished thing. It had a completion branch, a label, and a personality
+        // drift driver, and it was in no menu, in no DECISION_ACTIONS, and scheduled by nothing
+        // anywhere - so a project that actually got finished could never be shown to anybody, and
+        // "celebration" was one of the two drift causes a measured day fired zero times. Offered to
+        // whoever helped make it, standing where it is: you do not call people over to something in
+        // another building.
+        if(w.projects.stream().anyMatch(p->"ready".equals(p.status)&&p.contributors.contains(residentId)
+            &&p.place.equals(actor(w,residentId).place())))actions.add("celebrate");
         if(w.residentStates.stream().anyMatch(other->canTalkTo(w,residentId,other.id))){actions.add("invite");actions.add("join");}
         if(CafeService.mayTend(w,residentId)&&"cafe".equals(actor(w,residentId).place())&&CafeService.oldestWaitingRequestId(w)!=null)actions.add("tend");
         if(CafeService.acceptingOrders(w)&&"cafe".equals(actor(w,residentId).place())&&!residentId.equals(CafeService.operatorId(w))
@@ -1472,7 +1480,7 @@ public final class ResidentSimulation {
         if(!routineCues(w,r.id,at).isEmpty())return (int)Math.max(90*60,Duration.between(local,wake).getSeconds());
         double hours=Math.max(1.5,Math.min(4.0,(65-r.energy)/10.0));return (int)Math.round(hours*3600);
     }
-    private static final Set<String> DECISION_ACTIONS=Set.of("continue","resume","observe","create","help","invite","join","rest","sleep","study","work","read","make","request_drink","tend","open_cafe","close_cafe","continue_home","away","offer_assist","offer_delegate","offer_takeover","accept_work","change_work");
+    private static final Set<String> DECISION_ACTIONS=Set.of("continue","resume","observe","create","help","celebrate","invite","join","rest","sleep","study","work","read","make","request_drink","tend","open_cafe","close_cafe","continue_home","away","offer_assist","offer_delegate","offer_takeover","accept_work","change_work");
     public static boolean applyDecision(CompanionWorld w,String residentId,long residentRevision,long intentRevision,String place,String action,String target,String reason,String speech,List<String> evidence,Instant now) {
         ResidentState r=state(w,residentId);if(r==null||r.revision!=residentRevision||w.intentRevision!=intentRevision||!DECISION_ACTIONS.contains(action))return false;
         if(reason==null||reason.isBlank()||reason.length()>160||speech!=null&&speech.length()>180)return false;
@@ -1532,6 +1540,7 @@ public final class ResidentSimulation {
         if("cafe".equals(resolvedPlace)&&!"open".equals(w.cafeStatus))return false;
         if("sleep".equals(action)&&!resolvedPlace.equals(TownPlaces.homeOf(residentId)))return false;
         if(Set.of("create","help").contains(action)){Project p=project(w,target);if(p==null||!knows(w,r.id,p.id)||!p.place.equals(resolvedPlace)||Set.of("ready","celebrating").contains(p.status))return false;}
+        if(action.equals("celebrate")){Project p=project(w,target);if(p==null||!"ready".equals(p.status)||!p.contributors.contains(r.id)||!p.place.equals(resolvedPlace))return false;}
         if(action.equals("invite")&&(target==null||!canTalkTo(w,residentId,target)))return false;
         // "join" (item 3): sit down with someone already there. It is a physical positioning choice,
         // not itself a conversation - it deliberately reuses canTalkTo's same-place/available check
@@ -1580,6 +1589,8 @@ public final class ResidentSimulation {
                 case "join"->900;
                 case "observe"->900;
                 case "study","read","work","make"->1800;
+                // Long enough to actually be a gathering rather than a gesture at one.
+                case "celebrate"->1800;
                 default->60;
             };
             moveOrSchedule(w,r,action,resolvedPlace,target,reason,now,duration);

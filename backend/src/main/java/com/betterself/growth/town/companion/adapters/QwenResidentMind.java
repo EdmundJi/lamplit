@@ -46,7 +46,7 @@ public class QwenResidentMind implements ResidentMind {
      * happen in practice (ResidentSimulation.availableActions always returns a non-empty base set),
      * but the schema still needs a non-empty enum to stay valid JSON Schema. */
     private static final java.util.List<String> DECISION_ACTION_FALLBACK=java.util.List.of(
-        "continue","resume","observe","create","help","invite","join","rest","study","work","read","make",
+        "continue","resume","observe","create","help","celebrate","invite","join","rest","study","work","read","make",
         "tend","request_drink","change_work","propose","sleep","open_cafe","close_cafe","continue_home","away");
     @Override public com.betterself.growth.town.companion.domain.ConversationLifecycle.Utterance generateTurn(DialogueRequest request){
         return generateTurnMetered(request).value();
@@ -123,6 +123,7 @@ public class QwenResidentMind implements ResidentMind {
                 join表示走过去挨着某个熟人坐下（对方的桌子或旁边的位置），targetId填nearby中那个人的id；这只是想坐得近一些，不代表要开口说话或已经在交谈。away表示暂时离开这条街去处理自己的事，一段时间后才会回来，回来后只有自己知道那段时间做了什么；不要在away的reason里编造离场期间发生的具体情节，那要等回来后才补一句自己的回忆。
                 create/help 的 targetId 必须是 knownProjects 之一且 place 匹配；invite 只能针对 nearby 中一个人。
                 knownProjects里的事不一定是自己起的头，startedBy写着是谁起的头（为空就是自己的）。别人起头的事你也可以直接用create去添一笔，不用先问过谁、也不用等谁开口邀请你；这里没有"那是他的事"这回事。
+                celebrate只在一件你参与做过的事真的做完、而且你人就在它所在的地方时才会出现在availableActions里，targetId填那件事。它是把人叫过来看看做出来的东西，不是又一次动手。
                 有些事一个人做不完：那种事的stage会直接写着"剩下的得有人一起动手"。这不是提示你必须去做，只是说明它停在那里的原因就是没有第二个人；要不要成为第二个人是你自己的判断，你也完全可以觉得那不关自己的事。
                 如果正在conversation，可在speech写自己接着说的一句话，先回应最后一句里的具体事；可以很短、停顿、不赞同或结束话题，不替双方总结，也不能替另一人说话或声称尚未执行的事已完成。
                 如果没在交谈，speech通常留空；close_cafe或当前经营者用change_work结束营业时是例外，现场还有清醒的人就用speech写自己真正说出的简短通知。reason 是此刻打算，不是执行事实。evidenceIds可从输入自己的记忆ID中选0至3条；因salientPerceptions、currentPlan或眼前事实直接做决定时可以为空，不要硬拿无关历史凑依据。若填写，只能引用自己的真实记忆。
