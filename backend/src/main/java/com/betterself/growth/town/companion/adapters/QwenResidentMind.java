@@ -126,7 +126,7 @@ public class QwenResidentMind implements ResidentMind {
                 你知道自己长期总得找到能维持生活的事，这是一种日常顾虑而不是考勤指标：可以休息、犹豫、换方向，也可以在真实经历后重新理解它。它通常只影响选择，不要让每个reason或speech都说“维持生活”“给自己留空间”之类的总结。perspective.persona如果存在：wantSelf是自己心底真正想要的，oughtSelf是自己给自己定的规矩而不是谁下的命令，人会在压力或反复经历后违背自己定的规矩；actingSelf只决定reason、speech说出来的方式，不决定能做什么、不能做什么。同样不要让reason变成对这些底层动机的剖析——多数时候它们只是背景。occupation、cafeOperatorId、canTend 与 visibleServiceRequests 是此刻能实际做出的工作边界；若可服务，tend 的 targetId 选一条 waiting 请求。
                 cafeRoleFacts只陈述自己真实保留的经营权、设备熟悉度或有效帮工身份。若自己仍是cafeOperatorId但曾暂停经营，经营权没有消失；只有availableActions含open_cafe时，才可以自主选择重新开门。若经营权已经通过takeover转给别人，不能靠自己的决定夺回来，但在营业时仍可像普通居民一样去咖啡馆读写、休息、制作或见人。
                 前经营者若想回来帮忙，可以先到店与当前经营者当面谈，再在真实对话里提出offer_assist；要重新受托或拿回经营权，必须由当前经营者在自己的回合提出delegate/takeover、本人再明确接受。这里只提供协商路径，不代表任何一方必定愿意。
-                rest只表示休息，不会自动点饮料。只有availableActions包含request_drink且你确实想喝时才选request_drink，place必须cafe；这会创建本人真实请求并在店里等，不要假装饮料已经做好。
+                rest只表示休息，不会自动点饮料。想喝点什么、且availableActions包含request_drink时就可以选它，place必须cafe；这会创建本人真实请求并在店里等，不要假装饮料已经做好。不想喝也完全不必选。
                 咖啡馆的帮工、委托、接手、拒绝和退出只能在两人当面的结构化对话回合里协商，不能用这次decision隔空提出或接受。仅有提议不代表能使用吧台。tend 只在canTend=true时可选。change_work 用 reason 描述自己想尝试的新生活，它可能让咖啡馆暂时无人服务，不会自动产生接手者。
                 cafeStatus、cafeScheduleCue和cafeNotice是你此刻知道的营业状态、时间提示和真实通知。sleep表示回自己家睡觉，不要求先出现疲惫体感。open_cafe只在availableActions允许时选择，去咖啡馆完成开门；这是cafeStatus=closed时唯一合法的、以cafe为place的管理动作。close_cafe是本人决定开始打烊；place必须cafe，现场还有清醒的人时speech要写自己实际说出的简短通知，不能在reason里假装通知过。continue_home只在portableAction存在且availableActions允许时选择，place必须home；系统会按portableAction里的真实原任务和剩余时间续做，不按reason编造新工作。cafeStatus为closing或closed时，除允许的open_cafe外，不要选择其他以cafe为place的新动作。
                 已有安排要保持连贯；若新的记忆或眼前发生的事让你改变主意，说出简短缘由即可。其他action的projectTitle和objectKind填null。
@@ -173,4 +173,36 @@ public class QwenResidentMind implements ResidentMind {
             """,DayPlanDraft.class,decisionThinking);
     }
     private record DayPlanInput(Context perspective) {}
+
+    @Override public ExplainDraft explain(ExplainRequest request){return explainMetered(request).value();}
+    @Override public Result<ExplainDraft> explainMetered(ExplainRequest request){
+        return generateMetered("COMPANION_RESIDENT_EXPLAIN","""
+            你是perspective.self中的这一个居民。deeds是你最近做过、但还没顾得上细想的几件事；每一条只是旁观者会看到的动作和地点，不包含你当时心里到底怎么想——那正是要问你的。
+            回头看看这几件事，给自己一个说法：这是怎么回事。
+            这不是说给别人听的解释，是你自己回头想给自己的一句话，写下来之后你会真的相信自己当时就是这么想的——哪怕这句话是错的、只是在搪塞自己、含糊其辞，甚至连你自己心里都有点不踏实，这些都完全允许，甚至更真实。不必每次都诚实、周全或深刻；多数时候这就是一句很平淡的话，不必刻意提到自己的心情，也不必上升成什么道理或教训。
+            perspective.persona.oughtSelf如果存在，是你自己给自己定的规矩，你的说法会不自觉地顺着它把真正在意的东西盖过去，而不是老老实实报告内心：比如规矩是不能让人看出自己在意，面对反复做同一件小事，你更可能说成是那件事本身需要做，而不是承认自己心里不舒服。不用点破这是在掩饰，正常说出口就好。
+            deedIds只填这次账目里你真正想到的那几条，不必是全部；没提到的那部分就是没想起来，随它去，不必解释。
+            text是你自己这句说法，一两句话，不超过40个汉字。evidenceIds可从perspective.memories中选0到3条自己的真实记忆作依据，没有明显依据时留空，不能引用不是自己的记忆。
+            只返回JSON字段deedIds,text,evidenceIds，不输出推理过程。
+            """,new ExplainInput(request.perspective(),request.deeds()),"""
+            {"type":"object","required":["deedIds","text","evidenceIds"],"properties":{"deedIds":{"type":"array","items":{"type":"string"}},"text":{"type":"string"},"evidenceIds":{"type":"array","items":{"type":"string"}}}}
+            """,ExplainDraft.class,decisionThinking);
+    }
+    private record ExplainInput(Context perspective,java.util.List<DeedView> deeds) {}
+
+    @Override public ReflectDraft reflect(ReflectRequest request){return reflectMetered(request).value();}
+    @Override public Result<ReflectDraft> reflectMetered(ReflectRequest request){
+        return generateMetered("COMPANION_RESIDENT_REFLECT","""
+            你是perspective.self中的这一个居民。source是你自己过去的一段真实记忆，没有特定要回答的问题，就是随手翻一翻，看看有没有想起点什么。
+            大多数时候翻完不会有什么特别的结论，那就写一句很随口的感想，不必每次都提炼出道理，也不必强求有收获。
+            只有当你自己真的从source里看出一件事反复出现——比如某个人总是坐在某个位置、某件事总在类似的时间发生、面对某类情况自己总是同一种反应——才把它写成一条你会长期带着走的看法，并给出supersedesKey；这必须是你自己从材料里看出来的重复，不是替你数好、指定好方向的规律，没看出反复出现的东西就不要勉强编一个。
+            如果只是这一次随口想到的感想，说不上"反复出现"，就把supersedesKey留空——那只是一次性的想法，不要占用长期看法这一层。
+            supersedesKey是你自己起的一个简短代号（例如"小川-座位"），之后同一个key会替换你自己之前对同一件事、同一个人的看法；只有真正认定这是长期看法时才给它起名字。
+            text一两句话，不超过60个汉字。evidenceIds必须从source中选1条以上、真正让你这么想的自己的记忆，不能是别人的、也不能是source之外的。
+            只返回JSON字段text,evidenceIds,supersedesKey，不输出推理过程。
+            """,new ReflectInput(request.perspective(),request.source()),"""
+            {"type":"object","required":["text","evidenceIds","supersedesKey"],"properties":{"text":{"type":"string"},"evidenceIds":{"type":"array","items":{"type":"string"},"minItems":1},"supersedesKey":{"type":["string","null"]}}}
+            """,ReflectDraft.class,decisionThinking);
+    }
+    private record ReflectInput(Context perspective,java.util.List<MemoryView> source) {}
 }

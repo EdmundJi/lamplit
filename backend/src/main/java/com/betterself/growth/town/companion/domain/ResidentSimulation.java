@@ -658,7 +658,7 @@ public final class ResidentSimulation {
         if(r.unexplainedDeeds.stream().noneMatch(d->deedIds.contains(d.id)))return false;
         List<String> evidence=evidenceIds==null?List.of():evidenceIds;
         if(evidence.stream().anyMatch(id->w.memories.stream().noneMatch(m->m.id().equals(id)&&m.ownerId().equals(residentId))))return false;
-        String place=r.unexplainedDeeds.stream().filter(d->deedIds.contains(d.id)).map(d->d.place).findFirst().orElse(null);
+        String place=r.unexplainedDeeds.stream().filter(d->deedIds.contains(d.id)).findFirst().map(d->d.place).orElse(null);
         r.unexplainedDeeds.removeIf(d->deedIds.contains(d.id));
         memory(w,residentId,residentId,"reflection",now,null,text,evidence,6);
         // The account replaces whatever the resident was privately telling themselves. This is the
@@ -1172,7 +1172,10 @@ public final class ResidentSimulation {
         // model already told them, which of the two durability tiers it lands in.
         String type=supersedesKey!=null?"belief":"reflection";
         int importance=supersedesKey!=null?9:8;
-        String topic=w.memories.stream().filter(m->m.id().equals(evidenceIds.get(0))).map(Memory::topicId).findFirst().orElse(null);
+        // findFirst() throws on a null element, so this must find the memory first and read its
+        // topicId afterwards - a raw observation with no topic is completely ordinary, and mapping
+        // before findFirst turned that into a NullPointerException.
+        String topic=w.memories.stream().filter(m->m.id().equals(evidenceIds.get(0))).findFirst().map(Memory::topicId).orElse(null);
         memory(w,residentId,residentId,type,now,topic,text,List.copyOf(evidenceIds),importance,supersedesKey);
         r.thought=text;r.lastReflectionAt=now;r.revision++;w.revision++;
         return true;

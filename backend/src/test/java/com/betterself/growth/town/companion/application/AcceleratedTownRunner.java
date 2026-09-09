@@ -316,6 +316,18 @@ public final class AcceleratedTownRunner {
             Map<String,Object> input=new LinkedHashMap<>();input.put("perspective",request.perspective());input.put("partnerName",request.partnerName());input.put("transcript",ResidentMind.turnViews(request.transcript()));input.put("conversationMemories",request.conversationMemories());
             return capture("summary",input,()->delegate.summarizeConversationMetered(request));
         }
+        public ExplainDraft explain(ExplainRequest request){return explainMetered(request).value();}
+        public Result<ExplainDraft> explainMetered(ExplainRequest request){
+            // Forwarded for the same reason planDay's own comment above gives: a decorator that
+            // forgets one method still compiles and silently disables that capability for good.
+            Map<String,Object> input=new LinkedHashMap<>();input.put("residentId",request.perspective().residentId());input.put("deeds",request.deeds());
+            return capture("explain",input,()->delegate.explainMetered(request));
+        }
+        public ReflectDraft reflect(ReflectRequest request){return reflectMetered(request).value();}
+        public Result<ReflectDraft> reflectMetered(ReflectRequest request){
+            Map<String,Object> input=new LinkedHashMap<>();input.put("residentId",request.perspective().residentId());input.put("source",request.source());
+            return capture("reflect",input,()->delegate.reflectMetered(request));
+        }
         private <T>Result<T> capture(String type,Object input,java.util.function.Supplier<Result<T>> call){
             Map<String,Object> row=new LinkedHashMap<>();row.put("callType",type);row.put("input",input);
             try{Result<T> result=call.get();row.put("status","generated");row.put("output",result.value());row.put("usage",result.usage());calls.add(row);return result;}

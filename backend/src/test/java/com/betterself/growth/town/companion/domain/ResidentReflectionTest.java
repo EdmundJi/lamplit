@@ -229,4 +229,19 @@ class ResidentReflectionTest {
         memories.add(new Memory("test-" + memories.size() + "-" + at.toEpochMilli(), owner, owner, type, at, "测试用记忆", null, List.of(), importance));
         w.memories = memories;
     }
+
+    @Test void aConclusionGroundedInAPlainObservationWithNoTopicDoesNotCrash() {
+        // Stream.findFirst() throws on a null element, so `map(Memory::topicId).findFirst()` blew up
+        // on any evidence memory without a topic - which is what an ordinary observation looks like.
+        // The whole reflection path died there, and nothing in the suite happened to hit it because
+        // every existing fixture used seeded, topic-carrying memories.
+        CompanionWorld w = CompanionRules.join("reflect-null-topic", "住客", "Asia/Shanghai", now, true);
+        var owner = ResidentSimulation.state(w, "owner");
+        String id = ResidentSimulation.memory(w, "owner", "owner", "observed", now, null,
+            "看见小川又坐在窗边那个位置。", java.util.List.of(), 5);
+        assertThat(w.memories).anyMatch(m -> m.id().equals(id) && m.topicId() == null);
+        assertThat(ResidentSimulation.applyReflection(w, "owner", owner.revision,
+            "小川好像就是喜欢窗边那个位置。", java.util.List.of(id), "小川-座位", now.plusSeconds(60))).isTrue();
+        assertThat(w.memories).anyMatch(m -> m.ownerId().equals("owner") && "belief".equals(m.sourceType()));
+    }
 }

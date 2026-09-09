@@ -47,7 +47,9 @@ public class RoutingResidentMind implements ResidentMind {
         @Value("${app.town.companion-model.routes.turn:qwen,deepseek}") String turnRoute,
         @Value("${app.town.companion-model.routes.summary:qwen,deepseek}") String summaryRoute,
         @Value("${app.town.companion-model.routes.dayplan:qwen,deepseek}") String dayPlanRoute,
-        @Value("${app.town.companion-model.routes.react:qwen,deepseek}") String reactRoute
+        @Value("${app.town.companion-model.routes.react:qwen,deepseek}") String reactRoute,
+        @Value("${app.town.companion-model.routes.explain:qwen,deepseek}") String explainRoute,
+        @Value("${app.town.companion-model.routes.reflect:qwen,deepseek}") String reflectRoute
     ) {
         this.mindsByProvider = new LinkedHashMap<>();
         this.mindsByProvider.put("deepseek", deepseek);
@@ -63,7 +65,14 @@ public class RoutingResidentMind implements ResidentMind {
             // decision. That is not hypothetical: it livelocked a real accelerated run to zero model
             // calls before the routing existed.
             "dayplan", parseRoute(dayPlanRoute),
-            "react", parseRoute(reactRoute)
+            "react", parseRoute(reactRoute),
+            // Same reasoning as dayplan's own comment: without an entry here, explain/reflect fall
+            // through to ResidentMind's default (UnsupportedOperationException), which ResidentDirector
+            // is careful never to treat as a real failure - but silently missing them here would still
+            // mean every resident's own account of their recent behaviour, and every reflection, simply
+            // never happens, with nothing in this file looking wrong.
+            "explain", parseRoute(explainRoute),
+            "reflect", parseRoute(reflectRoute)
         );
         // Matches the pre-routing gate exactly: the companion model as a whole is only ever "on" when
         // the general AI provider is the real one (app.ai.provider=qwen) and the town toggle allows it.
@@ -101,6 +110,16 @@ public class RoutingResidentMind implements ResidentMind {
     @Override public DayPlanDraft planDay(DayPlanRequest request) { return planDayMetered(request).value(); }
     @Override public Result<DayPlanDraft> planDayMetered(DayPlanRequest request) {
         return attempt("dayplan", mind -> mind.planDayMetered(request));
+    }
+
+    @Override public ExplainDraft explain(ExplainRequest request) { return explainMetered(request).value(); }
+    @Override public Result<ExplainDraft> explainMetered(ExplainRequest request) {
+        return attempt("explain", mind -> mind.explainMetered(request));
+    }
+
+    @Override public ReflectDraft reflect(ReflectRequest request) { return reflectMetered(request).value(); }
+    @Override public Result<ReflectDraft> reflectMetered(ReflectRequest request) {
+        return attempt("reflect", mind -> mind.reflectMetered(request));
     }
 
     /**
