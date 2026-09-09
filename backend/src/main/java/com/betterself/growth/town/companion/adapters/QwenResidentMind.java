@@ -220,11 +220,13 @@ public class QwenResidentMind implements ResidentMind {
             只有当你自己真的从source里看出一件事反复出现——比如某个人总是坐在某个位置、某件事总在类似的时间发生、面对某类情况自己总是同一种反应——才把它写成一条你会长期带着走的看法，并给出supersedesKey；这必须是你自己从材料里看出来的重复，不是替你数好、指定好方向的规律，没看出反复出现的东西就不要勉强编一个。
             如果只是这一次随口想到的感想，说不上"反复出现"，就把supersedesKey留空——那只是一次性的想法，不要占用长期看法这一层。
             supersedesKey是你自己起的一个简短代号（例如"小川-座位"），之后同一个key会替换你自己之前对同一件事、同一个人的看法；只有真正认定这是长期看法时才给它起名字。
+            habits里是别人眼里你常做的几件事，各带一个现成的key（这一项可能是空的）。它不是要你逐条点评的清单，绝大多数次翻记忆都跟它无关，不要为了用它而用它。
+            只有当你这次确实从source里看出自己又那样做了一次、并且对这件事本身有了一句自己的看法时，才把那一条的key原样填进supersedesKey，把看法写进text。看法是什么、朝哪个方向，完全是你自己的事，没有对错。
             text一两句话，不超过60个汉字。evidenceIds必须从source中选1条以上、真正让你这么想的自己的记忆，不能是别人的、也不能是source之外的。
             只返回JSON字段text,evidenceIds,supersedesKey，不输出推理过程。
-            """,new ReflectInput(request.perspective(),request.source()),"""
+            """,new ReflectInput(request.perspective(),request.source(),request.habits()),"""
             {"type":"object","required":["text","evidenceIds","supersedesKey"],"properties":{"text":{"type":"string"},"evidenceIds":{"type":"array","items":{"type":"string"},"minItems":1},"supersedesKey":{"type":["string","null"]}}}
             """,ReflectDraft.class,decisionThinking);
     }
-    private record ReflectInput(Context perspective,java.util.List<MemoryView> source) {}
+    private record ReflectInput(Context perspective,java.util.List<MemoryView> source,java.util.List<HabitTraitView> habits) {}
 }

@@ -93,11 +93,20 @@ public interface ResidentMind {
      * they only half believe - see {@link #explain}'s own doc comment; it is never required to be a
      * complete or accurate account of {@code deedIds}. */
     record ExplainDraft(List<String> deedIds,String text,List<String> evidenceIds) {}
-    record ReflectRequest(Context perspective,List<MemoryView> source) {}
+    /** One of this resident's own default reflexes, and the exact key a belief must carry to stand
+     * over it (see ResidentSimulation's "habitTraits"). Offered, never required: most reflections are
+     * about other people or about one particular day, and only a resident who has actually noticed
+     * one of these in themselves should reach for it. */
+    record HabitTraitView(String key,String description) {}
+    record ReflectRequest(Context perspective,List<MemoryView> source,List<HabitTraitView> habits) {}
     /** {@code supersedesKey} non-null means this resident has genuinely noticed something recurring
      * across {@code source} and is naming it as a standing belief about someone or something, replacing
      * whatever they previously believed under the same key; null means an ordinary one-off reflection
-     * that stands in for nothing. The key is the resident's own short label, never assigned by a rule. */
+     * that stands in for nothing. The key is the resident's own short label, never assigned by a rule -
+     * with one exception, {@link HabitTraitView#key}, which is a fixed key the rules recognise so that
+     * a belief a resident forms about one of their own reflexes can actually reach that reflex. Even
+     * there the rules only supply the label; whether to use it at all, and what to conclude under it,
+     * is entirely the resident's. */
     record ReflectDraft(String text,List<String> evidenceIds,String supersedesKey) {}
     /** 3-4 short qualitative segments for the day ahead (see {@link #planDay}), plus 0-3 of this
      * resident's own memory ids the plan is grounded in - the same evidence discipline every other

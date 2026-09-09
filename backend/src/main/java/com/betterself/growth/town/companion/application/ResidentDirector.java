@@ -316,7 +316,9 @@ public class ResidentDirector {
             if(!ResidentSimulation.needsReflection(w,r.id,now))continue;
             var context=perspective(w,r.id,now,List.of());
             var source=ResidentSimulation.reflectionSource(w,r.id,now);
-            var request=new ResidentMind.ReflectRequest(context,ResidentMind.memoryViews(source));
+            var request=new ResidentMind.ReflectRequest(context,ResidentMind.memoryViews(source),
+                ResidentSimulation.habitTraits(r.id).stream()
+                    .map(t->new ResidentMind.HabitTraitView(t.key(),t.description())).toList());
             return reserved(w,now,new Work("reflect",w.id,r.revision,w.intentRevision,now,context,null,null,null,w.modelSequence+1,day,null,null,null,request));
         }
         return null;

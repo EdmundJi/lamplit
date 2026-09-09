@@ -153,6 +153,68 @@ class ResidentHabitTest {
         assertThat(owner.lastHabitAt).as("a standing, importance-9 belief damps the habit far past this window").doesNotContainKey("tidy");
     }
 
+    // ---- the other half of item 3: a resident has to be able to NAME the habit ---------------------
+
+    /** The damping rule above could already read a belief filed under "habit:<居民>:<习惯>". Nothing
+     * ever told a resident that such a key existed, so no resident could write one and the whole path
+     * was unreachable in a real run. habitTraits is that missing half: the exact keys, offered to the
+     * resident who owns them, described as what they keep doing rather than as a lever. */
+    @Test void everyResidentWithADefaultReflexIsOfferedTheExactKeyThatReachesIt() {
+        CompanionWorld w = world("habit-traits");
+        for (String id : List.of("owner", "student", "artist", "gardener", "fixer", "weaver")) {
+            var traits = ResidentSimulation.habitTraits(id);
+            assertThat(traits).as(id).isNotEmpty();
+            for (var t : traits) {
+                assertThat(t.key()).as(id).startsWith("habit:" + id + ":");
+                assertThat(t.description()).as(t.key()).isNotBlank();
+                // Offered as an observation about themselves, never as an instruction about what
+                // saying it will do - the resident's conclusion has to stay their own.
+                assertThat(t.description()).doesNotContain("少").doesNotContain("不要").doesNotContain("应该");
+            }
+        }
+        assertThat(ResidentSimulation.habitTraits("self")).as("the avatar's habits are the user's, not ours to name").isEmpty();
+    }
+
+    @Test void aBeliefUnderSomeoneElsesHabitKeyOrAHabitNobodyHasIsRefused() {
+        CompanionWorld w = world("habit-key-guard");
+        ResidentState owner = ResidentSimulation.state(w, "owner");
+        String evidenceId = w.memories.stream().filter(m -> m.ownerId().equals("owner")).findFirst().orElseThrow().id();
+        assertThat(ResidentSimulation.applyReflection(w, "owner", owner.revision,
+            "小川总是这样。", List.of(evidenceId), "habit:student:quiet", DAY))
+            .as("the reserved prefix is only ever about oneself").isFalse();
+        assertThat(ResidentSimulation.applyReflection(w, "owner", owner.revision,
+            "我老是这样。", List.of(evidenceId), "habit:owner:brooding", DAY))
+            .as("a habit nobody has is not quietly filed").isFalse();
+        // An ordinary, resident-invented key is untouched by the guard - it only polices the prefix.
+        assertThat(ResidentSimulation.applyReflection(w, "owner", owner.revision,
+            "小川总坐那个位置。", List.of(evidenceId), "小川-座位", DAY)).isTrue();
+    }
+
+    /** The loop end to end, for a habit that actually moves someone: he keeps going to the cafe, he
+     * notices that he keeps going, he says so under the key he was offered, and the going gets rarer.
+     * This is also the guard that stops the catalogue drifting away from the real habit ids - a
+     * mistyped suffix here would leave the belief filed and the habit completely unaffected. */
+    @Test void noticingAPlaceHabitOutLoudMakesItRarerThroughTheKeyTheResidentWasOffered() {
+        CompanionWorld w = world("habit-loop-closes");
+        ResidentState student = ResidentSimulation.state(w, "student");
+        student.plan = null; student.suspendedAction = null;
+        ResidentSimulation.replaceActor(w, "student", TownPlaces.homeOf("student"), "idle", "在自己房里", DAY);
+        assertThat(runUntilHabitFires(w, student, "study_cafe", DAY, () -> {})).isTrue();
+
+        String key = ResidentSimulation.habitTraits("student").stream()
+            .filter(t -> t.key().endsWith(":study_cafe")).findFirst().orElseThrow().key();
+        String evidenceId = w.memories.stream().filter(m -> m.ownerId().equals("student")).findFirst().orElseThrow().id();
+        assertThat(ResidentSimulation.applyReflection(w, "student", student.revision,
+            "我好像总是往那个位置去。", List.of(evidenceId), key, DAY)).isTrue();
+
+        // Same setup as the run that just fired, from a clean slate, with the belief now standing.
+        student.lastHabitAt.remove("study_cafe");
+        student.plan = null; student.suspendedAction = null;
+        ResidentSimulation.replaceActor(w, "student", TownPlaces.homeOf("student"), "idle", "在自己房里", DAY);
+        assertThat(runUntilHabitFires(w, student, "study_cafe", DAY, () -> {}))
+            .as("having noticed it, it is no longer entirely automatic").isFalse();
+    }
+
     // ---- place habits: a default MOVE, not just a default label -----------------------------------
 
     @Test void theStudentDefaultsToTheCafeWindowAndOrdersTheOrdinaryCupThatGoesWithIt() {
