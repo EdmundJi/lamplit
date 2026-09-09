@@ -270,7 +270,42 @@ final class CafeService {
      * are reaped, delivered drinks get picked up or go cold. Called once per world tick, independent
      * of whose plan is running - a request keeps its own clock even while its requester has moved on
      * to something else while they wait. */
+    /** A shop with posted hours, whose operator has an active commitment to running it, opens at its
+     * own opening time. This is not the rules deciding something on a resident's behalf - the
+     * decisions are all still theirs and all still exist: whether to run a shop at all
+     * ({@code cafeOperating}, cleared by pauseOperation and by changing your occupation), what the
+     * hours are ({@code cafeOpenMinute}/{@code cafeCloseMinute}), and closing early on any given day
+     * (close_cafe, which sets "closing" and is untouched here, so a shop closed for the day stays
+     * closed for the day). What is removed is the busywork of re-deciding every morning to do the
+     * thing you have already committed to doing.
+     * <p>It is here because the alternative turned out to be a single point of failure for the whole
+     * town. Opening was a model decision and nothing else; one wrong call - the operator was told at
+     * 08:31 that it was past closing time and believed it - cost the town its only public indoor
+     * space for a full simulated day, and with it every habit that goes there. A day with no model at
+     * all had the same shape for the same reason: nobody ever opened the door, so five of six
+     * residents stayed home from beginning to end. A town whose whole social life hangs on one
+     * successful model call a day is not a town.
+     * <p>Deliberately only "closed" -> "open": never reopens something the operator closed today
+     * (that is "closing", and it stays), never overrides a pause, and never touches the hours. */
+    private static void openOnSchedule(CompanionWorld w,Instant at) {
+        if(!w.cafeOperating||!"closed".equals(w.cafeStatus)||!scheduledOpen(w,at))return;
+        // Only once the day has actually turned over: an early close is a decision about TODAY, and
+        // reopening the same day would silently undo it.
+        if(w.cafeStatusChangedAt!=null&&closedEarlierToday(w,at))return;
+        ResidentState operator=ResidentSimulation.state(w,operatorId(w));
+        if(operator==null)return;
+        w.cafeStatus="open";w.cafeStatusChangedAt=at;
+        ResidentSimulation.event(w,at,"cafe_opened",PLACE,List.of(operator.id),
+            ResidentSimulation.actor(w,operator.id).name()+"照平常的钟点开了咖啡馆的门。",null);
+    }
+    /** Whether the shop's current "closed" was reached at some point during today's local date. */
+    private static boolean closedEarlierToday(CompanionWorld w,Instant at){
+        ZoneId zone=ZoneId.of(w.timezone);
+        return w.cafeStatusChangedAt.atZone(zone).toLocalDate().equals(at.atZone(zone).toLocalDate());
+    }
+
     static void tick(CompanionWorld w, Instant at) {
+        openOnSchedule(w, at);
         for (ServiceRequest req : w.serviceRequests) {
             if ("waiting".equals(req.status)) reapWaiting(w, req, at);
             else if ("delivered".equals(req.status)) resolveDelivered(w, req, at);

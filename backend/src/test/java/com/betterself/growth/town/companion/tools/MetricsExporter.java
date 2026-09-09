@@ -31,6 +31,14 @@ public final class MetricsExporter {
 
     @SuppressWarnings("unchecked")
     public static Map<String, Object> compute(List<Map<String, Object>> sortedEntries, TimelineCollector collector, CompanionWorld finalWorld) {
+        return compute(sortedEntries, collector, finalWorld, List.of());
+    }
+
+    /** {@code simulatedDays} is every local date the run actually covered. Without it a day on which
+     * nothing happened simply has no key, and "days meeting the target" then divides by the number of
+     * days that DID have something - which reads as 1/1 for a run whose first day scored zero. A
+     * metric that cannot report a zero is a metric that flatters itself. */
+    public static Map<String, Object> compute(List<Map<String, Object>> sortedEntries, TimelineCollector collector, CompanionWorld finalWorld, List<String> simulatedDays) {
         Map<String, Object> metrics = new LinkedHashMap<>();
         metrics.put("serviceRequests", serviceRequestMetrics(collector));
         metrics.put("personality", personalityMetrics(sortedEntries, finalWorld));
@@ -38,7 +46,7 @@ public final class MetricsExporter {
         metrics.put("relationshipAsymmetry", relationshipAsymmetryMetrics(finalWorld));
         metrics.put("memories", memoryMetrics(sortedEntries));
         metrics.put("coLocation", coLocationMetrics(collector));
-        metrics.put("jointAction", jointActionMetrics(collector, sortedEntries));
+        metrics.put("jointAction", jointActionMetrics(collector, sortedEntries, simulatedDays));
         return metrics;
     }
 
@@ -243,10 +251,11 @@ public final class MetricsExporter {
     private static final long JOINT_MIN_MINUTES = 5;
 
     @SuppressWarnings("unchecked")
-    private static Map<String, Object> jointActionMetrics(TimelineCollector collector, List<Map<String, Object>> entries) {
+    private static Map<String, Object> jointActionMetrics(TimelineCollector collector, List<Map<String, Object>> entries, List<String> simulatedDays) {
         Map<String, Object> out = new LinkedHashMap<>();
         Map<String, Integer> byKind = new TreeMap<>();
         Map<String, Integer> chosenPerDay = new TreeMap<>();
+        for (String day : simulatedDays) chosenPerDay.put(day, 0); // a zero day has to be able to say so
         List<Object> kept = new ArrayList<>();
         int chosen = 0;
         for (Map<String, Object> e : collector.jointEpisodes()) {
@@ -284,6 +293,7 @@ public final class MetricsExporter {
             for (String id : ((String) e.get("actorId")).split(",")) handsPerDayProject.computeIfAbsent(key, k -> new java.util.LinkedHashSet<>()).add(id);
         }
         Map<String, Integer> sharedBuildsPerDay = new TreeMap<>();
+        for (String day : simulatedDays) sharedBuildsPerDay.put(day, 0);
         for (var e : handsPerDayProject.entrySet())
             if (e.getValue().size() >= 2) sharedBuildsPerDay.merge(e.getKey().substring(0, e.getKey().indexOf('|')), 1, Integer::sum);
         out.put("sharedBuildsPerDay", sharedBuildsPerDay);

@@ -82,6 +82,36 @@ class ClosingCafeTrapTest {
         assertThat(r.consecutiveDecisionRejections).isZero();
     }
 
+    @Test void aShopWithPostedHoursOpensAtItsOwnOpeningTimeWithoutAnybodyDecidingTo() {
+        // The whole town's social life used to hang on one successful model call a day: opening was a
+        // model decision and nothing else, so a day without a model had five of six residents at home
+        // from beginning to end, and one wrong call cost the same.
+        CompanionWorld w = world(BEFORE_OPENING);
+        w.cafeStatus = "closed"; w.cafeOperating = true; w.cafeStatusChangedAt = BEFORE_OPENING.minusSeconds(86_400);
+        CompanionRules.advance(w, BEFORE_OPENING.plusSeconds(60));
+        assertThat(w.cafeStatus).as("08:32, still before the usual 09:00").isEqualTo("closed");
+        CompanionRules.advance(w, DURING_HOURS);
+        assertThat(w.cafeStatus).as("noon, and the operator still runs the place").isEqualTo("open");
+    }
+
+    @Test void aShopClosedForTheDayStaysClosedForTheDay() {
+        CompanionWorld w = world(DURING_HOURS);
+        w.cafeOperating = true;
+        ResidentSimulation.replaceActor(w, "owner", "cafe", "observe", "在店里", DURING_HOURS);
+        w.cafeStatus = "open";
+        assertThat(CafeService.closeForDay(w, "owner", "今天先到这儿吧", DURING_HOURS)).isTrue();
+        w.cafeStatus = "closed"; w.cafeStatusChangedAt = DURING_HOURS; // the room has emptied
+        CompanionRules.advance(w, DURING_HOURS.plusSeconds(3_600));
+        assertThat(w.cafeStatus).as("closing early is a decision about today, and it stands").isEqualTo("closed");
+    }
+
+    @Test void apausedShopIsNeverReopenedBySchedule() {
+        CompanionWorld w = world(DURING_HOURS);
+        w.cafeStatus = "closed"; w.cafeOperating = false; w.cafeStatusChangedAt = DURING_HOURS.minusSeconds(86_400);
+        CompanionRules.advance(w, DURING_HOURS.plusSeconds(60));
+        assertThat(w.cafeStatus).as("not running a shop is a standing choice, not a daily one").isEqualTo("closed");
+    }
+
     @Test void oneOrTwoRefusalsAreJustACollisionAndCostNothing() {
         CompanionWorld w = world(DURING_HOURS);
         ResidentState r = ResidentSimulation.state(w, "owner");

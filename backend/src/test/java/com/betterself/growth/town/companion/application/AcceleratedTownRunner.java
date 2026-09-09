@@ -499,7 +499,13 @@ public final class AcceleratedTownRunner {
 
         // Emergence metrics: the run's actual "did it work" evidence, not an impression from reading
         // timeline.md - see docs/01-requirements.md "让他们自己产生秩序" and MetricsExporter's javadoc.
-        Map<String, Object> metrics = MetricsExporter.compute(sorted, collector, finalWorld);
+        // Every local date the run actually covered, so a day on which nothing happened reports a
+        // zero instead of vanishing from the denominator.
+        List<String> simulatedDays = new ArrayList<>();
+        java.time.ZoneId zone = java.time.ZoneId.of(cfg.timezone());
+        for (java.time.LocalDate d = runStart.atZone(zone).toLocalDate(), last = finalInstant.atZone(zone).toLocalDate();
+             !d.isAfter(last); d = d.plusDays(1)) simulatedDays.add(d.toString());
+        Map<String, Object> metrics = MetricsExporter.compute(sorted, collector, finalWorld, simulatedDays);
         MetricsExporter.writeJson(cfg.outDir().resolve("metrics.json"), metrics);
         MetricsExporter.writeMarkdown(cfg.outDir().resolve("metrics.md"), metrics);
 
