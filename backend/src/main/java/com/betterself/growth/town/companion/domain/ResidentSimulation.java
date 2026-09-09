@@ -1029,9 +1029,12 @@ public final class ResidentSimulation {
      * world (no model at all) falls back to greeting on the resident's behalf. */
     private static final long PENDING_ENCOUNTER_TTL_SECONDS = 90;
     /** After deciding NOT to approach someone, this is how long before the rules will point the same
-     * pair out to each other again - much shorter than {@link #ENCOUNTER_COOLDOWN_SECONDS}, because
-     * "not right now" is a smaller statement than "we just talked". */
-    public static final long DECLINED_ENCOUNTER_COOLDOWN_SECONDS = 12*60;
+     * pair out to each other again. Shorter than {@link #ENCOUNTER_COOLDOWN_SECONDS} - "not right
+     * now" is a smaller statement than "we just talked" - but not by much, and twelve minutes was
+     * far too short: a measured run asked one pair the same question six times in a row and got back
+     * the same sentence almost verbatim each time. Nobody reconsiders saying hello to the same person
+     * every twelve minutes; having decided to leave someone alone, you leave them alone for a while. */
+    public static final long DECLINED_ENCOUNTER_COOLDOWN_SECONDS = 30*60;
 
     /** Drops face-to-face facts that reality has overtaken: one of them walked off, one of them is
      * already talking to somebody, or nobody got round to answering in time. A model outage must not
