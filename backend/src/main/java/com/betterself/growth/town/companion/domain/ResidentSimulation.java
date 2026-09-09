@@ -273,8 +273,30 @@ public final class ResidentSimulation {
         };
         r.energy=clamp(r.energy+hourly*seconds/3600.0);r.energyUpdatedAt=at;
     }
+    /** The actions that count as having done work of the kind a direction is about - deliberately the
+     * same set {@link #INTERRUPTIBLE_WORK_ACTIONS} already uses for "is this person in the middle of
+     * work", plus tending the counter, rather than a second, differently-drawn line. */
+    private static final Set<String> DIRECTED_WORK_ACTIONS=Set.of("study","read","work","make","create","help","tend");
+    /** Stamps "the last time I actually did something toward this" on a resident's own directions.
+     * <p>{@code lastActedAt} was declared, exposed all the way into every resident's model context
+     * through LifeIntentView, and asserted by a test - and written by absolutely nothing, anywhere,
+     * in production code. It reached every model call as a permanent null. This is the write.
+     * <p>The two intents are stamped by two different rules because they are two different things.
+     * careerIntent has no goalId, so the only honest reading is the coarse one: this person did work
+     * of the kind their direction is about. The rules deliberately do not judge whether the work
+     * SERVED the direction - that is a reading of meaning, and it belongs to the resident, not here.
+     * lifeIntent, when it names a goal at all, gets the precise reading instead: this finished thing
+     * was that thing. A lifeIntent naming nothing in particular is never stamped, because there is
+     * nothing in particular it could be stamped for. */
+    private static void markIntentActedOn(ResidentState r,Plan p,Instant at){
+        if(p==null||p.action()==null)return;
+        if(r.careerIntent!=null&&DIRECTED_WORK_ACTIONS.contains(p.action()))r.careerIntent.lastActedAt=at;
+        if(r.lifeIntent!=null&&r.lifeIntent.goalId!=null&&r.lifeIntent.goalId.equals(p.targetId()))r.lifeIntent.lastActedAt=at;
+    }
+
     private static void complete(CompanionWorld w,ResidentState r,Instant at) {
         Plan p=r.plan;
+        markIntentActedOn(r,p,at);
         if(p.action().equals("travel")){int duration=r.desiredDurationSeconds>0?r.desiredDurationSeconds:42;schedule(w,r,r.desiredAction,p.place(),p.targetId(),p.reason(),at,duration);return;}
         if(p.action().equals("away")){
             String home=TownPlaces.homeOf(r.id);
