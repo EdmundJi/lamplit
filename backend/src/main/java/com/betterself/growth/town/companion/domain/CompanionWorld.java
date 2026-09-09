@@ -68,6 +68,17 @@ public class CompanionWorld {
      * thinking just a timer running out?" instead of guessing. */
     public List<DecisionTrigger> decisionTriggers = new ArrayList<>();
     public record DecisionTrigger(String id,String residentId,String trigger,Instant at) {}
+    /** Bounded diagnostic trail for every time a real, already-recorded experience nudged a
+     * resident's own personality a small, bounded step (see ResidentSimulation's "driftPersonality"
+     * family, item 2). {@code cause} is one of a fixed, rule-authored vocabulary ("agreement",
+     * "declined", "project_complete", "interrupted", "solitude", "celebration", "noticed_detail",
+     * "missed_detail") naming which real event moved the dimension - never a model-authored
+     * explanation, and never read by any model. This is what lets a drift always be traced back to
+     * the one thing that caused it without the rules ever writing a resident's own account of why
+     * they changed - that account, if any, stays the resident's own, through the ordinary
+     * reflection/belief machinery. */
+    public List<PersonalityDrift> personalityDrifts = new ArrayList<>();
+    public record PersonalityDrift(String id,String residentId,String dimension,double delta,String cause,Instant at) {}
     /** Off by default, and deliberately not wired into the ordinary join()/advance() path this batch:
      * turning it on lets the avatar ("self") become a genuine decision candidate in ResidentDirector,
      * on the same terms as the four NPCs, whenever it is not currently under the user's own explicit
@@ -179,6 +190,12 @@ public class CompanionWorld {
         public Instant lastDutyReflectionAt;
         public List<String> dutyComplaintEvidenceIds = new ArrayList<>();
         public List<String> dutyInterruptionEvidenceIds = new ArrayList<>();
+        /** Last simulated instant each of this resident's own four personality dimensions actually
+         * drifted (see ResidentSimulation's "driftPersonality"), keyed by dimension name. The
+         * frequency backstop behind item 2's "slow, not mood": the same dimension cannot move again
+         * before its own cooldown has passed, however many qualifying events happen in between. Old
+         * saves self-heal via the empty map default, same shape as {@code lastHabitAt} above. */
+        public Map<String,Instant> lastPersonalityDriftAt = new LinkedHashMap<>();
         /** Per-resident decision cooldown (see ResidentDirector), replacing the old world-global
          * {@link #modelRequestedAt} gate: each resident now thinks on their own clock instead of the
          * whole town taking turns round-robin on one shared timer. Null until this resident's first
@@ -198,6 +215,12 @@ public class CompanionWorld {
         /** This resident's own coarse plan for today (see ResidentSimulation.applyDayPlan): three or
          * four qualitative segments, not a schedule. Left null until their first morning decision. */
         public DayPlan dayPlan;
+        /** Last simulated instant each of this resident's own habitual reflexes (see
+         * ResidentSimulation's "maybeHabit" family) actually fired, keyed by that habit's own short
+         * id ("tidy", "quiet", ...). Purely a frequency backstop - never read by any model - so the
+         * same habit cannot fire again before its own cooldown has passed. Old saves deserialize with
+         * the empty map default, the same self-healing shape as {@code relationships} above. */
+        public Map<String,Instant> lastHabitAt = new LinkedHashMap<>();
     }
     /** A resident's own coarse, interruptible day plan - see {@link ResidentState#dayPlan}. A segment
      * is deliberately just a short label and a status: nothing here forces it to happen, and nothing

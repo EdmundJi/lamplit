@@ -289,6 +289,36 @@ class ResidentLifeTest {
         assertThat(ResidentSimulation.availableActions(legacy,"owner",now.plusSeconds(6))).contains("open_cafe");
     }
 
+    @Test void aFarApartPairGetsHalfTheOrdinaryReencounterCooldownButANearbyPairDoesNot(){
+        // Item 4: walking may never be shortened to fix the far end of the street being isolated (a
+        // walk still has to outlast a tick - see travelSeconds's own note), so this is the one lever
+        // that is safe to change instead: once a rare, far-apart pair does happen to cross paths, the
+        // ordinary forty-minute "we just met" cooldown should not tax their one opportunity as heavily
+        // as it taxes two neighbours who bump into each other constantly. Owner (position 0) and
+        // gardener (position 26) are the two farthest-apart homes in the whole town; owner and student
+        // (position 8) are two of the closest.
+        CompanionWorld w=CompanionRules.join("far-pair-cooldown","住客","Asia/Shanghai",now,true);
+        w.conversations.forEach(c->c.status="ended");
+        for(String id:List.of("owner","student","gardener")){
+            ResidentState r=ResidentSimulation.state(w,id);r.plan=null;r.suspendedAction=null;r.lastSocialAt=null;
+            ResidentSimulation.replaceActor(w,id,"garden","observe","看看花园",now.plusSeconds(9000));
+        }
+        Instant justMet=now;
+        w.encounterCooldowns.put("gardener:owner",justMet);
+        w.encounterCooldowns.put("owner:student",justMet);
+
+        w.updatedAt=now;w.simulatedAt=now;
+        // Twenty minutes on: half the ordinary forty-minute cooldown has passed for the far pair, but
+        // not for the near one.
+        ResidentSimulation.state(w,"owner").lastSocialAt=null;ResidentSimulation.state(w,"gardener").lastSocialAt=null;
+        ResidentSimulation.state(w,"student").lastSocialAt=null;
+        advanceTo(w,now.plusSeconds(20*60+30));
+        assertThat(w.pendingEncounters).as("the far pair may meet again after only half the ordinary cooldown")
+            .anyMatch(p->List.of(p.residentId,p.otherId).containsAll(List.of("owner","gardener")));
+        assertThat(w.pendingEncounters).as("the nearby pair is still on the ordinary, unshortened cooldown")
+            .noneMatch(p->List.of(p.residentId,p.otherId).containsAll(List.of("owner","student")));
+    }
+
     private static void moveEveryoneHome(CompanionWorld w,Instant at){
         for(ResidentState state:w.residentStates){if("self".equals(state.id))continue;Actor actor=ResidentSimulation.actor(w,state.id);ResidentSimulation.replaceActor(w,state.id,TownPlaces.homeOf(state.id),"idle","在家",at.plusSeconds(60));state.plan=null;TownPlaces.release(w,state.id);}
         Actor avatar=w.avatar;w.avatar=new Actor(avatar.id(),avatar.name(),avatar.role(),TownPlaces.homeOf("self"),avatar.activity(),avatar.label(),avatar.x(),avatar.y(),avatar.until());TownPlaces.release(w,"self");

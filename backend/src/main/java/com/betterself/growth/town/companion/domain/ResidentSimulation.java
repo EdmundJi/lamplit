@@ -27,6 +27,11 @@ public final class ResidentSimulation {
         STREET_POSITION.put(TownPlaces.homeOf("artist"),20);
         STREET_POSITION.put(TownPlaces.homeOf("gardener"),26);
         STREET_POSITION.put(TownPlaces.homeOf("self"),30);
+        // 周野's own home (see ResidentSeed.initialize's "周野 gets a new home of his own, next to
+        // 青叔's garden") - an explicit entry so his travel times are the same kind of deliberate
+        // placement as everyone else's, rather than falling through to streetPosition()'s
+        // hash-of-the-place-id fallback below (still deterministic, but not an authored position).
+        STREET_POSITION.put(TownPlaces.homeOf("fixer"),16);
     }
     private static int streetPosition(String place){
         Integer known=STREET_POSITION.get(place);
@@ -53,6 +58,25 @@ public final class ResidentSimulation {
         int units=Math.abs(streetPosition(from)-streetPosition(to));
         return Math.max(60,Math.min(600,units*SECONDS_PER_STREET_UNIT));
     }
+    /** How far apart, in the same abstract street units {@link #travelSeconds} already uses, two
+     * residents' own homes sit. Read-only distance, never a duration - see
+     * {@link #encounterCooldownSeconds} for the one place this feeds into. */
+    private static int homeDistance(String a,String b){
+        return Math.abs(streetPosition(TownPlaces.homeOf(a))-streetPosition(TownPlaces.homeOf(b)));
+    }
+    /** Item 4: a pair who live far apart on {@link #STREET_POSITION} gets fewer chances to ever share
+     * a place at all - a fact this method does not try to fix (see {@link #travelSeconds}'s own note
+     * on why a walk may never be shortened to fix that). What it does fix is the one thing rule-owned
+     * and safe to change: once such a pair does happen to cross paths, the ordinary forty-minute
+     * "we just met" cooldown taxes them exactly as much as it taxes two neighbours who bump into each
+     * other constantly - for the far pair that tax can eat their one rare opportunity for the rest of
+     * the day. A pair whose homes sit at least {@link #FAR_PAIR_DISTANCE_UNITS} street-units apart
+     * gets half the ordinary cooldown instead, so a rare crossing is worth more, not less, than a
+     * routine one. Nearby pairs are completely unaffected. */
+    private static final int FAR_PAIR_DISTANCE_UNITS = 15;
+    private static long encounterCooldownSeconds(String a,String b){
+        return homeDistance(a,b)>=FAR_PAIR_DISTANCE_UNITS ? ENCOUNTER_COOLDOWN_SECONDS/2 : ENCOUNTER_COOLDOWN_SECONDS;
+    }
     /** Mean-once-every-~40-simulated-minutes, purely time-and-identity-derived so replay stays
      * deterministic (never Math.random - see Personality's own abandonThreshold() for the same
      * discipline). One independent 1/40 chance per simulated minute gives that mean via a geometric
@@ -64,6 +88,51 @@ public final class ResidentSimulation {
         long bucket=now.getEpochSecond()/60;
         long hash=Objects.hash(w.id,r.id,bucket);
         return Math.floorMod(hash,40)==0;
+    }
+
+    // ---- personality drift (item 2): real experience, not the clock, moves who someone is --------
+    /** How far a single genuine event may nudge one dimension. Small on purpose - personality is not
+     * mood; nobody should be able to point at one afternoon and see it move. */
+    private static final double PERSONALITY_DRIFT_STEP = 1.0;
+    /** How far a lifetime of real events may ever carry one dimension from where {@link Personality#of}
+     * originally seeded it. This is the "never a gate" guarantee (item 2's own red line) made concrete:
+     * however many events accumulate, owner's conscientiousness cannot drift down into artist's range
+     * or past it - the four residents stay four different people, just slightly weathered ones. */
+    private static final double PERSONALITY_DRIFT_LIFETIME_CAP = 12.0;
+    /** Minimum simulated gap between two drifts of the SAME dimension for the SAME resident. Combined
+     * with the small per-event step above, this is what keeps a day showing no visible change and a
+     * week showing a real one: at most six nudges of at most one point each in a single day, per
+     * dimension, and only when six genuinely separate qualifying events actually happened. */
+    private static final long PERSONALITY_DRIFT_MIN_GAP_SECONDS = 4*3600L;
+
+    private static double dimensionValue(ResidentState r,String dimension){
+        return switch(dimension){case "extroversion"->r.extroversion;case "conscientiousness"->r.conscientiousness;case "sensitivity"->r.sensitivity;default->r.volatility;};
+    }
+    private static void setDimensionValue(ResidentState r,String dimension,double value){
+        switch(dimension){case "extroversion"->r.extroversion=value;case "conscientiousness"->r.conscientiousness=value;case "sensitivity"->r.sensitivity=value;default->r.volatility=value;}
+    }
+    /** Nudges one of r's own four personality dimensions by signedStep (positive or negative), bounded
+     * on three sides at once: never past 0/100, never further than {@link #PERSONALITY_DRIFT_LIFETIME_CAP}
+     * from where this resident actually started, and never twice for the same dimension inside
+     * {@link #PERSONALITY_DRIFT_MIN_GAP_SECONDS}. {@code cause} is a fixed, rule-authored word (never a
+     * resident's own explanation - see {@link CompanionWorld.PersonalityDrift}'s own doc comment) and is
+     * the only place any of this is recorded; nothing here writes into the resident's own memory, because
+     * the rules do not get to tell a resident why they changed - only that, mechanically, they did.
+     * A no-op for the avatar, which has no authored personality to drift (see Personality.of). */
+    private static void driftPersonality(CompanionWorld w,ResidentState r,String dimension,double signedStep,String cause,Instant at){
+        if(r==null||"self".equals(r.id))return;
+        Personality.of(r); // ensure this resident's own fields are seeded before nudging them
+        Instant last=r.lastPersonalityDriftAt.get(dimension);
+        if(last!=null&&Duration.between(last,at).getSeconds()<PERSONALITY_DRIFT_MIN_GAP_SECONDS)return;
+        double current=dimensionValue(r,dimension);
+        double initial=Personality.initial(r.id,dimension);
+        double lo=Math.max(0,initial-PERSONALITY_DRIFT_LIFETIME_CAP), hi=Math.min(100,initial+PERSONALITY_DRIFT_LIFETIME_CAP);
+        double bounded=Math.max(lo,Math.min(hi,current+signedStep));
+        if(bounded==current)return; // already pinned at its own lifetime bound - nothing to record
+        setDimensionValue(r,dimension,bounded);
+        r.lastPersonalityDriftAt.put(dimension,at);
+        w.personalityDrifts.add(new CompanionWorld.PersonalityDrift("pd-"+(++w.eventSequence),r.id,dimension,bounded-current,cause,at));
+        while(w.personalityDrifts.size()>200)w.personalityDrifts.removeFirst();
     }
     /** Bounded diagnostic history of why a decision was actually triggered - see
      * {@link CompanionWorld#decisionTriggers}. Never read by any model. */
@@ -153,8 +222,10 @@ public final class ResidentSimulation {
             settleEnergy(w,r,at);
             if(activeConversation(w,r.id)!=null)continue;
             if(r.plan!=null&&!at.isBefore(r.plan.endsAt())){Plan completed=r.plan;complete(w,r,at);if(r.plan==completed){r.plan=null;if(!Set.of("sleep","open_cafe").contains(completed.action()))resumeSuspended(w,r,at);}}
-            if(r.plan==null)awaitDecision(w,r,at);
+            if(r.plan==null){if(!maybePlaceHabit(w,r,at))awaitDecision(w,r,at);}
             maybeEncounter(w,r,at);
+            maybeSolitudeDrift(w,r,at);
+            maybeHabit(w,r,at);
         }
         // The model is each resident's decision-maker. Rule-only fallback completes already approved
         // physical work but does not manufacture a reflection, social choice or new intention.
@@ -231,7 +302,10 @@ public final class ResidentSimulation {
                 event(w,at,"contribution",project.place,List.of(r.id),text,project.id);
                 for(ResidentState other:w.residentStates)if(!other.id.equals(r.id)&&!other.id.equals("self")&&actor(w,other.id).place().equals(project.place)&&!actor(w,other.id).activity().equals("walk"))
                     witnessContribution(w,other,r,project,text,evidence,at);
-                if(project.progress==100){project.completedAt=at;event(w,at,"ready",project.place,new ArrayList<>(project.contributors),"「"+project.title+"」准备好了，和最初一个人的想法已经不太一样。",project.id);}
+                if(project.progress==100){project.completedAt=at;event(w,at,"ready",project.place,new ArrayList<>(project.contributors),"「"+project.title+"」准备好了，和最初一个人的想法已经不太一样。",project.id);
+                    // Seeing something all the way through is real, repeatable evidence of follow-through -
+                    // exactly the axis conscientiousness already measures (see Personality's own javadoc).
+                    driftPersonality(w,r,"conscientiousness",PERSONALITY_DRIFT_STEP,"project_complete",at);}
             }
         } else if(p.action().equals("celebrate")) {
             Project project=project(w,p.targetId());
@@ -242,6 +316,9 @@ public final class ResidentSimulation {
                     boolean detail=Personality.of(state(w,member)).sensitivity()>=65;
                     String text=detail?"我亲眼看见，参与的「"+project.title+"」真的做出来了，连细节都跟当初说的差不多。":"我亲眼看见，参与的「"+project.title+"」真的做出来了。";
                     memory(w,member,r.id,"observed",at,project.id,text,List.of(),9);
+                    // A shared, happy moment is real steadying experience, not a reason - the opposite
+                    // pull from "interrupted" below, on the same dimension a repeated interruption erodes.
+                    driftPersonality(w,state(w,member),"volatility",-PERSONALITY_DRIFT_STEP,"celebration",at);
                 }
             }
         } else if(p.action().equals("open_cafe")){CafeService.openForDay(w,r.id,p.reason(),at);}
@@ -257,6 +334,17 @@ public final class ResidentSimulation {
         paused.plan=new Plan(r.plan.id(),r.plan.action(),r.plan.place(),r.plan.targetId(),r.plan.reason(),at,at.plusSeconds(remaining));
         paused.desiredAction=r.desiredAction;paused.desiredDurationSeconds=r.desiredDurationSeconds;paused.pausedAt=at;
         r.suspendedAction=paused;
+    }
+    /** Committed work (see {@link #PORTABLE_ACTIONS} plus the two social-project actions) genuinely
+     * being set aside for a conversation is item 2's "被打断" - real, repeated evidence, not mood.
+     * Used only where a conversation is about to start (see the two call sites below); the ordinary
+     * "rest"/"sleep" re-plan and the tend/request_drink detours in applyDecision are not this - they
+     * are the resident's own choice, not an interruption imposed on them by someone else appearing. */
+    private static final Set<String> INTERRUPTIBLE_WORK_ACTIONS = Set.of("study","read","work","make","create","help");
+    private static void suspendForConversation(CompanionWorld w,ResidentState r,Instant at){
+        if(r.plan!=null&&r.suspendedAction==null&&INTERRUPTIBLE_WORK_ACTIONS.contains(r.plan.action()))
+            driftPersonality(w,r,"conscientiousness",-PERSONALITY_DRIFT_STEP,"interrupted",at);
+        suspend(r,at);
     }
     /** Restoring is a normal scheduling transition, including a journey that was interrupted on the
      * street.  This is deliberately called only after the interrupting action actually completes. */
@@ -280,8 +368,14 @@ public final class ResidentSimulation {
      * trace. This is the mechanism the differentiated-memory tests exercise directly. */
     private static void witnessContribution(CompanionWorld w,ResidentState observer,ResidentState actorState,Project project,String actorText,String actorEvidenceId,Instant at) {
         int sensitivity=Personality.of(observer).sensitivity();
-        if(sensitivity<35)return;
+        if(sensitivity<35){
+            // Genuinely not noticing, repeatedly, is itself real evidence - the opposite pull from
+            // actually paying attention below, on the same dimension it moves.
+            driftPersonality(w,observer,"sensitivity",-PERSONALITY_DRIFT_STEP,"missed_detail",at);
+            return;
+        }
         boolean detail=sensitivity>=65;
+        if(detail)driftPersonality(w,observer,"sensitivity",PERSONALITY_DRIFT_STEP,"noticed_detail",at);
         String text=detail?"我看见"+actorText:"隐约感觉到"+actor(w,actorState.id).name()+"又在忙「"+project.title+"」，具体做了什么我没太看清。";
         memory(w,observer.id,actorState.id,"observed",at,project.id,text,List.of(actorEvidenceId),detail?7:4);
     }
@@ -344,7 +438,7 @@ public final class ResidentSimulation {
         p.invitationHistory.put(pairKey(a.id,b.id),at);
         // A chat can be a detour through an already meaningful afternoon, rather than a command to
         // discard that afternoon altogether.
-        suspend(a,at);suspend(b,at);
+        suspendForConversation(w,a,at);suspendForConversation(w,b,at);
         Conversation c=new Conversation();c.id="c-"+(++w.eventSequence);c.place=actor(w,a.id).place();c.topicId=p.id;c.status="active";c.participantIds.add(a.id);c.participantIds.add(b.id);c.startedAt=at;c.updatedAt=at;
         // A production/model conversation never drops into the rule-authored agreement script just
         // because the provider is cooling down. ConversationLifecycle will end it neutrally if the
@@ -375,7 +469,7 @@ public final class ResidentSimulation {
     /** A conversation may be about a shift, a possible new life, or an unresolved arrangement;
      * it does not need a public project to be a legitimate encounter. */
     private static void startLifeConversation(CompanionWorld w,ResidentState a,ResidentState b,Instant at){
-        suspend(a,at);suspend(b,at);Conversation c=new Conversation();c.id="c-"+(++w.eventSequence);c.place=actor(w,a.id).place();c.topicId="life";c.status="active";c.participantIds.add(a.id);c.participantIds.add(b.id);c.startedAt=at;c.updatedAt=at;c.mode=w.modelConversationsEnabled?"model":"fallback";c.nextSpeakerId=a.id;w.conversations.add(c);a.lastSocialAt=at;b.lastSocialAt=at;
+        suspendForConversation(w,a,at);suspendForConversation(w,b,at);Conversation c=new Conversation();c.id="c-"+(++w.eventSequence);c.place=actor(w,a.id).place();c.topicId="life";c.status="active";c.participantIds.add(a.id);c.participantIds.add(b.id);c.startedAt=at;c.updatedAt=at;c.mode=w.modelConversationsEnabled?"model":"fallback";c.nextSpeakerId=a.id;w.conversations.add(c);a.lastSocialAt=at;b.lastSocialAt=at;
         replaceActor(w,a.id,c.place,"talk","想聊聊手头的生活安排",at.plusSeconds(45));replaceActor(w,b.id,c.place,"talk","停下来听听对方的打算",at.plusSeconds(45));event(w,at,"conversation",c.place,List.of(a.id,b.id),actor(w,a.id).name()+"和"+actor(w,b.id).name()+"聊起最近的生活安排。",null);
     }
     private static void continueConversation(CompanionWorld w,Conversation c,Instant at) {
@@ -411,6 +505,9 @@ public final class ResidentSimulation {
                 a.revision++;b.revision++;
                 memory(w,a.id,b.id,"heard",at,p.id,actor(w,b.id).name()+"说今天想先休息，没有答应参与。",ownEvidence(w,a.id,p.id),6);
                 event(w,at,"declined",c.place,List.of(a.id,b.id),actor(w,b.id).name()+"婉拒了这一次邀请，"+actor(w,a.id).name()+"决定不催促。",p.id);
+                // A genuine, repeated rejection is real experience, not mood - see driftPersonality's
+                // own doc comment for the bound that keeps this from ever becoming a visible swing.
+                driftPersonality(w,a,"extroversion",-PERSONALITY_DRIFT_STEP,"declined",at);
                 replaceActor(w,speaker,c.place,"talk",text,at.plusSeconds(12));return;
             }
             text=switch(b.id){case "student"->"行。等我把这页看完。";case "artist"->"行，留一块给我。";case "gardener"->"行，我晚点把苗拿来。";default->"行，我收完台面就来。";};
@@ -419,6 +516,7 @@ public final class ResidentSimulation {
             String evidence=memory(w,b.id,a.id,"heard",at,p.id,"我们当面商量过「"+p.title+"」，对方接受了我的想法，我答应做一小部分。",ownEvidence(w,b.id,p.id),8);
             memory(w,a.id,b.id,"heard",at,p.id,actor(w,b.id).name()+"当面答应参与「"+p.title+"」。",List.of(evidence),8);
             event(w,at,"agreement",c.place,List.of(a.id,b.id),actor(w,b.id).name()+"答应参与「"+p.title+"」，不是旁观者了。",p.id);
+            driftPersonality(w,b,"extroversion",PERSONALITY_DRIFT_STEP,"agreement",at);
         } else {
             ConversationLifecycle.finish(w,c,at,"各自继续手上的事");return;
         }
@@ -525,6 +623,13 @@ public final class ResidentSimulation {
         if(CafeService.mayTend(w,residentId)&&"cafe".equals(actor(w,residentId).place())&&CafeService.oldestWaitingRequestId(w)!=null)result.add("柜台前有人在等");
         ServiceRequest ownWait=w.serviceRequests.stream().filter(request->residentId.equals(request.requesterId)&&"waiting".equals(request.status)&&"cafe".equals(actor(w,residentId).place())).findFirst().orElse(null);
         if(ownWait!=null&&Duration.between(ownWait.requestedAt,at).getSeconds()>=120)result.add("这杯已经等了一阵，还没有人来做");
+        // The one thing that could ever give someone a reason to order anything. Across a measured day
+        // request_drink was offered 32 times and chosen zero times, and the cafe served nobody - not
+        // because the machinery was broken (it isn't) but because nothing in anyone's perceptions ever
+        // pointed at it. A "thirst" value is forbidden, so this is a situation instead: you have been
+        // sitting here a while with nothing in front of you. See CafeService.drinkWantCue.
+        String drinkWant=CafeService.drinkWantCue(w,r,actor(w,residentId).place(),at);
+        if(drinkWant!=null)result.add(drinkWant);
         return List.copyOf(result);
     }
     public static String cafeScheduleCue(CompanionWorld w,String residentId,Instant at){return CafeService.scheduleCue(w,residentId,at);}
@@ -595,7 +700,7 @@ public final class ResidentSimulation {
             if(!greetable(w,other.id,at))continue;
             String key=pairKey(resident.id,other.id);
             Instant last=w.encounterCooldowns.get(key);
-            if(last!=null&&Duration.between(last,at).getSeconds()<ENCOUNTER_COOLDOWN_SECONDS)continue;
+            if(last!=null&&Duration.between(last,at).getSeconds()<encounterCooldownSeconds(resident.id,other.id))continue;
             w.encounterCooldowns.put(key,at);
             // The rules stop here. Standing in front of someone is a fact; what to do about it is the
             // resident's own call, answered by a model through applyReaction below.
@@ -608,6 +713,256 @@ public final class ResidentSimulation {
             return; // one encounter at a time; the others are still standing there next tick
         }
     }
+
+    /** Item 2's fifth example event, "长时间独处": read only from a fact the rules already track for an
+     * entirely different reason (lastSocialAt - see SOCIAL_RECOVERY_SECONDS above, and item 1's red
+     * line that this value is never sent to any model). A long, real stretch without a single
+     * conversation nudges volatility up a little, the opposite pull from a shared happy moment in
+     * complete()'s "celebrate" branch above. Gated by driftPersonality's own cooldown, so this cannot
+     * refire every tick just because the drought continues. */
+    private static final long SOLITUDE_DRIFT_THRESHOLD_SECONDS = 6*3600L;
+    private static void maybeSolitudeDrift(CompanionWorld w,ResidentState r,Instant at){
+        if(r.id.equals("self")||r.lastSocialAt==null)return;
+        if(Duration.between(r.lastSocialAt,at).getSeconds()<SOLITUDE_DRIFT_THRESHOLD_SECONDS)return;
+        driftPersonality(w,r,"volatility",PERSONALITY_DRIFT_STEP,"solitude",at);
+    }
+
+    // ---- habitual reflexes (item 1): the rules acting on a resident's behalf, never the model --------
+    /** At most about this often, per resident per habit - the frequency backstop item 1 explicitly asks
+     * for ("每人每小时最多一次那种量级"), tightened further here so a full simulated day still lands in
+     * the single digits per resident even if the structural condition holds continuously all day. */
+    private static final long HABIT_MIN_GAP_SECONDS = 3*3600L;
+    /** The same frequency backstop, sized for the other kind of habit item 1 also covers: one that
+     * actually walks a resident somewhere (see the placeHabitXxx family below) rather than only
+     * coloring a label. A trip is a bigger thing than a label change, so it gets a longer cooldown -
+     * at most four or five a day, not one every three hours. */
+    private static final long PLACE_HABIT_MIN_GAP_SECONDS = 5*3600L;
+    /** Deterministic, mean-once-every-five-eligible-minutes roll for whether a habit that has already
+     * cleared its own cooldown actually fires on this exact minute - same discipline as driftDue()/
+     * Personality.abandonThreshold(): (worldId, residentId, habit id, minute bucket) hashed, never
+     * Math.random, so a replay reproduces the exact same moments. */
+    private static boolean habitEligible(CompanionWorld w,ResidentState r,String habitId,Instant at){
+        return habitEligible(w,r,habitId,HABIT_MIN_GAP_SECONDS,at);
+    }
+    private static boolean habitEligible(CompanionWorld w,ResidentState r,String habitId,long baseGapSeconds,Instant at){
+        // A belief must be able to weaken even the very first time a habit would otherwise fire, not
+        // only the spacing between repeats - so a habit with no history yet is anchored to the
+        // world's own join instant, exactly as if it had "already fired" the moment this resident's
+        // life began. Without a belief this changes nothing observable (every habit already needs a
+        // real elapsed gap before it can fire at all); with one, the damped gap below can outlast an
+        // entire test window's worth of simulated time, deterministically, rather than merely making
+        // firing less likely.
+        Instant last=r.lastHabitAt.getOrDefault(habitId,w.joinedAt==null?at:w.joinedAt);
+        double damping=habitBeliefDamping(w,r.id,habitId);
+        long gap=Math.round(baseGapSeconds*damping);
+        if(Duration.between(last,at).getSeconds()<gap)return false;
+        long bucket=at.getEpochSecond()/60;
+        long hash=Objects.hash(w.id,r.id,habitId,bucket);
+        return Math.floorMod(hash,5)==0;
+    }
+    /** Item 3's one closed loop: a resident's own standing belief can turn its own default habit down.
+     * The rules never read what the belief SAYS - only whether one exists, structurally, under the
+     * exact reserved key "habit:&lt;residentId&gt;:&lt;habitId&gt;" (the same supersedesKey convention
+     * ResidentReflectionTest's own beliefs already use, e.g. "artist:seat:owner") and is not
+     * superseded. When one is found, its own {@code importance} (1-10, a structured field, not text)
+     * scales how much rarer the habit becomes - a belief the resident holds strongly dampens it harder
+     * than an offhand one. This can only ever weaken a habit, never strengthen it: telling the two
+     * directions apart would mean reading what the belief actually concludes, which is exactly the
+     * text-understanding the rules must never do (see this batch's own report for that boundary). */
+    private static double habitBeliefDamping(CompanionWorld w,String residentId,String habitId){
+        String key="habit:"+residentId+":"+habitId;
+        return w.memories.stream()
+            .filter(m->residentId.equals(m.ownerId())&&"belief".equals(m.sourceType())&&key.equals(m.supersedesKey())&&!m.superseded())
+            .findFirst()
+            .map(m->1.0+Math.max(1,m.importance()))
+            .orElse(1.0);
+    }
+    /** Lands one habitual reflex: a cosmetic label only, on top of whatever the resident is already
+     * doing. Deliberately never touches place/activity/plan - see item 1's own red line "习惯动作绝不
+     * 推进任何世界状态，也绝不开始对话" - so nothing that reads r.plan (completion, energy,
+     * availableActions) can tell the difference between a resident with a habit and one without. The
+     * deed itself is what survives: recordDeed's own note is the only durable trace, exactly like any
+     * other reflex action. */
+    private static void fireHabit(CompanionWorld w,ResidentState r,String habitId,String action,String label,String note,Instant at){
+        r.lastHabitAt.put(habitId,at);
+        Actor a=actor(w,r.id);
+        replaceActor(w,r.id,a.place(),a.activity(),label,a.until());
+        recordDeed(w,r.id,action,a.place(),note,at);
+    }
+    /** One habitual reflex per resident (item 1), sunk from ResidentSeed.NARRATIVES' actingSelf prose
+     * down into a rule the simulation runs on its own, without asking the model - see each habitXxx
+     * method for which sentence of that resident's own actingSelf it stands in for. A habit only ever
+     * colors a plan that is already running (never invents one from idle), which is what "习惯是默认
+     * 值不是强制" means in practice: the model's next real decision can always simply not repeat it. */
+    private static void maybeHabit(CompanionWorld w,ResidentState r,Instant at){
+        if(r.plan==null)return;
+        switch(r.id){
+            case "owner"->habitTidy(w,r,at);
+            case "student"->habitQuiet(w,r,at);
+            case "artist"->habitHide(w,r,at);
+            case "gardener"->habitHandwork(w,r,at);
+            case "fixer"->habitCheck(w,r,at);
+            case "weaver"->habitSmooth(w,r,at);
+            default->{}
+        }
+    }
+    /** 阿禾: "用忙碌代替表达：心里不舒服时去擦桌子、理杯子，而不是说出来。" dutyPressure (never sent to
+     * any model - see the class's own red line) is precisely the rules' own tracked measure of exactly
+     * the kind of unspoken discomfort that sentence describes: people are waiting, he has not gone to
+     * the counter yet, and it is building. */
+    private static final double HABIT_TIDY_DUTY_THRESHOLD = 20;
+    private static void habitTidy(CompanionWorld w,ResidentState r,Instant at){
+        Actor a=actor(w,r.id);
+        if(!"cafe".equals(a.place())||"tend".equals(r.plan.action())||r.dutyPressure<HABIT_TIDY_DUTY_THRESHOLD)return;
+        if(!habitEligible(w,r,"tidy",at))return;
+        fireHabit(w,r,"tidy","tidy","手上没停，去擦了擦桌子、把杯子按高矮摆整齐。","又把已经擦过的桌子擦了一遍，顺手把杯子按高矮重新摆好。",at);
+    }
+    /** 小川: "低调内敛：话短，……被打断就闭嘴。" Right after a conversation ends and he is back at his
+     * own portable work with nobody prompting him to, he goes quiet rather than dwelling on it aloud. */
+    private static void habitQuiet(CompanionWorld w,ResidentState r,Instant at){
+        if(r.plan==null||!PORTABLE_ACTIONS.contains(r.plan.action()))return;
+        if(r.lastSocialAt==null||Duration.between(r.lastSocialAt,at).getSeconds()>150)return;
+        if(!habitEligible(w,r,"quiet",at))return;
+        fireHabit(w,r,"quiet","study","把书翻回原来那页，没再多说什么。","被打断之后没再多说，把书翻回刚才那页，接着看。",at);
+    }
+    /** 知夏: "真做完时反而突然怕拿出来。" Right after one of her own projects actually reaches "ready",
+     * the rules' own recorded {@code completedAt} is the fact that this just happened. */
+    private static final long HABIT_HIDE_WINDOW_SECONDS = 300;
+    private static void habitHide(CompanionWorld w,ResidentState r,Instant at){
+        boolean justFinished=w.projects.stream().anyMatch(p->p.contributors.contains("artist")&&p.completedAt!=null
+            &&!p.completedAt.isAfter(at)&&Duration.between(p.completedAt,at).getSeconds()<=HABIT_HIDE_WINDOW_SECONDS);
+        if(!justFinished)return;
+        if(!habitEligible(w,r,"hide",at))return;
+        fireHabit(w,r,"hide","tidy","把刚画完的那张转过去放好，没急着给人看。","把刚完成的那部分转过去放好，没有主动拿给谁看。",at);
+    }
+    /** 青叔: "话少，动手多：用东西代替话……" Someone else sharing the garden with him, right now, is the
+     * rules' own "身边有人" fact - what he does about it is fix something rather than talk about it. */
+    private static void habitHandwork(CompanionWorld w,ResidentState r,Instant at){
+        if(!"garden".equals(actor(w,r.id).place()))return;
+        boolean someoneElseHere=w.residentStates.stream().anyMatch(o->!o.id.equals("gardener")&&!o.id.equals("self")&&"garden".equals(actor(w,o.id).place()));
+        if(!someoneElseHere)return;
+        if(!habitEligible(w,r,"handwork",at))return;
+        fireHabit(w,r,"handwork","tend_object","没说话，蹲下把一块松动的木牌钉紧了。","没答话，先把花园角落一块松动的木牌钉紧了。",at);
+    }
+    /** 周野: "直接问、直接说。" The wordless version of the same instinct, before there is anything
+     * worth saying yet: someone else sharing whatever public place he is in, right now, gets a quick,
+     * blunt physical check rather than small talk. */
+    private static void habitCheck(CompanionWorld w,ResidentState r,Instant at){
+        String place=actor(w,r.id).place();
+        if(!PUBLIC_PLACES.contains(place))return;
+        boolean someoneElseHere=w.residentStates.stream().anyMatch(o->!o.id.equals("fixer")&&!o.id.equals("self")&&place.equals(actor(w,o.id).place()));
+        if(!someoneElseHere)return;
+        if(!habitEligible(w,r,"check",at))return;
+        fireHabit(w,r,"check","inspect","伸手推了推旁边的桌子，看看稳不稳，没说话。","路过时伸手推了推旁边的桌子，确认稳不稳，没说话。",at);
+    }
+    /** 阿满: "抢在冲突之前说话，替别人找台阶。" The wordless version: a decline the rules already
+     * recorded as a WorldEvent, in the same place she is standing in right now, is the "冲突" fact -
+     * she does not need to have heard the words to reach for the cups between two people. */
+    private static final long HABIT_SMOOTH_WINDOW_SECONDS = 300;
+    private static void habitSmooth(CompanionWorld w,ResidentState r,Instant at){
+        String place=actor(w,r.id).place();
+        boolean tensionNearby=w.events.stream().anyMatch(e->"declined".equals(e.type())&&place.equals(e.place())
+            &&!e.actorIds().contains("weaver")&&!e.at().isAfter(at)&&Duration.between(e.at(),at).getSeconds()<=HABIT_SMOOTH_WINDOW_SECONDS);
+        if(!tensionNearby)return;
+        if(!habitEligible(w,r,"smooth",at))return;
+        fireHabit(w,r,"smooth","tidy","没说话，把两人中间的杯子往里挪了挪。","没说话，把两个人中间的杯子往里挪了挪，像是想让气氛松一点。",at);
+    }
+
+    // ---- place habits (item 1's second half): where someone goes without being asked -------------
+    /** The other shape a habit can take: not a label on top of an existing plan, but the plan itself -
+     * a resident with nothing already decided (r.plan==null - see step()'s own call site above, which
+     * tries this before falling back to the ordinary idle wait) defaults toward a place their own
+     * occupation or actingSelf already points at, exactly the way a person walks into a cafe and it
+     * simply occurs to them that they could sit down and drink something, long before they consciously
+     * decide anything. This walks the same {@link #moveOrSchedule} path any model decision already
+     * uses - a travel plan if not there yet, the destination action directly if already there - so a
+     * habit is a normal plan the model can simply choose not to repeat next time, never a separate
+     * mechanism the rest of the simulation has to know about. Returns whether it fired, so the caller
+     * knows whether to fall back to the ordinary idle wait instead. */
+    private static boolean maybePlaceHabit(CompanionWorld w,ResidentState r,Instant at){
+        if(activeConversation(w,r.id)!=null)return false;
+        if(Set.of("sleep","travel","walk","away","tend","wait").contains(actor(w,r.id).activity()))return false;
+        return switch(r.id){
+            case "student"->placeHabitStudyAtCafe(w,r,at);
+            case "artist"->placeHabitSeekInspiration(w,r,at);
+            case "gardener"->placeHabitTendGarden(w,r,at);
+            case "owner"->placeHabitMindTheCafe(w,r,at);
+            case "fixer"->placeHabitCheckCafe(w,r,at);
+            case "weaver"->placeHabitBeAroundPeople(w,r,at);
+            default->false;
+        };
+    }
+    /** Lands one place habit: moves (or, if already there, simply schedules the destination action
+     * for) the resident, then records the departure as a deed exactly like a micro-habit does - only
+     * what an observer standing at the starting place would have seen, never why. */
+    private static void firePlaceHabit(CompanionWorld w,ResidentState r,String habitId,String action,String place,String reason,String note,Instant at,int duration){
+        String from=actor(w,r.id).place();
+        r.lastHabitAt.put(habitId,at);
+        moveOrSchedule(w,r,action,place,null,reason,at,duration);
+        recordDeed(w,r.id,action,from,note,at);
+    }
+    /** 小川: occupation is studying for an exam, and the actual complaint behind this half of item 1
+     * ("request_drink 被提供 32 次、选中 0 次") is that nothing in his own context ever gives him a
+     * reason to want a drink - a hidden thirst value is exactly what is banned. This is the answer:
+     * not a need, a habit. When he has nothing already decided and it is not his own sleep window, he
+     * defaults to the cafe's window seat to study, and orders the ordinary cup that goes with it
+     * through the same {@link CafeService#request} path request_drink already uses. */
+    private static boolean placeHabitStudyAtCafe(CompanionWorld w,ResidentState r,Instant at){
+        if("cafe".equals(actor(w,r.id).place())||!routineCues(w,"student",at).isEmpty()||!CafeService.acceptingOrders(w))return false;
+        if(!habitEligible(w,r,"study_cafe",PLACE_HABIT_MIN_GAP_SECONDS,at))return false;
+        firePlaceHabit(w,r,"study_cafe","study","cafe","照老样子来咖啡馆靠窗的位置看书",
+            "没多想，又往咖啡馆靠窗那个位置去了。",at,1800);
+        CafeService.request(w,r,at);
+        return true;
+    }
+    /** 知夏: "擅长把'没做完'讲成'还在长'" pairs with the same instinct in the other direction - when
+     * stuck, she does not force the page, she goes and watches people instead. Watching, not
+     * studying, is the point: unlike student's habit above this one never orders anything. */
+    private static boolean placeHabitSeekInspiration(CompanionWorld w,ResidentState r,Instant at){
+        if("cafe".equals(actor(w,r.id).place())||!CafeService.acceptingOrders(w))return false;
+        if(!habitEligible(w,r,"seek_inspiration",PLACE_HABIT_MIN_GAP_SECONDS,at))return false;
+        firePlaceHabit(w,r,"seek_inspiration","observe","cafe","没想好画什么，先去咖啡馆看看人",
+            "没说要去哪，人已经往咖啡馆那边去了。",at,900);
+        return true;
+    }
+    /** 青叔: his own occupation's default place, needing no special condition beyond having nothing
+     * else already decided - "手上带点东西" is the {@code work} action he arrives to, not idle observing. */
+    private static boolean placeHabitTendGarden(CompanionWorld w,ResidentState r,Instant at){
+        if("garden".equals(actor(w,r.id).place()))return false;
+        if(!habitEligible(w,r,"tend_garden",PLACE_HABIT_MIN_GAP_SECONDS,at))return false;
+        firePlaceHabit(w,r,"tend_garden","work","garden","顺路去花园看看",
+            "没说什么，顺手拿了点东西，往花园那边去了。",at,1800);
+        return true;
+    }
+    /** 阿禾: "想被需要" - idle at home while the counter he runs is open, he defaults back toward it
+     * rather than staying put, even before anyone has actually asked for anything. */
+    private static boolean placeHabitMindTheCafe(CompanionWorld w,ResidentState r,Instant at){
+        if(!"open".equals(w.cafeStatus)||!TownPlaces.homeOf("owner").equals(actor(w,r.id).place()))return false;
+        if(!habitEligible(w,r,"mind_cafe",PLACE_HABIT_MIN_GAP_SECONDS,at))return false;
+        firePlaceHabit(w,r,"mind_cafe","observe","cafe","闲不住，去店里看看",
+            "没说什么，起身往店里走了。",at,900);
+        return true;
+    }
+    /** 周野: the same "看看有什么不对" instinct as his own micro-habit above, applied to where he
+     * defaults toward when nothing else is decided - the cafe's shared worktable is the one place in
+     * town most likely to have something worth checking. */
+    private static boolean placeHabitCheckCafe(CompanionWorld w,ResidentState r,Instant at){
+        if("cafe".equals(actor(w,r.id).place())||!CafeService.acceptingOrders(w))return false;
+        if(!habitEligible(w,r,"check_cafe",PLACE_HABIT_MIN_GAP_SECONDS,at))return false;
+        firePlaceHabit(w,r,"check_cafe","observe","cafe","顺路去店里看看有没有需要搭把手的",
+            "没说什么，往咖啡馆那边走去了。",at,900);
+        return true;
+    }
+    /** 阿满: being near people is what lets her get ahead of a conflict before it starts, so an idle
+     * moment defaults her toward wherever people already are. */
+    private static boolean placeHabitBeAroundPeople(CompanionWorld w,ResidentState r,Instant at){
+        if("cafe".equals(actor(w,r.id).place())||!CafeService.acceptingOrders(w))return false;
+        if(!habitEligible(w,r,"be_around_people",PLACE_HABIT_MIN_GAP_SECONDS,at))return false;
+        firePlaceHabit(w,r,"be_around_people","observe","cafe","没什么事，去咖啡馆那边坐坐",
+            "没说什么，往咖啡馆那边去了。",at,900);
+        return true;
+    }
+
     /** At most this many unaccounted-for deeds are kept per resident. A queue that grows without
      * bound would eventually hand the model a whole day in one prompt; more importantly, a deed
      * nobody got round to accounting for simply stops being available to remember, which is what

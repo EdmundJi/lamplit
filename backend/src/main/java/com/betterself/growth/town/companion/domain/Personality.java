@@ -93,4 +93,20 @@ public record Personality(int extroversion, int conscientiousness, int sensitivi
      * ResidentSimulation.complete() - conscientious residents follow through a little more
      * thoroughly once they actually commit; the least conscientious does a little less per attempt. */
     public int diligenceBonus() { return (conscientiousness - 50) / 10; }
+
+    /** id's own unmodified starting value for one of the four dimensions - read only by
+     * ResidentSimulation's bounded personality-drift mechanism (item 2 of this batch), so a lifetime
+     * of real events can never carry a resident more than a small, fixed distance from who
+     * {@link #of} originally seeded them as. Falls back to the neutral 50 for any id (or the
+     * avatar's own "self") this class does not author starting values for, exactly like {@link #of}
+     * itself does. Never sent to any model - this is a rule-side bound, not personality content. */
+    static int initial(String id, String dimension) {
+        int[] v = INITIAL.getOrDefault(id, NEUTRAL);
+        return switch (dimension) {
+            case "extroversion" -> v[0];
+            case "conscientiousness" -> v[1];
+            case "sensitivity" -> v[2];
+            default -> v[3]; // "volatility"
+        };
+    }
 }
