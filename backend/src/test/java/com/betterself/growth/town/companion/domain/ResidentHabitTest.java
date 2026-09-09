@@ -158,6 +158,14 @@ class ResidentHabitTest {
     /** Steps one continuous clock forward - a habit that walks somebody somewhere and then works
      * there needs the trip AND the work to run out, so the simulated time cannot be rewound between
      * the two the way {@link #runUntilHabitFires} would if it were called first. */
+    /** Everybody except the named resident put out of the way for the length of a test, so a race
+     * between neighbours cannot decide what the test measures. */
+    private void parkEveryoneElse(CompanionWorld w, String keep) {
+        for (ResidentState other : w.residentStates)
+            if (!other.id.equals(keep) && !other.id.equals("self"))
+                other.plan = new Plan("park-" + other.id, "sleep", TownPlaces.homeOf(other.id), null, "隔离", DAY, DAY.plusSeconds(200_000));
+    }
+
     private void runUntilContribution(CompanionWorld w, ResidentState r, String habitId, java.util.function.BooleanSupplier landed) {
         Instant t = DAY;
         for (int minute = 0; minute < 900 && !landed.getAsBoolean(); minute++) {
@@ -244,6 +252,53 @@ class ResidentHabitTest {
         assertThat(fixer.lastHabitAt).containsKey("lend_a_hand");
         assertThat(fixer.plan).isNotNull();
         assertThat(fixer.plan.targetId()).as("he went to the one with somebody standing at it").isEqualTo(underway.id);
+    }
+
+    /** The one case where lending a hand is worth a walk. Three measured days ended with two shared
+     * things sitting at the solo cap - one short a third person, one short a second - while the only
+     * people who could have unstuck them stayed in the cafe, because the man whose own written self is
+     * "闲下来往店里走，看看有没有需要搭把手的" was not allowed to walk anywhere to lend one. */
+    @Test void aThingStoppedDeadForWantOfOneMorePairOfHandsIsWorthTheWalk() {
+        CompanionWorld w = world("lend-a-hand-walk");
+        ResidentState fixer = ResidentSimulation.state(w, "fixer");
+        CompanionWorld.Project stalled = w.projects.stream()
+            .filter(p -> "garden".equals(p.place) && !"fixer".equals(p.ownerId)).findFirst().orElseThrow();
+        stalled.status = "active";
+        stalled.progress = ResidentSimulation.SOLO_PROGRESS_CAP;
+        stalled.contributors.clear(); stalled.contributors.add(stalled.ownerId);
+        stalled.needed = 2;
+        // Nobody else in the race: with everyone now able to walk to a thing that has stopped, a
+        // neighbour can genuinely get there first and finish it - which is the point of the whole
+        // change and exactly what this one test must not be measuring.
+        parkEveryoneElse(w, "fixer");
+        // His own default has already had its turn, which is what lets anything else move him.
+        fixer.lastHabitAt.put("check_cafe", DAY);
+        fixer.plan = null; fixer.suspendedAction = null;
+        ResidentSimulation.replaceActor(w, "fixer", "cafe", "idle", "在店里", DAY);
+
+        runUntilContribution(w, fixer, "lend_a_hand", () -> stalled.contributors.contains("fixer"));
+        assertThat(stalled.contributors).as("it had stopped, and he was the one thing it needed").contains("fixer");
+    }
+
+    @Test void nothingWalksAnywhereBeforeYourOwnDefaultHasHadItsTurn() {
+        CompanionWorld w = world("lend-a-hand-no-walk");
+        ResidentState fixer = ResidentSimulation.state(w, "fixer");
+        CompanionWorld.Project stalled = w.projects.stream()
+            .filter(p -> "garden".equals(p.place) && !"fixer".equals(p.ownerId)).findFirst().orElseThrow();
+        stalled.status = "active";
+        stalled.progress = ResidentSimulation.SOLO_PROGRESS_CAP;
+        stalled.contributors.clear(); stalled.contributors.add(stalled.ownerId);
+        stalled.needed = 2;
+        fixer.plan = null; fixer.suspendedAction = null;
+        ResidentSimulation.replaceActor(w, "fixer", "cafe", "idle", "在店里", DAY);
+        assertThat(fixer.lastHabitAt).doesNotContainKey("check_cafe");
+
+        Instant t = DAY;
+        for (int minute = 0; minute < 200 && !fixer.lastHabitAt.containsKey("check_cafe"); minute++) {
+            t = t.plusSeconds(60);
+            ResidentSimulation.step(w, t);
+        }
+        assertThat(stalled.contributors).as("an ingrained default gets first claim on the day").doesNotContain("fixer");
     }
 
     @Test void theFixerNeverLendsAHandToHisOwnThingOrToOneAlreadyFinished() {

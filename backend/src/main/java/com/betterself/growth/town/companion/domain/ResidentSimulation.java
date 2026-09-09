@@ -1202,7 +1202,13 @@ public final class ResidentSimulation {
             .filter(ResidentSimulation::takesMoreThanOnePerson)
             .filter(p->!p.contributors.contains(r.id)&&(!skipOwn||!r.id.equals(p.ownerId)))
             .filter(p->!"cafe".equals(p.place)||CafeService.acceptingOrders(w))
-            .max(Comparator.<Project>comparingInt(p->someoneIsWorkingOnItRightNow(w,p,r.id)?1:0)
+            // Somebody with their hands on it right now beats everything - that is the difference
+            // between two people who each did some of one thing and two people doing one thing. Then
+            // a thing that has actually STOPPED, which needs a hand more than one that is merely
+            // unfinished, and is the only case worth a walk. Then what is simply in front of you.
+            .max(Comparator.comparingInt((Project p)->(someoneIsWorkingOnItRightNow(w,p,r.id)?4:0)
+                +(p.contributors.size()<p.needed&&p.progress>=SOLO_PROGRESS_CAP?2:0)
+                +(actor(w,r.id).place().equals(p.place)?1:0))
                 .thenComparingInt(p->p.contributors.size()))
             .orElse(null);
     }
@@ -1231,13 +1237,19 @@ public final class ResidentSimulation {
     private static boolean placeHabitLendAHand(CompanionWorld w,ResidentState r,Instant at){
         Project shared=sharedThingToLendAHandTo(w,r,true);
         if(shared==null)return false;
-        // Where he already is, never a trip - the same rule placeHabitStartOwnThing follows, and for
-        // a reason worth stating once: a habit that MOVES somebody can permanently kill another whose
-        // own condition is "not already there". It happened twice while this was being written (the
-        // student stopped ever going to the cafe window; the gardener stopped ever running his
-        // errand), and both times the damage was silent. So: the signature habits are the ones that
-        // take you somewhere, and these two only ever act on what is already in front of you.
-        if(!actor(w,r.id).place().equals(shared.place))return false;
+        // Normally only what is already in front of him: a habit that MOVES somebody can silently
+        // kill another whose own condition is "not already there", which happened twice while this
+        // was being written (the student stopped going to the cafe window; the gardener stopped
+        // running his errand). So signature habits are what take you somewhere.
+        // The one exception, and it is the case this habit exists for: a shared thing that has
+        // actually STOPPED for want of one more pair of hands, once his own default has had its turn.
+        // Three measured days ended with two such things sitting at the cap - one needing a third
+        // person, one needing a second - while the only people who could have unstuck them stayed in
+        // the cafe, because a man whose own written self is "闲下来往店里走，看看有没有需要搭把手的"
+        // was not allowed to walk anywhere to lend one.
+        boolean stalledForWantOfHands=shared.contributors.size()<shared.needed&&shared.progress>=SOLO_PROGRESS_CAP;
+        if(!actor(w,r.id).place().equals(shared.place)
+            &&!(stalledForWantOfHands&&r.lastHabitAt.containsKey(SIGNATURE_HABIT.getOrDefault(r.id,""))))return false;
         if(!habitEligible(w,r,"lend_a_hand",PLACE_HABIT_MIN_GAP_SECONDS,at))return false;
         firePlaceHabit(w,r,"lend_a_hand","create",shared.place,shared.id,"看见「"+shared.title+"」还搁在那儿，顺手搭把手",
             "没问谁，走过去在「"+shared.title+"」上添了一笔。",at,900);
