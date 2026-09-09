@@ -19,6 +19,15 @@ public final class TownPlaces {
     private TownPlaces() {}
     /** The five residents who each have a home: the four NPCs plus the user's own avatar, "self". */
     public static final List<String> RESIDENT_IDS = List.of("owner", "student", "artist", "gardener", "self");
+    /** Flat-mates: an id in here does not get a Location of its own - {@code homeOf} resolves
+     * straight through to the resident it lives with, so every "go to my own home" check already in
+     * ResidentSimulation (it computes {@code homeOf(residentId)} directly, with no world lookup)
+     * lands both flat-mates on the exact same location without that file needing to know sharing
+     * exists at all. See {@link #addFlatmate} for how the shared occupant still ends up with
+     * separately-owned furniture rather than nothing. Declared before {@link #PLACES} below, which
+     * calls {@code homeOf} during class initialization - out of order here means a null map at that
+     * moment, not merely a wrong answer. */
+    private static final Map<String, String> HOME_SHARED_WITH = Map.of("weaver", "artist");
     private static final Set<String> PLACES;
     static {
         Set<String> set = new LinkedHashSet<>(List.of("street", "cafe", "garden"));
@@ -26,7 +35,7 @@ public final class TownPlaces {
         PLACES = Collections.unmodifiableSet(set);
     }
 
-    public static String homeOf(String residentId) { return "home-" + residentId; }
+    public static String homeOf(String residentId) { return "home-" + HOME_SHARED_WITH.getOrDefault(residentId, residentId); }
     public static boolean isHome(String place) { return place != null && place.startsWith("home-"); }
     public static Set<String> places() { return PLACES; }
     /** Shared places are fixed, but a deliberately authored resident can bring a home without
@@ -37,6 +46,26 @@ public final class TownPlaces {
         if(w.locations.stream().noneMatch(l->l.id().equals(home)))w.locations.add(new Location(home,"home",residentId));
         if(position(w,home+"-bed")==null)w.positions.add(position(home+"-bed",home,"bed",residentId,1));
         if(position(w,home+"-desk")==null)w.positions.add(position(home+"-desk",home,"desk",residentId,1));
+    }
+
+    /** A flat-mate moving into an existing resident's home: no new Location, but a real bed and a
+     * real desk of their own inside it. Ids are suffixed with the flat-mate's own id specifically so
+     * they can never collide with (or, like a plain second {@code addHome} call would, silently be
+     * skipped in favour of) the host's own bed and desk - that four-people-one-bed shape was exactly
+     * the earlier bug the per-resident home fix corrected, and two people sharing one address on
+     * purpose must not quietly regress back into it. Callers should route {@code homeOf(flatmateId)}
+     * through {@link #HOME_SHARED_WITH} first, or nothing else in the simulation will ever think to
+     * send the flat-mate here at all. */
+    static void addFlatmate(CompanionWorld w, String flatmateId, String hostId) {
+        addHome(w, hostId);
+        String home = homeOf(hostId);
+        // Named "home-<flatmate>-bed", not "home-<host>-bed-<flatmate>": every other resident's
+        // furniture follows the first shape and the frontend's POSITION_SLOTS table is keyed on it,
+        // so the second shape silently loses her pixels and drops her onto a guessed spot. Which
+        // location she is in is already carried by Position.place - the id does not need to repeat it.
+        String bed = "home-" + flatmateId + "-bed", desk = "home-" + flatmateId + "-desk";
+        if (position(w, bed) == null) w.positions.add(position(bed, home, "bed", flatmateId, 1));
+        if (position(w, desk) == null) w.positions.add(position(desk, home, "desk", flatmateId, 1));
     }
 
     /** A position kind that cannot be borrowed even when nothing shared is free: the coffee machine
@@ -67,6 +96,9 @@ public final class TownPlaces {
         // authored residents whose ids are intentionally absent from RESIDENT_IDS.
         for (Location location : new ArrayList<>(w.locations))
             if ("home".equals(location.kind()) && location.ownerId() != null) addHome(w, location.ownerId());
+        // A flat-mate owns no Location of their own, so the repair loop above never notices them;
+        // self-heal their furniture explicitly the same way, for the same reason.
+        for (Map.Entry<String, String> flatmate : HOME_SHARED_WITH.entrySet()) addFlatmate(w, flatmate.getKey(), flatmate.getValue());
         ensureQuietCafeSeats(w);
         ensureCounter(w);
     }

@@ -40,7 +40,7 @@ onMounted(async () => {
   try {
     const [{ default: PhaserRuntime }, { CompanionStreetScene }] = await Promise.all([import('phaser'), import('./companion-scene')])
     if (disposed || !host.value) return
-    scene = new CompanionStreetScene(() => ({ residents: props.residents, weather: props.weather, minutes: props.minutes, selectedResidentId: props.selectedResidentId, selectedPlace: props.selectedPlace, projects: props.projects, objects: props.objects, conversations: props.conversations, overview: props.overview }), id => openResident(id), id => emit('select-project', id), value => { labels.value = value })
+    scene = new CompanionStreetScene(() => ({ residents: props.residents, weather: props.weather, minutes: props.minutes, cafeOpen: props.cafeOpen, selectedResidentId: props.selectedResidentId, selectedPlace: props.selectedPlace, projects: props.projects, objects: props.objects, conversations: props.conversations, overview: props.overview }), id => openResident(id), id => emit('select-project', id), value => { labels.value = value })
     const density = Math.min(window.devicePixelRatio || 1, 3)
     const bounds = host.value.getBoundingClientRect()
     game = new PhaserRuntime.Game({ type: PhaserRuntime.AUTO, parent: host.value, width: Math.round(bounds.width * density), height: Math.round(bounds.height * density), backgroundColor: '#8da578', antialias: false, pixelArt: true, roundPixels: true, scene, scale: { mode: PhaserRuntime.Scale.NONE, autoCenter: PhaserRuntime.Scale.NO_CENTER }, audio: { noAudio: true }, banner: false })

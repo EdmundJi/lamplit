@@ -12,7 +12,9 @@ export interface SceneProject { id: string; title: string; place: string; status
 export interface SceneConversation { id: string; place: string; status: string; topicId?: string; participantIds?: string[]; turns: { speakerId: string; text: string; at: string; emoji?: string | null }[] }
 export interface SceneObject { id: string; kind: string; place: string; label: string; state: string; projectId: string | null }
 export interface SceneLabel { worldX?: number; worldY?: number; facing?: Direction4; id: string; name: string; x: number; y: number; selected: boolean; speechOffset: number; speech?: string; action: string; role: string; emoji: string; hovered?: boolean; bodyX: number; bodyY: number; bodyHeight: number; conversationId?: string; dialogue?: { name: string; text: string }[]; offscreen?: boolean; direction?: string }
-export interface SceneSnapshot { residents: SceneResident[]; weather: 'clear' | 'rain'; minutes: number; selectedResidentId?: string; selectedPlace?: string; overview?: boolean; projects?: SceneProject[]; conversations?: SceneConversation[]; objects?: SceneObject[] }
+// cafeOpen mirrors CompanionScene.vue's own prop of the same name: authoritative world.cafeStatus,
+// never inferred from the client's clock - see the night window lighting in sync().
+export interface SceneSnapshot { residents: SceneResident[]; weather: 'clear' | 'rain'; minutes: number; selectedResidentId?: string; selectedPlace?: string; overview?: boolean; projects?: SceneProject[]; conversations?: SceneConversation[]; objects?: SceneObject[]; cafeOpen?: boolean }
 const W = COMPANION_WORLD_SIZE.width, H = COMPANION_WORLD_SIZE.height
 const PALETTE = [0x688b82, 0xbd8765, 0x8185a4, 0xceaa65, 0x889b69]
 type RainShelter = { x: number; y: number; width: number; height: number }
@@ -36,7 +38,8 @@ export function scenePlace(location: string) {
 }
 function homeId(location: string) { return location.match(/^home[-./](.+)$/)?.[1] }
 function homeRoom(location: string) { return HOME_ROOMS[homeId(location) ?? ''] }
-function legacyHomeRoom(index: number) { return HOME_ROOMS[['owner', 'student', 'artist', 'gardener', 'self'][Math.max(0, index) % 5]!] }
+// 'weaver' is deliberately absent: she has no HOME_ROOMS entry of her own, she shares 'artist'.
+function legacyHomeRoom(index: number) { return HOME_ROOMS[['owner', 'student', 'artist', 'gardener', 'self', 'fixer'][Math.max(0, index) % 6]!] }
 function placeFrame(location: string) {
   const ownHome = homeRoom(location)
   return ownHome ?? PLACE_FRAMES[scenePlace(location)]
@@ -47,10 +50,13 @@ function placeCenter(location: string) {
 }
 export function visibleActivity(activity = '', action = '', objectKind?: string) {
   if (['create', 'help'].includes(activity)) return objectKind === 'flowers' ? 'garden' : objectKind === 'tea' ? 'drink' : 'create'
-  // Service uses the authoritative cafe-counter position when one is supplied. There is no pour
-  // animation yet, so keep the resident visibly at the counter instead of borrowing the garden
-  // animation merely because the backend verb happens to be `tend`.
-  if (['tend', 'serve', 'prepare', 'wait', 'handover', 'assist'].includes(activity)) return 'idle'
+  // Service at the counter (tend/prepare - actually making the drink) borrows the drink action
+  // sheet as its visible beat: docs/01 wants "等待... 你能看见他在弄" and there is no bespoke pour
+  // animation, but reusing the existing raise-a-cup frames at the counter (facing 'up', see
+  // update()) reads as him working the machine instead of standing idle for the whole wait.
+  // serve/wait/handover/assist are the surrounding, not-yet-making-it moments and stay idle.
+  if (['tend', 'prepare'].includes(activity)) return 'drink'
+  if (['serve', 'wait', 'handover', 'assist'].includes(activity)) return 'idle'
   if (['home', 'rest'].includes(activity)) return 'rest'
   if (['focus', 'study', 'read'].includes(activity)) return 'read'
   if (activity === 'work') return 'read'
@@ -114,7 +120,14 @@ export class CompanionStreetScene extends Phaser.Scene {
   private actors = new Map<string, Actor>()
   private shade!: Phaser.GameObjects.Rectangle
   private rain!: Phaser.GameObjects.Graphics
-  private indoorLight!: Phaser.GameObjects.Graphics
+  // Per-home window light, keyed by the same id as HOME_ROOMS/homeId() - lit after dark only for
+  // a home with someone actually in it and awake, dark again once everyone there is asleep (or
+  // the home is empty). Separate rectangles (rather than one shared graphics object) are what let
+  // each home be driven independently instead of every window turning on together at dusk.
+  private homeLights = new Map<string, Phaser.GameObjects.Rectangle>()
+  // The cafe's own light is gated on the authoritative cafeStatus the caller already computes for
+  // the soundscape (world.cafeStatus, never the client's own clock guess) - see CompanionScene.vue.
+  private cafeLights: (Phaser.GameObjects.Rectangle | Phaser.GameObjects.Ellipse)[] = []
   private selection!: Phaser.GameObjects.Ellipse
   private projectLayer!: Phaser.GameObjects.Container
   private projectSignature = ''
@@ -185,12 +198,17 @@ export class CompanionStreetScene extends Phaser.Scene {
     this.cafeSelection.fillPoints(cafeOutline, true).strokePoints(cafeOutline, true)
     this.selection = this.add.ellipse(0, 0, 46, 17, 0xffdf9b, .18).setStrokeStyle(2, 0xffe7b2, .9).setVisible(false)
     this.shade = this.add.rectangle(0, 0, W, H, 0x192644, 1).setAlpha(0).setOrigin(0).setDepth(800)
-    this.indoorLight = this.add.graphics().setDepth(805)
-    this.indoorLight.fillStyle(0xffdfaa, .12)
-    for (const room of Object.values(HOME_ROOMS)) this.indoorLight.fillRect(room.x + 8, room.y + 32, room.w - 16, room.h - 32)
-    this.indoorLight.fillRect(CAFE_ROOM.x + 8, CAFE_ROOM.y + 32, CAFE_ROOM.w - 16, CAFE_ROOM.h - 32)
-    this.indoorLight.fillRect(CAFE_WINDOW_ROOM.x + 8, CAFE_WINDOW_ROOM.y + 32, CAFE_WINDOW_ROOM.w - 16, CAFE_WINDOW_ROOM.h - 32)
-    this.indoorLight.fillStyle(0xffd89a, .1).fillEllipse(480, 226, 180, 185)
+    // One rectangle per home so sync() can light only the homes that actually have someone awake
+    // in them, instead of every window in town switching on together at dusk.
+    for (const [id, room] of Object.entries(HOME_ROOMS)) {
+      const light = this.add.rectangle(room.x + 8 + (room.w - 16) / 2, room.y + 32 + (room.h - 32) / 2, room.w - 16, room.h - 32, 0xffcf7a, .38).setDepth(805).setVisible(false)
+      this.homeLights.set(id, light)
+    }
+    this.cafeLights = [
+      this.add.rectangle(CAFE_ROOM.x + 8 + (CAFE_ROOM.w - 16) / 2, CAFE_ROOM.y + 32 + (CAFE_ROOM.h - 32) / 2, CAFE_ROOM.w - 16, CAFE_ROOM.h - 32, 0xffcf7a, .38).setDepth(805).setVisible(false),
+      this.add.rectangle(CAFE_WINDOW_ROOM.x + 8 + (CAFE_WINDOW_ROOM.w - 16) / 2, CAFE_WINDOW_ROOM.y + 32 + (CAFE_WINDOW_ROOM.h - 32) / 2, CAFE_WINDOW_ROOM.w - 16, CAFE_WINDOW_ROOM.h - 32, 0xffcf7a, .38).setDepth(805).setVisible(false),
+      this.add.ellipse(480, 226, 180, 185, 0xffd89a, .13).setDepth(805).setVisible(false),
+    ]
     this.rain = this.add.graphics().setDepth(950)
     this.projectLayer = this.add.container(0, 0).setDepth(290)
     this.ready = true
@@ -246,12 +264,16 @@ export class CompanionStreetScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor(night ? '#737f74' : state.weather === 'rain' ? '#849176' : '#96a486')
     const ids = new Set(state.residents.map(r => r.id))
     for (const [id, actor] of this.actors) if (!ids.has(id)) { actor.root.destroy(); this.actors.delete(id) }
+    // Which homes have someone in them who is not asleep right now - the per-window night light
+    // below is lit only for those, dark for an empty home or one where everyone is asleep.
+    const homeAwake = new Set<string>()
     state.residents.forEach((resident, index) => {
       const visibleMode = visibleActivity(resident.activity, resident.action, resident.objectKind)
       const atDesk = ['read', 'create', 'rest', 'drink'].includes(visibleMode) && (resident.location === 'cafe' || ['read', 'create'].includes(visibleMode))
       // The server describes a travelling actor as "walk"; destination belongs to its travel plan.
       const travelling = Boolean(resident.destination) && (resident.activity === 'walk' || resident.activity === 'travel')
       const location = travelling ? resident.destination! : resident.location
+      if (scenePlace(location) === 'home' && visibleMode !== 'sleep') { const id = homeId(location); if (id) homeAwake.add(id) }
       let actor = this.actors.get(resident.id)
       // A recognised backend positionId wins outright - it says exactly which bed/seat/plot this
       // resident holds. Only guess a seat from place+index (the old heuristic) when there is none,
@@ -339,7 +361,11 @@ export class CompanionStreetScene extends Phaser.Scene {
       actor.activity.setText(resident.action)
     })
     this.shade.setAlpha(night ? .28 : state.weather === 'rain' ? .1 : 0)
-    this.indoorLight.setVisible(night)
+    for (const [id, light] of this.homeLights) light.setVisible(night && homeAwake.has(id))
+    // Gated on the same authoritative cafeStatus the soundscape uses (see CompanionScene.vue's
+    // cafeOpen prop) - never on a guess about whether "now" falls inside opening hours.
+    const cafeLit = night && (state.cafeOpen ?? true)
+    for (const light of this.cafeLights) light.setVisible(cafeLit)
     this.updateProjects(state)
     this.frameCamera()
   }

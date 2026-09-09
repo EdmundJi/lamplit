@@ -17,7 +17,7 @@ class CompanionEmergenceTest {
         for (int second = 6; second <= 1800; second += 6) {
             CompanionRules.advance(world, start.plusSeconds(second));
             world.events.forEach(event -> { eventKinds.add(event.type()); eventIds.add(event.id()); });
-            assertThat(world.residents).hasSize(4);
+            assertThat(world.residents).hasSize(6);
             assertThat(world.residentStates).allSatisfy(resident -> {
                 assertThat(resident.energy).isBetween(0.0, 100.0);
                 assertThat(resident.social).isBetween(0.0, 100.0);

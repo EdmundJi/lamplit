@@ -48,12 +48,20 @@ public class ResidentDirector {
         Instant now=clock.instant();
         if(snapshot.modelRetryAfter!=null&&now.isBefore(snapshot.modelRetryAfter)){inFlight.remove(userId);return;}
         boolean dialogue=snapshot.conversations.stream().anyMatch(c->c.mode.equals("model")&&(c.status.equals("active")||c.summarizedParticipants.size()<c.participantIds.size()));
-        if(!dialogue&&snapshot.modelRequestedAt!=null&&Duration.between(snapshot.modelRequestedAt,now).getSeconds()<decisionThrottleSeconds){inFlight.remove(userId);return;}
+        // Per-resident decision throttling (item 1): each resident now has their own cooldown
+        // (ResidentState.lastDecisionRequestedAt) instead of one world-global timer, so this quick,
+        // pre-transaction check (a cheap way to skip an executor dispatch when nothing could possibly
+        // be reserved) asks "is ANY resident's own cooldown clear" rather than "has the whole town
+        // waited long enough since the last decision, whoever it was for". reserve() re-checks each
+        // candidate's own cooldown precisely inside the transaction; this is only an optimization.
+        boolean anyResidentReady=snapshot.residentStates.stream().anyMatch(r->r.lastDecisionRequestedAt==null||Duration.between(r.lastDecisionRequestedAt,now).getSeconds()>=decisionThrottleSeconds);
+        if(!dialogue&&!anyResidentReady){inFlight.remove(userId);return;}
         try{executor.execute(()->run(userId));}catch(RejectedExecutionException e){inFlight.remove(userId);}
     }
     private record Work(String kind,String worldId,long residentRevision,long intentRevision,Instant at,
                         ResidentMind.Context context,ConversationLifecycle.Operation operation,
-                        ResidentMind.DialogueRequest dialogue,ResidentMind.SummaryRequest summary,long sequence,String day) {}
+                        ResidentMind.DialogueRequest dialogue,ResidentMind.SummaryRequest summary,long sequence,String day,
+                        ResidentMind.DayPlanRequest dayPlan) {}
     private void run(long userId){
         final Work[] job={null};
         try {
@@ -65,6 +73,7 @@ public class ResidentDirector {
             switch(work.kind()){
                 case "turn"->{var r=mind.generateTurnMetered(work.dialogue());result=r.value();usage=r.usage();}
                 case "summary"->{var r=mind.summarizeConversationMetered(work.summary());result=r.value();usage=r.usage();}
+                case "dayplan"->{var r=mind.planDayMetered(work.dayPlan());result=r.value();usage=r.usage();}
                 default->{var r=mind.decideMetered(work.context());result=r.value();usage=r.usage();}
             }
             // Tokens were already spent whether or not the reply below still applies to a fresher world.
@@ -81,6 +90,10 @@ public class ResidentDirector {
                     var summary=(ConversationLifecycle.Recollection)result;
                     applied=summary!=null&&evidenceWithin(summary.evidenceIds(),work.summary().conversationMemories())&&ConversationLifecycle.applySummary(w,work.operation(),summary,clock.instant());
                     if(!applied)ConversationLifecycle.failSummary(w,work.operation(),clock.instant());
+                } else if(work.kind().equals("dayplan")) {
+                    var draft=(ResidentMind.DayPlanDraft)result;
+                    applied=draft!=null&&evidenceWithin(draft.evidenceIds()==null?List.of():draft.evidenceIds(),work.context().memories())
+                        &&ResidentSimulation.applyDayPlan(w,work.context().residentId(),work.residentRevision(),draft.segments(),draft.evidenceIds(),clock.instant());
                 } else {applied=applyDecision(w,work,(ResidentMind.Decision)result);if(applied)rememberDecisionSignal(w,work.context().residentId(),clock.instant());}
                 if(!applied){w.modelStatus="刚才的念头已经过时，继续眼前的生活";w.revision++;}
                 return w;
@@ -89,6 +102,17 @@ public class ResidentDirector {
             log.warn("Companion resident model fallback: {}",safeFailure(e));
             if(job[0]!=null)try{store.update(userId,null,w->{
                 if(!w.id.equals(job[0].worldId()))return w;
+                // A ResidentMind that simply does not implement day planning (the interface's own
+                // default throws UnsupportedOperationException - see RoutingResidentMind, which does
+                // not yet route "dayplan" calls to either provider) is a missing capability, not a
+                // real failure: it must never consume the shared model-failure backoff budget, or one
+                // resident's unsupported morning day-plan request would silently starve every other
+                // resident's ordinary decisions and every conversation turn for the whole retry window.
+                if(job[0].kind().equals("dayplan")&&e instanceof UnsupportedOperationException){
+                    w.modelCallsToday=Math.max(0,w.modelCallsToday-1);
+                    ResidentSimulation.markDayPlanUnavailableForToday(w,job[0].context().residentId(),clock.instant());
+                    return w;
+                }
                 if(job[0].kind().equals("turn"))ConversationLifecycle.failTurn(w,job[0].operation(),clock.instant());
                 if(job[0].kind().equals("summary"))ConversationLifecycle.failSummary(w,job[0].operation(),clock.instant());
                 w.modelCallsToday=Math.max(0,w.modelCallsToday-1);w.modelFailuresToday++;w.modelConsecutiveFailures++;
@@ -108,7 +132,7 @@ public class ResidentDirector {
             Project topic=ResidentSimulation.project(w,c.topicId);
             String topicTitle=topic==null?"眼前的生活和工作":topic.title;
             var request=new ResidentMind.DialogueRequest(context,c.id,c.turnVersion,operation.operationId(),partnerName(w,c,operation.speakerId()),topicTitle);
-            return reserved(w,now,new Work("turn",w.id,ResidentSimulation.state(w,operation.speakerId()).revision,w.intentRevision,now,context,operation,request,null,w.modelSequence+1,day));
+            return reserved(w,now,new Work("turn",w.id,ResidentSimulation.state(w,operation.speakerId()).revision,w.intentRevision,now,context,operation,request,null,w.modelSequence+1,day,null));
         }
         for(Conversation c:w.conversations)if("model".equals(c.mode)&&"ended".equals(c.status)&&!c.turns.isEmpty()) {
             for(String speaker:c.participantIds){
@@ -117,30 +141,89 @@ public class ResidentDirector {
                 var ids=c.turnMemoryIds.getOrDefault(speaker,List.of());
                 var memories=w.memories.stream().filter(m->m.ownerId().equals(speaker)&&ids.contains(m.id())).toList();
                 var request=new ResidentMind.SummaryRequest(context,c.id,partnerName(w,c,speaker),new ArrayList<>(c.turns),ResidentMind.memoryViews(memories));
-                return reserved(w,now,new Work("summary",w.id,ResidentSimulation.state(w,speaker).revision,w.intentRevision,now,context,operation,null,request,w.modelSequence+1,day));
+                return reserved(w,now,new Work("summary",w.id,ResidentSimulation.state(w,speaker).revision,w.intentRevision,now,context,operation,null,request,w.modelSequence+1,day,null));
             }
         }
-        if(w.modelRequestedAt!=null&&Duration.between(w.modelRequestedAt,now).getSeconds()<decisionThrottleSeconds)return null;
-        // The avatar ("self") shares this ResidentState list so it can be perceived and hold a
-        // position, but its activity is user-driven, never a model decision target.
-        var candidates=w.residentStates.stream().filter(r->!r.id.equals("self")&&ResidentSimulation.activeConversation(w,r.id)==null)
+        // Per-resident decision throttling (item 1): replaces the old world-global modelRequestedAt
+        // gate below candidates so each resident thinks on their own clock - the town's decision
+        // throughput is now bounded only by the shared single-flight (see AcceleratedTownRunner's
+        // javadoc on why that guarantee exists and must not be weakened) and each resident's own
+        // cooldown, not by a single shared timer round-robining across everyone.
+        var candidates=w.residentStates.stream()
+            // The avatar ("self") only ever joins this pool during its own free/autonomous time (item
+            // 7, see ResidentSimulation.selfIsFree) - never while the user is explicitly directing it.
+            .filter(r->(!r.id.equals("self")||ResidentSimulation.selfIsFree(w))&&ResidentSimulation.activeConversation(w,r.id)==null)
+            .filter(r->r.lastDecisionRequestedAt==null||Duration.between(r.lastDecisionRequestedAt,now).getSeconds()>=decisionThrottleSeconds)
             .filter(r->needsDecision(w,r,now)).toList();
         // Legacy rule worlds still allow plan decisions while talking, but their text is not a model turn.
         if(candidates.isEmpty()&&!w.modelConversationsEnabled)candidates=w.residentStates.stream().filter(r->!r.id.equals("self")&&r.plan!=null&&!Set.of("travel","sleep").contains(r.plan.action())).toList();
-        if(candidates.isEmpty())return null;
-        ResidentState r=candidates.get(Math.floorMod((int)w.modelSequence,candidates.size()));
-        var conversation=ResidentSimulation.activeConversation(w,r.id);
-        var context=perspective(w,r.id,now,conversation==null?List.of():conversation.turns);
-        return reserved(w,now,new Work("decision",w.id,r.revision,w.intentRevision,now,context,null,null,null,w.modelSequence+1,day));
+        if(!candidates.isEmpty()) {
+            ResidentState r=candidates.get(Math.floorMod((int)w.modelSequence,candidates.size()));
+            var conversation=ResidentSimulation.activeConversation(w,r.id);
+            var context=perspective(w,r.id,now,conversation==null?List.of():conversation.turns);
+            ResidentSimulation.recordDecisionTrigger(w,r.id,classifyTrigger(w,r,now),now);
+            return reserved(w,now,new Work("decision",w.id,r.revision,w.intentRevision,now,context,null,null,null,w.modelSequence+1,day,null));
+        }
+        // Recursive day plan (item 4): one call per resident per local morning. Deliberately the LOWEST
+        // priority, checked only once no ordinary decision is needed anywhere in town - a ResidentMind
+        // that does not implement day planning (the interface default throws
+        // UnsupportedOperationException; see run()'s catch handling for exactly that case) must never
+        // be able to starve ordinary life by winning this race every time. Gated the same way self's
+        // own decision candidacy is (see ResidentSimulation.selfIsFree) so this never reaches into the
+        // avatar while the user is explicitly directing it.
+        for(ResidentState r:w.residentStates){
+            if(r.id.equals("self")&&!ResidentSimulation.selfIsFree(w))continue;
+            if(ResidentSimulation.activeConversation(w,r.id)!=null)continue;
+            if(!needsDayPlan(w,r,now))continue;
+            var context=perspective(w,r.id,now,List.of());
+            return reserved(w,now,new Work("dayplan",w.id,r.revision,w.intentRevision,now,context,null,null,null,w.modelSequence+1,day,new ResidentMind.DayPlanRequest(context)));
+        }
+        return null;
+    }
+    private boolean needsDayPlan(CompanionWorld w,ResidentState r,Instant now){
+        ZonedDateTime local=now.atZone(ZoneId.of(w.timezone));
+        if(local.getHour()<5||local.getHour()>=11)return false;
+        String today=local.toLocalDate().toString();
+        return r.dayPlan==null||!today.equals(r.dayPlan.day);
+    }
+    /** Diagnostic-only classification of why this decision is actually being dispatched (item 6),
+     * checked in the same precedence order a person would reason about the cause: an ended/never-
+     * started plan first, then whether something is genuinely paused waiting to resume, then a
+     * perceivable body signal, then a routine/time anchor, then a perceivable environment change, and
+     * finally unexplained low-frequency drift when nothing else changed. Recorded onto
+     * {@link CompanionWorld#decisionTriggers} purely for later export/inspection - never read by any
+     * model and never gates whether the decision itself is allowed to happen. */
+    private static String classifyTrigger(CompanionWorld w,ResidentState r,Instant now){
+        if(r.plan==null)return r.suspendedAction!=null?"interrupted":"plan_ended";
+        if(!ResidentSimulation.salientPerceptions(w,r.id,now).isEmpty())return "body";
+        if(!ResidentSimulation.routineCues(w,r.id,now).isEmpty()||(w.period!=null&&!w.period.equals(r.periodAtLastDecision)))return "time_anchor";
+        if(ResidentSimulation.pausedAction(w,r.id,now)!=null||ResidentSimulation.portableAction(w,r.id,now)!=null)return "environment";
+        String cue=ResidentSimulation.cafeScheduleCue(w,r.id,now);if(cue!=null)return "environment";
+        if(ResidentSimulation.mayTend(w,r.id)&&w.serviceRequests.stream().anyMatch(x->"waiting".equals(x.status)&&Objects.equals(x.place,ResidentSimulation.actor(w,r.id).place())))return "environment";
+        if(ResidentSimulation.driftDue(w,r,now))return "drift";
+        return "environment";
     }
     private boolean needsDecision(CompanionWorld w,ResidentState r,Instant now){
         if(r.plan==null)return true;
         if(Set.of("travel","sleep").contains(r.plan.action()))return false;
         String fingerprint=decisionFingerprint(w,r.id,now);String key=decisionSignalKey(w,r.id);
-        if(fingerprint.isBlank()){consideredDecisionSignals.remove(key);return false;}
-        return !Objects.equals(consideredDecisionSignals.get(key),fingerprint);
+        boolean changed=!fingerprint.isBlank()&&!Objects.equals(consideredDecisionSignals.get(key),fingerprint);
+        if(fingerprint.isBlank())consideredDecisionSignals.remove(key);
+        // A broad time anchor (item 5): the day's own morning/afternoon/evening/night boundary, kept
+        // separate from the fingerprint above so a totally quiet plan with nothing else to report can
+        // still be reconsidered as the day moves on, without disturbing the existing "blank fingerprint
+        // means nothing to report yet" short-circuit the fingerprint itself relies on.
+        boolean periodChanged=w.period!=null&&!w.period.equals(r.periodAtLastDecision);
+        // Low-frequency, purely time-derived "走神" (item 5): even when nothing perceivable changed,
+        // a resident may occasionally reconsider what they are doing for no external reason at all -
+        // see ResidentSimulation.driftDue's own javadoc for the rate and why it stays deterministic.
+        return changed||periodChanged||ResidentSimulation.driftDue(w,r,now);
     }
-    private void rememberDecisionSignal(CompanionWorld w,String residentId,Instant now){String fingerprint=decisionFingerprint(w,residentId,now);String key=decisionSignalKey(w,residentId);if(fingerprint.isBlank())consideredDecisionSignals.remove(key);else consideredDecisionSignals.put(key,fingerprint);}
+    private void rememberDecisionSignal(CompanionWorld w,String residentId,Instant now){
+        String fingerprint=decisionFingerprint(w,residentId,now);String key=decisionSignalKey(w,residentId);
+        if(fingerprint.isBlank())consideredDecisionSignals.remove(key);else consideredDecisionSignals.put(key,fingerprint);
+        ResidentState r=ResidentSimulation.state(w,residentId);if(r!=null)r.periodAtLastDecision=w.period;
+    }
     private static String decisionSignalKey(CompanionWorld w,String residentId){return w.id+":"+residentId;}
     private static String decisionFingerprint(CompanionWorld w,String residentId,Instant now){
         ResidentState r=ResidentSimulation.state(w,residentId);if(r==null)return "";
@@ -154,7 +237,14 @@ public class ResidentDirector {
         String plan=r.plan==null?"none":r.plan.id()+":"+r.plan.action()+":"+r.plan.place()+":"+r.plan.targetId()+":"+r.plan.endsAt();
         return plan+"|"+w.cafeStatus+"|"+String.join("|",signals);
     }
-    private Work reserved(CompanionWorld w,Instant now,Work work){w.modelRequestedAt=now;w.modelCallsToday++;w.modelSequence++;w.modelStatus=work.kind().equals("turn")?""+work.context().self().name()+"正在想怎么接这句话":work.kind().equals("summary")?"有人在回想刚才的谈话":"有位居民正在想下一步";w.revision++;return work;}
+    private Work reserved(CompanionWorld w,Instant now,Work work){
+        w.modelRequestedAt=now;w.modelCallsToday++;w.modelSequence++;
+        // Per-resident decision cooldown (item 1): only stamped for an actual re-decision, never for a
+        // conversation turn/summary/day-plan dispatch, which have their own reservation timing.
+        if(work.kind().equals("decision")){ResidentState r=ResidentSimulation.state(w,work.context().residentId());if(r!=null)r.lastDecisionRequestedAt=now;}
+        w.modelStatus=work.kind().equals("turn")?""+work.context().self().name()+"正在想怎么接这句话":work.kind().equals("summary")?"有人在回想刚才的谈话":work.kind().equals("dayplan")?""+work.context().self().name()+"在想今天大致怎么过":"有位居民正在想下一步";
+        w.revision++;return work;
+    }
     ResidentMind.Context perspective(CompanionWorld w,String residentId,Instant now,List<Turn> transcript){
         var r=ResidentSimulation.state(w,residentId);Actor self=ResidentSimulation.actor(w,r.id);
         // The avatar is present in the world the same way any resident is: if it is standing in this

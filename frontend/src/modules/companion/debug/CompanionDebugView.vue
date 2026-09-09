@@ -14,7 +14,7 @@ import type { Memory } from '../companion.types'
 import type { DebugConversation, DebugResidentState, DebugWorld } from './companion-debug.types'
 import { backoffRemainingSeconds, memoriesByOwner, personalityDrift, relationshipMatrix, sharedMemoryTopics } from './companion-debug.presentation'
 
-const RESIDENT_ORDER = ['owner', 'student', 'artist', 'gardener']
+const RESIDENT_ORDER = ['owner', 'student', 'artist', 'gardener', 'fixer', 'weaver']
 
 const world = ref<DebugWorld | null>(null)
 const loading = ref(false)

@@ -40,6 +40,25 @@ public class CompanionWorld {
      * made of the owner, in real time, allowed to break at any link. Self-healing on an old save via
      * the empty-list default - nobody had made a request yet. */
     public List<ServiceRequest> serviceRequests = new ArrayList<>();
+    /** Per-pair cooldown for a rule-detected face-to-face encounter (see ResidentSimulation's
+     * "maybeEncounter"): the last instant this pair was pulled into a conversation this way, keyed by
+     * the same sorted "a:b" pair key already used for invitation cooldowns. Purely simulation-internal
+     * bookkeeping - a timestamp, never sent to any model - self-healing on an old save via the empty
+     * map default, exactly like {@link #serviceRequests} above. */
+    public Map<String,Instant> encounterCooldowns = new LinkedHashMap<>();
+    /** Bounded diagnostic history of why a resident decision was actually dispatched to the model -
+     * plan ended, an interruption, a rule-detected encounter, a perceivable environment change, a body
+     * signal, a time anchor, or low-frequency, unexplained drift. Never read by any model; it exists so
+     * a later change (see MetricsExporter, not owned by this batch) can answer "is 90% of the town's
+     * thinking just a timer running out?" instead of guessing. */
+    public List<DecisionTrigger> decisionTriggers = new ArrayList<>();
+    public record DecisionTrigger(String id,String residentId,String trigger,Instant at) {}
+    /** Off by default, and deliberately not wired into the ordinary join()/advance() path this batch:
+     * turning it on lets the avatar ("self") become a genuine decision candidate in ResidentDirector,
+     * on the same terms as the four NPCs, whenever it is not currently under the user's own explicit
+     * control (see ResidentSimulation.selfIsFree). See ResidentDirector's report/javadoc for exactly
+     * why this stays an explicit opt-in rather than an always-on change for this batch. */
+    public boolean avatarAutonomyEnabled;
     /** The resident currently responsible for deciding whether the cafe opens.  It starts with the
      * original owner, but is deliberately world state rather than an id baked into the rules: a
      * signed handover can change it and an old save simply heals back to "owner". */
@@ -132,6 +151,39 @@ public class CompanionWorld {
         public Instant lastDutyReflectionAt;
         public List<String> dutyComplaintEvidenceIds = new ArrayList<>();
         public List<String> dutyInterruptionEvidenceIds = new ArrayList<>();
+        /** Per-resident decision cooldown (see ResidentDirector), replacing the old world-global
+         * {@link #modelRequestedAt} gate: each resident now thinks on their own clock instead of the
+         * whole town taking turns round-robin on one shared timer. Null until this resident's first
+         * decision is ever dispatched. */
+        public Instant lastDecisionRequestedAt;
+        /** The world's own day-part (morning/afternoon/evening/night, see CompanionRules.environment)
+         * as of this resident's last applied decision - a broad, general "time anchor" (item 5),
+         * distinct from the personal sleep-window routine cue. Compared, never sent to any model. */
+        public String periodAtLastDecision;
+        /** Self-only bookkeeping (see ResidentSimulation.selfIsFree/step()): the place/activity/until
+         * signature ResidentSimulation itself last wrote for the avatar. If the live Actor no longer
+         * matches it, something outside ResidentSimulation (an explicit user intent, handled entirely
+         * in CompanionRules) has taken the avatar over since, and any plan recorded here is stale and
+         * must be silently abandoned rather than completed against a reality it no longer describes.
+         * Unused for the four NPCs, whose Actor only ResidentSimulation ever writes. */
+        public String selfActivitySignature;
+        /** This resident's own coarse plan for today (see ResidentSimulation.applyDayPlan): three or
+         * four qualitative segments, not a schedule. Left null until their first morning decision. */
+        public DayPlan dayPlan;
+    }
+    /** A resident's own coarse, interruptible day plan - see {@link ResidentState#dayPlan}. A segment
+     * is deliberately just a short label and a status: nothing here forces it to happen, and nothing
+     * marks it "active" or "done" on the resident's behalf - the model is free to defer or abandon
+     * it, and a segment still "pending" when the day rolls over becomes exactly one reflection memory
+     * ("today I did not get to X"), never a silent success. */
+    public static class DayPlan {
+        public String id, day;
+        public Instant formedAt;
+        public List<DaySegment> segments = new ArrayList<>();
+    }
+    public static class DaySegment {
+        public String label;
+        public String status = "pending";
     }
     /** A sparse resident-owned purpose, separate from the timer-backed action currently underway. */
     public static class LifeIntent {

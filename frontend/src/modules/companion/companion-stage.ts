@@ -38,7 +38,10 @@ export function buildCompanionStage(scene: Phaser.Scene) {
   path(1040, 424, 32, 168)
   path(752 + GARDEN_OFFSET_X, 224, 40, 236)
   path(48, 424, 32, 312)
-  path(48, 708, 640, 32)
+  // Widened to also pass under fixer's new house doorstep (x:1186-1218) - kept identical to the
+  // matching walkable rect in companion-navigation.ts so the drawn path and the collision box
+  // never disagree.
+  path(48, 708, 1170, 32)
   path(656, 424, 32, 312)
   // A shallow curb gives the street an edge without walling it off in hedges.
   rect(82, 459, 572, 4, 0xe0d6bd, 1, structure)
@@ -66,7 +69,9 @@ export function buildCompanionStage(scene: Phaser.Scene) {
       image(doorX, y + h + 15, 'doormat_1', .7)?.setTint(0xc8b99d)
     }
   }
-  const beds = ['home_bed_ochre', 'home_bed_blue', 'home_bed_lilac', 'home_bed_green', 'home_bed_blue']
+  // Only four bed colours exist in the licensed set; fixer reuses ochre (already reused for self)
+  // rather than needing a fifth colour.
+  const beds = ['home_bed_ochre', 'home_bed_blue', 'home_bed_lilac', 'home_bed_green', 'home_bed_blue', 'home_bed_ochre']
   Object.entries(HOME_ROOMS).forEach(([id, home], index) => {
     const { x, y, w, h, door } = home
     room(x, y, w, h, door.x, true)
@@ -83,10 +88,29 @@ export function buildCompanionStage(scene: Phaser.Scene) {
       image(x + w - 20, y + 147, 'office_lamp', .65, 'companion', y + 169)
     } else if (id === 'artist') {
       image(x + w - 31, y + 138, 'project_poster', .55, 'companion')
-      image(x + 32, y + 182, 'plant_2', .5)
+      // Moved from (x+32,y+182) into the open gap between the two beds, which weaver's own bed
+      // and desk/chair below would otherwise have crowded it into.
+      image(x + 69, y + 98, 'plant_2', .5)
+      // 阿满 (weaver) shares this room as a flat-mate: her own bed and desk, at hand-picked spots
+      // (POSITION_SLOTS['home-weaver-bed'/'home-weaver-desk']) clear of both 知夏's furniture and
+      // this room's collision obstacles, and drawn with a different bed colour and a different
+      // desk piece (desk_1 instead of the shared cafe_table) so it reads as two people sharing on
+      // purpose, not the old "everyone sleeps in one bed" bug. Smaller scale than 知夏's own set -
+      // this room only has one spare corner - the bed kept in the same y-band as her bed image so
+      // the sprite's own pixels stay below the top wall instead of poking through it, and the
+      // chair/desk pair sitting side by side (not stacked) on the rug below her own bed, in the
+      // narrow column left of 知夏's own chair/table instead of behind or on top of them.
+      image(x + 104, y + 118, 'home_bed_green', .65, 'companion')
+      image(x + 22, y + 178, 'chair_2', .5, 'interior', y + 177)?.setFlipX(true)
+      image(x + 42, y + 178, 'desk_1', .5, 'interior', y + 178)
     } else if (id === 'gardener') {
       image(x + w - 36, y + 145, 'plant_1', .5, 'interior', y + 169)
       image(x + 41, y + 181, 'plant_3', .6)
+    } else if (id === 'fixer') {
+      // 周野 repairs things - bicycles, furniture, lamps - so his room gets a wall cabinet for
+      // tools instead of the generic decorative plant/lamp/poster the other homes use.
+      image(x + w - 24, y + 148, 'wall_cabinet_1', .6, 'interior', y + 169)
+      image(x + 30, y + 181, 'plant_1', .5)
     } else {
       image(x + w - 41, y + 150, 'coffee_cup', .65, 'interior', y + 169)
       image(x + 33, y + 182, 'plant_1', .5)
@@ -150,11 +174,43 @@ export function buildCompanionStage(scene: Phaser.Scene) {
   image(362, 359, 'lamp_5', .7, 'town')
   image(796 + GARDEN_OFFSET_X, 457, 'lamp_5', .7, 'town')
   // Grouped foliage frames corners and open lawn, rather than repeated hedge borders.
-  for (const [x, y, scale] of [[26, 164, 1], [357, 93, .75], [936, 181, 1.2], [20, 352, 1], [947, 380, 1], [17, 614, 1.2], [718, 608, .95], [928, 667, 1.35], [781, 738, .8]] as const) plant(x, y, 'tree_2', scale)
-  for (const [x, y, scale] of [[37, 44, .8], [75, 39, .9], [111, 47, .7], [755, 88, .8], [794, 96, 1], [839, 87, .8], [899, 53, 1], [936, 51, .8], [34, 487, .8], [747, 665, .9], [789, 657, .8], [883, 726, 1]] as const) plant(x, y, 'bush_2', scale)
-  plant(818, 573, 'flowerbush_4', .8)
-  image(849 + GARDEN_OFFSET_X, 626, 'gardenbench_1', 1, 'town')?.setTint(0xd2c5a7)
-  const chicken = image(839 + GARDEN_OFFSET_X, 541, 'farm_chicken_0', 1, 'companion')
-  if (chicken) scene.tweens.add({ targets: chicken, y: 539, duration: 1100, yoyo: true, repeat: -1 })
+  // Two entries that used to sit in the open lawn below-right of the garden ([928,667,1.35] tree,
+  // [781,738,.8] tree) were removed/moved - that lawn is now fixer's house footprint (HOME_ROOMS.
+  // fixer). [781,738] is nudged to clear open ground instead of grazing the new building's corner.
+  for (const [x, y, scale] of [[26, 164, 1], [357, 93, .75], [936, 181, 1.2], [20, 352, 1], [947, 380, 1], [17, 614, 1.2], [718, 608, .95], [700, 700, .8]] as const) plant(x, y, 'tree_2', scale)
+  // Two entries that used to sit in the same now-built-on lawn ([789,657,.8], [883,726,1]) were
+  // dropped rather than relocated - they were background filler, not load-bearing detail.
+  for (const [x, y, scale] of [[37, 44, .8], [75, 39, .9], [111, 47, .7], [755, 88, .8], [794, 96, 1], [839, 87, .8], [899, 53, 1], [936, 51, .8], [34, 487, .8], [747, 665, .9]] as const) plant(x, y, 'bush_2', scale)
+  // The flowerbush and the third (purely decorative, unpositioned) garden bench that used to sit
+  // here were dropped for the same reason - fixer's house now occupies that ground.
+  // The chicken survives, moved up next to the farm beds it always belonged near.
+  const chicken = image(1195, 405, 'farm_chicken_0', 1, 'companion')
+  if (chicken) scene.tweens.add({ targets: chicken, y: 403, duration: 1100, yoyo: true, repeat: -1 })
+
+  // A small amount of non-resident ambient life on the street (docs/01: "少量生活动作，让它适合放
+  // 在旁边长时间陪伴"). Purely decorative - nothing here is ever a target for pathfinding or a
+  // click - and deliberately slow/quiet: the bar is "sits next to someone studying for hours
+  // without pulling the eye", not a lively scene.
+  if (scene.textures.exists('town') && scene.textures.get('town').has('pigeon_1')) {
+    if (!scene.anims.exists('street-pigeon-peck')) {
+      scene.anims.create({ key: 'street-pigeon-peck', frames: [1, 2, 3, 4, 5, 6].map(n => ({ key: 'town', frame: `pigeon_${n}` })), frameRate: 3, repeat: -1 })
+    }
+    // Well clear of the benches (x 290/500) and the lamp (362,359) so nothing overlaps.
+    for (const [x, y] of [[140, 412], [612, 420]] as const) {
+      const pigeon = scene.add.sprite(x, y, 'town', 'pigeon_1').setScale(.55).setDepth(y)
+      objects.push(pigeon)
+      pigeon.play('street-pigeon-peck')
+      // A slow, occasional few-pixel hop rather than a walk cycle - present, not attention-grabbing.
+      scene.tweens.add({ targets: pigeon, x: x + 16, duration: 4800 + Math.random() * 2200, delay: Math.random() * 4000, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' })
+    }
+  }
+  // A couple of leaves drifting over open lawn - cheap graphics, no extra art asset needed.
+  for (const [x, y] of [[905, 300], [1005, 350]] as const) {
+    const leaf = scene.add.graphics().setDepth(150)
+    leaf.fillStyle(0x8a9a5b, .8).fillEllipse(0, 0, 5, 3)
+    leaf.setPosition(x, y)
+    objects.push(leaf)
+    scene.tweens.add({ targets: leaf, x: x + 26, y: y + 34, angle: 40, duration: 9000 + Math.random() * 3000, delay: Math.random() * 5000, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' })
+  }
   return { destroy: () => objects.forEach(o => o.destroy()) }
 }

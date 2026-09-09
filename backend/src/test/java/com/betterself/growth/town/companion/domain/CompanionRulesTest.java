@@ -12,7 +12,7 @@ class CompanionRulesTest {
         long revision=a.revision;int diary=a.diary.size(),memories=a.memories.size();
         CompanionRules.advance(a,now.plusSeconds(300));
         assertThat(a.revision).isEqualTo(revision);assertThat(a.diary).hasSize(diary);assertThat(a.memories).hasSize(memories);
-        assertThat(b.revision).isEqualTo(1);assertThat(b.residents).hasSize(4);
+        assertThat(b.revision).isEqualTo(1);assertThat(b.residents).hasSize(6);
     }
     @Test void explicitFocusDefersPassingIdeaAndCancelPreventsLateExecution(){
         var w=world();
@@ -96,7 +96,11 @@ class CompanionRulesTest {
         assertThat(sleepingAt).isNotEmpty();
         // Each sleeper is in their own bedroom, never the single shared "home" the old bug produced.
         sleepingAt.forEach((id,place)->assertThat(place).isEqualTo(TownPlaces.homeOf(id)));
-        assertThat(sleepingAt.values()).doesNotHaveDuplicates();
+        // Two flat-mates deliberately share one address, so distinct *places* is no longer the claim.
+        // What still has to hold - and is what the original four-in-one-bed bug actually violated -
+        // is that no two sleepers are ever in the same bed.
+        var beds=sleepingAt.keySet().stream().map(id->ResidentSimulation.state(w,id).positionId).toList();
+        assertThat(beds).doesNotContainNull().doesNotHaveDuplicates();
     }
     @Test void aPlaceThatIsFullChangesWhatAResidentDoesInsteadOfSteppingOnSomeone(){
         // Per 04-decisions.md's "能站的地方都能去": standing/observing/passing through no longer

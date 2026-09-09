@@ -112,7 +112,8 @@ public class QwenResidentMind implements ResidentMind {
                 结合自己的目标、salientPerceptions里的显著体感、routineCues里的个人日常时间提示、当前计划与实际记忆决定下一步。salientPerceptions为空表示此刻没有需要特别注意的体感；routineCues是“到了我平常睡觉的时间”一类习惯事实，不等于困，也不是命令。不要猜测或要求任何隐藏数值。你可以继续投入、好奇地观察、拒绝配合，也可以因一次经历想到与原来不同的愿望。
                 给自己的幽默、想象力、偏好和分歧留空间，不必把每个决定写成温柔的小合作。大胆的创意可以是提案或幻想，不能伪装成已经发生的事件。
                 只返回一个可执行动作与一句简短理由，不输出推理过程。
-                action必须从availableActions选择；可能值为continue/resume/observe/create/help/invite/rest/study/work/read/make/tend/request_drink/change_work/propose/sleep/open_cafe/close_cafe/continue_home。place 仅home/cafe/street/garden。continue表示按currentPlan继续，不能重置计时或换一件事。
+                action必须从availableActions选择；可能值为continue/resume/observe/create/help/invite/join/rest/study/work/read/make/tend/request_drink/change_work/propose/sleep/open_cafe/close_cafe/continue_home/away。place 仅home/cafe/street/garden。continue表示按currentPlan继续，不能重置计时或换一件事。
+                join表示走过去挨着某个熟人坐下（对方的桌子或旁边的位置），targetId填nearby中那个人的id；这只是想坐得近一些，不代表要开口说话或已经在交谈。away表示暂时离开这条街去处理自己的事，一段时间后才会回来，回来后只有自己知道那段时间做了什么；不要在away的reason里编造离场期间发生的具体情节，那要等回来后才补一句自己的回忆。
                 create/help 的 targetId 必须是 knownProjects 之一且 place 匹配；invite 只能针对 nearby 中一个人。
                 如果正在conversation，可在speech写自己接着说的一句话，先回应最后一句里的具体事；可以很短、停顿、不赞同或结束话题，不替双方总结，也不能替另一人说话或声称尚未执行的事已完成。
                 如果没在交谈，speech通常留空；close_cafe或当前经营者用change_work结束营业时是例外，现场还有清醒的人就用speech写自己真正说出的简短通知。reason 是此刻打算，不是执行事实。evidenceIds可从输入自己的记忆ID中选0至3条；因salientPerceptions、currentPlan或眼前事实直接做决定时可以为空，不要硬拿无关历史凑依据。若填写，只能引用自己的真实记忆。
@@ -132,11 +133,25 @@ public class QwenResidentMind implements ResidentMind {
                 当前这一个居民的感知输入：
                 """+json.writeValueAsString(context);
             var result=provider.generateStructured(new QwenProvider.StructuredPrompt("COMPANION_RESIDENT",instruction,"""
-                {"type":"object","required":["action","place","targetId","reason","speech","evidenceIds"],"properties":{"action":{"type":"string","enum":["continue","resume","observe","create","help","invite","rest","study","work","read","make","tend","request_drink","change_work","propose","sleep","open_cafe","close_cafe","continue_home"]},"place":{"type":"string","enum":["home","cafe","street","garden"]},"targetId":{"type":["string","null"]},"reason":{"type":"string"},"speech":{"type":"string"},"evidenceIds":{"type":"array","items":{"type":"string"}},"projectTitle":{"type":["string","null"]},"objectKind":{"type":["string","null"]}}}
+                {"type":"object","required":["action","place","targetId","reason","speech","evidenceIds"],"properties":{"action":{"type":"string","enum":["continue","resume","observe","create","help","invite","join","rest","study","work","read","make","tend","request_drink","change_work","propose","sleep","open_cafe","close_cafe","continue_home","away"]},"place":{"type":"string","enum":["home","cafe","street","garden"]},"targetId":{"type":["string","null"]},"reason":{"type":"string"},"speech":{"type":"string"},"evidenceIds":{"type":"array","items":{"type":"string"}},"projectTitle":{"type":["string","null"]},"objectKind":{"type":["string","null"]}}}
                 """,decisionThinking));
             Decision decision=json.readValue(result.json(),Decision.class);
             return new Result<>(decision,usageOf(result));
         }catch(Exception e){throw new IllegalStateException("Resident decision unavailable",e);}
     }
     private Usage usageOf(QwenProvider.StructuredResult result){return new Usage(result.inputTokens(),result.outputTokens(),providerCode,result.model(),result.reasoningContentPresent(),result.reasoningTokens());}
+    @Override public DayPlanDraft planDay(DayPlanRequest request){return planDayMetered(request).value();}
+    @Override public Result<DayPlanDraft> planDayMetered(DayPlanRequest request){
+        return generateMetered("COMPANION_DAY_PLAN","""
+            你是perspective.self中的这一个居民，早上想一想今天大致想怎么过。
+            只写3到4段粗略的想法，不是带时间点的日程表，不必覆盖一整天的每一刻；每段不超过20个汉字。
+            这只是此刻的打算，不是承诺；现实随时可能打断、推迟或让你放弃其中一段，这很正常。
+            依据自己的occupation、careerIntent、lifeIntent和真实记忆想，不复述别人的项目，也不要发明还没发生的事。
+            evidenceIds可从自己memories中选0到3条依据，没有明显依据时留空。
+            只返回JSON字段segments,evidenceIds，不输出推理过程。
+            """,new DayPlanInput(request.perspective()),"""
+            {"type":"object","required":["segments","evidenceIds"],"properties":{"segments":{"type":"array","items":{"type":"string"},"minItems":3,"maxItems":4},"evidenceIds":{"type":"array","items":{"type":"string"}}}}
+            """,DayPlanDraft.class,decisionThinking);
+    }
+    private record DayPlanInput(Context perspective) {}
 }

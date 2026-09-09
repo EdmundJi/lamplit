@@ -256,6 +256,79 @@ class ResidentDirectorTest {
         finally{director.close();}
         assertThat(recordCalls).hasValue(0);
     }
+    @Test void perResidentThrottleLetsADifferentResidentDecideImmediatelyAfterAnother()throws Exception {
+        // Item 1: the old world-global modelRequestedAt gate meant nobody else could think again for
+        // the whole throttle window after ANY one resident's decision. With a per-resident cooldown, a
+        // second resident who has never been throttled gets a chance in the very same instant.
+        var world=CompanionRules.join("per-resident-throttle","我","Asia/Shanghai",now,true);world.conversations.clear();world.serviceRequests.clear();
+        var owner=ResidentSimulation.state(world,"owner");owner.plan=null;
+        var gardener=ResidentSimulation.state(world,"gardener");gardener.plan=null;
+        for(var r:world.residentStates)if(!Set.of("owner","gardener","self").contains(r.id))r.plan=new CompanionWorld.Plan("park-"+r.id,"sleep","home-"+r.id,null,"睡着",now,now.plusSeconds(600));
+        var store=new FakeStore(world);
+        List<String> decided=Collections.synchronizedList(new ArrayList<>());
+        ResidentMind mind=new ResidentMind(){
+            public boolean enabled(){return true;}
+            public Decision decide(Context c){decided.add(c.residentId());return new Decision("observe",c.self().place(),null,"先看看四周","",List.of(c.memories().getFirst().id()),null,null);}
+        };
+        var director=new ResidentDirector(store,mind,Clock.fixed(now,ZoneOffset.UTC));
+        try{
+            director.consider(61,world);assertThat(store.finished.await(2,TimeUnit.SECONDS)).isTrue();
+            store.finished=new CountDownLatch(1);
+            director.consider(61,world);assertThat(store.finished.await(2,TimeUnit.SECONDS)).isTrue();
+        }finally{director.close();}
+        assertThat(decided).containsExactlyInAnyOrder("owner","gardener");
+    }
+    @Test void everyDispatchedDecisionRecordsWhyItWasTriggered()throws Exception {
+        var world=CompanionRules.join("decision-trigger","我","Asia/Shanghai",now,true);world.conversations.clear();world.serviceRequests.clear();
+        var owner=ResidentSimulation.state(world,"owner");owner.plan=null;owner.suspendedAction=null;
+        for(var r:world.residentStates)if(!Set.of("owner","self").contains(r.id))r.plan=new CompanionWorld.Plan("park-"+r.id,"sleep","home-"+r.id,null,"睡着",now,now.plusSeconds(600));
+        var store=new FakeStore(world);
+        ResidentMind mind=new ResidentMind(){
+            public boolean enabled(){return true;}
+            public Decision decide(Context c){return new Decision("observe",c.self().place(),null,"先看看四周","",List.of(c.memories().getFirst().id()),null,null);}
+        };
+        var director=new ResidentDirector(store,mind,Clock.fixed(now,ZoneOffset.UTC));
+        try{director.consider(62,world);assertThat(store.finished.await(2,TimeUnit.SECONDS)).isTrue();}finally{director.close();}
+        // Diagnostic-only (item 6): never read by any model, exposed purely for later export.
+        assertThat(world.decisionTriggers).anyMatch(t->t.residentId().equals("owner")&&t.trigger().equals("plan_ended"));
+    }
+    @Test void avatarJoinsTheDecisionLoopWhenOptedInWithoutUserTextAndYieldsToAnExplicitIntent()throws Exception {
+        // Item 7: off by default (see CompanionWorld.avatarAutonomyEnabled) - this test turns it on to
+        // exercise the mechanism directly, extending the same marker-absence invariant
+        // avatarIsPerceivedByNearbyResidentsButNeverCarriesUserText already checks for a nearby NPC's
+        // context onto the avatar's OWN context, the one place user-supplied text is most likely to
+        // leak now that the avatar is itself the one being asked to decide.
+        var world=CompanionRules.join("avatar-autonomy","我","Asia/Shanghai",now);
+        world.avatarAutonomyEnabled=true;world.conversations.clear();
+        for(var r:world.residentStates)if(!r.id.equals("self"))r.plan=new CompanionWorld.Plan("park-"+r.id,"sleep","home-"+r.id,null,"睡着",now,now.plusSeconds(600));
+        // A finished explicit intent leaves user-typed text sitting in world state (Intent.feedback) -
+        // the avatar's own decision context must never carry a single character of it even so.
+        var intent=new CompanionWorld.Intent("secret-01","walk","explicit",null,25,now);
+        intent.status="done";intent.text="PRIVATE_NEVER_SEND_TO_NPC_AVATAR";
+        intent.feedback="记下这个念头了：PRIVATE_NEVER_SEND_TO_NPC_AVATAR。现在沿着小街慢慢散步。";
+        world.intents.add(intent);
+        assertThat(ResidentSimulation.selfIsFree(world)).isTrue();
+        var captured=new ResidentMind.Context[1];var store=new FakeStore(world);
+        ResidentMind mind=new ResidentMind(){
+            public boolean enabled(){return true;}
+            public Decision decide(Context c){captured[0]=c;return new Decision("rest","home",null,"先坐一会儿","",List.of(),null,null);}
+        };
+        var director=new ResidentDirector(store,mind,Clock.fixed(now,ZoneOffset.UTC));
+        try{director.consider(71,world);assertThat(store.finished.await(2,TimeUnit.SECONDS)).isTrue();}finally{director.close();}
+        assertThat(captured[0]).isNotNull();
+        assertThat(captured[0].residentId()).isEqualTo("self");
+        assertThat(captured[0].toString()).doesNotContain("PRIVATE_NEVER_SEND_TO_NPC_AVATAR");
+        var self=ResidentSimulation.state(world,"self");
+        assertThat(self.plan).isNotNull();assertThat(self.plan.action()).isIn("travel","rest");
+        if("travel".equals(self.plan.action()))assertThat(self.desiredAction).isEqualTo("rest");
+
+        // An explicit user intent always pre-empts whatever the avatar's own model just chose.
+        var explicit=new CompanionWorld.Intent("explicit-01","water","explicit",null,25,now);
+        CompanionRules.submit(world,explicit,now);
+        assertThat(ResidentSimulation.selfIsFree(world)).isFalse();
+        CompanionRules.advance(world,now.plusSeconds(6));
+        assertThat(self.plan).isNull();
+    }
     static class FakeStore implements WorldStore {
         CompanionWorld world;
         ThreadLocal<Boolean> transaction=ThreadLocal.withInitial(()->false);

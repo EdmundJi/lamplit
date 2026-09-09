@@ -1,6 +1,13 @@
 /** Action-sheet geometry from scripts/build-companion-assets.py; every action shares a foot anchor. */
 export const ACTION_FRAME = { width: 96, height: 96, originX: 32 / 96, originY: 80 / 96 }
-export const RESIDENT_ART = [1, 3, 6, 9, 12] as const
+// [1, 3, 6, 9, 12] have bespoke create/drink/garden action sheets (c0N-actions.png); 4 and 7 do
+// not - they only have the generic walk/idle/sleep/sit/read sheet that exists for all 20 base
+// characters. That is fine: sync() already guards every action-sheet animation behind
+// `this.textures.exists(`${sheet}-actions`)`, so fixer/weaver (whichever index lands on 4 or 7)
+// simply fall back to the native idle/read/sit poses instead of a missing/floating action frame.
+// Length must match the total actor count (avatar + residents) so every one of the seven gets a
+// distinct sprite by position, the same guarantee the original five-actor roster had.
+export const RESIDENT_ART = [1, 3, 6, 9, 12, 4, 7] as const
 export type CafeSeat = { x: number; y: number; facing: 'left' | 'right' }
 /** Compact two-tops with real opposing seats. All coordinates are residents' foot anchors. */
 export const CAFE_TABLES = [
@@ -43,11 +50,18 @@ function homeRoom(x: number, y: number, w: number, h: number): HomeRoom {
     // standing on its centre and reading toward the camera.
     desk: { x: x + w - 72, y: y + 168 } }
 }
-/** Five actual rooms and five entrances; keys are stable resident ids, not their current jobs. */
+/** Six actual rooms and six entrances; keys are stable resident ids, not their current jobs.
+ * `fixer` (周野) is the one new house this round: the only gap left in the 1248x768 canvas that
+ * fits a full room + walls + doorstep path (about 176x264, measured by rasterising every
+ * occupied rect) sits at x=1072,y=466 with 176x302 usable, below the garden - so this room and
+ * its wall/door bleed are sized to land inside that box with a couple of px of margin on every
+ * side, never past the canvas edge. `weaver` (阿满) is deliberately absent here: she shares
+ * 知夏's `artist` room as a flat-mate rather than getting a new building - see her bed/desk in
+ * POSITION_SLOTS below, placed inside this same room but clear of its furniture. */
 export const HOME_ROOMS: Record<string, HomeRoom> = {
   owner: homeRoom(80, 108, 128, 224), student: homeRoom(216, 108, 128, 224),
   artist: homeRoom(96, 492, 160, 208), gardener: homeRoom(288, 492, 160, 208),
-  self: homeRoom(480, 492, 160, 208),
+  self: homeRoom(480, 492, 160, 208), fixer: homeRoom(1080, 480, 160, 224),
 }
 export const PLACE_FRAMES = {
   home: { x: 72, y: 96, w: 576, h: 628 }, cafe: { x: 372, y: 0, w: 664, h: 576 },
@@ -81,20 +95,32 @@ export const POSITION_SLOTS: Record<string, { x: number; y: number }[]> = {
   'garden-bench': [{ x: 1109, y: 439 }, { x: 1137, y: 439 }, { x: 1165, y: 439 }],
   // The gardener's own tended plot (capacity 1) - a specific bed of soil, not the shared bench.
   'garden-plot': [{ x: 1137, y: 356 }],
-  // Each of the five residents' own bed, in their own home - the fix for "everyone sleeps in the
-  // same bed": every id below is now a distinct, non-overlapping spot.
+  // Each resident's own bed, in their own home - the fix for "everyone sleeps in the same bed":
+  // every id below is now a distinct, non-overlapping spot.
   'home-owner-bed': [HOME_ROOMS.owner!.bed],
   'home-student-bed': [HOME_ROOMS.student!.bed],
   'home-artist-bed': [HOME_ROOMS.artist!.bed],
   'home-gardener-bed': [HOME_ROOMS.gardener!.bed],
   // The avatar has its own room and bed, like every other resident.
   'home-self-bed': [HOME_ROOMS.self!.bed],
+  // 周野 (fixer) gets his own new house.
+  'home-fixer-bed': [HOME_ROOMS.fixer!.bed],
+  // 阿满 (weaver) shares 知夏's (artist) room as a flat-mate. Her bed sits in the same room but at
+  // a hand-picked spot clear of both the artist's own bed/desk collision rects and this room's
+  // interior walls, so two people sharing reads as a character choice, not the old "everyone
+  // sleeps in one bed" bug: companion-navigation.test.ts asserts every one of these bed ids is a
+  // distinct, standable, reachable pixel.
+  'home-weaver-bed': [{ x: HOME_ROOMS.artist!.x + 104, y: HOME_ROOMS.artist!.y + 133 }],
   // Reserved visual contract for home work; the backend decides when a desk is occupied.
   'home-owner-desk': [HOME_ROOMS.owner!.desk],
   'home-student-desk': [HOME_ROOMS.student!.desk],
   'home-artist-desk': [HOME_ROOMS.artist!.desk],
   'home-gardener-desk': [HOME_ROOMS.gardener!.desk],
   'home-self-desk': [HOME_ROOMS.self!.desk],
+  'home-fixer-desk': [HOME_ROOMS.fixer!.desk],
+  // Weaver's own desk, likewise inside the shared artist room, clear of her own bed above and of
+  // the artist's furniture (matched to the chair pixel drawn in companion-stage.ts).
+  'home-weaver-desk': [{ x: HOME_ROOMS.artist!.x + 22, y: HOME_ROOMS.artist!.y + 178 }],
 }
 
 export const RESIDENT_ACTIONS = {

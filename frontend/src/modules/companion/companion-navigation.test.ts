@@ -109,22 +109,34 @@ it('every TownPlaces positionId (backend two-layer place model) lands on standab
   }
 })
 
-it('each of the five residents\' own home positions is a distinct spot, not the old shared bed', () => {
-  const beds = ['home-owner-bed', 'home-student-bed', 'home-artist-bed', 'home-gardener-bed', 'home-self-bed']
+it('each resident\'s own home position is a distinct spot, not the old shared bed - including fixer\'s new house and weaver\'s bed sharing artist\'s room', () => {
+  const beds = ['home-owner-bed', 'home-student-bed', 'home-artist-bed', 'home-gardener-bed', 'home-self-bed', 'home-fixer-bed', 'home-weaver-bed']
     .map(id => residentPosition(id, 0, 'sleep', '', id))
-  expect(new Set(beds.map(p => `${p.x}:${p.y}`)).size).toBe(5)
+  expect(new Set(beds.map(p => `${p.x}:${p.y}`)).size).toBe(7)
+})
+
+it('each resident\'s own desk is likewise a distinct spot - weaver\'s desk inside artist\'s room stays clear of both his desk and her own bed', () => {
+  const desks = ['home-owner-desk', 'home-student-desk', 'home-artist-desk', 'home-gardener-desk', 'home-self-desk', 'home-fixer-desk', 'home-weaver-desk']
+    .map(id => residentPosition(id, 0, 'focus', '', id))
+  expect(new Set(desks.map(p => `${p.x}:${p.y}`)).size).toBe(7)
+  const weaverBed = residentPosition('home-weaver-bed', 0, 'sleep', '', 'home-weaver-bed')
+  const weaverDesk = desks[6]!
+  expect(Math.hypot(weaverBed.x - weaverDesk.x, weaverBed.y - weaverDesk.y)).toBeGreaterThan(20)
 })
 
 // "能站的地方都能去" (docs/04-decisions.md): once a resident's positionId is null - the normal
 // case for someone merely standing, chatting or passing through - the frontend free-stands them
 // instead of cramming everyone onto the same one or two named slots.
-const RESIDENT_IDS = ['owner', 'student', 'artist', 'gardener', 'avatar']
+// 'weaver' shares 'artist's home rather than owning one, so `homeLocation` below sends her
+// free-standing there too instead of a non-existent 'home-weaver'.
+const RESIDENT_IDS = ['owner', 'student', 'artist', 'gardener', 'avatar', 'fixer', 'weaver']
+const homeLocation = (id: string) => `home-${id === 'avatar' ? 'self' : id === 'weaver' ? 'artist' : id}`
 
 it('free-stands every resident on standable, reachable ground in every place', () => {
   const entrance = { x: 535, y: 396 }
   for (const place of ['home', 'cafe', 'garden', 'street']) {
     for (const id of RESIDENT_IDS) {
-      const location = place === 'home' ? `home-${id === 'avatar' ? 'self' : id}` : place
+      const location = place === 'home' ? homeLocation(id) : place
       const destination = freeStandPosition(location, id)
       const label = `${location}/${id}`
       expect(canStand(destination, COMPANION_COLLISION), label).toBe(true)
@@ -138,7 +150,7 @@ it('free-stands every resident on standable, reachable ground in every place', (
 it('free-standing is stable: the same resident id in the same place always lands on the same pixel', () => {
   for (const place of ['home', 'cafe', 'garden', 'street']) {
     for (const id of RESIDENT_IDS) {
-      const location = place === 'home' ? `home-${id === 'avatar' ? 'self' : id}` : place
+      const location = place === 'home' ? homeLocation(id) : place
       expect(freeStandPosition(location, id)).toEqual(freeStandPosition(location, id))
       // A completely unrelated resident coming and going elsewhere in the same place must not
       // move this one, since their point never even factors in as `occupied`.
@@ -150,7 +162,7 @@ it('free-standing is stable: the same resident id in the same place always lands
 it('free-standing spreads residents apart instead of stacking them on the same pixel', () => {
   for (const place of ['home', 'cafe', 'garden', 'street']) {
     if (place === 'home') {
-      const points = RESIDENT_IDS.map(id => freeStandPosition(`home-${id === 'avatar' ? 'self' : id}`, id))
+      const points = RESIDENT_IDS.map(id => freeStandPosition(homeLocation(id), id))
       expect(new Set(points.map(point => `${point.x}:${point.y}`)).size).toBe(RESIDENT_IDS.length)
       continue
     }

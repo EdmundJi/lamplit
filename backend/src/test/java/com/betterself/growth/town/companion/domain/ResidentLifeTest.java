@@ -22,6 +22,95 @@ class ResidentLifeTest {
         assertThat(Duration.between(artist.plan.startedAt(),artist.plan.endsAt()).getSeconds()).isEqualTo(60);
     }
 
+    @Test void travelDurationIsRealDistanceNotAFixedTwelveSeconds(){
+        // Item 2: seconds-scale, a few seconds between next-door places, about twenty across the map.
+        assertThat(ResidentSimulation.travelSeconds("cafe","cafe")).isEqualTo(3);
+        assertThat(ResidentSimulation.travelSeconds("home-owner","cafe")).isBetween(3,12);
+        assertThat(ResidentSimulation.travelSeconds("home-owner","home-gardener")).isEqualTo(20);
+        assertThat(ResidentSimulation.travelSeconds("home-owner","cafe"))
+            .isLessThan(ResidentSimulation.travelSeconds("home-owner","home-gardener"));
+    }
+
+    @Test void arrivingSomewhereSomeoneAlreadyIsCanOpenARuleDetectedEncounter(){
+        // Item 3: the rules detect the face-to-face fact and open the conversation; the model still
+        // writes every word through the same machinery a manual "invite" already uses.
+        CompanionWorld w=CompanionRules.join("encounter-arrival","住客","Asia/Shanghai",now,true);
+        w.conversations.forEach(c->c.status="ended");
+        ResidentState owner=ResidentSimulation.state(w,"owner"),gardener=ResidentSimulation.state(w,"gardener");
+        owner.plan=null;owner.suspendedAction=null;gardener.plan=null;gardener.suspendedAction=null;
+        ResidentSimulation.replaceActor(w,"gardener","garden","observe","看看花园",now.plusSeconds(600));
+        TownPlaces.release(w,"gardener");TownPlaces.claim(w,"gardener","garden",null,now);
+        ResidentSimulation.replaceActor(w,"owner","home-owner","idle","在家",now.plusSeconds(600));
+        TownPlaces.release(w,"owner");
+        assertThat(ResidentSimulation.applyDecision(w,"owner",owner.revision,w.intentRevision,"garden","observe",null,"去看看花园","",List.of(),now)).isTrue();
+        assertThat(owner.plan.action()).isEqualTo("travel");
+        Instant arrival=owner.plan.endsAt();
+        w.updatedAt=now;w.simulatedAt=now;
+        // advance() steps in fixed 6-second increments, so the target instant must clear the next
+        // 6-second boundary past the travel's own end, not merely be one second after it.
+        CompanionRules.advance(w,arrival.plusSeconds(8));
+        assertThat(w.conversations).anyMatch(c->"active".equals(c.status)&&c.participantIds.contains("owner")&&c.participantIds.contains("gardener"));
+        assertThat(w.encounterCooldowns).isNotEmpty();
+    }
+
+    @Test void joinLetsAResidentSitDownWithSomeoneAlreadyThere(){
+        // Item 3's "join" action: a physical positioning choice, not itself a conversation.
+        CompanionWorld w=CompanionRules.join("join-action","住客","Asia/Shanghai",now,true);
+        w.conversations.forEach(c->c.status="ended");
+        ResidentState owner=ResidentSimulation.state(w,"owner"),student=ResidentSimulation.state(w,"student");
+        owner.plan=null;owner.suspendedAction=null;student.plan=null;student.suspendedAction=null;
+        ResidentSimulation.replaceActor(w,"student","cafe","study","复习",now.plusSeconds(1200));
+        TownPlaces.release(w,"student");TownPlaces.claim(w,"student","cafe","seat",now);
+        ResidentSimulation.replaceActor(w,"owner","cafe","observe","看看店里",now.plusSeconds(200));
+        TownPlaces.release(w,"owner");
+        assertThat(ResidentSimulation.availableActions(w,"owner",now)).contains("join");
+        assertThat(ResidentSimulation.applyDecision(w,"owner",owner.revision,w.intentRevision,"cafe","join","student","过去和小川坐一起","",List.of(),now)).isTrue();
+        assertThat(owner.plan.action()).isEqualTo("join");
+        assertThat(owner.positionId).isNotNull();
+        assertThat(TownPlaces.position(w,owner.positionId).place).isEqualTo("cafe");
+    }
+
+    @Test void awayGenuinelyLeavesTheMapAndReturnsWithAPrivateMemory(){
+        // Item 8: an absence with a duration and a private memory, nothing more - no off-map economy.
+        CompanionWorld w=CompanionRules.join("away-action","住客","Asia/Shanghai",now,true);
+        w.conversations.forEach(c->c.status="ended");
+        ResidentState gardener=ResidentSimulation.state(w,"gardener");
+        gardener.plan=null;gardener.suspendedAction=null;
+        ResidentSimulation.replaceActor(w,"gardener","garden","observe","看看花园",now.plusSeconds(200));
+        TownPlaces.release(w,"gardener");
+        assertThat(ResidentSimulation.availableActions(w,"gardener",now)).contains("away");
+        assertThat(ResidentSimulation.applyDecision(w,"gardener",gardener.revision,w.intentRevision,"street","away",null,"去邻镇买点种子","",List.of(),now)).isTrue();
+        Plan away=gardener.plan;
+        assertThat(away.action()).isEqualTo("away");
+        assertThat(ResidentSimulation.actor(w,"gardener").place()).isEqualTo("away");
+        assertThat(gardener.positionId).isNull();
+        // Shrink the (600-2700s) remaining duration so the test can observe the return quickly.
+        gardener.plan=new Plan(away.id(),away.action(),away.place(),away.targetId(),away.reason(),now,now.plusSeconds(6));
+        w.updatedAt=now;w.simulatedAt=now;
+        CompanionRules.advance(w,now.plusSeconds(12));
+        assertThat(ResidentSimulation.actor(w,"gardener").place()).isEqualTo(TownPlaces.homeOf("gardener"));
+        assertThat(w.memories).anyMatch(m->m.ownerId().equals("gardener")&&m.text().contains("出门处理了自己的事")&&m.text().contains("邻镇买点种子"));
+        // Nobody else witnessed where they went - this is a private memory only they have.
+        assertThat(w.memories).noneMatch(m->!m.ownerId().equals("gardener")&&m.text().contains("邻镇买点种子"));
+    }
+
+    @Test void dayPlanIsCoarseAndAMissedSegmentLeavesAReflectionRatherThanASilentSuccess(){
+        // Item 4: three or four qualitative segments, never a time-slotted schedule; abandonable.
+        CompanionWorld w=CompanionRules.join("day-plan","住客","Asia/Shanghai",now,true);
+        ResidentState owner=ResidentSimulation.state(w,"owner");
+        List<String> evidence=w.memories.stream().filter(m->m.ownerId().equals("owner")).map(Memory::id).limit(1).toList();
+        assertThat(ResidentSimulation.applyDayPlan(w,"owner",owner.revision,List.of("上午整理吧台","下午画一版新海报","傍晚陪读书会的人聊聊"),evidence,now)).isTrue();
+        assertThat(owner.dayPlan).isNotNull();
+        assertThat(owner.dayPlan.segments).hasSize(3);
+        assertThat(owner.dayPlan.segments).allMatch(s->"pending".equals(s.status));
+        // The day rolls over without anything ever being marked done - reality wrecked the plan, and
+        // the resident should be able to notice that, not have it silently counted as a success.
+        Instant nextDay=now.plusSeconds(86400);
+        ResidentSimulation.step(w,nextDay);
+        assertThat(owner.dayPlan).isNull();
+        assertThat(w.memories).anyMatch(m->m.ownerId().equals("owner")&&"reflection".equals(m.sourceType())&&m.text().contains("没顾上"));
+    }
+
     @Test void counterAuthorityMovesOnlyAfterTheRelevantSecondPersonAccepts(){
         CompanionWorld w=CompanionRules.join("work-agreement","住客","Asia/Shanghai",now);
         Position counter=TownPlaces.position(w,"cafe-counter");

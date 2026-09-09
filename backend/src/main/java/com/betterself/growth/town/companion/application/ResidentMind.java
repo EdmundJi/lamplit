@@ -10,6 +10,13 @@ public interface ResidentMind {
     Decision decide(Context context);
     default com.betterself.growth.town.companion.domain.ConversationLifecycle.Utterance generateTurn(DialogueRequest request){throw new UnsupportedOperationException("Dialogue generation unavailable");}
     default com.betterself.growth.town.companion.domain.ConversationLifecycle.Recollection summarizeConversation(SummaryRequest request){throw new UnsupportedOperationException("Conversation recollection unavailable");}
+    /** One coarse, three-or-four-segment plan for this resident's day (see docs/01's "recursive day
+     * plan" - a coarse morning outline, not a schedule the rest of the day is checked against). Budget
+     * is one call per resident per morning; see ResidentDirector's own gating for exactly when this is
+     * offered. Additive default like the two methods above: any existing ResidentMind that predates
+     * day planning keeps compiling and simply has no opinion until it opts in. */
+    default DayPlanDraft planDay(DayPlanRequest request){throw new UnsupportedOperationException("Day planning unavailable");}
+    default Result<DayPlanDraft> planDayMetered(DayPlanRequest request){return new Result<>(planDay(request),null);}
 
     /**
      * Token-metered variants of the three calls above. Additive on purpose: implementations that only
@@ -35,6 +42,13 @@ public interface ResidentMind {
 
     record DialogueRequest(Context perspective,String conversationId,long turnVersion,String operationId,String partnerName,String topicTitle) {}
     record SummaryRequest(Context perspective,String conversationId,String partnerName,List<Turn> transcript,List<MemoryView> conversationMemories) {}
+    record DayPlanRequest(Context perspective) {}
+    /** 3-4 short qualitative segments for the day ahead (see {@link #planDay}), plus 0-3 of this
+     * resident's own memory ids the plan is grounded in - the same evidence discipline every other
+     * model output already follows. Never a time-slotted schedule: ResidentSimulation never checks
+     * elapsed real time against these segments, only whether one is still "pending" when the day rolls
+     * over. */
+    record DayPlanDraft(List<String> segments,List<String> evidenceIds) {}
     record Context(String residentId,String localTime,String weather,ActorView self,String goal,
                    List<String> salientPerceptions,List<String> routineCues,List<MemoryView> memories,List<ActorView> nearby,
                    List<WorldObjectView> visibleObjects,List<KnownPlaceView> knownPlaces,List<KnownProject> knownProjects,List<TurnView> conversation,

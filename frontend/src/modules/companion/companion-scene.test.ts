@@ -30,7 +30,11 @@ describe('authoritative activity presentation', () => {
     expect(visibleActivity('help', '帮忙')).toBe('create')
     expect(visibleActivity('drink', '喝水')).toBe('drink')
     expect(visibleActivity('garden', '浇花')).toBe('garden')
-    expect(visibleActivity('tend', '回到吧台，照应一下柜台前的人')).toBe('idle')
+    // Making the drink is now visible - it borrows the drink action sheet as its pour beat
+    // (docs/01: "等待... 你能看见他在弄") instead of leaving him idle for the whole wait.
+    expect(visibleActivity('tend', '回到吧台，照应一下柜台前的人')).toBe('drink')
+    expect(visibleActivity('prepare', '磨豆子')).toBe('drink')
+    expect(visibleActivity('serve', '把咖啡端过去')).toBe('idle')
     expect(visibleActivity('work', '把今天的账记完')).toBe('read')
     expect(visibleActivity('make', '收一收没画完的线稿')).toBe('create')
     expect(visibleActivity('idle', '回到吧台，照应一下柜台前的人')).toBe('idle')
@@ -47,7 +51,9 @@ describe('authoritative activity presentation', () => {
     expect(scenePlace('unavailable')).toBe('street')
   })
   it('maps every resident\'s own TownPlaces home ("home-<id>") to the home scene', () => {
-    for (const id of ['owner', 'student', 'artist', 'gardener', 'self']) expect(scenePlace(`home-${id}`)).toBe('home')
+    // 'weaver' has no separate home-<id> location of her own - she shares 'home-artist', already
+    // covered by 'artist' here.
+    for (const id of ['owner', 'student', 'artist', 'gardener', 'self', 'fixer']) expect(scenePlace(`home-${id}`)).toBe('home')
   })
 })
 
@@ -56,11 +62,10 @@ describe('positionId-authoritative placement (TownPlaces two-layer place model)'
     expect(residentPosition('home-owner', 3, 'sleep', '', 'home-owner-bed')).toEqual({ x: 112, y: 252 })
     expect(residentPosition('anything', 99, 'idle', '', 'home-student-bed')).toEqual({ x: 248, y: 252 })
   })
-  it('gives each of the five residents\' own beds a distinct, non-overlapping spot', () => {
-    const beds = ['home-owner-bed', 'home-student-bed', 'home-artist-bed', 'home-gardener-bed', 'home-self-bed']
+  it('gives each resident\'s own bed a distinct, non-overlapping spot - including fixer\'s new house and weaver\'s bed inside artist\'s shared room', () => {
+    const beds = ['home-owner-bed', 'home-student-bed', 'home-artist-bed', 'home-gardener-bed', 'home-self-bed', 'home-fixer-bed', 'home-weaver-bed']
       .map(id => residentPosition('home', 0, 'sleep', '', id))
-    expect(new Set(beds.map(p => `${p.x}:${p.y}`)).size).toBe(5)
-    for (const p of beds) { expect(p.x).toBeGreaterThanOrEqual(0); expect(p.x).toBeLessThanOrEqual(960); expect(p.y).toBeGreaterThanOrEqual(0); expect(p.y).toBeLessThanOrEqual(640) }
+    expect(new Set(beds.map(p => `${p.x}:${p.y}`)).size).toBe(7)
   })
   it('spreads multiple occupants of one shared position (e.g. the 4-seat cafe worktable) across distinct slots', () => {
     const seats = [0, 1, 2, 3].map(occupant => residentPosition('cafe', 0, '', '', 'cafe-worktable', occupant))

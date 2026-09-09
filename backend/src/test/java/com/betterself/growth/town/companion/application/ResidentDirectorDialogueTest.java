@@ -116,7 +116,13 @@ class ResidentDirectorDialogueTest {
         ResidentMind mind=new ResidentMind(){
             public boolean enabled(){return true;}
             public Decision decide(Context context){
-                decisions.incrementAndGet();assertThat(context.residentId()).isEqualTo("owner");
+                // Residents each think on their own cooldown now, so neighbours legitimately get asked
+                // too - this fixture used to assume the town-wide round robin would only ever reach
+                // the owner. Keep the claim (a tired owner ends the talk and then picks sleep himself)
+                // and stop asserting that nobody else in town is allowed to think.
+                if(!"owner".equals(context.residentId()))
+                    return new Decision("observe",context.self().place(),null,"先看看周围","",List.of(),null,null);
+                decisions.incrementAndGet();
                 assertThat(context.salientPerceptions()).contains("已经很累，注意力很难维持");
                 assertThat(context.availableActions()).contains("sleep");
                 return new Decision("sleep","home",null,"眼睛已经睁不开了，回去睡","",List.of(),null,null);

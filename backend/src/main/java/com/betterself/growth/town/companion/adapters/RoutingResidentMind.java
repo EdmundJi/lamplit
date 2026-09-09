@@ -45,7 +45,8 @@ public class RoutingResidentMind implements ResidentMind {
         @Value("${app.town.companion-model-enabled:true}") boolean modelEnabled,
         @Value("${app.town.companion-model.routes.decision:qwen,deepseek}") String decisionRoute,
         @Value("${app.town.companion-model.routes.turn:qwen,deepseek}") String turnRoute,
-        @Value("${app.town.companion-model.routes.summary:qwen,deepseek}") String summaryRoute
+        @Value("${app.town.companion-model.routes.summary:qwen,deepseek}") String summaryRoute,
+        @Value("${app.town.companion-model.routes.dayplan:qwen,deepseek}") String dayPlanRoute
     ) {
         this.mindsByProvider = new LinkedHashMap<>();
         this.mindsByProvider.put("deepseek", deepseek);
@@ -54,7 +55,13 @@ public class RoutingResidentMind implements ResidentMind {
         this.routes = Map.of(
             "decision", parseRoute(decisionRoute),
             "turn", parseRoute(turnRoute),
-            "summary", parseRoute(summaryRoute)
+            "summary", parseRoute(summaryRoute),
+            // Without this entry a day-plan call reaches ResidentMind's default method, which throws
+            // UnsupportedOperationException - and because that is indistinguishable from a real
+            // provider failure, it burns the shared backoff budget and starves every ordinary
+            // decision. That is not hypothetical: it livelocked a real accelerated run to zero model
+            // calls before the routing existed.
+            "dayplan", parseRoute(dayPlanRoute)
         );
         // Matches the pre-routing gate exactly: the companion model as a whole is only ever "on" when
         // the general AI provider is the real one (app.ai.provider=qwen) and the town toggle allows it.
@@ -82,6 +89,11 @@ public class RoutingResidentMind implements ResidentMind {
     @Override public ConversationLifecycle.Recollection summarizeConversation(SummaryRequest request) { return summarizeConversationMetered(request).value(); }
     @Override public Result<ConversationLifecycle.Recollection> summarizeConversationMetered(SummaryRequest request) {
         return attempt("summary", mind -> mind.summarizeConversationMetered(request));
+    }
+
+    @Override public DayPlanDraft planDay(DayPlanRequest request) { return planDayMetered(request).value(); }
+    @Override public Result<DayPlanDraft> planDayMetered(DayPlanRequest request) {
+        return attempt("dayplan", mind -> mind.planDayMetered(request));
     }
 
     /**

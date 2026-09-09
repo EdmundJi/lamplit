@@ -17,7 +17,11 @@ export const COMPANION_COLLISION: CollisionWorld = {
     // The lower houses are reachable through a modest side lane rather than teleporting through
     // their walls. These three paths are deliberately plain pavement; room identity stays in the
     // backend location id, not in a fake job-specific destination.
-    { x: 48, y: 416, width: 32, height: 320 }, { x: 48, y: 708, width: 640, height: 32 }, { x: 656, y: 416, width: 32, height: 320 },
+    // The alley's horizontal leg is widened (640 -> 1170px) to also pass under fixer's new house
+    // in the bottom-right corner (doorstep at x:1186-1218) instead of stopping at the old x=688 -
+    // matched pixel-for-pixel in companion-stage.ts's drawn path so the walkway and the collision
+    // rect never disagree (the known "invisible wall" hazard).
+    { x: 48, y: 416, width: 32, height: 320 }, { x: 48, y: 708, width: 1170, height: 32 }, { x: 656, y: 416, width: 32, height: 320 },
   ],
   obstacles: [
     ...Object.values(HOME_ROOMS).flatMap(room => [
