@@ -119,6 +119,20 @@ public final class ResidentSimulation {
      * the only place any of this is recorded; nothing here writes into the resident's own memory, because
      * the rules do not get to tell a resident why they changed - only that, mechanically, they did.
      * A no-op for the avatar, which has no authored personality to drift (see Personality.of). */
+    /** The two social outcomes that only a real, model-driven conversation can produce. They used to
+     * be nudged from {@link #continueConversation}, which is dead code for any conversation that is
+     * not literally {@code mode="rules"} - ConversationLifecycle.tick() short-circuits it, and every
+     * real conversation is created with {@code mode="model"}. So the accept/decline drift existed,
+     * was tested, and had never once fired: a measured day produced 17 personality nudges, 13 of them
+     * from being alone for six hours, and not a single one from anything that happened between two
+     * people.
+     * <p>Who moves is deliberately not who spoke. Being accepted is a fact about the person who
+     * asked; being turned down is also a fact about the person who asked. The one doing the accepting
+     * or declining is just answering. */
+    static void driftOnConversationOutcome(CompanionWorld w,String accepterId,String inviterId,boolean accepted,Instant at){
+        if(accepted)driftPersonality(w,state(w,accepterId),"extroversion",PERSONALITY_DRIFT_STEP,"agreement",at);
+        else driftPersonality(w,state(w,inviterId),"extroversion",-PERSONALITY_DRIFT_STEP,"declined",at);
+    }
     private static void driftPersonality(CompanionWorld w,ResidentState r,String dimension,double signedStep,String cause,Instant at){
         if(r==null||"self".equals(r.id))return;
         Personality.of(r); // ensure this resident's own fields are seeded before nudging them
@@ -885,7 +899,11 @@ public final class ResidentSimulation {
         return switch(r.id){
             case "student"->placeHabitStudyAtCafe(w,r,at);
             case "artist"->placeHabitSeekInspiration(w,r,at);
-            case "gardener"->placeHabitTendGarden(w,r,at);
+            // Garden work still comes first whenever it is actually due; the cafe errand below only
+            // gets a turn in the minutes that habit's own cooldown or hash roll leaves open - see its
+            // own javadoc for why the cafe is the second half of this resident's default, not a
+            // replacement for the first.
+            case "gardener"->placeHabitTendGarden(w,r,at)||placeHabitBringSeedlingToCafe(w,r,at);
             case "owner"->placeHabitMindTheCafe(w,r,at);
             case "fixer"->placeHabitCheckCafe(w,r,at);
             case "weaver"->placeHabitBeAroundPeople(w,r,at);
@@ -932,6 +950,28 @@ public final class ResidentSimulation {
         if(!habitEligible(w,r,"tend_garden",PLACE_HABIT_MIN_GAP_SECONDS,at))return false;
         firePlaceHabit(w,r,"tend_garden","work","garden","顺路去花园看看",
             "没说什么，顺手拿了点东西，往花园那边去了。",at,1800);
+        return true;
+    }
+    /** 青叔's own second half of the same instinct - "用东西代替话——递一株苗" (ResidentSeed's
+     * actingSelf line for him) is an errand, and an errand goes wherever the people are, not only
+     * wherever the plants are. A measured full simulated day found him sharing a place with anyone
+     * else exactly once: {@link #placeHabitTendGarden} is his only default, and it defaults him
+     * toward the one public place ({@code garden}, street-position 14) that none of the other five
+     * residents' own place habits ({@link #placeHabitStudyAtCafe}, {@link #placeHabitSeekInspiration},
+     * {@link #placeHabitMindTheCafe}, {@link #placeHabitCheckCafe}, {@link #placeHabitBeAroundPeople})
+     * ever visit - they all converge on the cafe, the actually busy point on the street (see {@link
+     * #STREET_POSITION}'s own doc comment on why). Shortening his walk there was explicitly rejected
+     * (see this batch's report) because a walk shorter than a tick's own resolution stops existing on
+     * the street at all - so the fix is not a faster trip, it is a second, independent reason to make
+     * the trip: living far and working alone is answered by going toward people occasionally, not by
+     * making the far end of the street closer than it is. Never touches the garden itself and never
+     * decides who he talks to once there - {@link #maybeEncounter} still owns that, exactly as it does
+     * for everyone else who already defaults toward the cafe. */
+    private static boolean placeHabitBringSeedlingToCafe(CompanionWorld w,ResidentState r,Instant at){
+        if("cafe".equals(actor(w,r.id).place())||!CafeService.acceptingOrders(w))return false;
+        if(!habitEligible(w,r,"deliver_seedling",PLACE_HABIT_MIN_GAP_SECONDS,at))return false;
+        firePlaceHabit(w,r,"deliver_seedling","observe","cafe","顺路带一株新苗去咖啡馆",
+            "没说什么，顺手拿了盆新苗，往咖啡馆那边去了。",at,900);
         return true;
     }
     /** 阿禾: "想被需要" - idle at home while the counter he runs is open, he defaults back toward it

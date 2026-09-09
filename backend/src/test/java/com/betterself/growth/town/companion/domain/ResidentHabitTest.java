@@ -204,6 +204,60 @@ class ResidentHabitTest {
         assertThat(ResidentSimulation.unexplainedDeeds(w, "gardener")).anyMatch(d -> "work".equals(d.action));
     }
 
+    // ---- the gardener's isolation (see this batch's report): a measured full simulated day found
+    // him sharing a place with anyone else exactly once, because his only default (tend_garden, just
+    // above) sends him toward the one public place none of the other five residents' own place
+    // habits ever visit. The two tests below pin the fix: a second default that actually goes where
+    // people are, and proof that the rule-detected encounter mechanism (maybeEncounter) then finds
+    // someone there to detect.
+
+    @Test void theGardenerAlsoDeliversASeedlingToTheCafeWhenGardenWorkIsAlreadyCovered() {
+        CompanionWorld w = world("place-habit-gardener-cafe");
+        ResidentState gardener = ResidentSimulation.state(w, "gardener");
+        // Garden work is already covered for hours - exactly the condition under which the old code
+        // left him with no other default at all.
+        gardener.lastHabitAt.put("tend_garden", DAY);
+        gardener.plan = null; gardener.suspendedAction = null;
+        ResidentSimulation.replaceActor(w, "gardener", TownPlaces.homeOf("gardener"), "idle", "在家里", DAY);
+        int requestsBefore = w.serviceRequests.size();
+
+        boolean fired = runUntilHabitFires(w, gardener, "deliver_seedling", DAY, () -> {});
+        assertThat(fired).isTrue();
+        assertThat(List.of("travel", "observe")).contains(gardener.plan.action());
+        assertThat(gardener.plan.place()).isEqualTo("cafe");
+        assertThat(ResidentSimulation.unexplainedDeeds(w, "gardener")).anyMatch(d -> "observe".equals(d.action));
+        // An errand, not a drink order - unlike the student's cafe habit, this one never requests one.
+        assertThat(w.serviceRequests.size()).isEqualTo(requestsBefore);
+    }
+
+    @Test void theGardenerActuallyMeetsSomeoneAtTheCafeOnceTheNewHabitSendsHimThere() {
+        // Proof the behaviour, not just a constant, changed: with someone already sitting at the cafe
+        // and garden work already covered, the new habit walks him there and the pre-existing,
+        // untouched maybeEncounter mechanism registers a real encounter - something the measured day
+        // (one encounter pair with the gardener in twenty-four hours) shows essentially never happened
+        // through his old, single, garden-only default.
+        CompanionWorld w = CompanionRules.join("gardener-reach", "住客", "Asia/Shanghai", DAY, true);
+        w.conversations.forEach(c -> c.status = "ended");
+        ResidentState gardener = ResidentSimulation.state(w, "gardener");
+        ResidentState owner = ResidentSimulation.state(w, "owner");
+        gardener.lastHabitAt.put("tend_garden", DAY);
+        gardener.plan = null; gardener.suspendedAction = null; gardener.lastSocialAt = null;
+        ResidentSimulation.replaceActor(w, "gardener", TownPlaces.homeOf("gardener"), "idle", "在家里", DAY);
+        // Someone is already at the cafe - the one place his old habit never sent him toward.
+        owner.plan = null; owner.suspendedAction = null; owner.lastSocialAt = null;
+        ResidentSimulation.replaceActor(w, "owner", "cafe", "observe", "在店里坐着", DAY.plusSeconds(20 * 3600L));
+
+        Instant t = DAY;
+        boolean met = false;
+        for (int minute = 0; minute < 400 && !met; minute++) {
+            t = t.plusSeconds(60);
+            ResidentSimulation.step(w, t);
+            met = w.encounterCooldowns.containsKey("gardener:owner") || w.encounterCooldowns.containsKey("owner:gardener");
+        }
+        assertThat(gardener.lastHabitAt).as("the new cafe-bound habit actually fired").containsKey("deliver_seedling");
+        assertThat(met).as("the rules actually put him in front of someone").isTrue();
+    }
+
     @Test void placeHabitsNeverFireWhileSomethingElseIsAlreadyDecidedOrUnderway() {
         // "习惯是默认值不是强制": once the resident (or the model) has already decided something, a
         // place habit must never override it - it only ever fills a genuinely undecided moment.

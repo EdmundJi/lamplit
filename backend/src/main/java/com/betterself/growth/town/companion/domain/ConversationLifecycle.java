@@ -70,9 +70,17 @@ public final class ConversationLifecycle {
             boolean newlyCommitted=!p.members.contains(speaker)||!Objects.equals(self.goal,p.id);
             if(!p.members.contains(speaker))p.members.add(speaker);self.goal=p.id;self.thought="我刚答应为「"+p.title+"」做一点自己的贡献。";
             self.relationships.compute(other(c,speaker),(key,value)->Math.min(100,(value==null?40:value)+4));
-            if(newlyCommitted)event(w,now,"agreement",c.place,List.of(speaker,other(c,speaker)),actor(w,speaker).name()+"在交谈中答应参与「"+p.title+"」。",p.id);
+            if(newlyCommitted){
+                event(w,now,"agreement",c.place,List.of(speaker,other(c,speaker)),actor(w,speaker).name()+"在交谈中答应参与「"+p.title+"」。",p.id);
+                // Saying yes to someone is one of the few things in this town that can actually change
+                // a person. This call was missing: the drift lived only in the rule-scripted
+                // conversation path, which no real conversation ever takes.
+                ResidentSimulation.driftOnConversationOutcome(w,speaker,other(c,speaker),true,now);
+            }
         } else if(reply.stance().equals("decline")) {
             event(w,now,"declined",c.place,List.of(speaker),actor(w,speaker).name()+"说出了自己的顾虑，这次先不答应。",c.topicId);
+            // Being turned down is a fact about whoever asked, not about whoever said no.
+            ResidentSimulation.driftOnConversationOutcome(w,speaker,other(c,speaker),false,now);
         } else if(reply.stance().equals("adjust")) {
             p.description=reply.adjustment();self.thought="听完邻居的话，我想调整一下做法："+reply.adjustment();
             event(w,now,"change_of_mind",c.place,List.of(speaker,other(c,speaker)),actor(w,speaker).name()+"调整了「"+p.title+"」的安排："+reply.adjustment(),p.id);
