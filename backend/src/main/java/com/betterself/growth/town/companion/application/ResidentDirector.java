@@ -158,7 +158,17 @@ public class ResidentDirector {
         // Legacy rule worlds still allow plan decisions while talking, but their text is not a model turn.
         if(candidates.isEmpty()&&!w.modelConversationsEnabled)candidates=w.residentStates.stream().filter(r->!r.id.equals("self")&&r.plan!=null&&!Set.of("travel","sleep").contains(r.plan.action())).toList();
         if(!candidates.isEmpty()) {
-            ResidentState r=candidates.get(Math.floorMod((int)w.modelSequence,candidates.size()));
+            // Whoever has waited longest gets the turn. This used to be
+            // candidates.get(modelSequence % candidates.size()), which only round-robins fairly when
+            // the list is the same length every time - and it never is, because the list is filtered
+            // by who currently needs a decision. A resident whose chosen action ended quickly rejoined
+            // the pool immediately and, with the pool usually one or two people deep, kept landing on
+            // the same index. In a measured day one resident took 123 of the town's 300 decisions that
+            // way. Sorting by each resident's own last-asked time is stable under a changing pool: the
+            // one who has gone longest without thinking is by definition not the one who just thought.
+            ResidentState r=candidates.stream()
+                .min(Comparator.comparing((ResidentState c)->c.lastDecisionRequestedAt,Comparator.nullsFirst(Comparator.naturalOrder())))
+                .orElseThrow();
             var conversation=ResidentSimulation.activeConversation(w,r.id);
             var context=perspective(w,r.id,now,conversation==null?List.of():conversation.turns);
             ResidentSimulation.recordDecisionTrigger(w,r.id,classifyTrigger(w,r,now),now);

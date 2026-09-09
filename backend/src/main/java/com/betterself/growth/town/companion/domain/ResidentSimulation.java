@@ -35,15 +35,23 @@ public final class ResidentSimulation {
         // place it deterministically along the same span instead of failing on an unknown key.
         return Math.floorMod(place.hashCode(),30);
     }
-    /** Real walking duration between two places, replacing the old fixed 12-second travel (item 2):
-     * seconds-scale, a few seconds between next-door places, about twenty seconds edge-to-edge across
-     * the whole map - see the calibration note on {@link #STREET_POSITION} above. Bounded at both ends
-     * so travel is always long enough to be genuinely on the street for a moment (never instant) and
-     * never longer than the map actually is. */
+    /** How many walking-seconds one unit of {@link #STREET_POSITION} is worth. The table is drawn in
+     * abstract units; this turns it into a duration a person would recognise - the far end of the
+     * street is about a ten-minute walk, next door about a minute.
+     * <p>The first version of this used the table's units as seconds directly, which made the whole
+     * town three to twenty seconds wide. That is not a walk, and it had a consequence beyond
+     * flavour: an accelerated run advances roughly a hundred simulated seconds per tick, so every
+     * journey began and ended inside a single tick. Nobody was ever observed on the street, which is
+     * why {@link #maybeStreetEncounter} could not have found anyone there however it was written. A
+     * walk has to last longer than the clock's own resolution to exist at all. */
+    private static final int SECONDS_PER_STREET_UNIT = 20;
+    /** Real walking duration between two places (item 2), from the abstract layout in
+     * {@link #STREET_POSITION}. Bounded at both ends so a trip is never instant and never longer than
+     * the map actually is. */
     static int travelSeconds(String from,String to){
-        if(Objects.equals(from,to))return 3;
-        int seconds=Math.abs(streetPosition(from)-streetPosition(to));
-        return Math.max(3,Math.min(20,seconds));
+        if(Objects.equals(from,to))return 60;
+        int units=Math.abs(streetPosition(from)-streetPosition(to));
+        return Math.max(60,Math.min(600,units*SECONDS_PER_STREET_UNIT));
     }
     /** Mean-once-every-~40-simulated-minutes, purely time-and-identity-derived so replay stays
      * deterministic (never Math.random - see Personality's own abandonThreshold() for the same
@@ -146,6 +154,7 @@ public final class ResidentSimulation {
             if(activeConversation(w,r.id)!=null)continue;
             if(r.plan!=null&&!at.isBefore(r.plan.endsAt())){Plan completed=r.plan;complete(w,r,at);if(r.plan==completed){r.plan=null;if(!Set.of("sleep","open_cafe").contains(completed.action()))resumeSuspended(w,r,at);}}
             if(r.plan==null)awaitDecision(w,r,at);
+            maybeEncounter(w,r,at);
         }
         // The model is each resident's decision-maker. Rule-only fallback completes already approved
         // physical work but does not manufacture a reflection, social choice or new intention.
@@ -179,7 +188,7 @@ public final class ResidentSimulation {
     }
     private static void complete(CompanionWorld w,ResidentState r,Instant at) {
         Plan p=r.plan;
-        if(p.action().equals("travel")){int duration=r.desiredDurationSeconds>0?r.desiredDurationSeconds:42;schedule(w,r,r.desiredAction,p.place(),p.targetId(),p.reason(),at,duration);maybeEncounter(w,r,at);return;}
+        if(p.action().equals("travel")){int duration=r.desiredDurationSeconds>0?r.desiredDurationSeconds:42;schedule(w,r,r.desiredAction,p.place(),p.targetId(),p.reason(),at,duration);return;}
         if(p.action().equals("away")){
             String home=TownPlaces.homeOf(r.id);
             replaceActor(w,r.id,home,"idle","刚从外面回来",at.plusSeconds(60));
@@ -537,32 +546,60 @@ public final class ResidentSimulation {
         Actor speaker=actor(w,speakerId),candidate=actor(w,otherId);
         return speaker.place().equals(candidate.place())&&!Set.of("walk","travel","sleep","rest","away","tend").contains(candidate.activity());
     }
-    /** Rule-detected "just ran into someone" (item 3, docs/01's 偶遇): fires when `arriving` finishes
-     * travelling into a place where another eligible resident already is. The model still writes every
-     * word - this only opens the conversation (via the same {@link #startLifeConversation} a manual
-     * "invite" without a shared project already uses), it never authors a line of dialogue. Gated on
+    /** The public places, and only these: being alone in your own home is not an encounter waiting to
+     * happen, and nobody is greeted through their own front door. */
+    private static final Set<String> PUBLIC_PLACES = Set.of("street","cafe","garden");
+    /** Long enough after anyone's last conversation before the rules will put them in front of someone
+     * again. The per-pair cooldown below stops the same two people greeting in a loop; this stops one
+     * sociable resident being handed round the whole town in a single afternoon. */
+    private static final long SOCIAL_RECOVERY_SECONDS = 15*60;
+
+    /** Whether the rules may put this resident face to face with someone right now. Deliberately more
+     * permissive than {@link #canTalkTo}, which governs a resident deciding to approach someone: you
+     * do not choose to interrupt a person mid-walk, but you do say hello to someone you pass, and to
+     * someone reading in the corner of the cafe you have just walked into. The three exclusions are
+     * the ones a person would also observe - asleep, out of town entirely, or behind the counter
+     * working - plus the avatar's own protection: it is only ever available during its free time. */
+    private static boolean greetable(CompanionWorld w,String residentId,Instant at){
+        ResidentState r=state(w,residentId);
+        if(r==null||activeConversation(w,residentId)!=null)return false;
+        if("self".equals(residentId)&&!selfIsFree(w))return false;
+        if(r.lastSocialAt!=null&&Duration.between(r.lastSocialAt,at).getSeconds()<SOCIAL_RECOVERY_SECONDS)return false;
+        return !Set.of("sleep","away","tend").contains(actor(w,residentId).activity());
+    }
+
+    /** Rule-detected "just ran into someone" (item 3, docs/01's 偶遇). Two residents sharing a public
+     * place become an external fact for both of them - the rules bring them face to face and stop
+     * there. The model still writes every word (through the same {@link #startLifeConversation} a
+     * manual "invite" without a shared project already uses); whether this actually becomes a
+     * conversation, a nod, or an excuse to leave is entirely its choice. Gated on
      * {@link CompanionWorld#modelConversationsEnabled}: a rule-only world has no model to write an
      * opening turn with, so it does not manufacture one.
-     * <p>Deliberately NOT implemented: the "cross paths while walking" half of item 3's description.
-     * Every traveller's activity is "walk" for the entire trip (see {@link #moveOrSchedule}), and the
-     * same item's own bound forbids triggering while either party is walking - the two requirements
-     * are in direct tension, and resolving it by literally stopping two people mid-walk would violate
-     * the bound. Rather than guess, only the unambiguous "one arrives where the other already is" case
-     * is implemented; see the batch report for this call. */
-    private static void maybeEncounter(CompanionWorld w,ResidentState arriving,Instant at){
-        if(!w.modelConversationsEnabled||activeConversation(w,arriving.id)!=null)return;
-        Actor here=actor(w,arriving.id);
+     * <p>This runs once per resident per tick rather than only on arrival, which is the correction to
+     * the first version. That one fired solely when a travel plan completed, and a measured day
+     * produced exactly one arrival event in twenty-four hours and zero encounters: residents mostly
+     * re-decide where they already are, so "arrived somewhere" is far too rare a moment to hang the
+     * town's whole social life on. Passing someone on the street is covered by the same code for the
+     * same reason - a walker's place IS "street" for the length of the walk (see
+     * {@link #moveOrSchedule}), so crossing paths needs no separate rule, only a walk long enough to
+     * be seen (see {@link #SECONDS_PER_STREET_UNIT}) and a {@link #greetable} check that does not
+     * refuse to notice someone because they are moving. An interrupted journey is already a case
+     * {@link #resumeSuspended} handles: both walkers pick their trip back up when the talking ends. */
+    private static void maybeEncounter(CompanionWorld w,ResidentState resident,Instant at){
+        if(!w.modelConversationsEnabled)return;
+        String place=actor(w,resident.id).place();
+        if(!PUBLIC_PLACES.contains(place)||!greetable(w,resident.id,at))return;
         for(ResidentState other:w.residentStates){
-            if(other.id.equals(arriving.id)||!actor(w,other.id).place().equals(here.place()))continue;
-            if(!canTalkTo(w,arriving.id,other.id)||!canTalkTo(w,other.id,arriving.id))continue;
-            String key=pairKey(arriving.id,other.id);
+            if(other.id.equals(resident.id)||!actor(w,other.id).place().equals(place))continue;
+            if(!greetable(w,other.id,at))continue;
+            String key=pairKey(resident.id,other.id);
             Instant last=w.encounterCooldowns.get(key);
             if(last!=null&&Duration.between(last,at).getSeconds()<ENCOUNTER_COOLDOWN_SECONDS)continue;
             w.encounterCooldowns.put(key,at);
-            startLifeConversation(w,arriving,other,at);
-            recordDecisionTrigger(w,arriving.id,"encounter",at);
+            startLifeConversation(w,resident,other,at);
+            recordDecisionTrigger(w,resident.id,"encounter",at);
             recordDecisionTrigger(w,other.id,"encounter",at);
-            return; // one encounter per arrival is enough
+            return; // one encounter at a time; the others are still standing there next tick
         }
     }
     /** End-of-day reconciliation for a resident's coarse day plan (item 4): once the local calendar
@@ -769,7 +806,22 @@ public final class ResidentSimulation {
             }
             else if(!"tend".equals(action))r.suspendedAction=null;
             if(Set.of("work","read","make").contains(action))setLifeIntent(w,r,null,reason,"active",now);
-            int duration="tend".equals(action)?CafeService.PREP_SECONDS:"sleep".equals(action)?sleepDurationSeconds(w,r,now):"rest".equals(action)?1200:"join".equals(action)?900:Set.of("study","read","work","make").contains(action)?1800:60;
+            // How long the resident is actually busy with what they just chose. "observe" used to
+            // fall through to the 60-second default, which is what made it a heartbeat rather than an
+            // activity: a resident who chose to look around was asked to decide again one simulated
+            // minute later, saw the same street, chose to look around again, and wrote a near-identical
+            // reflection each time. One resident spent 169 of his 194 model calls in that loop and took
+            // 41% of the whole town's decisions. Looking around is a stretch of someone's day, so it
+            // gets the length of one.
+            int duration=switch(action){
+                case "tend"->CafeService.PREP_SECONDS;
+                case "sleep"->sleepDurationSeconds(w,r,now);
+                case "rest"->1200;
+                case "join"->900;
+                case "observe"->900;
+                case "study","read","work","make"->1800;
+                default->60;
+            };
             moveOrSchedule(w,r,action,resolvedPlace,target,reason,now,duration);
         }
         if(!evidence.isEmpty())memory(w,r.id,r.id,"reflection",now,r.goal,reason,evidence,7);

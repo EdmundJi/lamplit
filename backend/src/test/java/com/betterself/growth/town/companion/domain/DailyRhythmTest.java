@@ -11,6 +11,13 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class DailyRhythmTest {
+    /** One CompanionRules.advance call simulates at most sixty seconds (ten six-second steps), so a
+     * test that waits out a real walk has to keep calling it rather than naming a distant instant.
+     * Walking across the town takes minutes now, not the three-to-twenty seconds it used to. */
+    private void advanceTo(CompanionWorld w,Instant target){
+        while(w.updatedAt.isBefore(target))
+            CompanionRules.advance(w,w.updatedAt.plusSeconds(54).isBefore(target)?w.updatedAt.plusSeconds(54):target);
+    }
     private static final Instant DAY = Instant.parse("2026-09-09T04:00:00Z"); // 12:00 Shanghai
 
     @Test void nighttimeArrivalStartsWithAClosedCafeAndNoManufacturedConversation(){
@@ -85,7 +92,7 @@ class DailyRhythmTest {
         assertThat(student.plan.action()).isEqualTo("travel");assertThat(student.desiredAction).isEqualTo("study");assertThat(student.desiredDurationSeconds).isEqualTo(720);
 
         w.updatedAt=closeAt;w.simulatedAt=closeAt;
-        CompanionRules.advance(w,closeAt.plusSeconds(12));
+        advanceTo(w,student.plan.endsAt().plusSeconds(12));
         assertThat(w.cafeStatus).isEqualTo("closed");
         assertThat(student.plan.action()).isEqualTo("study");assertThat(student.plan.place()).isEqualTo(TownPlaces.homeOf("student"));
         assertThat(student.plan.reason()).isEqualTo("把这一章读完");
@@ -104,9 +111,9 @@ class DailyRhythmTest {
         assertThat(ResidentSimulation.applyDecision(w,"owner",owner.revision,w.intentRevision,"cafe","open_cafe",null,"今天想早点开门",null,List.of(),morning)).isTrue();
         assertThat(owner.plan.action()).isEqualTo("travel");
         w.updatedAt=morning;w.simulatedAt=morning;
-        CompanionRules.advance(w,morning.plusSeconds(12));
+        advanceTo(w,owner.plan.endsAt().plusSeconds(6));
         assertThat(owner.plan.action()).isEqualTo("open_cafe");assertThat(w.cafeStatus).isEqualTo("closed");
-        CompanionRules.advance(w,morning.plusSeconds(42));
+        advanceTo(w,owner.plan.endsAt().plusSeconds(12));
         assertThat(w.cafeStatus).isEqualTo("open");
     }
 

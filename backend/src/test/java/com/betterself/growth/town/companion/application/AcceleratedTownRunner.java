@@ -295,6 +295,16 @@ public final class AcceleratedTownRunner {
             Map<String,Object> input=new LinkedHashMap<>();input.put("perspective",request.perspective());input.put("partnerName",request.partnerName());input.put("topicTitle",request.topicTitle());
             return capture("turn",input,()->delegate.generateTurnMetered(request));
         }
+        public DayPlanDraft planDay(DayPlanRequest request){return planDayMetered(request).value();}
+        public Result<DayPlanDraft> planDayMetered(DayPlanRequest request){
+            // Forwarded like every other call, and for a specific reason: ResidentMind.planDay has a
+            // default implementation that throws, so a decorator that simply forgets a method does not
+            // fail to compile - it silently disables the capability for everything behind it. This
+            // decorator forgot, and a whole measured day ran with every resident's day plan recorded
+            // as "unavailable". Not one line of it looked wrong.
+            Map<String,Object> input=new LinkedHashMap<>();input.put("residentId",request.perspective().residentId());
+            return capture("dayplan",input,()->delegate.planDayMetered(request));
+        }
         public com.betterself.growth.town.companion.domain.ConversationLifecycle.Recollection summarizeConversation(SummaryRequest request){return summarizeConversationMetered(request).value();}
         public Result<com.betterself.growth.town.companion.domain.ConversationLifecycle.Recollection> summarizeConversationMetered(SummaryRequest request){
             Map<String,Object> input=new LinkedHashMap<>();input.put("perspective",request.perspective());input.put("partnerName",request.partnerName());input.put("transcript",ResidentMind.turnViews(request.transcript()));input.put("conversationMemories",request.conversationMemories());
