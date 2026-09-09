@@ -893,8 +893,17 @@ public final class ResidentSimulation {
     }
     static void project(CompanionWorld w,String id,String title,String kind,String place,String owner,String object,String description,int needed){Project p=new Project();p.id=id;p.title=title;p.kind=kind;p.place=place;p.ownerId=owner;p.objectKind=object;p.description=description;p.status="idea";p.needed=needed;p.members.add(owner);w.projects.add(p);}
     static String memory(CompanionWorld w,String owner,String source,String type,Instant at,String topic,String text,List<String> evidence,int importance){
-        if(type.equals("reflection")){Memory existing=w.memories.stream().filter(m->m.ownerId().equals(owner)&&m.sourceType().equals(type)&&m.text().equals(text)).findFirst().orElse(null);if(existing!=null)return existing.id();}
-        String id="m2-"+(++w.eventSequence);w.memories.add(new Memory(id,owner,source,type,at,text,topic,evidence,importance));while(w.memories.size()>200) {
+        return memory(w,owner,source,type,at,topic,text,evidence,importance,null);
+    }
+    /** Same as the nine-argument form, plus an optional supersession key. A non-null key first flips
+     * every earlier memory this owner has under the same key to superseded (see Memory's own doc
+     * comment) before the new one is written - this is the only place supersession ever happens, so
+     * a reflection/belief's key is always resolved against the owner's own history, never anyone
+     * else's. */
+    static String memory(CompanionWorld w,String owner,String source,String type,Instant at,String topic,String text,List<String> evidence,int importance,String supersedesKey){
+        if(type.equals("reflection")&&supersedesKey==null){Memory existing=w.memories.stream().filter(m->m.ownerId().equals(owner)&&m.sourceType().equals(type)&&m.text().equals(text)).findFirst().orElse(null);if(existing!=null)return existing.id();}
+        if(supersedesKey!=null)supersedePrevious(w,owner,supersedesKey);
+        String id="m2-"+(++w.eventSequence);w.memories.add(new Memory(id,owner,source,type,at,text,topic,evidence,importance,supersedesKey,false));while(w.memories.size()>200) {
             Set<String> referenced=new HashSet<>();
             for(Memory m:w.memories)if(m.evidenceIds()!=null)referenced.addAll(m.evidenceIds());
             // CafeService.reflectOnDuty holds memory ids on the owner's own state
@@ -906,21 +915,116 @@ public final class ResidentSimulation {
             // held id can be evicted here and a later reflection ends up citing a memory that no
             // longer exists.
             for(ResidentState r:w.residentStates){referenced.addAll(r.dutyComplaintEvidenceIds);referenced.addAll(r.dutyInterruptionEvidenceIds);}
-            Memory removable=w.memories.stream().filter(m->!m.id().equals(id)&&!referenced.contains(m.id())).findFirst().orElse(null);
-            // Keep a source chain intact if all older memories are still cited by retained thoughts.
+            // Eviction respects the memory layers (see CompanionRecall.tier/Memory's doc comment):
+            // raw observation is cheapest and goes first, a one-off reflection next, and a standing
+            // belief is protected until nothing lower-tier is left to remove. Within a tier, the
+            // oldest goes first - this is capacity trimming, not a judgement about which memory is
+            // more "true".
+            Memory removable=w.memories.stream().filter(m->!m.id().equals(id)&&!referenced.contains(m.id()))
+                .min(Comparator.<Memory>comparingInt(m->CompanionRecall.tier(m.sourceType())).thenComparing(Memory::at)).orElse(null);
             if(removable==null)break;
             w.memories.remove(removable);
         }return id;}
+    /** Flags every one of this owner's earlier, not-yet-superseded memories sharing supersedesKey.
+     * The old memory is rewritten in place (same id, same everything else) rather than removed - see
+     * Memory's own doc comment on why the evidence chain has to stay intact. */
+    private static void supersedePrevious(CompanionWorld w,String owner,String supersedesKey){
+        for(int i=0;i<w.memories.size();i++){
+            Memory m=w.memories.get(i);
+            if(m.ownerId().equals(owner)&&supersedesKey.equals(m.supersedesKey())&&!m.superseded())
+                w.memories.set(i,new Memory(m.id(),m.ownerId(),m.sourceId(),m.sourceType(),m.at(),m.text(),m.topicId(),m.evidenceIds(),m.importance(),m.supersedesKey(),true));
+        }
+    }
     private static void deduplicateReflections(CompanionWorld w) {
         Map<String,String> canonical=new HashMap<>(),replacements=new HashMap<>();
         List<Memory> kept=new ArrayList<>();
         for(Memory m:w.memories){
-            String previous=m.sourceType().equals("reflection")?canonical.putIfAbsent(m.ownerId()+"\n"+m.text(),m.id()):null;
+            // A memory carrying a supersession key is never collapsed by this text-identity dedupe:
+            // two beliefs can legitimately share the exact same wording at two different times (the
+            // resident re-affirming the same conclusion), and each still needs its own id so
+            // supersedePrevious above can tell which one is current.
+            String previous=m.sourceType().equals("reflection")&&m.supersedesKey()==null?canonical.putIfAbsent(m.ownerId()+"\n"+m.text(),m.id()):null;
             if(previous==null)kept.add(m);else replacements.put(m.id(),previous);
         }
         if(replacements.isEmpty())return;
         w.memories=kept.stream().map(m->new Memory(m.id(),m.ownerId(),m.sourceId(),m.sourceType(),m.at(),m.text(),m.topicId(),
-            m.evidenceIds()==null?List.of():m.evidenceIds().stream().map(id->replacements.getOrDefault(id,id)).distinct().toList(),m.importance())).collect(java.util.stream.Collectors.toCollection(ArrayList::new));
+            m.evidenceIds()==null?List.of():m.evidenceIds().stream().map(id->replacements.getOrDefault(id,id)).distinct().toList(),m.importance(),m.supersedesKey(),m.superseded())).collect(java.util.stream.Collectors.toCollection(ArrayList::new));
+    }
+    /** Minimum simulated time between two reflections for the same resident - reflection happens a
+     * few times a day, not on a fixed clock and never every tick. Combined with the importance
+     * threshold below, an ordinary resident lands single digits of reflections per day: a run of
+     * eventful hours can trigger a couple of these, and the daily boundary trigger adds at most one
+     * more for a quiet day that never crossed the threshold on its own. */
+    private static final long REFLECTION_MIN_GAP_SECONDS = 3*3600L;
+    /** How much fresh, unreflected-on experience (summed importance) it takes before there is
+     * "enough" for this resident to have something worth thinking over - the same bar the earlier,
+     * since-removed rule-authored reflect() used, kept here because it already encoded a defensible
+     * amount of accumulated life rather than an arbitrary tick count. */
+    private static final int REFLECTION_IMPORTANCE_THRESHOLD = 24;
+    private static final int REFLECTION_SOURCE_LIMIT = 20;
+    /** Whether this resident has accumulated enough new, not-yet-reflected-on experience (or reached
+     * their own day's end) to be worth a real reflection. This never decides WHAT they conclude -
+     * only that today handed them enough material, or that the day is closing, so it is time to look
+     * back. A model call (outside this module) does the actual thinking; see {@link #reflectionSource}
+     * for what it gets to look at and {@link #applyReflection} for how its conclusion lands. */
+    public static boolean needsReflection(CompanionWorld w,String residentId,Instant now){
+        ResidentState r=state(w,residentId);
+        if(r==null||"self".equals(residentId)||r.lastReflectionAt==null||now==null)return false;
+        long gap=Duration.between(r.lastReflectionAt,now).getSeconds();
+        if(gap<REFLECTION_MIN_GAP_SECONDS)return false;
+        int freshImportance=w.memories.stream()
+            .filter(m->m.ownerId().equals(residentId)&&m.at()!=null&&m.at().isAfter(r.lastReflectionAt)&&!m.at().isAfter(now))
+            // Only raw experience counts as "something happened since I last thought this through" -
+            // an earlier reflection or belief is the product of thinking, not new material for it.
+            .filter(m->CompanionRecall.tier(m.sourceType())==0)
+            .mapToInt(Memory::importance).sum();
+        boolean enoughHappened=freshImportance>=REFLECTION_IMPORTANCE_THRESHOLD;
+        // The day-boundary trigger fires even on a quiet day that never crossed the importance bar -
+        // it is the catch-all that guarantees at least one reflection per day, not conditioned on
+        // there being any fresh experience at all.
+        boolean dayBoundary=!routineCues(w,residentId,now).isEmpty()&&!sameLocalDate(w,r.lastReflectionAt,now);
+        return enoughHappened||dayBoundary;
+    }
+    private static boolean sameLocalDate(CompanionWorld w,Instant a,Instant b){
+        ZoneId zone=ZoneId.of(w.timezone);
+        return a.atZone(zone).toLocalDate().equals(b.atZone(zone).toLocalDate());
+    }
+    /** The material a reflection is allowed to draw on: this resident's own memories, nothing from
+     * anyone else's, ranked by {@link CompanionRecall}'s own scoring with no particular question in
+     * mind (an open browse, not an answer to a query) and capped so a single reflection cannot read
+     * the resident's entire life. Superseded memories are excluded the same way retrieval normally
+     * excludes them - a reflection reasons from what this resident currently believes and has
+     * observed, not from conclusions they have already moved past. */
+    public static List<Memory> reflectionSource(CompanionWorld w,String residentId,Instant now){
+        if(state(w,residentId)==null||now==null)return List.of();
+        return CompanionRecall.retrieve(w.memories,residentId,"",now,REFLECTION_SOURCE_LIMIT);
+    }
+    /** Lands one conclusion a reflection (a model call outside this module) produced. Every evidence
+     * id must be a real memory this same resident owns, or nothing is written at all - this is the
+     * one guard against a fabricated or borrowed memory becoming "evidence" for a belief. A non-null
+     * supersedesKey marks the conclusion as a standing belief (see Memory's own doc comment) and
+     * retires whatever this resident previously believed under the same key; null means a one-off
+     * reflection that does not stand in for anything earlier. residentRevision is the same optimistic
+     * lock every other resident-mutating rule in this class already uses. */
+    public static boolean applyReflection(CompanionWorld w,String residentId,long residentRevision,String text,List<String> evidenceIds,String supersedesKey,Instant now){
+        ResidentState r=state(w,residentId);
+        if(r==null||r.revision!=residentRevision||now==null)return false;
+        if(text==null||text.isBlank()||text.length()>200)return false;
+        if(evidenceIds==null||evidenceIds.isEmpty())return false;
+        for(String evidenceId:evidenceIds)
+            if(w.memories.stream().noneMatch(m->m.id().equals(evidenceId)&&m.ownerId().equals(residentId)))return false;
+        if(supersedesKey!=null&&(supersedesKey.isBlank()||supersedesKey.length()>80))return false;
+        // A conclusion that names what it supersedes is, by construction, standing in for the
+        // resident's ongoing view of a recurring topic - that is exactly what a belief is (see
+        // Memory's doc comment). One that supersedes nothing is a one-off reflection instead. The
+        // rules never decide which conclusion to reach; they only decide, from the shape of what the
+        // model already told them, which of the two durability tiers it lands in.
+        String type=supersedesKey!=null?"belief":"reflection";
+        int importance=supersedesKey!=null?9:8;
+        String topic=w.memories.stream().filter(m->m.id().equals(evidenceIds.get(0))).map(Memory::topicId).findFirst().orElse(null);
+        memory(w,residentId,residentId,type,now,topic,text,List.copyOf(evidenceIds),importance,supersedesKey);
+        r.thought=text;r.lastReflectionAt=now;r.revision++;w.revision++;
+        return true;
     }
     static List<String> ownEvidence(CompanionWorld w,String id,String topic){return w.memories.stream().filter(m->m.ownerId().equals(id)&&Objects.equals(m.topicId(),topic)).sorted(Comparator.comparing(Memory::at).reversed()).limit(2).map(Memory::id).toList();}
     static void event(CompanionWorld w,Instant at,String type,String place,List<String> ids,String text,String project){w.events.add(new WorldEvent("e-"+(++w.eventSequence),at,type,place,ids,text,project));while(w.events.size()>80)w.events.removeFirst();if(w.avatar!=null&&w.avatar.place().equals(place)&&Set.of("ready","agreement","change_of_mind","celebration").contains(type)){w.diary.add(new Entry("d2-"+w.eventSequence,at,"路过时看见："+text));while(w.diary.size()>80)w.diary.removeFirst();}}

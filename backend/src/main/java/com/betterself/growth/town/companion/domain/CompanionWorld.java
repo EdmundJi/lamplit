@@ -261,7 +261,32 @@ public class CompanionWorld {
     }
     public record Focus(String taskId, Instant startedAt, Instant endsAt) {}
     public record Entry(String id, Instant at, String text) {}
-    public record Memory(String id, String ownerId, String sourceId, String sourceType, Instant at, String text, String topicId, List<String> evidenceIds, int importance) {
+    /** A resident's own remembered thing. {@code sourceType} is one of three layers, from most
+     * disposable to most durable - see {@link CompanionRecall#tier}:
+     * <ul>
+     *   <li>raw - {@code seed}/{@code observed}/{@code heard}: something that happened, in this
+     *   resident's own words. Cheapest to write, first to be evicted once memory fills up.</li>
+     *   <li>{@code reflection} - a one-off synthesis this resident made over some raw memories.
+     *   Never invented by a rule; only ever written through {@link ResidentSimulation#applyReflection}
+     *   once a real reflection (a model call, outside this module) has happened.</li>
+     *   <li>{@code belief} - a standing generalization this resident holds about someone or
+     *   something ("x likes the window seat"), also only ever written through
+     *   {@code applyReflection}. Most durable, and the layer {@link CompanionRecall} weighs most
+     *   heavily - this is deliberately the opposite of a rule counting occurrences and declaring a
+     *   pattern; the model decides a belief is warranted, the rules only store and rank it.</li>
+     * </ul>
+     * {@code supersedesKey} is null for a memory that does not stand in for an earlier conclusion.
+     * When non-null, landing a new {@code reflection}/{@code belief} with the same owner and key
+     * flips every earlier memory sharing that key to {@code superseded=true} (see
+     * {@link ResidentSimulation#applyReflection}) - the old memory is never deleted, only excluded
+     * from {@link CompanionRecall#retrieve}, so the town can always answer "what did they used to
+     * think" even after they have changed their mind. */
+    public record Memory(String id, String ownerId, String sourceId, String sourceType, Instant at, String text, String topicId, List<String> evidenceIds, int importance, String supersedesKey, boolean superseded) {
+        /** Shape used everywhere before supersession existed: a fresh, non-superseded memory that
+         * does not stand in for (or get superseded by) anything else. */
+        public Memory(String id,String ownerId,String sourceId,String sourceType,Instant at,String text,String topicId,List<String> evidenceIds,int importance){
+            this(id,ownerId,sourceId,sourceType,at,text,topicId,evidenceIds,importance,null,false);
+        }
         public Memory(String id,String ownerId,String sourceId,String sourceType,Instant at,String text,String topicId){
             this(id,ownerId,sourceId,sourceType,at,text,topicId,List.of(),sourceType.equals("seed")?6:5);
         }
