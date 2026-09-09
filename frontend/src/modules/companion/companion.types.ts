@@ -15,6 +15,7 @@ export type World = {
   weather: 'sunny' | 'rain'; period: 'morning' | 'afternoon' | 'evening' | 'night'
   avatar: Actor; residents: Actor[]; intents: Intent[]; diary: { id: string; at: string; text: string }[]
   simulationVersion?: number; residentStates?: ResidentState[]; projects?: Project[]; conversations?: Conversation[]; events?: WorldEvent[]; objects?: WorldObject[]
+  cafeOpenMinute?: number; cafeCloseMinute?: number; cafeStatus?: 'open' | 'closing' | 'closed'; cafeStatusChangedAt?: string | null
   // Structure/ownership only, from TownPlaces; may be absent on a save the backend hasn't repaired
   // yet (seeded lazily on the next advance()), so the frontend must keep working without them.
   locations?: Location[]; positions?: Position[]
@@ -24,6 +25,17 @@ export type Snapshot = { joined: boolean; world: World | null }
 export type IntentInput = { id: string; kind: IntentKind; priority: 'explicit' | 'passing'; taskId?: string; durationMinutes?: number; text?: string }
 export type ResidentState = {
   id: string; energy: number; social: number; curiosity: number; mood: string; goal: string; thought: string
+  /** A resident's own, longer-lived direction. It is intentionally separate from the short plan
+   * displayed in the street: an interruption should not make a whole day look like a new life. */
+  lifeIntent?: { id: string; goalId?: string | null; purpose?: string | null; status?: string | null; formedAt?: string | null; updatedAt?: string | null } | null
+  /** A livelihood direction that survives the short project or action currently occupying them. */
+  careerIntent?: { id: string; goalId?: string | null; purpose?: string | null; status?: string | null; formedAt?: string | null; updatedAt?: string | null; lastActedAt?: string | null } | null
+  /** A concrete action that was set aside. It is a record of what happened, not a promise that the
+   * resident will necessarily return to it. */
+  suspendedAction?: { plan?: { id?: string; action?: string; place?: string; targetId?: string | null; reason?: string; startedAt?: string; endsAt?: string } | null; desiredAction?: string | null; desiredDurationSeconds?: number | null; pausedAt?: string | null } | null
+  /** An evolving self-description of work, distinct from the public-facing actor role. */
+  occupation?: string | null
+  livelihoodPressure?: number
   // The position (bed, desk, plot, ...) this resident currently holds, if any; null/absent while
   // travelling or on a save from before the two-layer place model.
   positionId?: string | null

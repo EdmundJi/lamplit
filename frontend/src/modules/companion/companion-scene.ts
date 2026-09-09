@@ -1,31 +1,64 @@
 import Phaser from 'phaser'
 import type { Point } from '../../shared/scene/collision'
-import { companionPath, freeStandPosition } from './companion-navigation'
+import { resolveMove } from '../../shared/scene/collision'
+import { companionPath, freeStandPosition, COMPANION_COLLISION } from './companion-navigation'
 import { dominantDirection, stepTowardPoint, type Direction4 } from '../../shared/scene/walkers'
 import { conversationEmoji, residentStatus } from './companion-presentation'
 import { buildCompanionStage } from './companion-stage'
-import { ACTION_FRAME, RESIDENT_ART, RESIDENT_ACTIONS, isArtAction, CAFE_DESK_X, POSITION_SLOTS } from './companion-art'
+import { ACTION_FRAME, RESIDENT_ART, RESIDENT_ACTIONS, isArtAction, CAFE_WORK_SEATS, POSITION_SLOTS, COMPANION_WORLD_SIZE, HOME_ROOMS, PLACE_FRAMES, CAFE_ROOM, CAFE_WINDOW_ROOM, CAFE_SERVICE, CAFE_SEATS, cafeSeatAt, GARDEN_OFFSET_X } from './companion-art'
 
 export interface SceneResident { id: string; name: string; role?: string; location: string; action: string; activity?: string; destination?: string; objectKind?: string; positionId?: string | null }
 export interface SceneProject { id: string; title: string; place: string; status: string; progress: number; objectKind: string }
 export interface SceneConversation { id: string; place: string; status: string; topicId?: string; participantIds?: string[]; turns: { speakerId: string; text: string; at: string; emoji?: string | null }[] }
 export interface SceneObject { id: string; kind: string; place: string; label: string; state: string; projectId: string | null }
-export interface SceneLabel { id: string; name: string; x: number; y: number; selected: boolean; speechOffset: number; speech?: string; action: string; role: string; emoji: string; hovered?: boolean; bodyX: number; bodyY: number; bodyHeight: number; conversationId?: string; dialogue?: { name: string; text: string }[]; offscreen?: boolean; direction?: string }
+export interface SceneLabel { worldX?: number; worldY?: number; facing?: Direction4; id: string; name: string; x: number; y: number; selected: boolean; speechOffset: number; speech?: string; action: string; role: string; emoji: string; hovered?: boolean; bodyX: number; bodyY: number; bodyHeight: number; conversationId?: string; dialogue?: { name: string; text: string }[]; offscreen?: boolean; direction?: string }
 export interface SceneSnapshot { residents: SceneResident[]; weather: 'clear' | 'rain'; minutes: number; selectedResidentId?: string; selectedPlace?: string; overview?: boolean; projects?: SceneProject[]; conversations?: SceneConversation[]; objects?: SceneObject[] }
-const W = 960, H = 640
+const W = COMPANION_WORLD_SIZE.width, H = COMPANION_WORLD_SIZE.height
 const PALETTE = [0x688b82, 0xbd8765, 0x8185a4, 0xceaa65, 0x889b69]
+type RainShelter = { x: number; y: number; width: number; height: number }
+// These use the shared stage geometry rather than a second set of hand-tuned rain rectangles.
+// The cafe frame includes its wall/roof margin; homes are the real room footprints.
+const RAIN_SHELTERS: RainShelter[] = [
+  ...Object.values(HOME_ROOMS).map(room => ({ x: room.x - 6, y: room.y - 5, width: room.w + 12, height: room.h + 12 })),
+  { x: CAFE_ROOM.x - 6, y: CAFE_ROOM.y - 5, width: CAFE_ROOM.w + 12, height: CAFE_ROOM.h + 12 },
+  { x: CAFE_WINDOW_ROOM.x - 6, y: CAFE_WINDOW_ROOM.y - 5, width: CAFE_WINDOW_ROOM.w + 12, height: CAFE_WINDOW_ROOM.h + 12 },
+]
+function inside(rect: RainShelter, x: number, y: number) { return x >= rect.x && x <= rect.x + rect.width && y >= rect.y && y <= rect.y + rect.height }
+/** A rain streak is omitted when any of its short diagonal would land inside a roofed room. */
+export function rainFallsOutside(x: number, y: number) {
+  const samples = [[x, y], [x - 2.5, y + 6.5], [x - 5, y + 13]]
+  return !RAIN_SHELTERS.some(rect => samples.some(([px, py]) => inside(rect, px!, py!)))
+}
 export function scenePlace(location: string) {
   // The backend's TownPlaces gives each resident their own home location ("home-owner",
   // "home-self", ...) instead of one shared "home", so a dash-prefixed id counts too.
   return (['home', 'cafe', 'garden', 'street'] as const).find(key => location === key || location.startsWith(`${key}.`) || location.startsWith(`${key}/`) || location.startsWith(`${key}-`)) ?? 'street'
 }
+function homeId(location: string) { return location.match(/^home[-./](.+)$/)?.[1] }
+function homeRoom(location: string) { return HOME_ROOMS[homeId(location) ?? ''] }
+function legacyHomeRoom(index: number) { return HOME_ROOMS[['owner', 'student', 'artist', 'gardener', 'self'][Math.max(0, index) % 5]!] }
+function placeFrame(location: string) {
+  const ownHome = homeRoom(location)
+  return ownHome ?? PLACE_FRAMES[scenePlace(location)]
+}
+function placeCenter(location: string) {
+  const frame = placeFrame(location)
+  return { x: frame.x + frame.w / 2, y: frame.y + frame.h / 2 }
+}
 export function visibleActivity(activity = '', action = '', objectKind?: string) {
   if (['create', 'help'].includes(activity)) return objectKind === 'flowers' ? 'garden' : objectKind === 'tea' ? 'drink' : 'create'
+  // Service uses the authoritative cafe-counter position when one is supplied. There is no pour
+  // animation yet, so keep the resident visibly at the counter instead of borrowing the garden
+  // animation merely because the backend verb happens to be `tend`.
+  if (['tend', 'serve', 'prepare', 'wait', 'handover', 'assist'].includes(activity)) return 'idle'
   if (['home', 'rest'].includes(activity)) return 'rest'
   if (['focus', 'study', 'read'].includes(activity)) return 'read'
+  if (activity === 'work') return 'read'
+  if (activity === 'make') return objectKind === 'flowers' ? 'garden' : 'create'
   if (['water', 'drink'].includes(activity)) return 'drink'
   if (['observe', 'flowers', 'invite', 'celebrate', 'talk', 'walk', 'travel'].includes(activity)) return 'idle'
   const text = activity + ' ' + action
+  if (/\b(tend|serve|prepare)\b|吧台|柜台|热饮|咖啡/.test(text)) return 'idle'
   if (/sleep|睡|入眠/.test(text)) return 'sleep'
   if (/rest|休息|歇一会/.test(text)) return 'rest'
   if (/drink|喝|饮|茶歇/.test(text)) return 'drink'
@@ -35,7 +68,7 @@ export function visibleActivity(activity = '', action = '', objectKind?: string)
   return 'idle'
 }
 export function conversationPosition(place: string, index: number) {
-  const center = ({ home: { x: 194, y: 311 }, cafe: { x: 554, y: 314 }, garden: { x: 814, y: 412 }, street: { x: 480, y: 402 } })[scenePlace(place)]
+  const center = scenePlace(place) === 'cafe' ? CAFE_SERVICE.conversation : placeCenter(place)
   return { x: center.x + (index % 2 ? 21 : -21), y: center.y + Math.floor(index / 2) * 32 }
 }
 /**
@@ -56,23 +89,25 @@ export function residentPosition(location: string, index: number, activity = '',
     if (slots?.length) return slots[Math.min(Math.max(0, occupantIndex), slots.length - 1)]!
   }
   const place = scenePlace(location), slot = index % 5
-  if (place === 'home' && visibleActivity(activity, action) === 'sleep') return [{ x: 108, y: 237 }, { x: 148, y: 237 }, { x: 252, y: 223 }, { x: 296, y: 223 }][Math.max(0, slot - 1)]!
-  if (place === 'home' && slot === 0 && visibleActivity(activity, action) === 'rest') return { x: 128, y: 300 }
+  const room = homeRoom(location) ?? legacyHomeRoom(index)
+  if (place === 'home' && visibleActivity(activity, action) === 'sleep') return room.bed
+  if (place === 'home' && visibleActivity(activity, action) === 'rest') return room.anchor
+  if (place === 'cafe' && activity === 'wait') return CAFE_SERVICE.waiting[index % CAFE_SERVICE.waiting.length]!
   if (place === 'cafe' && ['read', 'create', 'rest', 'drink'].includes(visibleActivity(activity, action))) {
-    // The first three seats sit at the study desks built in companion-stage.ts; keep the same x.
-    const seats = [...CAFE_DESK_X.map(x => ({ x, y: 289 })), { x: 474, y: 319 }, { x: 668, y: 319 }]
-    return seats[slot]!
+    // Four discussion seats and six independently occupied window seats.
+    const seat = CAFE_SEATS[index % CAFE_SEATS.length]!
+    return { x: seat.x, y: seat.y }
   }
   if (place === 'garden' && /garden|tend|plant|flowers|grow|花|园艺|种植|照料|浇水/i.test(activity + action)) {
     // The native stream lands about 50px to the right and 10px below the feet.
     // Keep its whole silhouette inside the default camera, including the last resident.
     const plots = [{ x: 770, y: 276 }, { x: 849, y: 276 }, { x: 770, y: 356 }, { x: 849, y: 356 }, { x: 842, y: 421 }]
-    return plots[slot]!
+    return { x: plots[slot]!.x + GARDEN_OFFSET_X, y: plots[slot]!.y }
   }
-  if (place === 'home' && /focus|study|read|专注|学习|读书/i.test(activity + action) && slot === 0) return { x: 270, y: 327 }
-  return freeStandPosition(place, residentId ?? `${location}#${index}`, occupied)
+  if (place === 'home' && /focus|study|read|work|make|专注|学习|读书|工作|制作/i.test(activity + action)) return room.desk
+  return freeStandPosition(place === 'home' ? location : place, residentId ?? `${location}#${index}`, occupied)
 }
-type Actor = { mode: string; sleeping: boolean; conversationId?: string; seatIndex?: number; positionId?: string; slot?: number; facing: Direction4; hovered?: boolean; root: Phaser.GameObjects.Container; sprite?: Phaser.GameObjects.Sprite; label: Phaser.GameObjects.Text; activity: Phaser.GameObjects.Text; location: string; action: string; sheet: string; target: { x: number; y: number }; path: { x: number; y: number }[] }
+type Actor = { mode: string; sleeping: boolean; conversationId?: string; seatIndex?: number; positionId?: string; slot?: number; facing: Direction4; hovered?: boolean; root: Phaser.GameObjects.Container; sprite?: Phaser.GameObjects.Sprite; heldProp: Phaser.GameObjects.Graphics; label: Phaser.GameObjects.Text; activity: Phaser.GameObjects.Text; location: string; action: string; sheet: string; target: { x: number; y: number }; path: { x: number; y: number }[] }
 
 /** Animation projects server state. It never chooses a resident's next activity or destination. */
 export class CompanionStreetScene extends Phaser.Scene {
@@ -84,6 +119,7 @@ export class CompanionStreetScene extends Phaser.Scene {
   private projectLayer!: Phaser.GameObjects.Container
   private projectSignature = ''
   private placeSelection!: Phaser.GameObjects.Rectangle
+  private cafeSelection!: Phaser.GameObjects.Graphics
   private ready = false
   private viewport = { width: 960, height: 516, density: 1 }
   private cameraSignature = ''
@@ -97,15 +133,26 @@ export class CompanionStreetScene extends Phaser.Scene {
   private frameCamera(force = false) {
     const state = this.snapshot(), { width, height, density } = this.viewport
     const compact = width < 600
-    const signature = `${width}:${height}:${density}:${state.overview}:${compact ? state.selectedResidentId + ':' + state.selectedPlace : ''}`
+    const signature = `${width}:${height}:${density}:${state.overview}:${state.selectedResidentId ?? ''}:${state.selectedPlace ?? ''}`
     if (!force && this.cameraSignature === signature) return
     this.cameraSignature = signature
-    let frame = state.overview ? { x: 0, y: 0, w: 960, h: 640 } : compact ? { x: 330, y: 90, w: 445, h: 370 } : { x: 48, y: 22, w: 884, h: 475 }
+    let frame = state.overview ? { x: 0, y: 0, w: W, h: H } : compact ? { x: 470, y: 0, w: 445, h: 370 } : { x: 48, y: 0, w: 1168, h: 480 }
+    if (!state.overview && state.selectedPlace && !state.selectedResidentId) {
+      const selected = placeFrame(state.selectedPlace)
+      frame = { x: selected.x - 12, y: Math.max(0, selected.y - 12), w: selected.w + 24, h: selected.h + 24 }
+    }
+    if (!state.overview && state.selectedResidentId) frame = compact ? { x: 0, y: 0, w: 445, h: 370 } : { x: 0, y: 0, w: 580, h: 440 }
     let center = { x: frame.x + frame.w / 2, y: frame.y + frame.h / 2 }
-    if (compact && !state.overview) {
+    if (!state.overview && (state.selectedResidentId || (compact && state.selectedPlace))) {
       const target = state.selectedResidentId ? this.actors.get(state.selectedResidentId)?.root : undefined
-      const place = state.selectedPlace ? ({ home: { x: 210, y: 245 }, cafe: { x: 560, y: 250 }, garden: { x: 810, y: 330 }, street: { x: 500, y: 370 } } as Record<string, { x: number; y: number }>)[state.selectedPlace] : undefined
-      if (target || place) { const point = target ?? place!; center = { x: Math.max(225, Math.min(735, point.x)), y: Math.max(210, Math.min(410, point.y - 35)) } }
+      const place = state.selectedPlace ? placeCenter(state.selectedPlace) : undefined
+      if (target || place) {
+        const point = target ?? place!
+        center = {
+          x: Math.max(frame.w / 2, Math.min(W - frame.w / 2, point.x)),
+          y: Math.max(frame.h / 2, Math.min(H - frame.h / 2, point.y - 35)),
+        }
+      }
     }
     const camera = this.cameras.main
     camera.setViewport(0, 0, Math.round(width * density), Math.round(height * density))
@@ -128,15 +175,22 @@ export class CompanionStreetScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor('#78857a')
     if (this.textures.exists('town') && this.textures.exists('interior')) buildCompanionStage(this)
     else {
-      this.add.rectangle(480, 320, W, H, 0xb8bda7)
+      this.add.rectangle(W / 2, H / 2, W, H, 0xb8bda7)
       this.add.text(480, 190, '街景素材尚未生成 · 居民生活仍在继续', { fontSize: '16px', color: '#56604e' }).setOrigin(.5)
     }
     this.placeSelection = this.add.rectangle(0, 0, 240, 200, 0xffdf9b, .04).setStrokeStyle(2, 0xffdf9b, .8).setVisible(false).setDepth(700)
+    this.cafeSelection = this.add.graphics().setDepth(700).setVisible(false)
+    this.cafeSelection.fillStyle(0xffdf9b, .04).lineStyle(2, 0xffdf9b, .8)
+    const cafeOutline = [{ x: 378, y: 7 }, { x: 1030, y: 7 }, { x: 1030, y: 555 }, { x: 858, y: 555 }, { x: 858, y: 339 }, { x: 378, y: 339 }]
+    this.cafeSelection.fillPoints(cafeOutline, true).strokePoints(cafeOutline, true)
     this.selection = this.add.ellipse(0, 0, 46, 17, 0xffdf9b, .18).setStrokeStyle(2, 0xffe7b2, .9).setVisible(false)
     this.shade = this.add.rectangle(0, 0, W, H, 0x192644, 1).setAlpha(0).setOrigin(0).setDepth(800)
     this.indoorLight = this.add.graphics().setDepth(805)
-    this.indoorLight.fillStyle(0xffdfaa, .12).fillRect(81, 139, 253, 191).fillRect(385, 107, 349, 223)
-    this.indoorLight.fillStyle(0xffd89a, .1).fillEllipse(272, 263, 103, 64).fillEllipse(528, 242, 267, 91)
+    this.indoorLight.fillStyle(0xffdfaa, .12)
+    for (const room of Object.values(HOME_ROOMS)) this.indoorLight.fillRect(room.x + 8, room.y + 32, room.w - 16, room.h - 32)
+    this.indoorLight.fillRect(CAFE_ROOM.x + 8, CAFE_ROOM.y + 32, CAFE_ROOM.w - 16, CAFE_ROOM.h - 32)
+    this.indoorLight.fillRect(CAFE_WINDOW_ROOM.x + 8, CAFE_WINDOW_ROOM.y + 32, CAFE_WINDOW_ROOM.w - 16, CAFE_WINDOW_ROOM.h - 32)
+    this.indoorLight.fillStyle(0xffd89a, .1).fillEllipse(480, 226, 180, 185)
     this.rain = this.add.graphics().setDepth(950)
     this.projectLayer = this.add.container(0, 0).setDepth(290)
     this.ready = true
@@ -148,12 +202,16 @@ export class CompanionStreetScene extends Phaser.Scene {
     this.projectSignature = signature
     this.projectLayer.removeAll(true)
     const objects = state.objects?.length ? state.objects : (state.projects ?? []).filter(p => p.progress > 0).map(p => ({ id: p.id, kind: p.objectKind, place: p.place, label: p.title, state: p.status, projectId: p.id }))
-    objects.forEach((object, index) => {
+    // This art pass only has real anchors in the cafe and garden. A project at a resident's own
+    // home remains in the story data until the world supplies a matching place/object; it must not
+    // silently appear on a cafe table merely because that is the only old project shelf.
+    objects.filter(object => ['cafe', 'garden'].includes(scenePlace(object.place))).forEach((object, index) => {
       const project = state.projects?.find(p => p.id === object.projectId)
       const progress = project?.progress ?? 100
       const kind = object.kind.toLowerCase()
-      const x = /poster|海报/.test(kind) ? 714 : /flower|花/.test(kind) ? 578 : /book|书/.test(kind) ? 528 : 455 + index % 2 * 56
-      const y = /poster|海报/.test(kind) ? 319 : /flower|花/.test(kind) ? 241 : 243
+      const cafe = scenePlace(object.place) === 'cafe'
+      const x = cafe ? (/poster|海报/.test(kind) ? 825 : /flower|花/.test(kind) ? 574 : /book|书/.test(kind) ? 409 : 804) : 823 + GARDEN_OFFSET_X + index % 2 * 62
+      const y = cafe ? (/poster|海报/.test(kind) ? 40 : /flower|花/.test(kind) ? 76 : /book|书/.test(kind) ? 98 : 158) : 366
       const g = this.add.graphics()
       this.projectLayer.add(g)
       const art = (atlas: string, frame: string, px: number, py: number, scale = 1) => {
@@ -161,14 +219,13 @@ export class CompanionStreetScene extends Phaser.Scene {
         this.projectLayer.add(this.add.image(px, py, atlas, frame).setOrigin(.5, 1).setScale(scale))
       }
       if (/poster|海报/.test(kind)) {
-        art('companion', progress > 25 ? 'project_poster' : 'project_poster_blank', x, y)
+        art('interior', 'notice_1', x, y, .7)
       } else if (/flower|花/.test(kind)) {
         art('interior', 'plant_1', x, y, .5)
         if (progress > 40) art('town', 'flowers_3', x, y - 18, .5)
       } else if (/book|书/.test(kind)) {
-        for (let i = 0; i < Math.max(1, Math.min(4, Math.ceil(progress / 25))); i++) art('interior', 'book_1', x - 10 + i * 7, y, .35)
+        art('companion', 'office_books', x, y, .6)
       } else {
-        art('interior', 'coffee_table_wood', x, y + 10, .65)
         for (let i = 0; i < 3; i++) art('interior', 'coffee_cup', x - 10 + i * 10, y - 8, .5)
       }
       const hit = this.add.zone(x, y - 30, 54, 74).setInteractive({ useHandCursor: true })
@@ -183,6 +240,10 @@ export class CompanionStreetScene extends Phaser.Scene {
   sync() {
     if (!this.ready) return
     const state = this.snapshot()
+    const night = state.minutes < 360 || state.minutes >= 1140
+    // Overview uses the camera's background for the side bars around a tall world. Match the
+    // ground instead of exposing a dark canvas edge that has no place in the street.
+    this.cameras.main.setBackgroundColor(night ? '#737f74' : state.weather === 'rain' ? '#849176' : '#96a486')
     const ids = new Set(state.residents.map(r => r.id))
     for (const [id, actor] of this.actors) if (!ids.has(id)) { actor.root.destroy(); this.actors.delete(id) }
     state.residents.forEach((resident, index) => {
@@ -209,17 +270,18 @@ export class CompanionStreetScene extends Phaser.Scene {
       } else {
         const peersHere = [...this.actors.entries()].filter(([id, other]) => id !== resident.id && scenePlace(other.location) === scenePlace(location))
         const usedSeats = new Set(peersHere.map(([, other]) => other.seatIndex).filter(value => value !== undefined))
-        seatIndex = atDesk ? (actor?.seatIndex !== undefined && scenePlace(actor.location) === scenePlace(location) ? actor.seatIndex : [0, 1, 2, 3, 4].find(seat => !usedSeats.has(seat)) ?? index) : undefined
+        seatIndex = atDesk ? (actor?.seatIndex !== undefined && scenePlace(actor.location) === scenePlace(location) ? actor.seatIndex : CAFE_SEATS.map((_, index) => index).find(seat => !usedSeats.has(seat)) ?? index) : undefined
         // Free-standing (no seat matched): spread away from wherever every other resident
         // already visible in this place has settled, whatever put them there - another
         // free-standing pick, a bed, a desk seat, a garden plot.
         const occupied = peersHere.map(([, other]) => other.target)
         target = residentPosition(location, seatIndex ?? index, resident.activity, resident.action, undefined, 0, resident.id, occupied)
       }
-      if (travelling) target = ({ home: { x: 204, y: 350 }, cafe: { x: 535, y: 350 }, garden: { x: 768, y: 396 }, street: { x: 480, y: 396 } })[scenePlace(location)]
+      if (travelling) target = homeRoom(location)?.door ?? (scenePlace(location) === 'cafe' ? CAFE_SERVICE.entry : placeCenter(location))
       const conversation = !travelling ? state.conversations?.find(c => c.status === 'active' && scenePlace(c.place) === scenePlace(location) && (c.participantIds?.includes(resident.id) || c.turns.some(t => t.speakerId === resident.id))) : undefined
       const participants = conversation?.participantIds ?? [...new Set(conversation?.turns.map(t => t.speakerId) ?? [])]
-      if (conversation) { target = conversationPosition(location, participants.indexOf(resident.id)); seatIndex = undefined }
+      // A conversation does not uproot people from an occupied chair or the coffee machine.
+      if (conversation && !knownPositionId && seatIndex === undefined) target = conversationPosition(location, participants.indexOf(resident.id))
       if (!actor) {
         const root = this.add.container(target.x, target.y)
         root.add(this.add.ellipse(0, -1, 29, 9, 0x4c5444, .2))
@@ -233,6 +295,12 @@ export class CompanionStreetScene extends Phaser.Scene {
               const key = `${sheet}-${action}-${direction}`
               if (!this.anims.exists(key)) this.anims.create({ key, frames: this.anims.generateFrameNumbers(sheet, { start: row * columns + directionIndex * 6, end: row * columns + directionIndex * 6 + 5 }), frameRate: action === 'walk' ? 9 : 6, repeat: -1 })
             }
+          }
+          // The purchased sheet has six right-facing sit poses followed by six left-facing poses.
+          // Cycling all twelve reverses a person in their chair; keep each orientation separate.
+          for (const [facing, start] of [['right', 0], ['left', 6]] as const) {
+            const key = `${sheet}-sit-${facing}`
+            if (!this.anims.exists(key)) this.anims.create({ key, frames: this.anims.generateFrameNumbers(sheet, { start: 4 * columns + start, end: 4 * columns + start + 5 }), frameRate: 5, repeat: -1 })
           }
           if (!this.anims.exists(`${sheet}-read`)) this.anims.create({ key: `${sheet}-read`, frames: this.anims.generateFrameNumbers(sheet, { start: 7 * columns, end: 7 * columns + 5 }), frameRate: 5, repeat: -1 })
           for (const [name, row, start, count] of [['sleep', 3, 0, 6], ['sit', 4, 0, 6]] as const) {
@@ -249,13 +317,15 @@ export class CompanionStreetScene extends Phaser.Scene {
           root.add(this.add.rectangle(0, -18, 19, 25, PALETTE[index % 5]).setStrokeStyle(2, 0xfff3dc))
           root.add(this.add.circle(0, -37, 10, 0xe9bf97))
         }
+        const heldProp = this.add.graphics()
+        root.add(heldProp)
         const label = this.add.text(0, index % 2 === 0 ? 11 : 28, resident.name, { fontFamily: 'system-ui', fontSize: '11px', color: '#f6e9ca', backgroundColor: '#465c50', resolution: 2, padding: { x: 6, y: 3 } }).setOrigin(.5)
         const activity = this.add.text(0, -86, '', { fontFamily: 'system-ui', fontSize: '12px', color: '#455047', backgroundColor: '#fff3d8', resolution: 2, wordWrap: { width: 190, useAdvancedWrap: true }, align: 'center', padding: { x: 6, y: 4 } }).setOrigin(.5)
         label.setVisible(false); activity.setVisible(false);
         root.add([label, activity]); root.setSize(64, 100).setInteractive(new Phaser.Geom.Rectangle(-32, -80, 64, 110), Phaser.Geom.Rectangle.Contains)
         root.on('pointerdown', () => this.select(resident.id))
         root.on('pointerover', () => { if (actor) actor.hovered = true }); root.on('pointerout', () => { if (actor) actor.hovered = false })
-        actor = { mode: 'idle', sleeping: false, root, sprite, sheet, label, activity, location, action: resident.action, target, path: [], facing: 'down', seatIndex }
+        actor = { mode: 'idle', sleeping: false, root, sprite, heldProp, sheet, label, activity, location, action: resident.action, target, path: [], facing: 'down', seatIndex }
         this.actors.set(resident.id, actor)
       }
       if (actor.target.x !== target.x || actor.target.y !== target.y) actor.path = companionPath(actor.root, target)
@@ -268,7 +338,6 @@ export class CompanionStreetScene extends Phaser.Scene {
       actor.target = target; actor.action = resident.action; actor.label.setText(resident.name)
       actor.activity.setText(resident.action)
     })
-    const night = state.minutes < 360 || state.minutes >= 1140
     this.shade.setAlpha(night ? .28 : state.weather === 'rain' ? .1 : 0)
     this.indoorLight.setVisible(night)
     this.updateProjects(state)
@@ -276,9 +345,11 @@ export class CompanionStreetScene extends Phaser.Scene {
   }
   update(time: number, delta: number) {
     const state = this.snapshot()
-    const bounds = ({ home: [208, 220, 264, 240], cafe: [560, 207, 360, 270], garden: [845, 371, 156, 315], street: [460, 408, 860, 100] } as Record<string, number[]>)[state.selectedPlace ?? '']
-    this.placeSelection?.setVisible(Boolean(bounds))
-    if (bounds) this.placeSelection.setPosition(bounds[0]!, bounds[1]!).setSize(bounds[2]!, bounds[3]!)
+    const selectedFrame = state.selectedPlace ? placeFrame(state.selectedPlace) : undefined
+    const selectedCafe = Boolean(state.selectedPlace && scenePlace(state.selectedPlace) === 'cafe')
+    this.placeSelection?.setVisible(Boolean(selectedFrame) && !selectedCafe)
+    this.cafeSelection?.setVisible(selectedCafe)
+    if (selectedFrame) this.placeSelection.setPosition(selectedFrame.x + selectedFrame.w / 2, selectedFrame.y + selectedFrame.h / 2).setSize(selectedFrame.w, selectedFrame.h)
     const selected = state.selectedResidentId ? this.actors.get(state.selectedResidentId) : undefined
     this.selection?.setVisible(Boolean(selected))
     if (selected) this.selection.setPosition(selected.root.x, selected.root.y - 1).setDepth(selected.root.y - 1)
@@ -287,11 +358,16 @@ export class CompanionStreetScene extends Phaser.Scene {
     const recentTurns = active?.turns.slice(-2) ?? []
     const turn = recentTurns[Math.floor(time / 6500) % Math.max(1, recentTurns.length)]
     for (const actor of this.actors.values()) {
-      while (actor.path[0] && Phaser.Math.Distance.Between(actor.root.x, actor.root.y, actor.path[0].x, actor.path[0].y) < .5) actor.path.shift()
+      while (actor.path[0] && Phaser.Math.Distance.Between(actor.root.x, actor.root.y, actor.path[0].x, actor.path[0].y) < .5) {
+        // Finish the corner before advancing to the next segment; dropping a near waypoint can
+        // shave a fraction of a pixel off an L-shaped pavement edge and leave walkable ground.
+        actor.root.setPosition(actor.path[0].x, actor.path[0].y)
+        actor.path.shift()
+      }
       const waypoint = actor.path[0]
       const from = { x: actor.root.x, y: actor.root.y }
       if (waypoint) {
-        const next = stepTowardPoint(from, waypoint, 72, Math.min(delta, 50))
+        const next = resolveMove(from, stepTowardPoint(from, waypoint, 72, Math.min(delta, 50)), COMPANION_COLLISION)
         actor.facing = dominantDirection(next.x - from.x, next.y - from.y, actor.facing)
         actor.root.setPosition(next.x, next.y)
       }
@@ -300,13 +376,31 @@ export class CompanionStreetScene extends Phaser.Scene {
       const chatting = peers.length > 0 && !waypoint && peers.every(peer => !peer.path.length)
       if (chatting) actor.facing = dominantDirection(peers[0]!.root.x - actor.root.x, peers[0]!.root.y - actor.root.y, actor.facing)
       actor.sleeping = !waypoint && !actor.conversationId && actor.mode === 'sleep' && scenePlace(actor.location) === 'home'
+      const seat = !waypoint && scenePlace(actor.location) === 'cafe' && Math.hypot(actor.root.x - actor.target.x, actor.root.y - actor.target.y) < .5 ? cafeSeatAt(actor.target) : undefined
+      const homeDesk = !waypoint && actor.positionId?.endsWith('-desk') && Math.hypot(actor.root.x - actor.target.x, actor.root.y - actor.target.y) < .5
+      const seatedFacing = seat?.facing ?? (homeDesk ? 'right' : undefined)
+      if (seatedFacing) actor.facing = seatedFacing
+      else if (!waypoint && actor.positionId === 'cafe-counter') actor.facing = 'up'
       const mode = waypoint || actor.conversationId ? 'idle' : actor.mode
-      const nativeAction = isArtAction(mode) && this.anims.exists(`${actor.sheet}-${mode}`)
-      const animation = waypoint ? `walk-${actor.facing}` : actor.sleeping ? 'sleep' : nativeAction ? mode : mode === 'read' ? 'read' : mode === 'rest' ? 'sit' : `idle-${actor.facing}`
-      // Sleep row is only a head. Its lower edge sits on the actual pillow above the blanket.
+      const nativeAction = !seatedFacing && isArtAction(mode) && this.anims.exists(`${actor.sheet}-${mode}`)
+      const animation = waypoint ? `walk-${actor.facing}` : actor.sleeping ? 'sleep' : seatedFacing ? `sit-${seatedFacing}` : nativeAction ? mode : mode === 'read' ? 'read' : mode === 'rest' ? 'sit' : `idle-${actor.facing}`
       actor.sprite?.setPosition(0, actor.sleeping ? -40 : 0)
         .setOrigin(nativeAction ? ACTION_FRAME.originX : .5, nativeAction ? ACTION_FRAME.originY : 1)
         .setFlipX(false).play(`${actor.sheet}-${animation}`, true)
+      // Small pixel props follow the seated hand; the body keeps its actual seat orientation.
+      actor.heldProp.clear()
+      if (seatedFacing && !actor.conversationId) {
+        const handX = seatedFacing === 'right' ? 12 : -12
+        if (actor.mode === 'drink') {
+          actor.heldProp.fillStyle(0x6d6655).fillRect(handX - 4, -22, 8, 7)
+          actor.heldProp.fillStyle(0xf2ead6).fillRect(handX - 3, -22, 6, 5).fillRect(handX + 3, -21, 2, 3)
+        } else if (['read', 'create'].includes(actor.mode)) {
+          actor.heldProp.fillStyle(0x86745a).fillRect(handX - 7, -21, 14, 10)
+          actor.heldProp.fillStyle(0xece3cb).fillRect(handX - 6, -20, 12, 8)
+          actor.heldProp.lineStyle(1, 0xa3a68c).lineBetween(handX, -19, handX, -13)
+          if (actor.mode === 'create') actor.heldProp.lineStyle(1, 0x766148).lineBetween(handX + 3, -23, handX, -17)
+        }
+      }
 
     }
     if (time >= this.nextLabelsAt) {
@@ -325,7 +419,7 @@ export class CompanionStreetScene extends Phaser.Scene {
         const status = residentStatus(resident?.activity ?? '', actor.action, Boolean(actor.path.length), Boolean(speech))
         const topic = speech ? conversationEmoji(turn?.emoji) : ''
         const dialogue = speech ? recentTurns.map(line => ({ name: state.residents.find(r => r.id === line.speakerId)?.name ?? '邻居', text: line.text })) : undefined
-        labels.push({ id, name: actor.label.text, role: resident?.role === 'user' ? '你的小人' : resident?.role ?? '小街邻居', x: Math.max(20, Math.min(this.viewport.width - 20, x)), y: Math.max(68, Math.min(this.viewport.height - 29, y)), selected: actor === selected, speechOffset: 8, speech: offscreen ? undefined : speech, action: status.shortAction, emoji: topic, conversationId: speech ? active?.id : undefined, dialogue, bodyX: x - 17, bodyY: y + 20, bodyHeight: bodyHeight * zoom, hovered: actor.hovered, offscreen, direction: offscreen ? direction : undefined })
+        labels.push({ worldX: actor.root.x, worldY: actor.root.y, facing: actor.facing, id, name: actor.label.text, role: resident?.role === 'user' ? '你的小人' : resident?.role ?? '小街邻居', x: Math.max(20, Math.min(this.viewport.width - 20, x)), y: Math.max(68, Math.min(this.viewport.height - 29, y)), selected: actor === selected, speechOffset: 8, speech: offscreen ? undefined : speech, action: status.shortAction, emoji: topic, conversationId: speech ? active?.id : undefined, dialogue, bodyX: x - 17, bodyY: y + 20, bodyHeight: bodyHeight * zoom, hovered: actor.hovered, offscreen, direction: offscreen ? direction : undefined })
       }
       // Edge pins remain individually reachable when several residents are outside the close view.
       for (const edge of ['‹', '›', '⌃', '⌄']) {
@@ -347,7 +441,7 @@ export class CompanionStreetScene extends Phaser.Scene {
       this.rain.lineStyle(1, 0xeaf3e9, .48)
       for (let i = 0; i < 85; i++) {
         const x = (i * 137 + time * .025) % W, y = (i * 79 + time * .19) % H
-        if ((x >= 80 && x <= 336 && y >= 108 && y <= 338) || (x >= 384 && x <= 736 && y >= 76 && y <= 338)) continue
+        if (!rainFallsOutside(x, y)) continue
         this.rain.lineBetween(x, y, x - 5, y + 13)
       }
     }

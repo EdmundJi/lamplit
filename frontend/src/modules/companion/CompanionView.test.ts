@@ -124,6 +124,44 @@ describe('companion page task boundary', () => {
     expect(view.get('.evidence').text()).toContain('亲身经历')
   })
 
+  it('shows a resident-owned through-line and a real paused action without promising a recovery', async () => {
+    const base = snapshot()
+    const saved = { ...base, world: { ...base.world,
+      residents: [{ ...base.world.residents[0], role: '受托照看吧台', activity: 'tend', label: '替阿禾照看吧台' }, { ...actor, id: 'student', name: '小川', role: '备考邻居' }],
+      residentStates: [{ id: 'owner', goal: 'old-project', thought: '先照应一下柜台。', occupation: '暂时帮邻居照看咖啡馆', careerIntent: { id: 'career-owner', purpose: '试着把咖啡馆经营下去', status: 'active' }, lifeIntent: { id: 'life-owner', purpose: '把招贴慢慢改完', status: 'active' }, suspendedAction: { plan: { id: 'old-plan', action: 'create', place: 'cafe', reason: '把窗边那张招贴改完' } }, relationships: { student: 4 }, plan: { id: 'service', action: 'tend', place: 'cafe', targetId: null, reason: '柜台前有人在等', startedAt: '2026-09-08T00:00:00Z', endsAt: '2026-09-08T00:01:00Z' } }],
+    } }
+    api.get.mockImplementation((path: string) => Promise.resolve(path === '/town/companion' ? saved : []))
+    api.post.mockResolvedValue(saved)
+    const view = await render()
+    await view.get('[aria-label="看看阿禾"]').trigger('click')
+    expect(view.get('.personal-plan').text()).toContain('长期想走的方向')
+    expect(view.get('.personal-plan').text()).toContain('试着把咖啡馆经营下去')
+    expect(view.get('.personal-plan').text()).toContain('眼前在惦记')
+    expect(view.get('.personal-plan').text()).toContain('把招贴慢慢改完')
+    expect(view.get('.paused-action').text()).toBe('暂放着：把窗边那张招贴改完')
+    expect(view.get('.paused-action').text()).not.toContain('会回来')
+    expect(view.get('.person-identity').text()).toContain('受托照看吧台')
+    expect(view.get('.current-action').text()).toContain('替阿禾照看吧台')
+    expect(view.get('.relationship-list').text()).toContain('有点疏远')
+  })
+
+  it('does not repeat an unchanged career direction as a second current-life paragraph', async () => {
+    const base = snapshot()
+    const saved = { ...base, world: { ...base.world, residentStates: [{
+      id: 'owner', goal: null, thought: '先歇一会儿。', occupation: '照看花草和邻里的小事',
+      careerIntent: { id: 'career-owner', purpose: '照看花草和邻里的小事', status: 'active' },
+      lifeIntent: { id: 'life-owner', purpose: '照看花草和  邻里的小事', status: 'active' },
+      relationships: {}, plan: null,
+    }] } }
+    api.get.mockImplementation((path: string) => Promise.resolve(path === '/town/companion' ? saved : []))
+    api.post.mockResolvedValue(saved)
+    const view = await render()
+    await view.get('[aria-label="看看阿禾"]').trigger('click')
+    expect(view.get('.personal-plan').text()).toContain('长期想走的方向')
+    expect(view.get('.personal-plan').text()).not.toContain('眼前在惦记')
+    expect(view.find('.life-thread').exists()).toBe(false)
+  })
+
   it('exposes memory provenance and allows quiet mode to hide the detail', async () => {
     const view = await render()
     await view.get('[aria-label="看看阿禾"]').trigger('click')

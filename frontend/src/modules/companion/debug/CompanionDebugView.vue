@@ -20,6 +20,7 @@ const world = ref<DebugWorld | null>(null)
 const loading = ref(false)
 const error = ref('')
 const lastFetchedAt = ref<number | null>(null)
+const lastAttemptedAt = ref<number | null>(null)
 const autoRefresh = ref(true)
 const now = ref(Date.now())
 
@@ -29,11 +30,12 @@ async function load() {
     const snapshot = await companionApi.load()
     world.value = (snapshot.world as DebugWorld) ?? null
     error.value = snapshot.world ? '' : '还没有加入这条小街 - 先去 /town 搬进来，再回这里看内心。'
+    lastFetchedAt.value = Date.now()
   } catch (caught) {
     error.value = (caught as Error)?.message || '拉取失败，稍后重试。'
   } finally {
     loading.value = false
-    lastFetchedAt.value = Date.now()
+    lastAttemptedAt.value = Date.now()
   }
 }
 
@@ -96,6 +98,7 @@ function toggleConversation(id: string) { openConversationId.value = openConvers
 const openConversation = computed(() => world.value?.conversations?.find(conversation => conversation.id === openConversationId.value))
 function planCountdown(endsAt?: string) {
   if (!endsAt) return ''
+  if (error.value) return `快照计划截止于 ${dateTime(endsAt)}`
   const seconds = Math.round((Date.parse(endsAt) - now.value) / 1000)
   if (seconds <= 0) return '已到时间'
   return `还剩 ${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
@@ -131,15 +134,17 @@ function driftClass(delta: number | null) {
         <a class="text-button" href="/town">回到小街</a>
         <label class="auto-toggle"><input type="checkbox" v-model="autoRefresh"/>每 4 秒自动刷新</label>
         <button class="secondary" :disabled="loading" @click="load">{{ loading ? '刷新中…' : '立即刷新' }}</button>
-        <span v-if="lastFetchedAt" class="fetched-at" role="status">上次拉取 {{ new Date(lastFetchedAt).toLocaleTimeString('zh-CN', { hourCycle: 'h23' }) }}</span>
+        <span v-if="lastFetchedAt" class="fetched-at" role="status">最近成功读取 {{ new Date(lastFetchedAt).toLocaleTimeString('zh-CN', { hourCycle: 'h23' }) }}</span>
+        <span v-if="error && lastAttemptedAt" class="fetched-at">最近尝试 {{ new Date(lastAttemptedAt).toLocaleTimeString('zh-CN', { hourCycle: 'h23' }) }}</span>
       </div>
     </header>
 
-    <p v-if="error" class="error" role="alert">{{ error }}</p>
+    <p class="hint">只读观察：本页读取存档，不推进小镇；成功读取时间与下方的世界模拟时间不同。</p>
+    <p v-if="error" class="error" role="alert"><strong v-if="world">快照已过期。以下保留上次成功读取的内容，不代表实时状态。 </strong>{{ error }}</p>
 
     <template v-if="world">
       <details open class="section">
-        <summary>世界状态 <span class="count">rev {{ world.revision }}</span></summary>
+        <summary>{{ error ? '历史世界快照' : '世界状态' }} <span class="count">rev {{ world.revision }}</span></summary>
         <div class="kv-grid">
           <div><span>天气 / 时段</span><strong>{{ world.weather === 'rain' ? '雨' : '晴' }} · {{ world.period }}</strong></div>
           <div><span>时区</span><strong>{{ world.timezone }}</strong></div>
@@ -204,7 +209,7 @@ function driftClass(delta: number | null) {
       </details>
 
       <details open class="section">
-        <summary>此刻发生着什么</summary>
+        <summary>{{ error ? '上次快照里的生活' : '此刻发生着什么' }}</summary>
         <div class="scroll-x">
           <table class="grid-table">
             <thead><tr><th>居民</th><th>位置</th><th>此刻</th><th>计划</th><th>心里想着</th><th>对话</th></tr></thead>

@@ -4,6 +4,7 @@ describe('quiet resident status', () => {
   it.each([
     ['focus', '继续专注', '📖'], ['sleep', '睡着了', '💤'], ['garden', '照料花草', '🌱'],
     ['create', '继续画海报', '🎨'], ['help', '帮邻居摆桌子', '🤝'], ['coffee', '整理咖啡馆', '☕'],
+    ['tend', '回到吧台，照应一下柜台前的人', '☕'], ['wait', '这里现在坐满了，先在旁边等一等', '⌛'],
   ])('uses a small status for %s', (activity, action, emoji) => expect(residentStatus(activity, action).emoji).toBe(emoji))
   it('shows the real speaker and travel animation before the underlying scheduled activity', () => {
     expect(residentStatus('read', '读书', false, true)).toEqual({ emoji: '💬', shortAction: '正在聊天' })
@@ -12,6 +13,10 @@ describe('quiet resident status', () => {
   it('uses the actual action instead of mistaking a project title for the activity', () => {
     expect(residentStatus('help', '准备留一盏灯的读书小聚').shortAction).toBe('和邻居忙一会儿')
     expect(residentStatus('home', '回家休息').shortAction).toBe('在家歇一会儿')
+  })
+  it('never presents cafe tending as gardening because of the shared English verb', () => {
+    expect(residentStatus('tend', '回到吧台，照应一下柜台前的人')).toEqual({ emoji: '☕', shortAction: '在吧台忙着' })
+    expect(residentStatus('idle', '回到吧台，照应一下柜台前的人')).toEqual({ emoji: '☕', shortAction: '在吧台忙着' })
   })
 })
 

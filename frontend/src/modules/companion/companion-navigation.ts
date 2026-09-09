@@ -1,26 +1,53 @@
 import type { CollisionWorld, Point, Rect } from '../../shared/scene/collision'
 import { canStand, nearestStandable } from '../../shared/scene/collision'
 import { findPath } from '../../shared/scene/pathfinding'
+import { CAFE_TABLES, CAFE_WINDOW_SEATS, CAFE_ROOM, CAFE_WINDOW_ROOM, HOME_ROOMS, GARDEN_OFFSET_X } from './companion-art'
 /** Feet navigation mirrors the cutaway floors, open doorways and actual furniture footprint. */
+const HOME_INTERIORS = Object.values(HOME_ROOMS).map(room => ({ x: room.x + 8, y: room.y + 32, width: room.w - 16, height: room.h - 32 }))
+const HOME_DOORS = Object.values(HOME_ROOMS).map(room => ({ x: room.door.x - 16, y: room.y + room.h, width: 32, height: 40 }))
 export const COMPANION_COLLISION: CollisionWorld = {
   walkable: [
-    { x: 88, y: 180, width: 240, height: 149 }, { x: 188, y: 319, width: 32, height: 83 },
-    { x: 392, y: 183, width: 336, height: 146 }, { x: 519, y: 319, width: 32, height: 83 },
-    { x: 40, y: 364, width: 884, height: 98 }, { x: 746, y: 230, width: 184, height: 240 },
+    ...HOME_INTERIORS, ...HOME_DOORS,
+    { x: CAFE_ROOM.x + 8, y: CAFE_ROOM.y + 32, width: CAFE_ROOM.w - 16, height: CAFE_ROOM.h - 32 },
+    { x: CAFE_WINDOW_ROOM.x + 8, y: CAFE_WINDOW_ROOM.y + 32, width: CAFE_WINDOW_ROOM.w - 16, height: CAFE_WINDOW_ROOM.h - 32 },
+    { x: 848, y: 44, width: 40, height: 284 }, // open connection between the main room and window wing
+    { x: CAFE_ROOM.doorX - 16, y: 328, width: 32, height: 40 },
+    { x: 32, y: 364, width: 816, height: 96 }, { x: 746 + GARDEN_OFFSET_X, y: 230, width: 184, height: 240 },
+    { x: 816, y: 424, width: 32, height: 168 }, { x: 816, y: 560, width: 256, height: 32 }, { x: 1040, y: 424, width: 32, height: 168 },
+    // The lower houses are reachable through a modest side lane rather than teleporting through
+    // their walls. These three paths are deliberately plain pavement; room identity stays in the
+    // backend location id, not in a fake job-specific destination.
+    { x: 48, y: 416, width: 32, height: 320 }, { x: 48, y: 708, width: 640, height: 32 }, { x: 656, y: 416, width: 32, height: 320 },
   ],
   obstacles: [
-    ...[108, 148].map(x => ({ x: x - 14, y: 138, width: 28, height: 84 })),
-    ...[252, 296].map(x => ({ x: x - 14, y: 124, width: 28, height: 84 })),
-    { x: 184, y: 142, width: 7, height: 78 },
-    { x: 95, y: 255, width: 66, height: 36 }, { x: 172, y: 269, width: 35, height: 17 },
-    { x: 245, y: 245, width: 59, height: 43 }, { x: 258, y: 300, width: 25, height: 20 },
-    { x: 411, y: 185, width: 58, height: 69 }, { x: 499, y: 185, width: 58, height: 69 }, { x: 587, y: 185, width: 58, height: 69 },
-    { x: 428, y: 262, width: 24, height: 18 }, { x: 516, y: 262, width: 24, height: 18 }, { x: 604, y: 262, width: 24, height: 18 },
-    { x: 798, y: 248, width: 49, height: 40 }, { x: 859, y: 248, width: 49, height: 40 },
-    { x: 798, y: 328, width: 49, height: 40 }, { x: 859, y: 328, width: 49, height: 40 },
+    ...Object.values(HOME_ROOMS).flatMap(room => [
+      { x: room.x + 18, y: room.y + 46, width: 28, height: 83 },
+      // Keep the tabletop solid while leaving the side chair as a destination rather than a wall;
+      // otherwise bed + chair + table form an impassable strip across the narrow upper homes.
+      { x: room.x + room.w - 50, y: room.y + 144, width: 38, height: 24 },
+    ]),
+    ...CAFE_TABLES.flatMap(table => [
+      { x: table.x - 30, y: table.y - 25, width: 60, height: 25 },
+      ...table.seats.map(seat => ({ x: seat.x - 12, y: seat.y - 24, width: 24, height: 18 })),
+    ]),
+    // The service counter is a real barrier; staff reach its rear via the left end.
+    { x: 622, y: 147, width: 224, height: 32 },
+    { x: 630, y: 55, width: 208, height: 25 },
+    { x: 589, y: 46, width: 32, height: 32 }, { x: 394, y: 72, width: 31, height: 27 },
+    // Joined window desktops are one solid edge, with a separate aisle behind the chairs.
+    { x: 976, y: 105, width: 45, height: 414 },
+    ...CAFE_WINDOW_SEATS.map(seat => ({ x: seat.x - 12, y: seat.y - 24, width: 24, height: 18 })),
+    ...[798, 859].flatMap(x => [248, 328].map(y => ({ x: x + GARDEN_OFFSET_X, y, width: 49, height: 40 }))),
   ],
 }
-export function companionPath(from: Point, to: Point) { return findPath(from, to, COMPANION_COLLISION) ?? [] }
+const STAFF_AISLE: Rect = { x: 622, y: 80, width: 224, height: 67 }
+const inStaffAisle = (point: Point) => point.x >= STAFF_AISLE.x && point.x <= STAFF_AISLE.x + STAFF_AISLE.width && point.y >= STAFF_AISLE.y && point.y <= STAFF_AISLE.y + STAFF_AISLE.height
+export function companionPath(from: Point, to: Point) {
+  // A trip to/from the machine can use its working aisle. Seat-to-seat and guest entry paths
+  // take the public side of the counter, even when the newly extended wing offers a shorter cut.
+  const world = inStaffAisle(from) || inStaffAisle(to) ? COMPANION_COLLISION : { ...COMPANION_COLLISION, obstacles: [...COMPANION_COLLISION.obstacles, STAFF_AISLE] }
+  return findPath(from, to, world) ?? []
+}
 
 /**
  * "能站的地方都能去" (docs/04-decisions.md). Once the backend leaves `positionId` null for a
@@ -31,10 +58,15 @@ export function companionPath(from: Point, to: Point) { return findPath(from, to
  * walls even where no obstacle rect happens to cover the last few pixels of floor.
  */
 const PLACE_STANDING_AREA: Record<'home' | 'cafe' | 'garden' | 'street', Rect> = {
-  home: { x: 102, y: 194, width: 212, height: 121 },
-  cafe: { x: 406, y: 197, width: 308, height: 118 },
-  garden: { x: 760, y: 244, width: 156, height: 212 },
-  street: { x: 54, y: 378, width: 856, height: 70 },
+  home: { x: HOME_ROOMS.owner!.x + 18, y: HOME_ROOMS.owner!.y + HOME_ROOMS.owner!.h - 20, width: HOME_ROOMS.owner!.w - 36, height: 8 },
+  cafe: { x: 554, y: 210, width: 222, height: 108 },
+  garden: { x: 760 + GARDEN_OFFSET_X, y: 244, width: 156, height: 212 },
+  street: { x: 54, y: 378, width: 776, height: 70 },
+}
+
+function homeStandingArea(place: string): Rect | undefined {
+  const room = HOME_ROOMS[place.replace(/^home[-./]?/, '')]
+  return room ? { x: room.x + 18, y: room.y + room.h - 20, width: room.w - 36, height: 8 } : undefined
 }
 
 /** Minimum distance (px) kept between two free-standing residents so nobody visually overlaps -
@@ -80,7 +112,7 @@ function hashedPointInRect(seed: string, rect: Rect): Point {
  * newcomer never lands on the room's one popular hashed corner along with everyone else.
  */
 export function freeStandPosition(place: string, residentId: string, occupied: Point[] = []): Point {
-  const area = PLACE_STANDING_AREA[place as keyof typeof PLACE_STANDING_AREA] ?? PLACE_STANDING_AREA.street
+  const area = homeStandingArea(place) ?? PLACE_STANDING_AREA[place as keyof typeof PLACE_STANDING_AREA] ?? PLACE_STANDING_AREA.street
   for (let attempt = 0; attempt < 32; attempt++) {
     const candidate = hashedPointInRect(`${place}:${residentId}:${attempt}`, area)
     if (canStand(candidate, COMPANION_COLLISION) && occupied.every(p => Math.hypot(p.x - candidate.x, p.y - candidate.y) >= FREE_STAND_SPACING)) return candidate

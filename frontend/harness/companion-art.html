@@ -15,20 +15,62 @@
 <script type="module">
   import { createApp, h, ref } from 'vue'
   import CompanionScene from '/src/modules/companion/CompanionScene.vue'
+  import { CAFE_SERVICE } from '/src/modules/companion/companion-art.ts'
   createApp({ setup() {
-    const night = ref(false), chat = ref(false), overview = ref(false)
-    const residents = [
+    const night = ref(false), chat = ref(false), overview = ref(false), rain = ref(false)
+    const residents = ref([
       { id: 'self', name: '小满', role: 'user', location: 'cafe', activity: 'read', action: '读一会儿书' },
       { id: 'ahe', name: '阿禾', role: '店主', location: 'cafe', activity: 'drink', action: '喝口咖啡' },
       { id: 'achuan', name: '阿川', role: '插画师', location: 'cafe', activity: 'create', action: '写海报上的小故事' },
-      { id: 'xiaxia', name: '小夏', role: '邻居', location: 'home', activity: 'rest', action: '歇一会儿' },
+      { id: 'xiaxia', name: '小夏', role: '邻居', location: 'home-artist', activity: 'rest', action: '歇一会儿' },
       { id: 'alin', name: '阿林', role: '园艺爱好者', location: 'garden', activity: 'garden', action: '给花圃浇水' },
-    ]
+    ])
+    const baseResidents = residents.value.map(r => ({ ...r }))
+    const cafeFocus = ref(false), explicitPlace = ref(undefined), cafeOpen = ref(true)
+    function showService() {
+      chat.value = false
+      residents.value = baseResidents.map((r, index) => index === 1 ? { ...r, location: 'cafe', activity: 'prepare', action: '准备热饮', positionId: 'cafe-counter' } : index === 0 ? { ...r, location: 'cafe', activity: 'wait', action: '等一杯热饮', positionId: null } : r)
+    }
+    function showAllSeats() {
+      chat.value = false
+      residents.value = baseResidents.map((r, index) => ({ ...r, location: 'cafe', activity: index === 2 ? 'create' : 'read', positionId: index === 4 ? 'cafe-window-seat' : 'cafe-worktable' }))
+    }
+    function showWindowRow() {
+      chat.value = false
+      // Hand-authored capacity fixture: visitors exist only in this preview, never in a saved town.
+      const at = (id, name, positionId, activity = 'read', role = '受控访客') => ({ id, name, role, location: 'cafe', activity, action: activity === 'prepare' ? '准备热饮' : activity === 'rest' ? '对坐聊一会儿' : '安静做手上的事', positionId })
+      residents.value = [
+        at('self', '小满', 'cafe-worktable', 'rest', 'user'),
+        at('discussion-a', '讨论访客甲', 'cafe-worktable', 'rest'),
+        at('discussion-b', '讨论访客乙', 'cafe-worktable', 'rest'),
+        at('discussion-c', '讨论访客丙', 'cafe-worktable', 'rest'),
+        at('student', '小川', 'cafe-window-seat', 'work', '备考邻居'),
+        at('artist', '知夏', 'cafe-window-2', 'make', '插画师'),
+        at('gardener', '青叔', 'cafe-window-3', 'read', '园艺爱好者'),
+        at('window-guest-4', '窗边访客甲', 'cafe-window-4', 'work'),
+        at('window-guest-5', '窗边访客乙', 'cafe-window-5', 'read'),
+        at('window-guest-6', '窗边访客丙', 'cafe-window-6', 'make'),
+        at('owner', '阿禾', 'cafe-counter', 'prepare', '咖啡馆店主'),
+      ]
+    }
+    // Controlled fixture only: lets the browser test ask for one concrete transition at a time.
+    window.cafeLayoutHarness = {
+      setResidents: value => { residents.value = value; chat.value = false },
+      setPlace: value => { explicitPlace.value = value; overview.value = false },
+      setCafeOpen: value => { cafeOpen.value = value },
+      reset: () => { residents.value = baseResidents.map(r => ({ ...r })) },
+      service: showService, allSeats: showAllSeats, windowRow: showWindowRow, servicePoints: CAFE_SERVICE,
+    }
     return () => [h('h1', '慢慢小街 · 午后的生活'), h('nav', [
       h('button', { onClick: () => night.value = !night.value }, night.value ? '看白天' : '看夜晚'),
+      h('button', { onClick: () => rain.value = !rain.value }, rain.value ? '看晴天' : '看细雨'),
       h('button', { onClick: () => chat.value = !chat.value }, chat.value ? '继续做事' : '聊聊海报'),
+      h('button', { onClick: () => { cafeFocus.value = !cafeFocus.value; overview.value = false } }, cafeFocus.value ? '看街角' : '看咖啡厅'),
+      h('button', { onClick: showService }, '看点单与服务'),
+      h('button', { onClick: showAllSeats }, '看五席入座'),
+      h('button', { onClick: showWindowRow }, '看窗边与讨论区'),
       h('button', { onClick: () => overview.value = !overview.value }, overview.value ? '聚焦生活区' : '看看全街'),
-    ]), h(CompanionScene, { residents, minutes: night.value ? 1260 : 840, overview: overview.value,
+    ]), h(CompanionScene, { residents: residents.value, selectedPlace: explicitPlace.value ?? (cafeFocus.value ? 'cafe' : undefined), cafeOpen: cafeOpen.value, weather: rain.value ? 'rain' : 'clear', minutes: night.value ? 1260 : 840, overview: overview.value,
       projects: [
         { id: 'poster', title: '窗边海报', place: 'cafe', status: 'working', progress: 75, objectKind: 'poster' },
         { id: 'flowers', title: '一瓶小花', place: 'cafe', status: 'working', progress: 60, objectKind: 'flowers' },

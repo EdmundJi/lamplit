@@ -77,6 +77,41 @@ describe('companion debug view', () => {
     expect(api.post).not.toHaveBeenCalled()
   })
 
+  it('marks a retained snapshot as stale after a failed poll without moving the last success time', async () => {
+    const view = await render()
+    const succeededAt = view.get('[role="status"]').text()
+    expect(succeededAt).toContain('最近成功读取')
+    api.get.mockRejectedValue(new Error('资源不存在'))
+    await vi.advanceTimersByTimeAsync(4000)
+    await flushPromises()
+    expect(view.get('[role="status"]').text()).toBe(succeededAt)
+    expect(view.get('[role="alert"]').text()).toContain('快照已过期')
+    expect(view.get('[role="alert"]').text()).toContain('不代表实时状态')
+    expect(view.text()).toContain('最近尝试')
+    expect(view.text()).toContain('历史世界快照')
+    expect(view.text()).toContain('上次快照里的生活')
+    expect(view.text()).toContain('快照计划截止于')
+    expect(view.text()).toContain('rev 42')
+    expect(api.post).not.toHaveBeenCalled()
+
+    api.get.mockResolvedValue({ joined: true, world: world({ revision: 43 }) })
+    await vi.advanceTimersByTimeAsync(4000)
+    await flushPromises()
+    expect(view.find('[role="alert"]').exists()).toBe(false)
+    expect(view.get('[role="status"]').text()).not.toBe(succeededAt)
+    expect(view.text()).toContain('rev 43')
+    expect(view.text()).not.toContain('上次快照里的生活')
+  })
+
+  it('does not claim a successful read when the initial request fails', async () => {
+    api.get.mockRejectedValue(new Error('资源不存在'))
+    const view = await render()
+    expect(view.find('[role="status"]').exists()).toBe(false)
+    expect(view.get('[role="alert"]').text()).toBe('资源不存在')
+    expect(view.text()).toContain('最近尝试')
+    expect(view.text()).not.toContain('历史世界快照')
+  })
+
   it('shows each resident\'s personality drift from their seed values, including a negative drift', async () => {
     const view = await render()
     const text = view.text()

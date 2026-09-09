@@ -3,7 +3,7 @@ import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type Phaser from 'phaser'
 import type { SceneResident, SceneProject, SceneConversation, SceneObject, SceneLabel } from './companion-scene'
 import { TownSoundscape } from '../../shared/scene/soundscape'
-const props = withDefaults(defineProps<{ residents: SceneResident[]; weather?: 'clear' | 'rain'; minutes?: number; soundEnabled?: boolean; selectedResidentId?: string; selectedPlace?: string; projects?: SceneProject[]; conversations?: SceneConversation[]; objects?: SceneObject[]; overview?: boolean; textBubbles?: boolean; suppressHover?: boolean }>(), { weather: 'clear', minutes: 720, soundEnabled: false, overview: false, textBubbles: false, suppressHover: false })
+const props = withDefaults(defineProps<{ residents: SceneResident[]; weather?: 'clear' | 'rain'; minutes?: number; soundEnabled?: boolean; cafeOpen?: boolean; selectedResidentId?: string; selectedPlace?: string; projects?: SceneProject[]; conversations?: SceneConversation[]; objects?: SceneObject[]; overview?: boolean; textBubbles?: boolean; suppressHover?: boolean }>(), { weather: 'clear', minutes: 720, soundEnabled: false, cafeOpen: true, overview: false, textBubbles: false, suppressHover: false })
 const emit = defineEmits<{ 'select-resident': [id: string]; 'select-project': [id: string]; 'select-conversation': [id: string] }>()
 const host = ref<HTMLDivElement>()
 const failed = ref(false)
@@ -24,13 +24,16 @@ let scene: import('./companion-scene').CompanionStreetScene | undefined
 let disposed = false
 const sound = new TownSoundscape(() => ({ weather: props.weather, minutes: props.minutes }))
 function updateSound() {
+  sound.setCafeOpen(props.cafeOpen)
   const self = props.residents.find(resident => resident.role === 'user' || resident.id === 'self' || resident.id === 'user')
-  sound.setIndoor(Boolean(self && /^(home|cafe)([./]|$)/.test(self.location)))
+  const selected = props.residents.find(resident => resident.id === props.selectedResidentId)
+  const viewedPlace = props.overview ? 'street' : props.selectedPlace || selected?.location || self?.location || 'street'
+  sound.setSpace(/^cafe([./]|$)/.test(viewedPlace) ? 'cafe' : /^home([./-]|$)/.test(viewedPlace) ? 'home' : 'outdoor')
   sound.refresh()
 }
 function visibility() { sound.setVisible(!document.hidden) }
 watch(() => props.soundEnabled, enabled => sound.setEnabled(enabled))
-watch(() => [props.residents, props.weather, props.minutes, props.projects, props.objects, props.conversations, props.selectedResidentId, props.selectedPlace, props.overview], () => { scene?.sync(); updateSound() }, { deep: true })
+watch(() => [props.residents, props.weather, props.minutes, props.cafeOpen, props.projects, props.objects, props.conversations, props.selectedResidentId, props.selectedPlace, props.overview], () => { scene?.sync(); updateSound() }, { deep: true })
 onMounted(async () => {
   document.addEventListener('visibilitychange', visibility)
   visibility(); updateSound()
@@ -63,7 +66,7 @@ onBeforeUnmount(() => { disposed = true; document.removeEventListener('visibilit
     <div ref="host" class="companion-scene__canvas" :aria-hidden="!failed" />
     <div class="companion-scene__labels" aria-label="小街居民">
       <template v-for="label in labels" :key="label.id">
-        <button type="button" class="resident-label resident-person" :class="{ 'is-offscreen': label.offscreen, 'card-below': label.y < 115, 'edge-left': label.x < 120, 'edge-right': label.x > (host?.clientWidth ?? 960) - 120 }" :style="label.offscreen ? { left: `${label.x}px`, top: `${label.y}px`, height: '28px' } : { left: `${label.bodyX}px`, top: `${label.bodyY}px`, height: `${label.bodyHeight}px` }" :aria-label="`${label.name}，${label.role}，${label.action}${label.offscreen ? '，在画面外，点击查看' : '，点击查看故事'}`" @mouseenter="hoveredId = label.id" @mouseleave="hoveredId = null" @focus="focusedId = label.id" @blur="focusedId = null" @click="openResident(label.id)">
+        <button type="button" class="resident-label resident-person" :data-resident-id="label.id" :data-world-x="label.worldX" :data-world-y="label.worldY" :data-facing="label.facing" :class="{ 'is-offscreen': label.offscreen, 'card-below': label.y < 115, 'edge-left': label.x < 120, 'edge-right': label.x > (host?.clientWidth ?? 960) - 120 }" :style="label.offscreen ? { left: `${label.x}px`, top: `${label.y}px`, height: '28px' } : { left: `${label.bodyX}px`, top: `${label.bodyY}px`, height: `${label.bodyHeight}px` }" :aria-label="`${label.name}，${label.role}，${label.action}${label.offscreen ? '，在画面外，点击查看' : '，点击查看故事'}`" @mouseenter="hoveredId = label.id" @mouseleave="hoveredId = null" @focus="focusedId = label.id" @blur="focusedId = null" @click="openResident(label.id)">
           <span v-if="label.offscreen" class="resident-edge-avatar" aria-hidden="true">{{ label.direction }} {{ label.name.slice(0, 1) }}</span>
           <span v-if="showCard(label)" role="tooltip" class="resident-card"><strong>{{ label.name }}</strong><span class="resident-role">{{ label.role }}</span><span class="resident-action">{{ label.action }}</span></span>
         </button>
