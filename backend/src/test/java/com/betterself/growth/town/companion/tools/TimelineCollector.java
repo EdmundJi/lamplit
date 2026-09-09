@@ -26,8 +26,8 @@ import java.util.TreeMap;
  * ever appeared in the world is lost, even after the world itself evicts it.
  */
 public final class TimelineCollector {
-    private static final Map<String, String> RESIDENT_NAMES = Map.of(
-        "owner", "阿禾", "student", "小川", "artist", "知夏", "gardener", "青叔");
+    private final Map<String, String> residentNames = new HashMap<>(Map.of(
+        "owner", "阿禾", "student", "小川", "artist", "知夏", "gardener", "青叔"));
 
     private final Set<String> seenDiary = new HashSet<>();
     private final Set<String> seenEvents = new HashSet<>();
@@ -67,6 +67,7 @@ public final class TimelineCollector {
     public void capture(CompanionWorld w) {
         if (w == null) return;
         avatarName = w.name;
+        for (Actor actor : w.residents) residentNames.put(actor.id(), actor.name());
         captureDiary(w);
         captureEvents(w);
         captureMemories(w);
@@ -203,6 +204,6 @@ public final class TimelineCollector {
 
     private String nameOf(String id) {
         if (id.equals("self")) return avatarName;
-        return RESIDENT_NAMES.getOrDefault(id, id);
+        return residentNames.getOrDefault(id, id);
     }
 }

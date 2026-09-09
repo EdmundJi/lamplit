@@ -27,9 +27,7 @@ import java.util.TreeMap;
 public final class MetricsExporter {
     private MetricsExporter() {}
 
-    private static final List<String> RESIDENT_IDS = List.of("owner", "student", "artist", "gardener");
-    private static final Map<String, String> RESIDENT_NAMES = Map.of(
-        "owner", "阿禾", "student", "小川", "artist", "知夏", "gardener", "青叔");
+    private static final List<String> INITIAL_RESIDENT_IDS = List.of("owner", "student", "artist", "gardener");
 
     @SuppressWarnings("unchecked")
     public static Map<String, Object> compute(List<Map<String, Object>> sortedEntries, TimelineCollector collector, CompanionWorld finalWorld) {
@@ -96,11 +94,15 @@ public final class MetricsExporter {
             snapshotsByResident.computeIfAbsent(id, k -> new ArrayList<>()).add((Map<String, Object>) e.get("extra"));
         }
         List<Object> out = new ArrayList<>();
-        for (String id : RESIDENT_IDS) {
+        List<String> residentIds = finalWorld == null
+            ? INITIAL_RESIDENT_IDS
+            : finalWorld.residentStates.stream().map(r -> r.id).filter(id -> !"self".equals(id)).toList();
+        for (String id : residentIds) {
             List<Map<String, Object>> snaps = snapshotsByResident.getOrDefault(id, List.of());
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("id", id);
-            row.put("name", RESIDENT_NAMES.get(id));
+            String name = finalWorld == null ? id : finalWorld.residents.stream().filter(a -> a.id().equals(id)).map(CompanionWorld.Actor::name).findFirst().orElse(id);
+            row.put("name", name);
             row.put("snapshotsObserved", snaps.size());
             if (snaps.isEmpty()) {
                 // No snapshot was ever captured for this resident - honest zero/empty, not a guess.
@@ -164,7 +166,8 @@ public final class MetricsExporter {
         Map<String, Object> out = new LinkedHashMap<>();
         List<String> targets = new ArrayList<>();
         if (finalWorld != null) {
-            ResidentState owner = finalWorld.residentStates.stream().filter(r -> "owner".equals(r.id)).findFirst().orElse(null);
+            String operatorId = finalWorld.cafeOperatorId == null ? "owner" : finalWorld.cafeOperatorId;
+            ResidentState owner = finalWorld.residentStates.stream().filter(r -> operatorId.equals(r.id)).findFirst().orElse(null);
             if (owner != null) owner.anticipatesRefill.forEach((k, v) -> { if (Boolean.TRUE.equals(v)) targets.add(k); });
         }
         out.put("learned", targets.size());
@@ -229,7 +232,7 @@ public final class MetricsExporter {
     @SuppressWarnings("unchecked")
     private static Map<String, Object> memoryMetrics(List<Map<String, Object>> entries) {
         Map<String, Integer> perResident = new LinkedHashMap<>();
-        for (String id : RESIDENT_IDS) perResident.put(id, 0);
+        for (String id : INITIAL_RESIDENT_IDS) perResident.put(id, 0);
         // topicId -> ownerId -> set of distinct texts that owner recorded for that topic
         Map<String, Map<String, java.util.Set<String>>> byTopic = new LinkedHashMap<>();
         for (Map<String, Object> e : entries) {

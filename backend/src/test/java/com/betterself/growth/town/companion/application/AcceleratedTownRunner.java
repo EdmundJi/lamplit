@@ -16,9 +16,12 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * A headless runner that drives one {@link CompanionWorld} through many simulated days, entirely
@@ -92,7 +95,7 @@ public final class AcceleratedTownRunner {
          * ResidentDirector's own 90-second decision-staleness check discard a model reply that
          * arrives after the simulated clock has moved on too far while the real network call was
          * in flight - so the simulated-seconds-per-real-second ratio must stay well under that
-         * budget. docs/05-notes.md measures DeepSeek round trips at 1.7-2.5s; 8s/tick with a 600ms
+         * budget. Measured model round trips are a few seconds; 8s/tick with a 600ms
          * sleep is a 13.3:1 ratio, which still leaves a 2.5s call ~12s of margin (32%) before the
          * tighter 45s dialogue-turn window - down from the original 10:1 (800ms sleep, ~18s margin
          * at 2.5s) because measuring this batch's actual DeepSeek latency (see the item-1 speed
@@ -145,7 +148,8 @@ public final class AcceleratedTownRunner {
         Instant runStart = resuming ? seed.updatedAt : cfg.start();
 
         var clock = new MutableClock(runStart);
-        ResidentMind mind = cfg.modelEnabled() ? liveMind() : disabledMind();
+        LiveMind live = cfg.modelEnabled() ? liveMind(System.getenv()) : null;
+        ResidentMind mind = live == null ? disabledMind() : live.mind();
         var director = new ResidentDirector(store, mind, clock, Math.max(1, cfg.dailyModelBudget()), usage);
         var service = new CompanionService(store, clock, director, usage);
 
@@ -154,6 +158,7 @@ public final class AcceleratedTownRunner {
         var collector = new TimelineCollector();
         collector.capture(seed);
         collector.capturePersonalitySnapshot(seed); // a true t=0 baseline for THIS run, resumed or fresh
+        List<Map<String,Object>> applicationOutcomes=new ArrayList<>();String lastModelStatus=seed.modelStatus;
 
         List<ScriptedIntent> scripted = cfg.scriptedAvatarIntents() ? scriptedIntents() : List.of();
 
@@ -176,6 +181,13 @@ public final class AcceleratedTownRunner {
                 fireDueScripted(service, cfg.userId(), scripted, elapsedSeconds);
                 CompanionService.View view = service.advance(cfg.userId());
                 collector.capture(view.world());
+                if(view.world()!=null&&!java.util.Objects.equals(lastModelStatus,view.world().modelStatus)){
+                    lastModelStatus=view.world().modelStatus;
+                    if(lastModelStatus!=null&&!lastModelStatus.contains("正在想")){
+                        Map<String,Object> outcome=new LinkedHashMap<>();outcome.put("at",t.toString());outcome.put("status",lastModelStatus);
+                        outcome.put("outcome",lastModelStatus.contains("过时")?"rejected":lastModelStatus.contains("暂时")?"failed":"applied");applicationOutcomes.add(outcome);
+                    }
+                }
                 if (i % ticksPerDay == 0) collector.capturePersonalitySnapshot(view.world());
 
                 if (cfg.modelEnabled() && cfg.realPaceMillisPerTick() > 0) {
@@ -192,6 +204,11 @@ public final class AcceleratedTownRunner {
                         protectedTicksRemaining--;
                         pacedTicks++;
                     } else {
+                        // consider() dispatches on its own executor. Give that worker a small bounded
+                        // wall-clock turn before advancing simulated time again; otherwise a very
+                        // short run can finish all ticks and close the director before the first
+                        // reservation ever starts, yielding a misleading "model-on, zero calls" run.
+                        sleepQuietly(Math.min(25,Math.max(10,cfg.realPaceMillisPerTick()/12)));
                         fastTicks++;
                     }
                 }
@@ -202,7 +219,7 @@ public final class AcceleratedTownRunner {
 
         var sorted = TimelineExporter.sortedByTime(collector.entries());
         CompanionWorld finalWorld = store.read(cfg.userId());
-        export(cfg, sorted, usage, finalWorld, runStart, t, collector);
+        export(cfg, sorted, usage, finalWorld, runStart, t, collector, live, applicationOutcomes);
 
         Duration wall = Duration.ofNanos(System.nanoTime() - startNanos);
         return new RunResult(cfg.outDir(), runStart, t, ticks,
@@ -244,29 +261,78 @@ public final class AcceleratedTownRunner {
         };
     }
 
-    /** Builds a real DeepSeek-backed mind directly, the same way ResidentMindLiveEmojiIT does:
-     * QwenHttpProvider's non-Spring constructor, credentials read straight from the environment
-     * (see .env.local's QWEN_* names) and never logged or written anywhere. No Spring context is
-     * started, so this never risks wiring in the real DataSource/JdbcWorldStore by accident. */
-    private static ResidentMind liveMind() {
-        String baseUrl = requireEnv("QWEN_BASE_URL");
-        String apiKey = requireEnv("QWEN_API_KEY");
-        String model = requireEnv("QWEN_MODEL");
-        Duration timeout = envDuration("QWEN_TIMEOUT", Duration.ofSeconds(35));
+    /** One explicitly selected provider per accelerated run. There is intentionally no fallback in
+     * this harness: a Qwen evaluation must fail visibly if Qwen fails, rather than producing a
+     * plausible-looking report whose dialogue was silently generated by DeepSeek. */
+    private record LiveMind(ResidentMind mind,String provider,String model,List<Map<String,Object>> calls) {}
+
+    private static LiveMind liveMind(Map<String,String> env) {
+        String selected=modelProvider(env);
+        String baseUrl=requireProviderEnv(env,selected,"BASE_URL");
+        String apiKey=requireProviderEnv(env,selected,"API_KEY");
+        String model=requireProviderEnv(env,selected,"MODEL");
+        Duration timeout=providerDuration(env,selected,"TIMEOUT","qwen".equals(selected)?Duration.ofSeconds(60):Duration.ofSeconds(120));
+        Duration streamTimeout=providerDuration(env,selected,"STREAM_TIMEOUT","qwen".equals(selected)?Duration.ofSeconds(70):Duration.ofSeconds(130));
+        String jsonModeValue=providerEnv(env,selected,"JSON_MODE");
+        boolean jsonMode=jsonModeValue==null||jsonModeValue.isBlank()||Boolean.parseBoolean(jsonModeValue);
         ObjectMapper json = new ObjectMapper().findAndRegisterModules();
-        var provider = new QwenHttpProvider(json, baseUrl, apiKey, model, timeout);
-        return new QwenResidentMind(provider, json, "qwen", true);
+        var provider = new QwenHttpProvider(json,baseUrl,apiKey,model,timeout,streamTimeout,jsonMode,selected);
+        var delegate = new QwenResidentMind(provider,json,"qwen",true,selected,false,false,false);
+        List<Map<String,Object>> calls=Collections.synchronizedList(new ArrayList<>());
+        return new LiveMind(new RecordingMind(delegate,calls),selected,model,calls);
     }
 
-    private static String requireEnv(String name) {
-        String value = System.getenv(name);
-        if (value == null || value.isBlank())
-            throw new IllegalStateException("Model mode requires " + name + " in the environment (see .env.local) - refusing to guess a default.");
+    /** Captures the canonical input and structured result only. Credentials and HTTP headers stay
+     * inside QwenHttpProvider and cannot enter the exported audit file. */
+    private static final class RecordingMind implements ResidentMind {
+        private final ResidentMind delegate;private final List<Map<String,Object>> calls;
+        RecordingMind(ResidentMind delegate,List<Map<String,Object>> calls){this.delegate=delegate;this.calls=calls;}
+        public boolean enabled(){return delegate.enabled();}
+        public Decision decide(Context context){return decideMetered(context).value();}
+        public Result<Decision> decideMetered(Context context){return capture("decision",context,()->delegate.decideMetered(context));}
+        public com.betterself.growth.town.companion.domain.ConversationLifecycle.Utterance generateTurn(DialogueRequest request){return generateTurnMetered(request).value();}
+        public Result<com.betterself.growth.town.companion.domain.ConversationLifecycle.Utterance> generateTurnMetered(DialogueRequest request){
+            Map<String,Object> input=new LinkedHashMap<>();input.put("perspective",request.perspective());input.put("partnerName",request.partnerName());input.put("topicTitle",request.topicTitle());
+            return capture("turn",input,()->delegate.generateTurnMetered(request));
+        }
+        public com.betterself.growth.town.companion.domain.ConversationLifecycle.Recollection summarizeConversation(SummaryRequest request){return summarizeConversationMetered(request).value();}
+        public Result<com.betterself.growth.town.companion.domain.ConversationLifecycle.Recollection> summarizeConversationMetered(SummaryRequest request){
+            Map<String,Object> input=new LinkedHashMap<>();input.put("perspective",request.perspective());input.put("partnerName",request.partnerName());input.put("transcript",ResidentMind.turnViews(request.transcript()));input.put("conversationMemories",request.conversationMemories());
+            return capture("summary",input,()->delegate.summarizeConversationMetered(request));
+        }
+        private <T>Result<T> capture(String type,Object input,java.util.function.Supplier<Result<T>> call){
+            Map<String,Object> row=new LinkedHashMap<>();row.put("callType",type);row.put("input",input);
+            try{Result<T> result=call.get();row.put("status","generated");row.put("output",result.value());row.put("usage",result.usage());calls.add(row);return result;}
+            catch(RuntimeException failure){row.put("status","failed");row.put("error",failure.getClass().getSimpleName());calls.add(row);throw failure;}
+        }
+    }
+
+    static String modelProvider(Map<String,String> env) {
+        String selected=env.getOrDefault("COMPANION_RUN_MODEL_PROVIDER","qwen").trim().toLowerCase(java.util.Locale.ROOT);
+        if("qwen3".equals(selected))selected="qwen"; // old runner value, same Qwen supplier
+        if(!Set.of("qwen","deepseek").contains(selected))throw new IllegalStateException("COMPANION_RUN_MODEL_PROVIDER must be qwen or deepseek");
+        return selected;
+    }
+
+    static String modelName(Map<String,String> env) {
+        return requireProviderEnv(env,modelProvider(env),"MODEL");
+    }
+
+    private static String providerEnv(Map<String,String> env,String provider,String suffix) {
+        String value=env.get(("qwen".equals(provider)?"QWEN":"DEEPSEEK")+"_"+suffix);
+        if((value==null||value.isBlank())&&"qwen".equals(provider))value=env.get("QWEN3_"+suffix);
         return value;
     }
 
-    private static Duration envDuration(String name, Duration fallback) {
-        String value = System.getenv(name);
+    private static String requireProviderEnv(Map<String,String> env,String provider,String suffix) {
+        String value=providerEnv(env,provider,suffix);
+        if (value == null || value.isBlank())
+            throw new IllegalStateException("Model mode requires the selected "+provider+" "+suffix+" in the environment (see .env.local) - refusing to guess a credential.");
+        return value;
+    }
+
+    private static Duration providerDuration(Map<String,String> env,String provider,String suffix, Duration fallback) {
+        String value=providerEnv(env,provider,suffix);
         return value == null || value.isBlank() ? fallback : Duration.parse(value);
     }
 
@@ -285,7 +351,8 @@ public final class AcceleratedTownRunner {
     }
 
     private static void export(RunConfig cfg, List<Map<String, Object>> sorted, InMemoryModelUsage usage,
-                                CompanionWorld finalWorld, Instant runStart, Instant finalInstant, TimelineCollector collector) throws IOException {
+                                CompanionWorld finalWorld, Instant runStart, Instant finalInstant, TimelineCollector collector,
+                                LiveMind live,List<Map<String,Object>> applicationOutcomes) throws IOException {
         Map<String, Object> manifest = new LinkedHashMap<>();
         manifest.put("worldId", finalWorld == null ? cfg.worldId() : finalWorld.id);
         manifest.put("avatarName", finalWorld == null ? cfg.avatarName() : finalWorld.name);
@@ -296,6 +363,8 @@ public final class AcceleratedTownRunner {
         manifest.put("requestedDays", cfg.days());
         manifest.put("tickSeconds", cfg.tickSeconds());
         manifest.put("modelEnabled", cfg.modelEnabled());
+        manifest.put("modelProvider", live == null ? null : live.provider());
+        manifest.put("model", live == null ? null : live.model());
         manifest.put("dailyModelBudget", cfg.dailyModelBudget());
         manifest.put("userId", cfg.userId());
         manifest.put("scriptedAvatarIntents", cfg.scriptedAvatarIntents());
@@ -316,6 +385,8 @@ public final class AcceleratedTownRunner {
         usageReport.put("totalInputTokens", usage.totalInputTokens());
         usageReport.put("totalOutputTokens", usage.totalOutputTokens());
         TimelineExporter.writeJson(cfg.outDir().resolve("usage.json"), usageReport);
+        TimelineExporter.writeJson(cfg.outDir().resolve("model-calls.json"),live==null?List.of():List.copyOf(live.calls()));
+        TimelineExporter.writeJson(cfg.outDir().resolve("model-application-outcomes.json"),applicationOutcomes);
 
         // Blind test: questions and answers live in two separate directories on purpose (see
         // docs/05-notes.md "手抄是个静默失败点" / docs/04-decisions.md "验收") - whoever actually

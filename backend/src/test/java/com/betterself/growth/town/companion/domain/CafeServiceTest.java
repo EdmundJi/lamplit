@@ -1,11 +1,13 @@
 package com.betterself.growth.town.companion.domain;
 
 import com.betterself.growth.town.companion.domain.CompanionWorld.Project;
+import com.betterself.growth.town.companion.domain.CompanionWorld.Plan;
 import com.betterself.growth.town.companion.domain.CompanionWorld.ResidentState;
 import com.betterself.growth.town.companion.domain.CompanionWorld.ServiceRequest;
 import org.junit.jupiter.api.Test;
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
 import static org.assertj.core.api.Assertions.*;
 
 /**
@@ -40,20 +42,26 @@ class CafeServiceTest {
         ServiceRequest request = w.serviceRequests.get(0);
         assertThat(request.status).isEqualTo("waiting");
 
-        // Advance real time well past this student's patience threshold. The owner never moves, never
-        // ticks any duty decision, never claims the counter - exactly "店主外出且有人渴了".
+        // Waiting a long time becomes a perception; it does not make the rules decide to leave or
+        // complain on the student's behalf.
         Instant at = start;
         for (int i = 0; i < 20; i++) { at = at.plusSeconds(6); CafeService.tick(w, at); }
+        assertThat(request.status).isEqualTo("waiting");
+        assertThat(ResidentSimulation.salientPerceptions(w,"student",at)).contains("这杯已经等了一阵，还没有人来做");
+        assertThat(w.events.stream().filter(e -> "complaint".equals(e.type()))).isEmpty();
 
-        // The request was never fulfilled - it broke, it did not silently succeed.
+        // Once the resident's own chosen action actually leaves the cafe, the physical request
+        // chain can truthfully record that it was abandoned.
+        assertThat(ResidentSimulation.applyDecision(w,"student",student.revision,w.intentRevision,"home","rest",null,"先回家",null,List.of(),at)).isTrue();
+        CafeService.tick(w,at.plusSeconds(1));
+
         assertThat(request.status).isEqualTo("abandoned");
         assertThat(request.resolvedAt).isNotNull();
         assertThat(List.of("consumed", "delivered", "preparing")).doesNotContain(request.status);
-        // It is recorded only in the thirsty resident's own memory - never announced as a WorldEvent
-        // (the student here is introverted enough, extroversion 20, that this stays unspoken too).
+        // It is recorded only in the thirsty resident's own memory, never turned into invented speech.
         assertThat(w.memories.stream().filter(m -> m.ownerId().equals("student")).count()).isGreaterThan(memoriesBefore);
         assertThat(w.memories.stream().filter(m -> m.ownerId().equals("student") && "service".equals(m.topicId())))
-            .anySatisfy(m -> assertThat(m.text()).contains("没人来"));
+            .anySatisfy(m -> assertThat(m.text()).contains("离开咖啡馆"));
         assertThat(w.events.stream().filter(e -> "complaint".equals(e.type()))).isEmpty();
     }
 
@@ -62,7 +70,7 @@ class CafeServiceTest {
      * end is far beyond the student's patience window, so choose() never even runs for the owner
      * during this window - the same gate the production loop uses), and a whole real simulated
      * afternoon passes. This is "老板跑出去做自己的事" itself, not a stand-in for it. */
-    @Test void endToEndTheOwnerBeingGenuinelyAwayLeavesARealRequestUnservedInTheFullSimulationLoop() {
+    @Test void endToEndTheOwnerBeingGenuinelyAwayLeavesAWaitingRequestWithoutInventingAReaction() {
         CompanionWorld w = CompanionRules.join("cafe-break-e2e", "住客", "Asia/Shanghai", start);
         ResidentState owner = ResidentSimulation.state(w, "owner");
         ResidentState student = ResidentSimulation.state(w, "student");
@@ -85,16 +93,12 @@ class CafeServiceTest {
         w.serviceRequests.clear();
         CafeService.request(w, student, start);
         ServiceRequest request = w.serviceRequests.get(w.serviceRequests.size() - 1);
-        int memoriesBefore = (int) w.memories.stream().filter(m -> m.ownerId().equals("student")).count();
-
         for (int second = 6; second <= 600; second += 6) CompanionRules.advance(w, start.plusSeconds(second));
 
-        // The owner never actually served it - the plan committed above never let choose() run for
-        // them during this whole window - so the request broke rather than silently succeeding.
-        assertThat(request.status).isEqualTo("abandoned");
-        assertThat(owner.dutyPressure).isGreaterThan(0); // pressure still visibly built up while ignored
-        assertThat(w.memories.stream().filter(m -> m.ownerId().equals("student")).count()).isGreaterThan(memoriesBefore);
-        assertThat(w.memories.stream().filter(m -> m.ownerId().equals("student") && "service".equals(m.topicId()))).isNotEmpty();
+        assertThat(request.status).isEqualTo("waiting");
+        assertThat(owner.plan.action()).isEqualTo("sleep"); // the queue never wakes a sleeping operator
+        assertThat(ResidentSimulation.salientPerceptions(w,"student",start.plusSeconds(600))).contains("这杯已经等了一阵，还没有人来做");
+        assertThat(w.events).noneMatch(event->"complaint".equals(event.type()));
     }
 
     @Test void anExplicitRequestIsAlwaysConsumedOnceDeliveredButAProactiveGuessCanGoColdUnwanted() {
@@ -123,52 +127,30 @@ class CafeServiceTest {
         assertThat(guess.status).isEqualTo("cold");
     }
 
-    // ---- allowed to grow either way: the decisive proof this is emergence, not a ratchet ------
+    @Test void restingAtTheCafeDoesNotOrderADrinkUnlessTheModelChoosesThatAction(){
+        CompanionWorld w=CompanionRules.join("explicit-drink","住客","Asia/Shanghai",start,true);
+        w.conversations.stream().filter(c->"active".equals(c.status)).forEach(c->ConversationLifecycle.finish(w,c,start,"测试准备"));
+        ResidentState student=ResidentSimulation.state(w,"student");w.serviceRequests.clear();
+        ResidentSimulation.replaceActor(w,"student","cafe","idle","坐了一会儿",start.plusSeconds(60));student.plan=null;
+        assertThat(ResidentSimulation.applyDecision(w,"student",student.revision,w.intentRevision,"cafe","rest",null,"坐一会儿",null,List.of(),start)).isTrue();Plan resting=student.plan;
+        assertThat(w.serviceRequests).isEmpty();
+        assertThat(ResidentSimulation.availableActions(w,"student",start.plusSeconds(1))).contains("request_drink");
+        assertThat(ResidentSimulation.applyDecision(w,"student",student.revision,w.intentRevision,"cafe","request_drink",null,"想点一杯热的",null,List.of(),start.plusSeconds(1))).isTrue();
+        assertThat(w.serviceRequests).singleElement().satisfies(request->assertThat(request.status).isEqualTo("waiting"));
+        assertThat(student.plan).isSameAs(resting);assertThat(student.plan.endsAt()).isEqualTo(start.plusSeconds(1200));
+    }
 
-    @Test void repeatedVoicedComplaintsNudgeConscientiousnessUpAndRepeatedInterruptionsWithNoComplaintsNudgeItDown() {
-        CompanionWorld complained = CompanionRules.join("cafe-drift-up", "住客", "Asia/Shanghai", start);
-        ResidentState complainedOwner = ResidentSimulation.state(complained, "owner");
-        double before1 = Personality.of(complainedOwner).conscientiousness();
-        // A real history of two customers, twice each, waiting too long and (being extroverted enough
-        // to say so - the artist's extroversion is 62) actually voicing it - driven through the real
-        // abandon() path via reapWaiting(), not by poking the counters directly.
-        ResidentState artist = ResidentSimulation.state(complained, "artist");
-        for (int i = 0; i < 3; i++) {
-            Instant requestedAt = start.plusSeconds(i * 1000L);
-            ResidentSimulation.replaceActor(complained, "artist", "cafe", "observe", "在咖啡馆里", requestedAt.plusSeconds(6000));
-            TownPlaces.release(complained, "artist");
-            TownPlaces.claim(complained, "artist", "cafe", null, requestedAt);
-            complained.serviceRequests.removeIf(r -> "artist".equals(r.requesterId) && !java.util.Set.of("consumed","abandoned","cold").contains(r.status));
-            CafeService.request(complained, artist, requestedAt);
-            Instant at = requestedAt;
-            for (int t = 0; t < 20; t++) { at = at.plusSeconds(6); CafeService.tick(complained, at); }
-        }
-        assertThat(complainedOwner.complaintsSinceDutyReflection).isGreaterThanOrEqualTo(2);
-        Instant reflectAt = start.plusSeconds(400);
-        CafeService.reflectOnDuty(complained, complainedOwner, reflectAt);
-        double after1 = Personality.of(complainedOwner).conscientiousness();
-        assertThat(after1).isGreaterThan(before1);
-
-        CompanionWorld ignored = CompanionRules.join("cafe-drift-down", "住客", "Asia/Shanghai", start);
-        ResidentState ignoredOwner = ResidentSimulation.state(ignored, "owner");
-        double before2 = Personality.of(ignoredOwner).conscientiousness();
-        // A real history of the owner's own project being repeatedly interrupted by duty, with nobody
-        // ever complaining - driven through the real recordInterruption() path.
-        Project ownProject = ignored.projects.stream().filter(p -> "owner".equals(p.ownerId)).findFirst().orElseThrow();
-        for (int i = 0; i < 4; i++) CafeService.recordInterruption(ignored, ignoredOwner, ownProject, start.plusSeconds(i * 30L));
-        assertThat(ignoredOwner.interruptionsSinceDutyReflection).isGreaterThanOrEqualTo(3);
-        assertThat(ignoredOwner.complaintsSinceDutyReflection).isZero();
-        CafeService.reflectOnDuty(ignored, ignoredOwner, reflectAt);
-        double after2 = Personality.of(ignoredOwner).conscientiousness();
-        assertThat(after2).isLessThan(before2);
-
-        // The decisive assertion: the very same mechanism (reflectOnDuty, reading dutyPressure-chain
-        // evidence) moved the same starting trait in opposite directions under two different histories.
-        assertThat(after1).isGreaterThan(before1);
-        assertThat(after2).isLessThan(before2);
-        // Bounded: neither move flips the character - both stay well short of the 0/100 extremes.
-        assertThat(after1).isLessThanOrEqualTo(95);
-        assertThat(after2).isGreaterThanOrEqualTo(15);
+    @Test void waitingDoesNotManufactureComplaintsReflectionsOrProactiveRefills() {
+        CompanionWorld w = CompanionRules.join("cafe-no-hidden-brain", "住客", "Asia/Shanghai", start);
+        ResidentState owner=ResidentSimulation.state(w,"owner"),artist=ResidentSimulation.state(w,"artist");
+        ResidentSimulation.replaceActor(w,"artist","cafe","observe","在咖啡馆里",start.plusSeconds(6000));
+        w.serviceRequests.clear();CafeService.request(w,artist,start);
+        for(int second=6;second<=300;second+=6)CafeService.tick(w,start.plusSeconds(second));
+        assertThat(w.serviceRequests.getFirst().status).isEqualTo("waiting");
+        assertThat(owner.complaintsSinceDutyReflection).isZero();
+        assertThat(owner.anticipatesRefill).isEmpty();
+        assertThat(w.events).noneMatch(event->"complaint".equals(event.type()));
+        assertThat(w.memories).noneMatch(memory->memory.text().contains("下次想在她开口前"));
     }
 
     @Test void dutyPressureBuildsWhileIgnoredAndDecaysOnceTheQueueClears() {
@@ -189,49 +171,18 @@ class CafeServiceTest {
         assertThat(owner.dutyPressure).isLessThan(withQueue);
     }
 
-    // ---- end-to-end: the whole autonomous loop, not a hand-built scenario ---------------------
+    // ---- no-model fallback --------------------------------------------------------------------
 
-    /** Every other test above hand-builds a scenario and drives CafeService's own methods directly.
-     * That is exactly the kind of test that can pass while the mechanism is dead in a real, running
-     * world - which is what actually happened: a batch of this same machinery shipped with green
-     * unit tests while a real world's serviceRequests were 3-for-3 abandoned, dutyPressure sat at 0,
-     * and lastDutyReflectionAt was null because {@link ResidentSimulation#choose} only ever ran
-     * between plans, never during one. This test drives nothing but the public entry point the app
-     * itself calls every tick - {@link CompanionRules#advance} - over a real multi-day span, and
-     * asserts the counters this whole batch is about actually moved on their own: requests get
-     * consumed (not just created and abandoned), dutyPressure is a genuinely live quantity,
-     * reflectOnDuty actually runs, and conscientiousness - the one field that proves this is
-     * reflection moving a trait rather than a memory - actually drifts away from its seed value. */
-    @Test void endToEndARealMultiDaySimulationActuallyMovesTheDutyCounters() {
+    /** With no resident mind configured, elapsed time may finish existing physical work but cannot
+     * invent thirst, service decisions, or a new social routine on the residents' behalf. */
+    @Test void aRuleOnlyMultiDayRunDoesNotManufactureRequestsOrServiceDecisions() {
         CompanionWorld w = CompanionRules.join("cafe-e2e-lifecycle", "住客", "Asia/Shanghai", start);
-        ResidentState owner = ResidentSimulation.state(w, "owner");
-        double seeded = Personality.of(owner).conscientiousness();
-        boolean pressureEverPositive = false, reflectionRan = false;
-        int peakComplaints = 0, peakInterruptions = 0;
-        double conscientiousnessMin = seeded, conscientiousnessMax = seeded;
         Instant at = start, end = start.plusSeconds(5L * 86400); // real advance() cadence
         while (at.isBefore(end)) {
             at = at.plusSeconds(60);
             CompanionRules.advance(w, at);
-            pressureEverPositive |= owner.dutyPressure > 0;
-            peakComplaints = Math.max(peakComplaints, owner.complaintsSinceDutyReflection);
-            peakInterruptions = Math.max(peakInterruptions, owner.interruptionsSinceDutyReflection);
-            reflectionRan |= owner.lastDutyReflectionAt != null;
-            double c = Personality.of(owner).conscientiousness();
-            conscientiousnessMin = Math.min(conscientiousnessMin, c);
-            conscientiousnessMax = Math.max(conscientiousnessMax, c);
         }
-        long total = w.serviceRequests.size();
-        long consumed = w.serviceRequests.stream().filter(r -> "consumed".equals(r.status)).count();
-        assertThat(total).isGreaterThan(0); // residents actually asked for a drink at some point
-        assertThat(consumed).isGreaterThan(0); // and duty actually won often enough to serve some of them
-        assertThat(pressureEverPositive).isTrue(); // dutyPressure is a real, moving number, not stuck at 0
-        // Evidence accumulated at some point, even if a given reflection window consumed it below the
-        // threshold - see the reflectOnDuty fix this batch makes: sub-threshold evidence must survive
-        // across windows rather than being silently discarded, or it can never reach the threshold.
-        assertThat(peakComplaints + peakInterruptions).isGreaterThan(0);
-        assertThat(reflectionRan).isTrue(); // reflectOnDuty's call site is actually reached and acts
-        // The decisive assertion: over a real run, conscientiousness itself is not frozen at 85.
-        assertThat(conscientiousnessMax - conscientiousnessMin).isGreaterThan(0);
+        assertThat(w.serviceRequests).isEmpty();
+        assertThat(w.events).noneMatch(event->Set.of("complaint","work_offer","work_agreement").contains(event.type()));
     }
 }

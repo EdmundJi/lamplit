@@ -4,8 +4,10 @@ import com.betterself.growth.town.companion.domain.*;
 import org.junit.jupiter.api.Test;
 import java.time.*;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.*;
@@ -49,8 +51,9 @@ class ResidentDirectorTest {
         try{director.consider(1,w);assertThat(store.finished.await(2,TimeUnit.SECONDS)).isTrue();assertThat(w.events).anyMatch(e->e.type().equals("thought"));}
         finally{director.close();}
         var failedStore=new FakeStore(CompanionRules.join("model-fails","我","Asia/Shanghai",now));
+        var plansBeforeFailure=failedStore.world.residentStates.stream().filter(r->!r.id.equals("self")).map(r->r.plan==null?null:r.plan.id()).toList();
         var unavailable=new ResidentDirector(failedStore,new ResidentMind(){public boolean enabled(){return true;}public Decision decide(Context c){throw new IllegalStateException("network unavailable");}},Clock.fixed(now,ZoneOffset.UTC));
-        try{unavailable.consider(1,failedStore.world);assertThat(failedStore.finished.await(2,TimeUnit.SECONDS)).isTrue();assertThat(failedStore.world.residentStates).filteredOn(r->!r.id.equals("self")).allMatch(r->r.plan!=null);assertThat(failedStore.world.modelStatus).contains("习惯");}
+        try{unavailable.consider(1,failedStore.world);assertThat(failedStore.finished.await(2,TimeUnit.SECONDS)).isTrue();assertThat(failedStore.world.residentStates.stream().filter(r->!r.id.equals("self")).map(r->r.plan==null?null:r.plan.id()).toList()).containsExactlyElementsOf(plansBeforeFailure);assertThat(failedStore.world.modelStatus).contains("习惯");}
         finally{unavailable.close();}
     }
     @Test void avatarIsPerceivedByNearbyResidentsButNeverCarriesUserText()throws Exception {
@@ -66,7 +69,7 @@ class ResidentDirectorTest {
             if(a.id().equals("gardener"))world.residents.set(i,new CompanionWorld.Actor(a.id(),a.name(),a.role(),"cafe","observe","看看周围",a.x(),a.y(),now.plusSeconds(200)));
         }
         ResidentSimulation.state(world,"gardener").plan=new CompanionWorld.Plan("test-plan","observe","cafe",null,"看看周围",now,now.plusSeconds(200));
-        for(var r:world.residentStates)if(!r.id.equals("gardener")&&!r.id.equals("self"))r.plan=null;
+        for(var r:world.residentStates)if(!r.id.equals("gardener")&&!r.id.equals("self"))r.plan=new CompanionWorld.Plan("park-"+r.id,"sleep","home-"+r.id,null,"测试中睡着",now,now.plusSeconds(600));
         var store=new FakeStore(world);
         var captured=new ResidentMind.Context[1];
         ResidentMind mind=new ResidentMind(){
@@ -96,7 +99,7 @@ class ResidentDirectorTest {
             if(a.id().equals("gardener"))world.residents.set(i,new CompanionWorld.Actor(a.id(),a.name(),a.role(),"cafe","observe","看看周围",a.x(),a.y(),now.plusSeconds(200)));
         }
         ResidentSimulation.state(world,"gardener").plan=new CompanionWorld.Plan("test-plan","observe","cafe",null,"看看周围",now,now.plusSeconds(200));
-        for(var r:world.residentStates)if(!r.id.equals("gardener")&&!r.id.equals("self"))r.plan=null;
+        for(var r:world.residentStates)if(!r.id.equals("gardener")&&!r.id.equals("self"))r.plan=new CompanionWorld.Plan("park-"+r.id,"sleep","home-"+r.id,null,"测试中睡着",now,now.plusSeconds(600));
         var store=new FakeStore(world);
         var captured=new ResidentMind.Context[1];
         ResidentMind mind=new ResidentMind(){
@@ -109,11 +112,109 @@ class ResidentDirectorTest {
         var context=captured[0];
         assertThat(context).isNotNull();
         assertThat(context.residentId()).isEqualTo("gardener");
-        // Gardener's own context carries only gardener's own relationships map (this world starts
-        // everyone below 97), never student's private number about a third resident, and the
-        // affection-expressed flag - a field Context never even declares - cannot surface either.
-        assertThat(context.relationships()).doesNotContainValue(97);
+        // Internal gauges and another resident's private relationship state are absent from the
+        // model contract itself, rather than merely being set to an innocuous-looking value.
+        assertThat(Arrays.stream(ResidentMind.Context.class.getRecordComponents()).map(java.lang.reflect.RecordComponent::getName))
+            .doesNotContain("energy","social","curiosity","relationships","extroversion","conscientiousness","sensitivity","volatility","dutyPressure");
         assertThat(context.toString()).doesNotContain("affectionExpressed");
+    }
+    @Test void normalResidentWithoutAPlanReachesTheModelWithoutInternalGauges()throws Exception {
+        var world=CompanionRules.join("qualitative-context","我","Asia/Shanghai",now,true);world.conversations.clear();world.serviceRequests.clear();
+        var owner=ResidentSimulation.state(world,"owner");owner.plan=null;owner.energy=70;
+        for(var r:world.residentStates)if(!Set.of("owner","self").contains(r.id))r.plan=new CompanionWorld.Plan("park-"+r.id,"sleep","home-"+r.id,null,"睡着",now,now.plusSeconds(600));
+        var captured=new ResidentMind.Context[1];var store=new FakeStore(world);
+        ResidentMind mind=new ResidentMind(){
+            public boolean enabled(){return true;}
+            public Decision decide(Context c){captured[0]=c;return new Decision("rest","home",null,"先回去坐一会儿","",List.of(c.memories().getFirst().id()),null,null);}
+        };
+        var director=new ResidentDirector(store,mind,Clock.fixed(now,ZoneOffset.UTC));
+        try{director.consider(41,world);assertThat(store.finished.await(2,TimeUnit.SECONDS)).isTrue();}finally{director.close();}
+
+        assertThat(captured[0]).isNotNull();
+        assertThat(captured[0].residentId()).isEqualTo("owner");
+        assertThat(captured[0].salientPerceptions()).isEmpty();
+        assertThat(captured[0].availableActions()).contains("sleep","rest");
+        assertThat(Arrays.stream(ResidentMind.Context.class.getRecordComponents()).map(java.lang.reflect.RecordComponent::getName))
+            .doesNotContain("worldId","revision","intentRevision","at","mood","thought","energy","social","curiosity","relationships","dutyPressure");
+        assertThat(Arrays.stream(ResidentMind.ActorView.class.getRecordComponents()).map(java.lang.reflect.RecordComponent::getName)).doesNotContain("x","y","until");
+        assertThat(Arrays.stream(ResidentMind.MemoryView.class.getRecordComponents()).map(java.lang.reflect.RecordComponent::getName)).doesNotContain("importance");
+    }
+    @Test void tiredPerceptionLetsTheModelContinueWithoutResettingTheCurrentPlan()throws Exception {
+        var world=CompanionRules.join("continue-context","我","Asia/Shanghai",now,true);world.conversations.clear();world.serviceRequests.clear();
+        var owner=ResidentSimulation.state(world,"owner");owner.energy=15;
+        var plan=new CompanionWorld.Plan("work-in-progress","work","cafe",null,"把账本最后一页写完",now.minusSeconds(120),now.plusSeconds(600));owner.plan=plan;
+        for(int i=0;i<world.residents.size();i++){var actor=world.residents.get(i);if("owner".equals(actor.id()))world.residents.set(i,new CompanionWorld.Actor(actor.id(),actor.name(),actor.role(),"cafe","work","还在写账本",actor.x(),actor.y(),now.plusSeconds(600)));}
+        for(var r:world.residentStates)if(!Set.of("owner","self").contains(r.id))r.plan=new CompanionWorld.Plan("park-"+r.id,"sleep","home-"+r.id,null,"睡着",now,now.plusSeconds(600));
+        var store=new FakeStore(world);var calls=new AtomicInteger();
+        ResidentMind mind=new ResidentMind(){
+            public boolean enabled(){return true;}
+            public Decision decide(Context c){calls.incrementAndGet();assertThat(c.salientPerceptions()).contains("已经很累，注意力很难维持");assertThat(c.availableActions()).contains("continue","sleep");return new Decision("continue","cafe",null,"这页只剩一点，先写完再说","",List.of(),null,null);}
+        };
+        var director=new ResidentDirector(store,mind,Clock.fixed(now,ZoneOffset.UTC));
+        try{director.consider(42,world);assertThat(store.finished.await(2,TimeUnit.SECONDS)).isTrue();}finally{director.close();}
+
+        assertThat(calls).hasValue(1);
+        assertThat(owner.plan).isSameAs(plan);
+        assertThat(owner.plan.endsAt()).isEqualTo(now.plusSeconds(600));
+    }
+    @Test void pausedWorkIsVisibleAndTheModelCanResumeItsAuthoritativeRemainder()throws Exception {
+        var world=CompanionRules.join("resume-context","我","Asia/Shanghai",now,true);world.conversations.clear();world.serviceRequests.clear();
+        var owner=ResidentSimulation.state(world,"owner");owner.energy=70;owner.plan=null;
+        var pausedPlan=new CompanionWorld.Plan("paused-ledger","work","cafe",null,"把账本最后一页写完",now.minusSeconds(300),now.plusSeconds(300));
+        owner.suspendedAction=new CompanionWorld.SuspendedAction();owner.suspendedAction.plan=pausedPlan;owner.suspendedAction.pausedAt=now;owner.suspendedAction.desiredDurationSeconds=300;
+        for(var r:world.residentStates)if(!Set.of("owner","self").contains(r.id))r.plan=new CompanionWorld.Plan("park-"+r.id,"sleep","home-"+r.id,null,"睡着",now,now.plusSeconds(600));
+        var store=new FakeStore(world);var captured=new ResidentMind.Context[1];
+        ResidentMind mind=new ResidentMind(){
+            public boolean enabled(){return true;}
+            public Decision decide(Context c){captured[0]=c;return new Decision("resume","cafe",null,"账本还没写完，接着来","",List.of(),null,null);}
+        };
+        var director=new ResidentDirector(store,mind,Clock.fixed(now,ZoneOffset.UTC));
+        try{director.consider(43,world);assertThat(store.finished.await(2,TimeUnit.SECONDS)).isTrue();}finally{director.close();}
+
+        assertThat(captured[0].pausedAction()).isEqualTo(new ResidentMind.PausedActionView("work","cafe","把账本最后一页写完",600));
+        assertThat(captured[0].availableActions()).contains("resume");
+        assertThat(owner.suspendedAction).isNull();
+        assertThat(owner.plan.action()).isIn("travel","work");
+        if("travel".equals(owner.plan.action())){assertThat(owner.desiredAction).isEqualTo("work");assertThat(owner.desiredDurationSeconds).isEqualTo(600);}
+    }
+    @Test void portableCafeWorkCanResumeAtHomeAfterTheCafeHasClosed()throws Exception {
+        var world=CompanionRules.join("resume-home-context","我","Asia/Shanghai",now,true);world.conversations.clear();world.serviceRequests.clear();world.cafeStatus="closed";
+        var owner=ResidentSimulation.state(world,"owner");owner.energy=70;owner.plan=null;
+        var pausedPlan=new CompanionWorld.Plan("paused-ledger-home","work","cafe",null,"把账本最后一页写完",now.minusSeconds(300),now.plusSeconds(300));
+        owner.suspendedAction=new CompanionWorld.SuspendedAction();owner.suspendedAction.plan=pausedPlan;owner.suspendedAction.pausedAt=now;owner.suspendedAction.desiredDurationSeconds=300;
+        for(int i=0;i<world.residents.size();i++){var actor=world.residents.get(i);if("owner".equals(actor.id()))world.residents.set(i,new CompanionWorld.Actor(actor.id(),actor.name(),actor.role(),"home-owner","idle","刚睡醒",actor.x(),actor.y(),now.plusSeconds(600)));}
+        for(var r:world.residentStates)if(!Set.of("owner","self").contains(r.id))r.plan=new CompanionWorld.Plan("park-"+r.id,"sleep","home-"+r.id,null,"睡着",now,now.plusSeconds(600));
+        var store=new FakeStore(world);var captured=new ResidentMind.Context[1];
+        ResidentMind mind=new ResidentMind(){
+            public boolean enabled(){return true;}
+            public Decision decide(Context c){captured[0]=c;return new Decision("resume","home",null,"在家把剩下这页写完","",List.of(),null,null);}
+        };
+        var director=new ResidentDirector(store,mind,Clock.fixed(now,ZoneOffset.UTC));
+        try{director.consider(44,world);assertThat(store.finished.await(2,TimeUnit.SECONDS)).isTrue();}finally{director.close();}
+
+        assertThat(captured[0].pausedAction()).isEqualTo(new ResidentMind.PausedActionView("work","home","把账本最后一页写完",600));
+        assertThat(captured[0].availableActions()).contains("resume");
+        assertThat(owner.suspendedAction).isNull();
+        assertThat(owner.plan.action()).isEqualTo("work");
+        assertThat(owner.plan.place()).isEqualTo("home-owner");
+        assertThat(Duration.between(now,owner.plan.endsAt()).getSeconds()).isEqualTo(600);
+    }
+    @Test void retainedOperatorSeesAReopenPathWhileFormerOwnerOnlySeesOrdinaryCafeUses() {
+        Instant morning=Instant.parse("2026-09-09T01:05:00Z");
+        var world=CompanionRules.join("cafe-return-context","我","Asia/Shanghai",morning,true);world.conversations.clear();world.cafeOperatorId="owner";world.cafeOperating=false;world.cafeStatus="closed";
+        var director=new ResidentDirector(new FakeStore(world),new ResidentMind(){public boolean enabled(){return false;}public Decision decide(Context context){throw new UnsupportedOperationException();}},Clock.fixed(morning,ZoneOffset.UTC));
+        try{
+            var retained=director.perspective(world,"owner",morning,List.of());
+            assertThat(retained.cafeRoleFacts()).contains("我是咖啡馆当前经营者，经营权和吧台设备责任仍在我这里。","我熟悉咖啡馆、吧台和日常开关门方式。","我之前暂停了经营，咖啡馆目前已经关门。");
+            assertThat(retained.cafeScheduleCue()).isEqualTo("到了咖啡馆平常开门时间；目前经营暂停，门仍关着");
+            assertThat(retained.availableActions()).contains("open_cafe");
+
+            world.cafeOperatorId="artist";world.cafeOperating=true;world.cafeStatus="open";
+            var former=director.perspective(world,"owner",morning,List.of());
+            assertThat(former.cafeRoleFacts()).doesNotContain("我是咖啡馆当前经营者，经营权和吧台设备责任仍在我这里。");
+            assertThat(former.availableActions()).doesNotContain("open_cafe","close_cafe");
+            assertThat(former.knownPlaces()).filteredOn(place->place.id().equals("cafe")).singleElement().satisfies(place->{assertThat(place.description()).contains("六个独立窗边座位","安静读书","制作");assertThat(place.possibleActivities()).contains("read","work","make");});
+        }finally{director.close();}
     }
     @Test void modelUsageIsRecordedPerUserWorldDayAndCallType()throws Exception {
         var world=CompanionRules.join("model-usage","我","Asia/Shanghai",now);

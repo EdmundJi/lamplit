@@ -7,9 +7,9 @@ import java.util.LinkedHashSet;
 import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** Outcome checks across a sustained afternoon, rather than snapshots of preset lines. */
+/** Outcome checks across a sustained interval when no resident model is configured. */
 class CompanionEmergenceTest {
-    @Test void anAfternoonProducesAgreementsAndPhysicalCollaborativeResults() {
+    @Test void aRuleOnlyAfternoonFinishesExistingEventsWithoutInventingNewIntentions() {
         Instant start = Instant.parse("2026-09-08T06:00:00Z");
         CompanionWorld world = CompanionRules.join("afternoon-alice", "住客", "Asia/Shanghai", start);
         Set<String> eventKinds = new HashSet<>();
@@ -27,26 +27,18 @@ class CompanionEmergenceTest {
                     .allSatisfy(actor -> assertThat(actor.place()).isEqualTo(conversation.place));
             });
         }
-        assertThat(eventKinds).contains("conversation", "agreement", "contribution", "ready");
-        assertThat(world.projects).anySatisfy(project -> {
-            assertThat(project.progress).isEqualTo(100);
-            assertThat(project.contributors).hasSizeGreaterThanOrEqualTo(2);
-            assertThat(world.objects).anySatisfy(object -> {
-                assertThat(object.projectId()).isEqualTo(project.id);
-                assertThat(object.state()).isEqualTo("finished");
-            });
-        });
-        assertThat(world.memories.stream().filter(m -> m.sourceType().equals("reflection")))
-            .isNotEmpty().allSatisfy(memory -> assertThat(memory.evidenceIds()).isNotEmpty());
+        assertThat(eventKinds).contains("conversation", "agreement", "arrival");
+        assertThat(eventKinds).doesNotContain("contribution", "ready", "new_wish");
+        assertThat(world.residentStates).filteredOn(resident->!"self".equals(resident.id)).allMatch(resident->resident.plan==null);
         System.out.println("Companion afternoon: " + eventIds.size() + " events, types=" + eventKinds);
     }
 
-    @Test void independentWorldsHaveDifferentButReplayableLife() {
+    @Test void aNoMindFallbackIsReplayableAndDoesNotUseWorldIdAsAHiddenDesire() {
         assertThat(trace("same-world")).isEqualTo(trace("same-world"));
-        assertThat(new HashSet<>(java.util.List.of(trace("a-world"), trace("b-world"), trace("c-world")))).hasSizeGreaterThan(1);
+        assertThat(new HashSet<>(java.util.List.of(trace("a-world"), trace("b-world"), trace("c-world")))).hasSize(1);
     }
 
-    @Test void returningTheNextDayContinuesHistoryAndStartsSomethingNew() {
+    @Test void returningTheNextDayContinuesHistoryWithoutManufacturingANewPublicActivity() {
         Instant start = Instant.parse("2026-09-08T06:00:00Z");
         CompanionWorld world = CompanionRules.join("next-day", "住客", "Asia/Shanghai", start);
         Set<String> originalProjects = new HashSet<>();
@@ -58,8 +50,7 @@ class CompanionEmergenceTest {
         for (int second = 6; second <= 300; second += 6) CompanionRules.advance(world, start.plusSeconds(86400 + second));
         assertThat(world.id).isEqualTo(identity);
         assertThat(world.joinedAt).isEqualTo(joined);
-        assertThat(world.projects).anySatisfy(project -> assertThat(originalProjects).doesNotContain(project.id));
-        assertThat(world.projects).anySatisfy(project -> assertThat(originalProjects).contains(project.id));
+        assertThat(world.projects).extracting(project -> project.id).containsExactlyInAnyOrderElementsOf(originalProjects);
     }
 
     private String trace(String seed) {

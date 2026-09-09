@@ -5,37 +5,59 @@ import java.util.*;
 import static com.betterself.growth.town.companion.domain.CompanionWorld.*;
 
 /**
- * The coffee/water service chain: a resident wants a drink, the owner - when present, free at the
- * counter, and when duty actually wins out over whatever else they were doing - makes and delivers
- * it, and the resident drinks it. Every link can break: the owner is out, the counter never gets
- * tended before patience runs out, a drink is made for someone who has already left, or a proactive
- * pour goes to someone who did not want it this time. A broken link is written only into memory,
- * never announced as a {@link WorldEvent} - see the "does not shout" requirement in 01-requirements.
+ * Physical coffee/water service and opening-state rules. Residents choose whether to request a
+ * drink, tend the counter, keep waiting, leave, open, close, or return through their own model turn.
+ * This class validates permissions and place state, advances an already chosen request through
+ * waiting/preparing/delivered/consumed, and records objective failures such as leaving before a cup
+ * arrives or closing with work still open.
  *
- * <p>This is deliberately not "if someone is waiting, go serve them". The owner accumulates a
- * {@code dutyPressure} every tick the counter has someone waiting (heavier during business hours,
- * lighter but never zero off them - business hours only change how heavy the pressure feels, not
- * whether it exists), and {@link #decide} compares that pressure against a competing pull toward
- * whatever else the owner would rather be doing right now - their own unfinished project, and a term
- * that grows as their own conscientiousness erodes. Either can win. Duty pressure decays on its own
- * when nobody is waiting, so it is a real, moving quantity the owner weighs each time they are free to
- * choose, not a boolean.
- *
- * <p>Two pieces of evidence feed back into the owner's own conscientiousness, in {@link #reflectOnDuty}:
- * repeated, voiced complaints about waiting nudge it up; repeated interruptions of the owner's own
- * project with nobody complaining nudge it down. Both are small, bounded, and require more than one
- * occurrence - a single bad afternoon cannot flip a personality.
- *
- * <p>Regulars are also where an expectation gets learned (and can be learned wrong): when the same
- * customer comes back for another drink shortly after the last one, twice in a row, the owner starts
- * pouring before being asked. Two coincidences are enough - it is not guarded against being wrong, and
- * a proactive pour the customer does not actually want this time just goes cold, same as any other
- * broken link.
+ * <p>It deliberately does not turn duty pressure, personality, familiarity, elapsed waiting time or
+ * learned expectations into speech or actions. Those legacy helpers remain only for old controlled
+ * compatibility tests and are not called by the production simulation loop. A visible wait may enter
+ * one resident's model context as a qualitative fact; the resident still decides what it means and
+ * what to do.
  */
 final class CafeService {
     private CafeService() {}
     static final String OWNER = "owner";
     static final String PLACE = "cafe";
+    static final int DEFAULT_OPEN_MINUTE = 9 * 60;
+    static final int DEFAULT_CLOSE_MINUTE = 21 * 60;
+    /** The operator is mutable world state.  OWNER remains the legacy/default id for old saves and
+     * tests, while an active, explicitly accepted arrangement can add a helper or replace it. */
+    /** Even when the counter is closed, the last operator remains the person who can agree to a
+     * handover.  cafeOperating gates actual service in mayTend and the simulation loop. */
+    static String operatorId(CompanionWorld w){return w.cafeOperatorId==null?OWNER:w.cafeOperatorId;}
+    static void reconcileSchedule(CompanionWorld w,Instant at){
+        if(w.cafeOpenMinute<0||w.cafeOpenMinute>=1440||w.cafeCloseMinute<0||w.cafeCloseMinute>=1440||w.cafeOpenMinute==w.cafeCloseMinute){
+            w.cafeOpenMinute=DEFAULT_OPEN_MINUTE;w.cafeCloseMinute=DEFAULT_CLOSE_MINUTE;
+        }
+        if(!Set.of("open","closing","closed").contains(w.cafeStatus==null?"":w.cafeStatus)){
+            w.cafeStatus=w.cafeOperating&&scheduledOpen(w,at)?"open":"closed";w.cafeStatusChangedAt=at;
+        }
+        // An explicit pause uses closing until everyone has actually left. Only an old/inconsistent
+        // save that says both "not operating" and "open" is repaired straight to closed.
+        if(!w.cafeOperating&&"open".equals(w.cafeStatus)){w.cafeStatus="closed";w.cafeStatusChangedAt=at;}
+    }
+    static boolean scheduledOpen(CompanionWorld w,Instant at){
+        int minute=at.atZone(ZoneId.of(w.timezone)).getHour()*60+at.atZone(ZoneId.of(w.timezone)).getMinute();
+        return w.cafeOpenMinute<w.cafeCloseMinute
+            ?minute>=w.cafeOpenMinute&&minute<w.cafeCloseMinute
+            :minute>=w.cafeOpenMinute||minute<w.cafeCloseMinute;
+    }
+    static boolean acceptingOrders(CompanionWorld w){return w.cafeOperating&&"open".equals(w.cafeStatus);}
+    static boolean mayManage(CompanionWorld w,String residentId){
+        if(Objects.equals(operatorId(w),residentId))return true;
+        return w.workArrangements.stream().anyMatch(a->"active".equals(a.status)&&residentId.equals(a.workerId)
+            &&PLACE.equals(a.place)&&"delegate".equals(a.kind));
+    }
+    static boolean mayTend(CompanionWorld w,String residentId){
+        if(!acceptingOrders(w))return false;
+        if(Objects.equals(operatorId(w),residentId))return true;
+        return w.workArrangements.stream().anyMatch(a->"active".equals(a.status)&&residentId.equals(a.workerId)
+            && PLACE.equals(a.place)&&Set.of("assist","delegate").contains(a.kind));
+    }
+    static String oldestWaitingRequestId(CompanionWorld w){return w.serviceRequests.stream().filter(r->"waiting".equals(r.status)&&PLACE.equals(r.place)).min(Comparator.comparing(r->r.requestedAt)).map(r->r.id).orElse(null);}
     static final int PREP_SECONDS = 18;
     private static final int COLD_AFTER_SECONDS = 90;
     private static final int FOLLOWUP_WINDOW_SECONDS = 600;
@@ -48,25 +70,12 @@ final class CafeService {
 
     // ---- making a request --------------------------------------------------------------------
 
-    /** A resident, wanting a drink at the cafe, asks for one - unless they already have a request in
-     * flight. Also where the owner's learned-expectation counter for this customer moves: a request
-     * that follows the last one they were actually served within {@link #FOLLOWUP_WINDOW_SECONDS} is
-     * one more piece of (possibly coincidental) evidence that this person always wants another. */
+    /** A resident has explicitly chosen request_drink; create one request unless one is already open. */
     static void request(CompanionWorld w, ResidentState requester, Instant at) {
-        if (requester == null || requester.id.equals(OWNER)) return;
+        if(!acceptingOrders(w))return;
+        String operatorId=operatorId(w);
+        if (requester == null || requester.id.equals(operatorId)) return;
         if (w.serviceRequests.stream().anyMatch(r -> r.requesterId.equals(requester.id) && open(r.status))) return;
-        ResidentState owner = ResidentSimulation.state(w, OWNER);
-        if (owner != null) {
-            Instant last = owner.lastServedAt.get(requester.id);
-            int streak = last != null && Duration.between(last, at).getSeconds() <= FOLLOWUP_WINDOW_SECONDS
-                ? owner.repeatVisitStreak.getOrDefault(requester.id, 0) + 1 : 0;
-            owner.repeatVisitStreak.put(requester.id, streak);
-            if (streak >= 2 && !Boolean.TRUE.equals(owner.anticipatesRefill.get(requester.id))) {
-                owner.anticipatesRefill.put(requester.id, true);
-                ResidentSimulation.memory(w, owner.id, owner.id, "reflection", at, "service",
-                    ResidentSimulation.actor(w, requester.id).name() + "最近总是不一会儿又要一杯，我记住了，下次想在她开口前就准备好。", List.of(), 7);
-            }
-        }
         ServiceRequest req = new ServiceRequest();
         req.id = "sr-" + (++w.eventSequence); req.requesterId = requester.id; req.kind = "coffee";
         req.place = PLACE; req.status = "waiting"; req.requestedAt = at;
@@ -135,6 +144,7 @@ final class CafeService {
      * decays gently on its own when the counter is clear. Called every tick regardless of what the
      * owner is currently doing, so pressure genuinely builds while it is being ignored. */
     static void accruePressure(CompanionWorld w, ResidentState owner, Instant at) {
+        if(!acceptingOrders(w)){owner.dutyPressure=clamp(owner.dutyPressure-2.5);return;}
         long waiting = w.serviceRequests.stream().filter(r -> "waiting".equals(r.status) && PLACE.equals(r.place)).count();
         double weight = businessHours(w, at) ? 1.0 : 0.4;
         owner.dutyPressure = waiting > 0
@@ -147,8 +157,74 @@ final class CafeService {
     // 花园，这本身就不对" requirement. Still just a bias on one fallback branch, not a rule that
     // forbids leaving; duty itself still runs entirely on dutyPressure vs. personalPull above.
     static boolean businessHours(CompanionWorld w, Instant at) {
-        int hour = at.atZone(ZoneId.of(w.timezone)).getHour();
-        return hour >= 8 && hour < 21;
+        return scheduledOpen(w,at);
+    }
+
+    static String scheduleCue(CompanionWorld w,String residentId,Instant at){
+        if(!mayManage(w,residentId))return null;
+        if("open".equals(w.cafeStatus)&&!scheduledOpen(w,at))return "已经过了咖啡馆平常打烊的时间";
+        if("closed".equals(w.cafeStatus)&&scheduledOpen(w,at))return w.cafeOperating?"已经到了咖啡馆平常开门的时间":"到了咖啡馆平常开门时间；目前经营暂停，门仍关着";
+        if("closing".equals(w.cafeStatus))return cafeEmpty(w)?"客人已经走了，可以锁门回家":"刚才已经说过要打烊，店里还有人没走";
+        return null;
+    }
+
+    static String latestClosingNotice(CompanionWorld w,String residentId){
+        return w.memories.stream().filter(m->m.ownerId().equals(residentId)&&"cafe-hours".equals(m.topicId())&&"heard".equals(m.sourceType()))
+            .max(Comparator.comparing(Memory::at)).map(Memory::text).orElse(null);
+    }
+
+    static boolean closeForDay(CompanionWorld w,String residentId,String announcement,Instant at){
+        ResidentState manager=ResidentSimulation.state(w,residentId);Actor actor=manager==null?null:ResidentSimulation.actor(w,residentId);
+        if(manager==null||actor==null||!mayManage(w,residentId)||!"open".equals(w.cafeStatus)||!PLACE.equals(actor.place())||"sleep".equals(actor.activity()))return false;
+        List<String> present=new ArrayList<>();
+        for(ResidentState state:w.residentStates)if(!state.id.equals(residentId)&&PLACE.equals(ResidentSimulation.actor(w,state.id).place())&&!"sleep".equals(ResidentSimulation.actor(w,state.id).activity()))present.add(state.id);
+        String spoken=announcement==null?"":announcement.trim();
+        if(!present.isEmpty()&&spoken.isEmpty())return false;
+        w.cafeStatus="closing";w.cafeStatusChangedAt=at;
+        String own=null;
+        if(!spoken.isEmpty())own=ResidentSimulation.memory(w,residentId,residentId,"observed",at,"cafe-hours","我刚才说：“"+spoken+"”",List.of(),5);
+        for(String guest:present)ResidentSimulation.memory(w,guest,residentId,"heard",at,"cafe-hours",ResidentSimulation.actor(w,residentId).name()+"当面说：“"+spoken+"”",List.of(),6);
+        closeRequests(w,residentId,at);
+        ResidentSimulation.event(w,at,"cafe_closing",PLACE,List.of(residentId),spoken.isEmpty()?ResidentSimulation.actor(w,residentId).name()+"开始收店。":ResidentSimulation.actor(w,residentId).name()+"说：“"+spoken+"",null);
+        return own!=null||present.isEmpty();
+    }
+
+    static boolean openForDay(CompanionWorld w,String residentId,String reason,Instant at){
+        if(!mayManage(w,residentId)||!"closed".equals(w.cafeStatus)||!PLACE.equals(ResidentSimulation.actor(w,residentId).place()))return false;
+        boolean returning=!w.cafeOperating;w.cafeOperating=true;w.cafeStatus="open";w.cafeStatusChangedAt=at;
+        if(returning)ResidentSimulation.markCafeReturned(w,residentId,reason,at);
+        ResidentSimulation.memory(w,residentId,residentId,"observed",at,"cafe-hours","我把门打开，开始今天的营业。",List.of(),4);
+        ResidentSimulation.event(w,at,"cafe_opened",PLACE,List.of(residentId),ResidentSimulation.actor(w,residentId).name()+"打开了咖啡馆的门。",null);return true;
+    }
+
+    /** Stop accepting work without inventing an announcement. A caller may first use closeForDay
+     * when the operator actually supplied on-site speech; this is the silent physical fallback for
+     * an operator who changes direction elsewhere or says nothing aloud. */
+    static boolean pauseOperation(CompanionWorld w,String residentId,Instant at){
+        if(!Objects.equals(operatorId(w),residentId))return false;
+        boolean wasOpen="open".equals(w.cafeStatus);w.cafeOperating=false;
+        if(!"closed".equals(w.cafeStatus)){w.cafeStatus="closing";w.cafeStatusChangedAt=at;closeRequests(w,residentId,at);}
+        if(wasOpen)ResidentSimulation.event(w,at,"cafe_closing",PLACE,List.of(residentId),"咖啡馆暂停营业，正在收店。",null);
+        return true;
+    }
+
+    static void finishClosingIfEmpty(CompanionWorld w,Instant at){
+        if(!"closing".equals(w.cafeStatus)||!cafeEmpty(w))return;
+        w.cafeStatus="closed";w.cafeStatusChangedAt=at;
+        ResidentSimulation.event(w,at,"cafe_closed",PLACE,List.of(),"咖啡馆的灯熄了，今天已经打烊。",null);
+    }
+
+    private static boolean cafeEmpty(CompanionWorld w){
+        boolean npc=w.residents.stream().anyMatch(a->PLACE.equals(a.place()));
+        return !npc&&(w.avatar==null||!PLACE.equals(w.avatar.place()));
+    }
+
+    private static void closeRequests(CompanionWorld w,String managerId,Instant at){
+        for(ServiceRequest req:w.serviceRequests)if(Set.of("waiting","preparing","delivered").contains(req.status)){
+            ResidentState requester=ResidentSimulation.state(w,req.requesterId);
+            if(requester!=null)ResidentSimulation.memory(w,requester.id,managerId,"observed",at,"service","店里打烊了，这一杯今天没等到。",List.of(),4);
+            req.status="abandoned";req.resolvedAt=at;
+        }
     }
 
     /** Called from choose() the moment duty wins over an unfinished project of the owner's own: leaves
@@ -184,7 +260,7 @@ final class CafeService {
                 ResidentSimulation.memory(w, owner.id, owner.id, "observed", at, "service", "做好了一杯，人却已经不在了。", List.of(), 4);
             }
         }
-        proactivelyServe(w, owner, at);
+        // Further service is another decision. Completing one cup never silently creates the next.
     }
 
     /** Pours, unprompted, for at most one learned regular currently at the cafe with nothing already
@@ -194,7 +270,7 @@ final class CafeService {
      * still plausibly wants it, which is exactly what lets a learned rule misfire. */
     private static void proactivelyServe(CompanionWorld w, ResidentState owner, Instant at) {
         for (ResidentState other : w.residentStates) {
-            if (other.id.equals(OWNER) || other.id.equals("self")) continue;
+            if (other.id.equals(operatorId(w)) || other.id.equals("self")) continue;
             if (!Boolean.TRUE.equals(owner.anticipatesRefill.get(other.id))) continue;
             if (!ResidentSimulation.actor(w, other.id).place().equals(PLACE)) continue;
             Instant cooldown = owner.lastProactiveAt.get(other.id);
@@ -227,10 +303,7 @@ final class CafeService {
     private static void reapWaiting(CompanionWorld w, ServiceRequest req, Instant at) {
         ResidentState requester = ResidentSimulation.state(w, req.requesterId);
         boolean present = requester != null && ResidentSimulation.actor(w, req.requesterId).place().equals(req.place);
-        if (!present) { abandon(w, requester, req, at, false); return; }
-        int familiarity = ResidentSimulation.state(w, OWNER).relationships.getOrDefault(req.requesterId, 40);
-        long patience = patienceSeconds(requester, familiarity);
-        if (Duration.between(req.requestedAt, at).getSeconds() >= patience) abandon(w, requester, req, at, true);
+        if (!present) abandon(w, requester, req, at);
     }
 
     /** How long this particular requester will wait before giving up: familiar people (a relationship
@@ -243,24 +316,10 @@ final class CafeService {
         return Math.max(18, Math.round(42 + familiarityBonus + steadiness));
     }
 
-    private static void abandon(CompanionWorld w, ResidentState requester, ServiceRequest req, Instant at, boolean waitedTooLong) {
+    private static void abandon(CompanionWorld w, ResidentState requester, ServiceRequest req, Instant at) {
         req.status = "abandoned"; req.resolvedAt = at;
         if (requester == null) return;
-        String privateText = waitedTooLong ? "等了好一会儿也没人来，我先去忙别的了。" : "本来想喝口热的，柜台没人，先去忙别的了。";
-        ResidentSimulation.memory(w, requester.id, requester.id, "observed", at, "service", privateText, List.of(), waitedTooLong ? 5 : 3);
-        // Not saying anything out loud is not the same as not minding: whether this shows is gated on
-        // the requester's own extroversion, exactly the "speaks up or keeps it to themselves" pattern
-        // affectionExpressed already uses elsewhere - nothing reaches the owner unless it is said.
-        if (waitedTooLong && Personality.of(requester).extroversion() >= 55) {
-            ResidentState owner = ResidentSimulation.state(w, OWNER);
-            String heardId = ResidentSimulation.memory(w, owner.id, requester.id, "heard", at, "service",
-                ResidentSimulation.actor(w, requester.id).name() + "抱怨说等太久了，" + ResidentSimulation.actor(w, owner.id).name() + "心里有点不是滋味。", List.of(), 8);
-            owner.complaintsSinceDutyReflection++;
-            pushEvidence(owner.dutyComplaintEvidenceIds, heardId);
-            ResidentSimulation.relation(requester, owner, -4);
-            ResidentSimulation.event(w, at, "complaint", req.place, List.of(requester.id, owner.id),
-                ResidentSimulation.actor(w, requester.id).name() + "等太久了，跟" + ResidentSimulation.actor(w, owner.id).name() + "说了一句。", null);
-        }
+        ResidentSimulation.memory(w, requester.id, requester.id, "observed", at, "service", "离开咖啡馆时，那杯还没有等到。", List.of(), 3);
     }
 
     private static void resolveDelivered(CompanionWorld w, ServiceRequest req, Instant at) {
@@ -275,10 +334,11 @@ final class CafeService {
 
     private static void consume(CompanionWorld w, ResidentState requester, ServiceRequest req, Instant at) {
         req.status = "consumed"; req.resolvedAt = at;
-        ResidentState owner = ResidentSimulation.state(w, OWNER);
+        ResidentState owner = ResidentSimulation.state(w, operatorId(w));
+        if(owner==null)return;
         owner.lastServedAt.put(requester.id, at);
-        requester.energy = Math.min(100, requester.energy + 6);
-        requester.mood = "被照顾到";
+        // A drink is a small immediate lift, not a substitute for sustained sleep.
+        requester.energy = Math.min(100, requester.energy + 3);
         ResidentSimulation.relation(owner, requester, req.proactive ? 5 : 3);
         String text = req.proactive
             ? "还没开口，" + ResidentSimulation.actor(w, owner.id).name() + "就端了一杯过来，像是记住了我的习惯。"
@@ -288,7 +348,8 @@ final class CafeService {
 
     private static void goCold(CompanionWorld w, ServiceRequest req, Instant at) {
         req.status = "cold"; req.resolvedAt = at;
-        ResidentState owner = ResidentSimulation.state(w, OWNER);
+        ResidentState owner = ResidentSimulation.state(w, operatorId(w));
+        if(owner==null)return;
         ResidentSimulation.memory(w, owner.id, owner.id, "observed", at, "service",
             "端过去的那一杯，" + ResidentSimulation.actor(w, req.requesterId).name() + "这次没喝，凉了。", List.of(), 4);
     }
@@ -310,7 +371,7 @@ final class CafeService {
      * the threshold at all - this is the broken link that left conscientiousness stuck at its initial
      * value even after real complaints and interruptions had happened. */
     static void reflectOnDuty(CompanionWorld w, ResidentState r, Instant at) {
-        if (!r.id.equals(OWNER)) return;
+        if (!r.id.equals(operatorId(w))) return;
         Personality.of(r); // ensure this resident's own personality fields are seeded before nudging them
         if (r.lastDutyReflectionAt != null && Duration.between(r.lastDutyReflectionAt, at).getSeconds() < DUTY_REFLECTION_COOLDOWN_SECONDS) return;
         r.lastDutyReflectionAt = at;

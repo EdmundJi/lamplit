@@ -47,6 +47,143 @@ class ResidentDirectorDialogueTest {
             assertThat(c.recollectionSources).containsEntry("owner","model").containsEntry("artist","model");
         }finally{director.close();}
     }
+
+    @Test void lifeConversationCanOfferThenAcceptATakeoverThroughTwoResidentsOwnTurns()throws Exception {
+        var clock=new MutableClock(Instant.parse("2026-09-08T06:00:00Z"));
+        var world=CompanionRules.join("work-dialogue","住客","Asia/Shanghai",clock.instant(),true);
+        var conversation=world.conversations.stream().filter(c->c.mode.equals("model")&&c.status.equals("active")).findFirst().orElseThrow();
+        conversation.topicId="life";
+        var store=new Store(world);var calls=new AtomicInteger();
+        ResidentMind mind=new ResidentMind(){
+            public boolean enabled(){return true;}
+            public Decision decide(Context context){throw new AssertionError("A work agreement must be negotiated in dialogue turns");}
+            public ConversationLifecycle.Utterance generateTurn(DialogueRequest request){
+                int call=calls.incrementAndGet();
+                assertThat(request.topicTitle()).isEqualTo("眼前的生活和工作");
+                assertThat(request.perspective().careerIntent()).isNotNull();
+                assertThat(request.perspective().occupation()).isNotBlank();
+                assertThat(request.perspective().cafeOperatorId()).isEqualTo("owner");
+                if(call==1){
+                    assertThat(request.perspective().residentId()).isEqualTo("owner");
+                    assertThat(request.perspective().workArrangements()).isEmpty();
+                    return new ConversationLifecycle.Utterance("我最近确实累了。你愿不愿意试着接手咖啡馆？",false,"有点忐忑","none",null,List.of(),"☕","offer_takeover","artist");
+                }
+                assertThat(request.perspective().residentId()).isEqualTo("artist");
+                var offer=request.perspective().workArrangements().stream().filter(a->"proposed".equals(a.status())).findFirst().orElseThrow();
+                assertThat(offer.kind()).isEqualTo("takeover");assertThat(offer.proposerId()).isEqualTo("owner");assertThat(offer.workerId()).isEqualTo("artist");
+                return new ConversationLifecycle.Utterance("我愿意接手，但会按自己的节奏试一阵。",true,"认真","none",null,List.of(),"☕🎨","accept_work",offer.id());
+            }
+        };
+        var director=new ResidentDirector(store,mind,clock);
+        try{
+            await(()->{director.consider(1,world);return world.workArrangements.size()==1;});
+            var offer=world.workArrangements.getFirst();assertThat(offer.status).isEqualTo("proposed");
+            assertThat(ResidentSimulation.cafeOperatorId(world)).isEqualTo("owner");
+            clock.now=clock.now.plusSeconds(7);
+            await(()->{director.consider(1,world);return "active".equals(offer.status);});
+            assertThat(calls).hasValue(2);
+            assertThat(ResidentSimulation.cafeOperatorId(world)).isEqualTo("artist");
+            assertThat(ResidentSimulation.state(world,"artist").occupation).isEqualTo("经营咖啡馆");
+            assertThat(ResidentSimulation.mayTend(world,"artist")).isTrue();
+            assertThat(conversation.turns).extracting(Turn::speakerId).containsExactly("owner","artist");
+        }finally{director.close();}
+    }
+
+    @Test void invalidStructuredWorkActionFailsTheTurnWithoutCreatingAuthority()throws Exception {
+        var clock=new MutableClock(Instant.parse("2026-09-08T06:00:00Z"));
+        var world=CompanionRules.join("invalid-work-dialogue","住客","Asia/Shanghai",clock.instant(),true);
+        var conversation=world.conversations.stream().filter(c->c.mode.equals("model")&&c.status.equals("active")).findFirst().orElseThrow();
+        conversation.topicId="life";var store=new Store(world);
+        ResidentMind mind=new ResidentMind(){
+            public boolean enabled(){return true;}
+            public Decision decide(Context context){throw new AssertionError();}
+            public ConversationLifecycle.Utterance generateTurn(DialogueRequest request){return new ConversationLifecycle.Utterance("我已经把店送给他了。",false,"笃定","none",null,List.of(),null,"invent_agreement","artist");}
+        };
+        var director=new ResidentDirector(store,mind,clock);
+        try{
+            await(()->{director.consider(2,world);return "fallback".equals(conversation.mode);});
+            assertThat(world.workArrangements).isEmpty();
+            assertThat(conversation.turns).isEmpty();
+            assertThat(ResidentSimulation.cafeOperatorId(world)).isEqualTo("owner");
+        }finally{director.close();}
+    }
+    @Test void tiredResidentCanEndTheConversationThenChooseSleepAsTheirOwnNextAction()throws Exception {
+        var clock=new MutableClock(Instant.parse("2026-09-08T06:00:00Z"));
+        var world=CompanionRules.join("tired-dialogue","住客","Asia/Shanghai",clock.instant(),true);
+        var conversation=world.conversations.stream().filter(c->c.mode.equals("model")&&c.status.equals("active")).findFirst().orElseThrow();
+        ResidentSimulation.state(world,"owner").energy=15;world.serviceRequests.clear();
+        var store=new Store(world);var decisions=new AtomicInteger();
+        ResidentMind mind=new ResidentMind(){
+            public boolean enabled(){return true;}
+            public Decision decide(Context context){
+                decisions.incrementAndGet();assertThat(context.residentId()).isEqualTo("owner");
+                assertThat(context.salientPerceptions()).contains("已经很累，注意力很难维持");
+                assertThat(context.availableActions()).contains("sleep");
+                return new Decision("sleep","home",null,"眼睛已经睁不开了，回去睡","",List.of(),null,null);
+            }
+            public ConversationLifecycle.Utterance generateTurn(DialogueRequest request){
+                assertThat(request.perspective().residentId()).isEqualTo("owner");
+                assertThat(request.perspective().salientPerceptions()).contains("已经很累，注意力很难维持");
+                return new ConversationLifecycle.Utterance("我有点撑不住了，先回去睡。",true,"困倦","none",null,List.of(),null,"none",null);
+            }
+            public ConversationLifecycle.Recollection summarizeConversation(SummaryRequest request){return new ConversationLifecycle.Recollection("刚才说自己太困，先回去了。","困倦",List.of(request.conversationMemories().getFirst().id()));}
+        };
+        var director=new ResidentDirector(store,mind,clock);
+        try{
+            await(()->{director.consider(3,world);return "ended".equals(conversation.status);});
+            await(()->{director.consider(3,world);return conversation.summarizedParticipants.size()==2;});
+            clock.now=clock.now.plusSeconds(13);
+            await(()->{director.consider(3,world);var plan=ResidentSimulation.state(world,"owner").plan;return decisions.get()==1&&plan!=null&&Set.of("travel","sleep").contains(plan.action());});
+            var owner=ResidentSimulation.state(world,"owner");
+            assertThat(owner.plan.action()).isIn("travel","sleep");
+            if("travel".equals(owner.plan.action()))assertThat(owner.desiredAction).isEqualTo("sleep");
+        }finally{director.close();}
+    }
+    @Test void operatorCanCloseAndAnotherResidentCanCarryPortableWorkHomeThroughDirector()throws Exception {
+        var clock=new MutableClock(Instant.parse("2026-09-08T12:59:00Z"));
+        var world=CompanionRules.join("director-closing","住客","Asia/Shanghai",clock.instant(),true);world.conversations.clear();world.serviceRequests.clear();world.cafeStatus="open";
+        var owner=ResidentSimulation.state(world,"owner");owner.plan=null;
+        var artist=ResidentSimulation.state(world,"artist");artist.plan=new Plan("portable-sketch","make","cafe",null,"把窗边那张小稿收尾",clock.instant().minusSeconds(120),clock.instant().plusSeconds(600));artist.suspendedAction=null;
+        move(world,"artist","cafe","make","还在画小稿",clock.instant().plusSeconds(600));
+        for(var r:world.residentStates)if(Set.of("student","gardener").contains(r.id))r.plan=new Plan("park-"+r.id,"sleep","home-"+r.id,null,"睡着",clock.instant(),clock.instant().plusSeconds(600));
+        var store=new Store(world);var decisions=new AtomicInteger();
+        ResidentMind mind=new ResidentMind(){
+            public boolean enabled(){return true;}
+            public Decision decide(Context context){
+                decisions.incrementAndGet();
+                if("owner".equals(context.residentId())){assertThat(context.availableActions()).contains("close_cafe");return new Decision("close_cafe","cafe",null,"到打烊时间了","今天先打烊，我要关灯了。",List.of(),null,null);}
+                assertThat(context.residentId()).isEqualTo("artist");assertThat(context.portableAction()).isNotNull();assertThat(context.availableActions()).contains("continue_home");
+                return new Decision("continue_home","home",null,"把没画完的带回去","",List.of(),null,null);
+            }
+        };
+        var director=new ResidentDirector(store,mind,clock);
+        try{
+            await(()->{director.consider(51,world);return "closing".equals(world.cafeStatus);});
+            clock.now=clock.now.plusSeconds(13);
+            await(()->{director.consider(51,world);return decisions.get()==2&&Set.of("travel","make").contains(artist.plan.action());});
+            assertThat(world.cafeStatus).isEqualTo("closing");
+            assertThat(artist.plan.place()).isIn("home-artist","cafe");
+            if("travel".equals(artist.plan.action())){assertThat(artist.desiredAction).isEqualTo("make");assertThat(artist.desiredDurationSeconds).isEqualTo(587);}
+        }finally{director.close();}
+    }
+
+    @Test void closedCafeOperatorCanChooseToOpenThroughDirector()throws Exception {
+        var clock=new MutableClock(Instant.parse("2026-09-08T01:00:00Z"));
+        var world=CompanionRules.join("director-opening","住客","Asia/Shanghai",clock.instant(),true);world.conversations.clear();world.serviceRequests.clear();world.cafeStatus="closed";world.cafeOperating=true;
+        var owner=ResidentSimulation.state(world,"owner");owner.plan=null;owner.suspendedAction=null;move(world,"owner","home-owner","idle","在家",clock.instant().plusSeconds(600));
+        for(var r:world.residentStates)if(!Set.of("owner","self").contains(r.id))r.plan=new Plan("park-"+r.id,"sleep","home-"+r.id,null,"睡着",clock.instant(),clock.instant().plusSeconds(600));
+        var store=new Store(world);
+        ResidentMind mind=new ResidentMind(){
+            public boolean enabled(){return true;}
+            public Decision decide(Context context){assertThat(context.cafeStatus()).isEqualTo("closed");assertThat(context.availableActions()).contains("open_cafe");return new Decision("open_cafe","cafe",null,"去把门打开","",List.of(),null,null);}
+        };
+        var director=new ResidentDirector(store,mind,clock);
+        try{await(()->{director.consider(52,world);return owner.plan!=null&&Set.of("travel","open_cafe").contains(owner.plan.action());});}
+        finally{director.close();}
+        assertThat(owner.desiredAction==null?owner.plan.action():owner.desiredAction).isEqualTo("open_cafe");
+    }
+
+    private static void move(CompanionWorld world,String id,String place,String activity,String label,Instant until){for(int i=0;i<world.residents.size();i++){var actor=world.residents.get(i);if(id.equals(actor.id()))world.residents.set(i,new Actor(actor.id(),actor.name(),actor.role(),place,activity,label,actor.x(),actor.y(),until));}}
     private static void await(BooleanSupplier condition)throws Exception{long deadline=System.nanoTime()+Duration.ofSeconds(3).toNanos();while(!condition.getAsBoolean()&&System.nanoTime()<deadline)Thread.sleep(5);assertThat(condition.getAsBoolean()).isTrue();}
     static class MutableClock extends Clock {
         volatile Instant now;MutableClock(Instant now){this.now=now;}

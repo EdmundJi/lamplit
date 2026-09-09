@@ -17,9 +17,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  *   COMPANION_RUN=true COMPANION_RUN_DAYS=3 \
  *     ./mvnw test -Dtest=AcceleratedTownRunnerIT
  *
- *   # With the real model (DeepSeek v4 flash via the QWEN_* env vars already in .env.local):
+ *   # With the Qwen3.8-Flash primary (QWEN_* env vars in .env.local, no provider fallback):
  *   set -a; source ../.env.local; set +a
- *   COMPANION_RUN=true COMPANION_RUN_MODEL=true COMPANION_RUN_DAYS=0.02 \
+ *   COMPANION_RUN=true COMPANION_RUN_MODEL=true COMPANION_RUN_MODEL_PROVIDER=qwen COMPANION_RUN_DAYS=0.02 \
  *     ./mvnw test -Dtest=AcceleratedTownRunnerIT
  *
  *   # Custom output directory (default: backend/target/accelerated-run):
@@ -48,11 +48,14 @@ class AcceleratedTownRunnerIT {
         var base = modelEnabled ? AcceleratedTownRunner.RunConfig.withModel(outDir, days) : AcceleratedTownRunner.RunConfig.ruleOnly(outDir, days);
         var cfg = new AcceleratedTownRunner.RunConfig(
             worldId, base.avatarName(), base.timezone(), base.start(), days, base.tickSeconds(),
-            modelEnabled, base.dailyModelBudget(), base.userId(), outDir, base.realPaceMillisPerTick(),
-            base.drainTicks(), base.blindTestSeed(), base.blindTestSize(), base.scriptedAvatarIntents(),
+            modelEnabled, Integer.parseInt(System.getenv().getOrDefault("COMPANION_RUN_MODEL_BUDGET", String.valueOf(base.dailyModelBudget()))), base.userId(), outDir, base.realPaceMillisPerTick(),
+            Integer.parseInt(System.getenv().getOrDefault("COMPANION_RUN_DRAIN_TICKS",String.valueOf(base.drainTicks()))), base.blindTestSeed(), base.blindTestSize(), base.scriptedAvatarIntents(),
             resumeFromEnv == null || resumeFromEnv.isBlank() ? null : Path.of(resumeFromEnv));
 
+        String modelProvider=modelEnabled?AcceleratedTownRunner.modelProvider(System.getenv()):"none";
+        String modelName=modelEnabled?AcceleratedTownRunner.modelName(System.getenv()):"none";
         System.out.println("[accelerated-run] starting: days=" + days + " modelEnabled=" + modelEnabled
+            + " modelProvider="+modelProvider+" model="+modelName
             + " outDir=" + outDir.toAbsolutePath() + " resumeFrom=" + cfg.resumeFrom());
         var result = AcceleratedTownRunner.run(cfg);
         System.out.println("[accelerated-run] done: " + result);
@@ -64,6 +67,8 @@ class AcceleratedTownRunnerIT {
         assertThat(Files.exists(outDir.resolve("highlights.md"))).isTrue();
         assertThat(Files.exists(outDir.resolve("manifest.json"))).isTrue();
         assertThat(Files.exists(outDir.resolve("usage.json"))).isTrue();
+        assertThat(Files.exists(outDir.resolve("model-calls.json"))).isTrue();
+        assertThat(Files.exists(outDir.resolve("model-application-outcomes.json"))).isTrue();
         assertThat(Files.exists(outDir.resolve("world-snapshot.json"))).isTrue();
         assertThat(Files.exists(outDir.resolve("metrics.json"))).isTrue();
         assertThat(Files.exists(outDir.resolve("metrics.md"))).isTrue();
@@ -78,6 +83,7 @@ class AcceleratedTownRunnerIT {
         // never actually lived, which is exactly what this tool exists to catch.
         assertThat(result.diaryCount() + result.eventCount() + result.memoryCount() + result.dialogueTurnCount()).isGreaterThan(0);
         if (modelEnabled) {
+            assertThat(result.totalModelCalls()).isBetween(1L,(long)cfg.dailyModelBudget());
             System.out.println("[accelerated-run] model usage: calls=" + result.totalModelCalls()
                 + " inputTokens=" + result.totalInputTokens() + " outputTokens=" + result.totalOutputTokens()
                 + " pacedTicks=" + result.pacedTicks() + " fastTicks=" + result.fastTicks());
