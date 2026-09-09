@@ -103,6 +103,19 @@ public class CompanionWorld {
     }
     public static class ResidentState {
         public String id, mood, goal, thought, desiredAction, positionId;
+        /** Things this resident has already done that no model chose and nobody has yet accounted
+         * for. The architecture behind it: rules are the reflex, the model is the explanation, and
+         * people mostly act first and explain afterwards - Gazzaniga's interpreter, Libet's readiness
+         * potential, Nisbett &amp; Wilson's "Telling More Than We Can Know". A habit fires from the
+         * rules layer, lands here, and is later accounted for in the resident's own words (see
+         * {@link ResidentSimulation#applyExplanation}).
+         * <p>Two things this is deliberately NOT. It is not a log: an explained deed leaves the queue
+         * and survives only as whatever memory the resident wrote about it, which is exactly how
+         * autobiographical memory works - what is kept is the account, not the event. And the
+         * explanation is not decoration: it becomes a memory, memories become beliefs, and beliefs
+         * are allowed to change what the reflex does next time. Without that last step the model is
+         * an expensive narrator. */
+        public List<Deed> unexplainedDeeds = new ArrayList<>();
         /** Reserved for an explicitly remembered livelihood concern.  There is deliberately no
          * clock-driven work quota or automatic "unemployed" penalty behind this value. */
         public double livelihoodPressure;
@@ -273,6 +286,13 @@ public class CompanionWorld {
             this.durationMinutes=durationMinutes; this.createdAt=now; this.status="pending";
             this.feedback="记住了，等手上的安排告一段落。";
         }
+    }
+    /** One thing a resident did without deciding to. {@code note} is the rules' plain account of what
+     * happened - never a motive, because the rules do not know one and must not invent one. The
+     * motive is the resident's own, and arrives later. */
+    public static class Deed {
+        public String id, action, place, note;
+        public Instant at;
     }
     public record Focus(String taskId, Instant startedAt, Instant endsAt) {}
     public record Entry(String id, Instant at, String text) {}

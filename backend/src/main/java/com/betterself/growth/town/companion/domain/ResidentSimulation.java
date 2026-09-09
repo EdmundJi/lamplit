@@ -608,6 +608,67 @@ public final class ResidentSimulation {
             return; // one encounter at a time; the others are still standing there next tick
         }
     }
+    /** At most this many unaccounted-for deeds are kept per resident. A queue that grows without
+     * bound would eventually hand the model a whole day in one prompt; more importantly, a deed
+     * nobody got round to accounting for simply stops being available to remember, which is what
+     * happens to most of what a person does. */
+    private static final int MAX_UNEXPLAINED_DEEDS = 8;
+
+    /** Records something the rules did on a resident's behalf, so it can be accounted for later in
+     * that resident's own words. Called from the reflex layer - a habit firing, a routine carrying
+     * on - never from a path where a model already chose and already gave its reason.
+     * <p>{@code note} must state only what an observer would have seen. The rules do not know why
+     * anyone does anything and must never write a motive here; that is the whole point of the
+     * split. */
+    public static void recordDeed(CompanionWorld w,String residentId,String action,String place,String note,Instant at){
+        ResidentState r=state(w,residentId);
+        if(r==null||note==null||note.isBlank())return;
+        CompanionWorld.Deed deed=new CompanionWorld.Deed();
+        deed.id="deed-"+(++w.eventSequence);deed.action=action;deed.place=place;deed.note=note;deed.at=at;
+        r.unexplainedDeeds.add(deed);
+        while(r.unexplainedDeeds.size()>MAX_UNEXPLAINED_DEEDS)r.unexplainedDeeds.removeFirst();
+    }
+    public static List<CompanionWorld.Deed> unexplainedDeeds(CompanionWorld w,String residentId){
+        ResidentState r=state(w,residentId);
+        return r==null?List.of():List.copyOf(r.unexplainedDeeds);
+    }
+    /** How long a stretch of unaccounted-for behaviour has to be before it is worth accounting for.
+     * People do not narrate themselves continuously; they notice afterwards, in a lull, that they
+     * have been doing something. Asking after every single deed would cost more model calls than
+     * asking before every action did, which would defeat the entire point. */
+    private static final int EXPLANATION_MIN_DEEDS = 3;
+    public static boolean needsExplanation(CompanionWorld w,String residentId,Instant now){
+        ResidentState r=state(w,residentId);
+        if(r==null||"self".equals(residentId)||now==null)return false;
+        if(activeConversation(w,residentId)!=null)return false;
+        return r.unexplainedDeeds.size()>=EXPLANATION_MIN_DEEDS;
+    }
+    /** Lands a resident's own account of what they have been doing. The deeds named are cleared
+     * whether or not they were all mentioned - an account that skips something is still the account
+     * this person ended up with, and the unmentioned parts are simply gone, exactly as they would be.
+     * <p>The account is written as a {@code reflection}, not an {@code observed}: it is a construction
+     * after the fact, and a resident who later retrieves it is retrieving what they decided it meant,
+     * not what happened. That distinction is already carried by the memory layers, and the model is
+     * told to treat reflection as fallible. */
+    public static boolean applyExplanation(CompanionWorld w,String residentId,long residentRevision,List<String> deedIds,String text,List<String> evidenceIds,Instant now){
+        ResidentState r=state(w,residentId);
+        if(r==null||r.revision!=residentRevision||now==null)return false;
+        if(text==null||text.isBlank()||text.length()>200)return false;
+        if(deedIds==null||deedIds.isEmpty())return false;
+        if(r.unexplainedDeeds.stream().noneMatch(d->deedIds.contains(d.id)))return false;
+        List<String> evidence=evidenceIds==null?List.of():evidenceIds;
+        if(evidence.stream().anyMatch(id->w.memories.stream().noneMatch(m->m.id().equals(id)&&m.ownerId().equals(residentId))))return false;
+        String place=r.unexplainedDeeds.stream().filter(d->deedIds.contains(d.id)).map(d->d.place).findFirst().orElse(null);
+        r.unexplainedDeeds.removeIf(d->deedIds.contains(d.id));
+        memory(w,residentId,residentId,"reflection",now,null,text,evidence,6);
+        // The account replaces whatever the resident was privately telling themselves. This is the
+        // step that keeps the explanation from being decoration: it is now the thing they know about
+        // themselves, and it is what the next decision reads.
+        r.thought=text;r.revision++;w.revision++;
+        event(w,now,"account",place==null?actor(w,residentId).place():place,List.of(residentId),actor(w,residentId).name()+"回头想了想刚才：“"+text+"”",null);
+        return true;
+    }
+
     /** How long a face-to-face fact stays worth answering. Past this the moment has gone: you do not
      * walk up to someone ten minutes after noticing them. Also the window inside which a rule-only
      * world (no model at all) falls back to greeting on the resident's behalf. */
