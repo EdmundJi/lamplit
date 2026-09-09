@@ -20,6 +20,16 @@ public class ResidentDirector {
     private final int dailyBudget;
     private final long decisionThrottleSeconds;
     private final ModelUsageRecorder usageRecorder;
+    /** Fires exactly once per dispatched model call, right where {@code applied} (or its
+     * failure/unsupported-capability equivalent) is actually decided - never a guess reconstructed
+     * later from {@link CompanionWorld#modelStatus} text, which only a handful of the apply* paths
+     * ever touch on success (see the accelerated runner's own audit of this). Default is a no-op so
+     * production wiring (which has no listener) pays nothing; test/offline harnesses (see
+     * AcceleratedTownRunner) attach one to build an exact offered/selected/applied/rejected account
+     * per call type and action, closing the observability gap a purely tick-sampled export cannot. */
+    public interface OutcomeListener{void onOutcome(String callType,String action,String outcome);}
+    private volatile OutcomeListener outcomeListener=(callType,action,outcome)->{};
+    public void setOutcomeListener(OutcomeListener listener){this.outcomeListener=listener==null?(callType,action,outcome)->{}:listener;}
     private final Set<Long> inFlight=ConcurrentHashMap.newKeySet();
     /** Suppresses repeated model calls for the same already-considered cue while a plan continues.
      * The fingerprint contains qualitative/observable state only; failures are never remembered. */
@@ -104,8 +114,10 @@ public class ResidentDirector {
                 if(!w.id.equals(work.worldId()))return w;
                 w.modelConsecutiveFailures=0;w.modelRetryAfter=null;
                 boolean applied;
+                String outcomeAction=null;
                 if(work.kind().equals("turn")) {
                     var utterance=(ConversationLifecycle.Utterance)result;
+                    outcomeAction=utterance==null?null:utterance.stance();
                     applied=utterance!=null&&evidenceWithin(utterance.evidenceIds(),work.context().memories())&&ConversationLifecycle.applyTurn(w,work.operation(),utterance,clock.instant());
                     if(!applied)ConversationLifecycle.failTurn(w,work.operation(),clock.instant());
                 } else if(work.kind().equals("summary")) {
@@ -114,6 +126,7 @@ public class ResidentDirector {
                     if(!applied)ConversationLifecycle.failSummary(w,work.operation(),clock.instant());
                 } else if(work.kind().equals("react")) {
                     var draft=(ResidentMind.ReactDraft)result;
+                    outcomeAction=draft==null?null:draft.reaction();
                     applied=draft!=null&&evidenceWithin(draft.evidenceIds()==null?List.of():draft.evidenceIds(),work.context().memories())
                         &&ResidentSimulation.applyReaction(w,work.react().pendingId(),work.residentRevision(),draft.reaction(),draft.reason(),
                             draft.evidenceIds()==null?List.of():draft.evidenceIds(),clock.instant());
@@ -133,8 +146,13 @@ public class ResidentDirector {
                     // ordinary decisions and would wrongly reject perfectly real evidence.
                     applied=draft!=null&&evidenceWithin(draft.evidenceIds()==null?List.of():draft.evidenceIds(),work.reflect().source())
                         &&ResidentSimulation.applyReflection(w,work.context().residentId(),work.residentRevision(),draft.text(),draft.evidenceIds(),draft.supersedesKey(),clock.instant());
-                } else {applied=applyDecision(w,work,(ResidentMind.Decision)result);if(applied)rememberDecisionSignal(w,work.context().residentId(),clock.instant());}
+                } else {
+                    var decision=(ResidentMind.Decision)result;
+                    outcomeAction=decision==null?null:decision.action();
+                    applied=applyDecision(w,work,decision);if(applied)rememberDecisionSignal(w,work.context().residentId(),clock.instant());
+                }
                 if(!applied){w.modelStatus="刚才的念头已经过时，继续眼前的生活";w.revision++;}
+                outcomeListener.onOutcome(work.kind(),outcomeAction,applied?"applied":"rejected");
                 return w;
             });
         } catch(Exception e){
@@ -153,11 +171,13 @@ public class ResidentDirector {
                 if(job[0].kind().equals("react")&&e instanceof UnsupportedOperationException){
                     w.modelCallsToday=Math.max(0,w.modelCallsToday-1);
                     ResidentSimulation.greetWithoutDeciding(w,job[0].react().pendingId(),clock.instant());
+                    outcomeListener.onOutcome("react",null,"unsupported");
                     return w;
                 }
                 if(job[0].kind().equals("dayplan")&&e instanceof UnsupportedOperationException){
                     w.modelCallsToday=Math.max(0,w.modelCallsToday-1);
                     ResidentSimulation.markDayPlanUnavailableForToday(w,job[0].context().residentId(),clock.instant());
+                    outcomeListener.onOutcome("dayplan",null,"unsupported");
                     return w;
                 }
                 // Explain/reflect have no rule-authored fallback that drains their own trigger (unlike
@@ -168,18 +188,22 @@ public class ResidentDirector {
                 if(job[0].kind().equals("explain")&&e instanceof UnsupportedOperationException){
                     w.modelCallsToday=Math.max(0,w.modelCallsToday-1);
                     explainUnavailable.set(true);
+                    outcomeListener.onOutcome("explain",null,"unsupported");
                     return w;
                 }
                 if(job[0].kind().equals("reflect")&&e instanceof UnsupportedOperationException){
                     w.modelCallsToday=Math.max(0,w.modelCallsToday-1);
                     reflectUnavailable.set(true);
+                    outcomeListener.onOutcome("reflect",null,"unsupported");
                     return w;
                 }
                 if(job[0].kind().equals("turn"))ConversationLifecycle.failTurn(w,job[0].operation(),clock.instant());
                 if(job[0].kind().equals("summary"))ConversationLifecycle.failSummary(w,job[0].operation(),clock.instant());
                 w.modelCallsToday=Math.max(0,w.modelCallsToday-1);w.modelFailuresToday++;w.modelConsecutiveFailures++;
                 long delay=Math.min(600,75L*(1L<<Math.min(3,w.modelConsecutiveFailures-1)));
-                w.modelRetryAfter=clock.instant().plusSeconds(delay);w.modelStatus="暂时按自己的习惯生活，稍后再想新主意";w.revision++;return w;
+                w.modelRetryAfter=clock.instant().plusSeconds(delay);w.modelStatus="暂时按自己的习惯生活，稍后再想新主意";w.revision++;
+                outcomeListener.onOutcome(job[0].kind(),null,"failed");
+                return w;
             });}catch(Exception ignored){/* A deleted world is never recreated by a late result. */}
         } finally {inFlight.remove(userId);}
     }

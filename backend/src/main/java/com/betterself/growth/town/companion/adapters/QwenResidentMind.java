@@ -42,6 +42,12 @@ public class QwenResidentMind implements ResidentMind {
         this.provider=provider;this.json=json;this.enabled=enabled&&name.equals("qwen");this.providerCode=providerCode;
         this.decisionThinking=decisionThinking;this.turnThinking=turnThinking;this.summaryThinking=summaryThinking;}
     public boolean enabled(){return enabled;}
+    /** Only used if a call ever arrives with a null/empty {@code availableActions} - should not
+     * happen in practice (ResidentSimulation.availableActions always returns a non-empty base set),
+     * but the schema still needs a non-empty enum to stay valid JSON Schema. */
+    private static final java.util.List<String> DECISION_ACTION_FALLBACK=java.util.List.of(
+        "continue","resume","observe","create","help","invite","join","rest","study","work","read","make",
+        "tend","request_drink","change_work","propose","sleep","open_cafe","close_cafe","continue_home","away");
     @Override public com.betterself.growth.town.companion.domain.ConversationLifecycle.Utterance generateTurn(DialogueRequest request){
         return generateTurnMetered(request).value();
     }
@@ -113,7 +119,7 @@ public class QwenResidentMind implements ResidentMind {
                 结合自己的目标、salientPerceptions里的显著体感、routineCues里的个人日常时间提示、当前计划与实际记忆决定下一步。salientPerceptions为空表示此刻没有需要特别注意的体感；routineCues是“到了我平常睡觉的时间”一类习惯事实，不等于困，也不是命令。不要猜测或要求任何隐藏数值。你可以继续投入、好奇地观察、拒绝配合，也可以因一次经历想到与原来不同的愿望。
                 给自己的幽默、想象力、偏好和分歧留空间，不必把每个决定写成温柔的小合作。大胆的创意可以是提案或幻想，不能伪装成已经发生的事件。
                 只返回一个可执行动作与一句简短理由，不输出推理过程。
-                action必须从availableActions选择；可能值为continue/resume/observe/create/help/invite/join/rest/study/work/read/make/tend/request_drink/change_work/propose/sleep/open_cafe/close_cafe/continue_home/away。place 仅home/cafe/street/garden。continue表示按currentPlan继续，不能重置计时或换一件事。
+                action必须严格照抄availableActions这次实际给出的字符串之一，不能选择availableActions里没有的动作，哪怕它是别的时候合法的动作名——这次没列出就是这次真的做不到，选了也不会发生，你的意图会完全落空。availableActions因情况实时变化：continue/continue_home/resume/tend等并非总是可选，尤其咖啡馆开始打烊（cafeStatus=closing）后，即使手头还有一件没做完的事，continue也常常不会出现在这次的availableActions里；这种时候如果你仍想做原来那件事（比如还在等一杯已经点的饮料），改选一个这次确实列出的动作（例如rest，重新安排一段等待/休息），而不要选continue或continue_home，那样只会被判定为这次没有发生过。continue表示按currentPlan继续，不能重置计时或换一件事。reason一句话说清楚就好，不必展开分析，控制在80个汉字以内。
                 join表示走过去挨着某个熟人坐下（对方的桌子或旁边的位置），targetId填nearby中那个人的id；这只是想坐得近一些，不代表要开口说话或已经在交谈。away表示暂时离开这条街去处理自己的事，一段时间后才会回来，回来后只有自己知道那段时间做了什么；不要在away的reason里编造离场期间发生的具体情节，那要等回来后才补一句自己的回忆。
                 create/help 的 targetId 必须是 knownProjects 之一且 place 匹配；invite 只能针对 nearby 中一个人。
                 如果正在conversation，可在speech写自己接着说的一句话，先回应最后一句里的具体事；可以很短、停顿、不赞同或结束话题，不替双方总结，也不能替另一人说话或声称尚未执行的事已完成。
@@ -133,9 +139,23 @@ public class QwenResidentMind implements ResidentMind {
                 不可发明已完成的物件、承诺或事件。JSON字段严格为 action,place,targetId,reason,speech,evidenceIds,projectTitle,objectKind。
                 当前这一个居民的感知输入：
                 """+json.writeValueAsString(context);
-            var result=provider.generateStructured(new QwenProvider.StructuredPrompt("COMPANION_RESIDENT",instruction,"""
-                {"type":"object","required":["action","place","targetId","reason","speech","evidenceIds"],"properties":{"action":{"type":"string","enum":["continue","resume","observe","create","help","invite","join","rest","study","work","read","make","tend","request_drink","change_work","propose","sleep","open_cafe","close_cafe","continue_home","away"]},"place":{"type":"string","enum":["home","cafe","street","garden"]},"targetId":{"type":["string","null"]},"reason":{"type":"string"},"speech":{"type":"string"},"evidenceIds":{"type":"array","items":{"type":"string"}},"projectTitle":{"type":["string","null"]},"objectKind":{"type":["string","null"]}}}
-                """,decisionThinking));
+            // The action enum below used to be the full, static set of every action that is EVER
+            // legal somewhere - which meant the schema itself kept telling the model "continue" and
+            // "continue_home" were always fine to pick, even on a call where this resident's own
+            // availableActions did not offer them (most commonly: waiting on an already-requested
+            // drink in the cafe while it starts closing, where the rules deliberately withdraw
+            // "continue" and there is no portable substitute). The natural-language instruction above
+            // already says "pick only from availableActions", but a schema hint that silently
+            // contradicts that instruction is exactly the kind of thing a model follows over prose.
+            // Scoping the enum to this call's own context.availableActions() makes the schema agree
+            // with the instruction instead of undermining it - the model still freely chooses among
+            // its real options, this only stops the schema from advertising fake ones.
+            var offeredActions=context.availableActions();
+            String actionEnumJson=json.writeValueAsString(offeredActions==null||offeredActions.isEmpty()?DECISION_ACTION_FALLBACK:offeredActions);
+            var result=provider.generateStructured(new QwenProvider.StructuredPrompt("COMPANION_RESIDENT",instruction,
+                "{\"type\":\"object\",\"required\":[\"action\",\"place\",\"targetId\",\"reason\",\"speech\",\"evidenceIds\"],\"properties\":{\"action\":{\"type\":\"string\",\"enum\":"
+                    +actionEnumJson+"},\"place\":{\"type\":\"string\",\"enum\":[\"home\",\"cafe\",\"street\",\"garden\"]},\"targetId\":{\"type\":[\"string\",\"null\"]},\"reason\":{\"type\":\"string\"},\"speech\":{\"type\":\"string\"},\"evidenceIds\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"projectTitle\":{\"type\":[\"string\",\"null\"]},\"objectKind\":{\"type\":[\"string\",\"null\"]}}}",
+                decisionThinking));
             Decision decision=json.readValue(result.json(),Decision.class);
             return new Result<>(decision,usageOf(result));
         }catch(Exception e){throw new IllegalStateException("Resident decision unavailable",e);}
