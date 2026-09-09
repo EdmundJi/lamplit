@@ -50,6 +50,14 @@ final class CafeService {
             :minute>=w.cafeOpenMinute||minute<w.cafeCloseMinute;
     }
     static boolean acceptingOrders(CompanionWorld w){return w.cafeOperating&&"open".equals(w.cafeStatus);}
+    /** Of the two ways to be outside the usual hours, the early one: strictly between the previous
+     * closing and today's opening. Written against the same wrap-around shape scheduledOpen uses, so
+     * an overnight shop stays correct. */
+    static boolean beforeUsualOpening(CompanionWorld w,Instant at){
+        if(scheduledOpen(w,at))return false;
+        int minute=at.atZone(ZoneId.of(w.timezone)).getHour()*60+at.atZone(ZoneId.of(w.timezone)).getMinute();
+        return w.cafeOpenMinute<w.cafeCloseMinute?minute<w.cafeOpenMinute:minute>=w.cafeCloseMinute&&minute<w.cafeOpenMinute;
+    }
     static boolean mayManage(CompanionWorld w,String residentId){
         if(Objects.equals(operatorId(w),residentId))return true;
         return w.workArrangements.stream().anyMatch(a->"active".equals(a.status)&&residentId.equals(a.workerId)
@@ -149,7 +157,14 @@ final class CafeService {
 
     static String scheduleCue(CompanionWorld w,String residentId,Instant at){
         if(!mayManage(w,residentId))return null;
-        if("open".equals(w.cafeStatus)&&!scheduledOpen(w,at))return "已经过了咖啡馆平常打烊的时间";
+        // Before opening and after closing are both "not within the usual hours", and telling them
+        // apart matters more than it looks: the operator opened the shop half an hour early, was told
+        // on the very next tick that it was past closing time, and closed it again fifty seconds
+        // later. The town then had no cafe for the rest of the day - every habit that goes there is
+        // gated on it being open - and the operator sat inside it looping on a decision that could
+        // not be applied, 408 times.
+        if("open".equals(w.cafeStatus)&&!scheduledOpen(w,at))
+            return beforeUsualOpening(w,at)?"还没到咖啡馆平常开门的时间，门已经先开着了":"已经过了咖啡馆平常打烊的时间";
         if("closed".equals(w.cafeStatus)&&scheduledOpen(w,at))return w.cafeOperating?"已经到了咖啡馆平常开门的时间":"到了咖啡馆平常开门时间；目前经营暂停，门仍关着";
         if("closing".equals(w.cafeStatus))return cafeEmpty(w)?"客人已经走了，可以锁门回家":"刚才已经说过要打烊，店里还有人没走";
         return null;

@@ -210,6 +210,14 @@ public class CompanionWorld {
          * whole town taking turns round-robin on one shared timer. Null until this resident's first
          * decision is ever dispatched. */
         public Instant lastDecisionRequestedAt;
+        /** How many decisions in a row this resident has had refused, and until when to stop asking.
+         * A refused decision leaves them with nothing decided, which is itself the condition for
+         * asking again - so a decision that can never apply is an unbounded loop, and one really
+         * happened: an operator standing inside his own closing shop chose to sit down 476 times and
+         * was refused 408 of them, taking 67% of the whole town's thinking for a day. Both reset on
+         * any decision that lands. Self-healing on an old save via the 0/null defaults. */
+        public int consecutiveDecisionRejections;
+        public Instant decisionRetryAfter;
         /** The world's own day-part (morning/afternoon/evening/night, see CompanionRules.environment)
          * as of this resident's last applied decision - a broad, general "time anchor" (item 5),
          * distinct from the personal sleep-window routine cue. Compared, never sent to any model. */

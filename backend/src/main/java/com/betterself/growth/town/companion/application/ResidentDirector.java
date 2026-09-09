@@ -151,6 +151,10 @@ public class ResidentDirector {
                     outcomeAction=decision==null?null:decision.action();
                     applied=applyDecision(w,work,decision);if(applied)rememberDecisionSignal(w,work.context().residentId(),clock.instant());
                 }
+                if(work.kind().equals("decision")){
+                    ResidentState decider=ResidentSimulation.state(w,work.context().residentId());
+                    if(decider!=null)ResidentSimulation.recordDecisionOutcome(decider,applied,clock.instant());
+                }
                 if(!applied){w.modelStatus="刚才的念头已经过时，继续眼前的生活";w.revision++;}
                 outcomeListener.onOutcome(work.kind(),outcomeAction,applied?"applied":"rejected");
                 return w;
@@ -268,6 +272,7 @@ public class ResidentDirector {
             // The avatar ("self") only ever joins this pool during its own free/autonomous time (item
             // 7, see ResidentSimulation.selfIsFree) - never while the user is explicitly directing it.
             .filter(r->(!r.id.equals("self")||ResidentSimulation.selfIsFree(w))&&ResidentSimulation.activeConversation(w,r.id)==null)
+            .filter(r->r.decisionRetryAfter==null||!now.isBefore(r.decisionRetryAfter))
             .filter(r->r.lastDecisionRequestedAt==null||Duration.between(r.lastDecisionRequestedAt,now).getSeconds()>=decisionThrottleSeconds)
             .filter(r->needsDecision(w,r,now)).toList();
         // Legacy rule worlds still allow plan decisions while talking, but their text is not a model turn.

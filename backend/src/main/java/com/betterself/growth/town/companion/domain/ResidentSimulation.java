@@ -1481,6 +1481,24 @@ public final class ResidentSimulation {
         double hours=Math.max(1.5,Math.min(4.0,(65-r.energy)/10.0));return (int)Math.round(hours*3600);
     }
     private static final Set<String> DECISION_ACTIONS=Set.of("continue","resume","observe","create","help","celebrate","invite","join","rest","sleep","study","work","read","make","request_drink","tend","open_cafe","close_cafe","continue_home","away","offer_assist","offer_delegate","offer_takeover","accept_work","change_work");
+    /** How many refusals in a row before this resident stops being asked for a while, and how long
+     * that while can grow to. This is a retry backoff, not a judgement about how often a person
+     * reconsiders their day - the situation the question was asked in has to change before the same
+     * answer can land, and asking again in the meantime buys nothing and costs a model call. Both
+     * numbers are bounds on waste: three attempts is enough to rule out a one-off collision, and
+     * fifteen minutes is short enough that a resident whose world has moved on is not left stranded.
+     * Any decision that lands clears it. */
+    private static final int DECISION_REJECTIONS_BEFORE_BACKOFF = 3;
+    private static final long MAX_DECISION_BACKOFF_SECONDS = 15*60;
+    public static void recordDecisionOutcome(ResidentState r,boolean applied,Instant now){
+        if(applied){r.consecutiveDecisionRejections=0;r.decisionRetryAfter=null;return;}
+        r.consecutiveDecisionRejections++;
+        if(r.consecutiveDecisionRejections<DECISION_REJECTIONS_BEFORE_BACKOFF)return;
+        long seconds=Math.min(MAX_DECISION_BACKOFF_SECONDS,
+            60L<<Math.min(8,r.consecutiveDecisionRejections-DECISION_REJECTIONS_BEFORE_BACKOFF));
+        r.decisionRetryAfter=now.plusSeconds(seconds);
+    }
+
     public static boolean applyDecision(CompanionWorld w,String residentId,long residentRevision,long intentRevision,String place,String action,String target,String reason,String speech,List<String> evidence,Instant now) {
         ResidentState r=state(w,residentId);if(r==null||r.revision!=residentRevision||w.intentRevision!=intentRevision||!DECISION_ACTIONS.contains(action))return false;
         if(reason==null||reason.isBlank()||reason.length()>160||speech!=null&&speech.length()>180)return false;
@@ -1537,7 +1555,14 @@ public final class ResidentSimulation {
             else if(!"rest".equals(current.action())){suspend(r,now);moveOrSchedule(w,r,"rest","cafe",w.serviceRequests.getLast().id,"等刚才点的饮料",now,1200);}
             return appliedThought(w,r,residentId,reason,w.serviceRequests.getLast().id,now);
         }
-        if("cafe".equals(resolvedPlace)&&!"open".equals(w.cafeStatus))return false;
+        // A closed cafe is not a place you can go and use. But a cafe that is CLOSING still has
+        // people standing in it, and one of them has to be able to do something: the operator, inside
+        // his own shop while it emptied, chose to sit down 476 times and was refused 408 of them,
+        // because "rest, here" named the cafe as its place. Winding-down actions only - sitting for a
+        // moment or looking around while the room empties is what people do; starting a half-hour
+        // study session in a shop that has just called last orders is not.
+        if("cafe".equals(resolvedPlace)&&!"open".equals(w.cafeStatus)
+            &&!("closing".equals(w.cafeStatus)&&"cafe".equals(actor(w,residentId).place())&&Set.of("rest","observe").contains(action)))return false;
         if("sleep".equals(action)&&!resolvedPlace.equals(TownPlaces.homeOf(residentId)))return false;
         if(Set.of("create","help").contains(action)){Project p=project(w,target);if(p==null||!knows(w,r.id,p.id)||!p.place.equals(resolvedPlace)||Set.of("ready","celebrating").contains(p.status))return false;}
         if(action.equals("celebrate")){Project p=project(w,target);if(p==null||!"ready".equals(p.status)||!p.contributors.contains(r.id)||!p.place.equals(resolvedPlace))return false;}
