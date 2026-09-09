@@ -1123,6 +1123,12 @@ public final class ResidentSimulation {
      * that is not finished, and that they have not put their hands on yet. Ones somebody has already
      * started come first: joining something under way is a smaller step than starting something
      * nobody has touched, and it is the one that unblocks {@link #SOLO_PROGRESS_CAP}. */
+    /** Each resident's own ingrained default - the one their actingSelf is written around, and the
+     * one that gets first claim on where their day goes. Only used to decide whether a second pull is
+     * allowed to move them yet; nothing reads it to decide what anybody does. */
+    private static final Map<String,String> SIGNATURE_HABIT = Map.of(
+        "owner","mind_cafe","student","study_cafe","artist","seek_inspiration",
+        "gardener","tend_garden","fixer","check_cafe","weaver","be_around_people");
     private static Project sharedThingToLendAHandTo(CompanionWorld w,ResidentState r,boolean skipOwn){
         return w.projects.stream()
             .filter(p->knows(w,r.id,p.id)&&!Set.of("ready","celebrating").contains(p.status))
@@ -1187,11 +1193,18 @@ public final class ResidentSimulation {
             .min(Comparator.comparingInt(p->p.progress))
             .orElse(null);
         if(own==null||own.progress>=SOLO_PROGRESS_CAP)return false;
-        // Only ever where they already are. A reflex does not walk you across town - and letting this
-        // one do so quietly killed a signature habit: it relocated the student to the cafe before his
-        // own cafe-window default ever got a turn, and that default's own condition is "not already
-        // at the cafe", so it could never fire again for the rest of the day.
-        if(!actor(w,r.id).place().equals(own.place))return false;
+        // Normally only where they already are: a reflex does not walk you across town, and letting
+        // this one do so quietly killed a signature habit - it relocated the student to the cafe
+        // before his own cafe-window default ever got a turn, and that default's own condition is
+        // "not already at the cafe", so it could never fire again all day.
+        // The exception, once that default has actually had its turn at least once: your own
+        // unfinished thing may not be where your day usually takes you. 知夏 owns the colour
+        // collection, it lives in the garden, and her only default walks her to the cafe - so she
+        // could never once work on her own project. Travelling only after the signature habit has
+        // fired is what keeps the original bug from coming back: an ingrained default gets first
+        // claim on the day, and a trip AWAY from where it goes re-enables it rather than killing it.
+        if(!actor(w,r.id).place().equals(own.place)
+            &&!r.lastHabitAt.containsKey(SIGNATURE_HABIT.getOrDefault(r.id,"")))return false;
         if(!habitEligible(w,r,"own_thing",PLACE_HABIT_MIN_GAP_SECONDS,at))return false;
         firePlaceHabit(w,r,"own_thing","create",own.place,own.id,"手上没别的事，先给「"+own.title+"」弄一点",
             "没跟谁说，先动手给「"+own.title+"」弄了一点。",at,1800);

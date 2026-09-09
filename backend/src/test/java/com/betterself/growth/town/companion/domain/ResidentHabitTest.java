@@ -287,6 +287,30 @@ class ResidentHabitTest {
         assertThat(w.memories).anyMatch(m -> m.ownerId().equals("owner") && m.text().contains("真的做出来了"));
     }
 
+    /** 知夏 owns the colour collection, it lives in the garden, and her one default walks her to the
+     * cafe - so across four measured simulated days she never once worked on her own project. Your
+     * own unfinished thing is allowed to move you, but only once your ingrained default has had its
+     * turn, which is what stops this from killing that default the way it did the first time. */
+    @Test void yourOwnUnfinishedThingCanMoveYouOnceYourOwnDefaultHasHadItsTurn() {
+        CompanionWorld w = world("own-thing-travel");
+        ResidentState artist = ResidentSimulation.state(w, "artist");
+        CompanionWorld.Project hers = w.projects.stream()
+            .filter(p -> "artist".equals(p.ownerId)).findFirst().orElseThrow();
+        assertThat(hers.place).as("her own project is not where her day takes her").isEqualTo("garden");
+        artist.plan = null; artist.suspendedAction = null;
+        ResidentSimulation.replaceActor(w, "artist", TownPlaces.homeOf("artist"), "idle", "在家里", DAY);
+
+        // Before her signature habit has ever fired, nothing may move her: that is the rule that
+        // stops a second pull stealing an ingrained default's first turn.
+        assertThat(artist.lastHabitAt).doesNotContainKey("seek_inspiration");
+        runUntilContribution(w, artist, "own_thing", () -> artist.lastHabitAt.containsKey("seek_inspiration"));
+        assertThat(artist.lastHabitAt).as("her own default went first").containsKey("seek_inspiration");
+
+        artist.plan = null; artist.suspendedAction = null;
+        runUntilContribution(w, artist, "own_thing", () -> hers.contributors.contains("artist"));
+        assertThat(hers.contributors).as("and then she can finally get to her own thing").contains("artist");
+    }
+
     // ---- the other half of item 3: a resident has to be able to NAME the habit ---------------------
 
     /** The damping rule above could already read a belief filed under "habit:<居民>:<习惯>". Nothing
