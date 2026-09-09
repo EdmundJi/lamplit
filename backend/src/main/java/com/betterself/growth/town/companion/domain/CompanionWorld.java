@@ -45,6 +45,13 @@ public class CompanionWorld {
      * the same sorted "a:b" pair key already used for invitation cooldowns. Purely simulation-internal
      * bookkeeping - a timestamp, never sent to any model - self-healing on an old save via the empty
      * map default, exactly like {@link #serviceRequests} above. */
+    /** The local date on which the operator actually decided to shut for the day (close_cafe /
+     * closeForDay), so scheduled opening can tell that apart from every other reason the shop happens
+     * to be closed - not opening time yet, the world having only just been created, a handover. Using
+     * "the status changed today" instead was wrong in exactly the way that matters: a world is born
+     * with its shop closed, so day one read as "already closed for today" and the town never got a
+     * cafe on the day it was made. Self-healing on an old save via the null default. */
+    public String cafeClosedForDayOn;
     public Map<String,Instant> encounterCooldowns = new LinkedHashMap<>();
     /** "上次看到他时的样子" - for a pair where one of them has already decided NOT to approach the
      * other, what the scene looked like at the moment of that decision, keyed by the same sorted

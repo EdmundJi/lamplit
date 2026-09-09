@@ -800,7 +800,18 @@ public final class ResidentSimulation {
         // real elapsed gap before it can fire at all); with one, the damped gap below can outlast an
         // entire test window's worth of simulated time, deterministically, rather than merely making
         // firing less likely.
-        Instant last=r.lastHabitAt.getOrDefault(habitId,w.joinedAt==null?at:w.joinedAt);
+        // ...anchored to the world's join instant, but staggered BACKWARDS from it rather than
+        // sitting exactly on it. A resident's habits are years old; the world being created is not
+        // their life starting. Anchoring on the join instant meant every habit in town served out a
+        // full cooldown before it could fire even once, so the first simulated day had no habitual
+        // life in it at all - a measured three-day run scored 0 / 3 / 0 on the day the town was made
+        // and 3 on the next one, purely from that. The stagger is deterministic (worldId, residentId,
+        // habitId) and spread across one gap, so they do not all come due in the same minute either.
+        Instant last=r.lastHabitAt.get(habitId);
+        if(last==null){
+            Instant anchor=w.joinedAt==null?at:w.joinedAt;
+            last=anchor.minusSeconds(Math.floorMod(Objects.hash(w.id,r.id,habitId),baseGapSeconds));
+        }
         double damping=habitBeliefDamping(w,r.id,habitId);
         long gap=Math.round(baseGapSeconds*damping);
         if(Duration.between(last,at).getSeconds()<gap)return false;

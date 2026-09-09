@@ -183,6 +183,7 @@ final class CafeService {
         String spoken=announcement==null?"":announcement.trim();
         if(!present.isEmpty()&&spoken.isEmpty())return false;
         w.cafeStatus="closing";w.cafeStatusChangedAt=at;
+        w.cafeClosedForDayOn=at.atZone(ZoneId.of(w.timezone)).toLocalDate().toString();
         String own=null;
         if(!spoken.isEmpty())own=ResidentSimulation.memory(w,residentId,residentId,"observed",at,"cafe-hours","我刚才说：“"+spoken+"”",List.of(),5);
         for(String guest:present)ResidentSimulation.memory(w,guest,residentId,"heard",at,"cafe-hours",ResidentSimulation.actor(w,residentId).name()+"当面说：“"+spoken+"”",List.of(),6);
@@ -289,21 +290,15 @@ final class CafeService {
      * (that is "closing", and it stays), never overrides a pause, and never touches the hours. */
     private static void openOnSchedule(CompanionWorld w,Instant at) {
         if(!w.cafeOperating||!"closed".equals(w.cafeStatus)||!scheduledOpen(w,at))return;
-        // Only once the day has actually turned over: an early close is a decision about TODAY, and
-        // reopening the same day would silently undo it.
-        if(w.cafeStatusChangedAt!=null&&closedEarlierToday(w,at))return;
+        // An early close is a decision about TODAY, and reopening the same day would silently undo
+        // it. Only that decision counts - not every other reason a shop is closed.
+        if(at.atZone(ZoneId.of(w.timezone)).toLocalDate().toString().equals(w.cafeClosedForDayOn))return;
         ResidentState operator=ResidentSimulation.state(w,operatorId(w));
         if(operator==null)return;
         w.cafeStatus="open";w.cafeStatusChangedAt=at;
         ResidentSimulation.event(w,at,"cafe_opened",PLACE,List.of(operator.id),
             ResidentSimulation.actor(w,operator.id).name()+"照平常的钟点开了咖啡馆的门。",null);
     }
-    /** Whether the shop's current "closed" was reached at some point during today's local date. */
-    private static boolean closedEarlierToday(CompanionWorld w,Instant at){
-        ZoneId zone=ZoneId.of(w.timezone);
-        return w.cafeStatusChangedAt.atZone(zone).toLocalDate().equals(at.atZone(zone).toLocalDate());
-    }
-
     static void tick(CompanionWorld w, Instant at) {
         openOnSchedule(w, at);
         for (ServiceRequest req : w.serviceRequests) {
