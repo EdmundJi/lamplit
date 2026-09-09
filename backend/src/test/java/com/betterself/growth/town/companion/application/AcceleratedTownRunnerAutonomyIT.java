@@ -3,6 +3,7 @@ package com.betterself.growth.town.companion.application;
 import com.betterself.growth.town.companion.domain.CompanionRules;
 import com.betterself.growth.town.companion.domain.CompanionWorld;
 import com.betterself.growth.town.companion.domain.ResidentSimulation;
+import com.betterself.growth.town.companion.domain.ResidentSeed;
 import com.betterself.growth.town.companion.tools.InMemoryModelUsage;
 import com.betterself.growth.town.companion.tools.InMemoryWorldStore;
 import com.betterself.growth.town.companion.tools.MutableClock;
@@ -51,7 +52,7 @@ class AcceleratedTownRunnerAutonomyIT {
     @Test void aHandWrittenResidentHasADynamicHomeOwnEvidenceAndAUsableModelContext() throws Exception {
         CompanionWorld world = CompanionRules.join("qa-manual-resident", "我", "Asia/Shanghai", NOW);
         world.conversations.clear();
-        assertThat(ResidentSimulation.addResident(world, "translator", "阿岚", "自由译者", "在家接翻译工作", NOW)).isTrue();
+        assertThat(ResidentSeed.addResident(world, "translator", "阿岚", "自由译者", "在家接翻译工作", NOW)).isTrue();
         parkOtherResidents(world, "translator", NOW.plusSeconds(7_200));
 
         var newcomer = ResidentSimulation.state(world, "translator");

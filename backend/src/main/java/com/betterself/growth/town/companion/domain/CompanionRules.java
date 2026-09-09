@@ -23,7 +23,7 @@ public final class CompanionRules {
         remember(w,"student","history","seed",now.minusSeconds(86400),"study-habit","我常在咖啡馆靠窗的位置备考，阿禾会留一杯温水。");
         remember(w,"gardener","history","seed",now.minusSeconds(86400),"garden-habit","花园里新开的花适合送给朋友，我还没听说最近有什么聚会。");
         diary(w,now,"搬进小街了。咖啡馆就在住处旁边，邻居们已经有各自的日子。先慢慢认识这里。");
-        environment(w,now); w.revision=1; ResidentSimulation.initialize(w,now); return w;
+        environment(w,now); w.revision=1; ResidentSeed.initialize(w,now); return w;
     }
 
     public static void advance(CompanionWorld w, Instant now) {

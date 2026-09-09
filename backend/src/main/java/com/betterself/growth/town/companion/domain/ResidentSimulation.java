@@ -7,92 +7,24 @@ import static com.betterself.growth.town.companion.domain.CompanionWorld.*;
 /** Small event-driven society. Plans persist; only completed actions change physical objects. */
 public final class ResidentSimulation {
     private ResidentSimulation() {}
-    private static final List<String> IDS=List.of("owner","student","artist","gardener");
     /** Plan actions that make a resident ineligible to start or be pulled into a new conversation,
      * whether as initiator or partner - see the "tend" doc comment at its one use site below for why
      * "tend" belongs in this set even though it is not a passive/absent state like the other four. */
     private static final Set<String> UNAVAILABLE_FOR_CONVERSATION = Set.of("travel","sleep","rest","away","tend");
-    private static LifeIntent lifeIntent(CompanionWorld w,ResidentState r,String goalId,String purpose,String status,Instant at){
+    static LifeIntent lifeIntent(CompanionWorld w,ResidentState r,String goalId,String purpose,String status,Instant at){
         // Intent ids are local descriptive state, never world events.  Keeping them out of the event
         // sequence preserves the deterministic social simulation/replay that already keys choices on
         // that sequence.
         LifeIntent intent=new LifeIntent();intent.id="life-"+r.id+"-"+at.toEpochMilli();intent.goalId=goalId;intent.purpose=purpose;intent.status=status;intent.formedAt=at;intent.updatedAt=at;return intent;
     }
-    /** Old worlds used a public-project id as the entire life of a resident.  Keep that id as a
-     * possible thread, but seed a resident-owned purpose so private work, rest and a change of life
-     * have somewhere durable to live. */
-    private static void reconcileLife(CompanionWorld w,Instant at){
-        if(w.cafeOperatorId==null||state(w,w.cafeOperatorId)==null)w.cafeOperatorId="owner";
-        for(ResidentState r:w.residentStates){
-            if(r.id.equals("self"))continue;
-            if(r.occupation==null||r.occupation.isBlank())r.occupation=defaultOccupation(r.id);
-            if(r.lifeIntent==null)r.lifeIntent=lifeIntent(w,r,r.goal,r.occupation,"active",at);
-            if(r.careerIntent==null)r.careerIntent=lifeIntent(w,r,null,r.occupation+"。我知道总得找到能长期做下去的事，但也允许自己先歇一歇、慢慢想。","active",at);
-            if(r.lifeIntent.status==null)r.lifeIntent.status="active";
-            if(!r.sleepScheduleSeeded){r.usualSleepMinute=23*60;r.usualWakeMinute=7*60;r.sleepScheduleSeeded=true;}
-        }
-    }
-    private static String defaultOccupation(String id){return switch(id){case "owner"->"经营咖啡馆，也想留下自己的时间";case "student"->"备考，也在摸索以后想过怎样的日子";case "artist"->"画画、接零散的创作活";case "gardener"->"照看花草和邻里的小事";default->"找一件能长期做下去的事";};}
-    private static void setLifeIntent(CompanionWorld w,ResidentState r,String goalId,String purpose,String status,Instant at){
+    static void setLifeIntent(CompanionWorld w,ResidentState r,String goalId,String purpose,String status,Instant at){
         if(r.lifeIntent==null||!Objects.equals(r.lifeIntent.purpose,purpose)||!Objects.equals(r.lifeIntent.goalId,goalId))r.lifeIntent=lifeIntent(w,r,goalId,purpose,status,at);
         else {r.lifeIntent.status=status;r.lifeIntent.updatedAt=at;}
     }
-    public static void initialize(CompanionWorld w,Instant now) {
-        if(w.simulationVersion>=2)return;
-        long initialRevision=w.revision;
-        w.simulationVersion=4; w.residentStates.clear();w.projects.clear();w.objects.clear();w.conversations.clear();
-        CafeService.reconcileSchedule(w,now);
-        TownPlaces.seed(w);ensureAvatarState(w);
-        boolean modelMode=w.modelConversationsEnabled;w.modelConversationsEnabled=false;
-        Instant past=now.minusSeconds(90);
-        project(w,"reading-night","留一盏灯的读书小聚","gathering","cafe","owner","books","想让晚归的人也有一个能坐下来的地方。",2);
-        project(w,"quiet-corner","窗边的安静角","quiet","cafe","student","books","需要安静备考，又不想把邻居们都挡在门外。",2);
-        project(w,"street-colors","小街颜色采集册","art","garden","artist","poster","收集四个人眼里的小街，画成一张大家都认得的画。",3);
-        project(w,"seed-exchange","带一株新芽回家","garden","garden","gardener","flowers","给门前空花盆找新主人，也想学会怎么把花画下来。",2);
-        for(int i=0;i<4;i++) {
-            ResidentState r=new ResidentState();r.id=IDS.get(i);r.energy=i==1?42:74-i*5;r.social=i==0?48:62;r.curiosity=60+i*8;
-            r.mood=i==1?"有点紧绷":"有所期待";r.goal=w.projects.get(i).id;r.thought=w.projects.get(i).description;
-            r.occupation=switch(r.id){case "owner"->"经营咖啡馆，也想留下自己的时间";case "student"->"备考，也在摸索以后想过怎样的日子";case "artist"->"画画、接零散的创作活";default->"照看花草和邻里的小事";};
-            r.lifeIntent=lifeIntent(w,r,null,r.occupation+"。我知道总得找到能长期做下去的事，但也允许自己先歇一歇、慢慢想。","active",past);
-            r.careerIntent=lifeIntent(w,r,null,r.occupation+"。我知道总得找到能长期做下去的事，但也允许自己先歇一歇、慢慢想。","active",past);
-            r.lastSocialAt=past.minusSeconds(120);r.lastReflectionAt=past;r.energyUpdatedAt=past;r.usualSleepMinute=23*60;r.usualWakeMinute=7*60;r.sleepScheduleSeeded=true;r.revision=1;
-            for(String other:IDS)if(!other.equals(r.id))r.relationships.put(other,other.equals("owner")?62:38+Math.floorMod((w.id+r.id+other).hashCode(),20));
-            w.residentStates.add(r);
-            Project own=w.projects.get(i);r.knownProjects.put(own.id,new ProjectKnowledge(own.id,own.place,own.status,own.progress,past,r.id));
-            memory(w,r.id,"history","seed",past.minusSeconds(86400),r.goal,r.thought,List.of(),7);
-            boolean open="open".equals(w.cafeStatus);
-            String place=open?(i<3?"cafe":"garden"):TownPlaces.homeOf(r.id);
-            String action=open?(i==1?"study":"observe"):switch(r.id){case "student"->"study";case "artist"->"make";case "gardener"->"work";default->"rest";};
-            String reason=open?(i==1?"先守住今天的复习时间":"看看邻居手上的事，再决定从哪里开始"):switch(r.id){case "student"->"在自己桌前看书";case "artist"->"在家收一收没画完的线稿";case "gardener"->"在家整理种子和工具";default->"店还没开，先在家歇一会儿";};
-            schedule(w,r,action,place,null,reason,past,open?36+i*7:1800);
-        }
-        // Shared history is split into individual perspectives, rather than a global script.
-        memory(w,"artist","owner","seed",past.minusSeconds(3600),"reading-night","阿禾昨天问我能不能帮她画一张读书小聚的招贴，我说可以先聊聊。",List.of(),8);
-        w.projects.get(0).members.add("artist");
-        state(w,"artist").knownProjects.put("reading-night",new ProjectKnowledge("reading-night","cafe","idea",0,past,"owner"));
-        w.objects.add(new WorldObject("worktable","table","cafe","一张可共用的长桌","available",null));
-        w.objects.add(new WorldObject("noticeboard","board","street","门前留言板","empty",null));
-        w.objects.add(new WorldObject("flowerbed","flowers","garden","等待移栽的新芽","growing","seed-exchange"));
-        // A short deterministic warm start creates actual earlier interactions and unfinished plans.
-        w.simulatedAt=past;
-        for(int i=1;i<=15;i++)step(w,past.plusSeconds(i*6L));
-        w.simulatedAt=now;
-        w.modelConversationsEnabled=modelMode;
-        if("open".equals(w.cafeStatus)){
-            ResidentState owner=state(w,"owner"),artist=state(w,"artist");
-            schedule(w,owner,"observe","cafe",null,"等知夏看看桌上还没定稿的招贴",now,42);
-            schedule(w,artist,"observe","cafe",null,"想先问清小聚想让人记住什么",now,48);
-            owner.lastSocialAt=now.minusSeconds(120);artist.lastSocialAt=now.minusSeconds(120);
-            w.conversations.stream().filter(c->c.status.equals("active")).forEach(c->c.status="ended");
-            startConversation(w,owner,artist,w.projects.get(0),now);
-            event(w,now,"arrival","street",List.of(),"小街的日子早就开始了。咖啡馆里，一张招贴还没有定稿。",null);
-        } else event(w,now,"arrival","street",List.of(),"小街安静下来。咖啡馆已经打烊，居民们各自在家。",null);
-        w.revision=initialRevision;
-    }
     public static void advance(CompanionWorld w,Instant now) {
-        initialize(w,now);
+        ResidentSeed.initialize(w,now);
         reconcileLegacyPlaces(w,now);
-        reconcileLife(w,now);
+        ResidentSeed.reconcileLife(w,now);
         CafeService.reconcileSchedule(w,now);
         deduplicateReflections(w);
         if(w.simulatedAt==null)w.simulatedAt=now;
@@ -106,7 +38,7 @@ public final class ResidentSimulation {
         int steps=0;
         while(!w.simulatedAt.plusSeconds(6).isAfter(now)&&steps++<10){w.simulatedAt=w.simulatedAt.plusSeconds(6);step(w,w.simulatedAt);}
     }
-    private static void step(CompanionWorld w,Instant at) {
+    static void step(CompanionWorld w,Instant at) {
         CafeService.reconcileSchedule(w,at);
         ConversationLifecycle.recoverSummaries(w,at);
         // The coffee/water chain has its own clock, independent of whose plan is currently running:
@@ -257,7 +189,7 @@ public final class ResidentSimulation {
             replaceActor(w,r.id,"street","walk","准备去"+placeName(place)+"："+reason,r.plan.endsAt());
         } else schedule(w,r,action,place,target,reason,at,duration);
     }
-    private static void schedule(CompanionWorld w,ResidentState r,String action,String place,String target,String reason,Instant at,int duration) {
+    static void schedule(CompanionWorld w,ResidentState r,String action,String place,String target,String reason,Instant at,int duration) {
         r.plan=new Plan("p-"+(++w.eventSequence),action,place,target,reason,at,at.plusSeconds(duration));r.revision++;r.thought=reason;
         r.desiredAction=null;r.desiredDurationSeconds=0;
         String label=switch(action){case "create","help"->"动手准备"+(project(w,target)==null?"手上的小事":"「"+project(w,target).title+"」");case "study"->"在窗边复习，想守住一点安静";case "invite"->reason;case "sleep"->"睡着了，给明天留一点精神";case "rest"->"捧着杯子歇一会儿";case "celebrate"->"想请大家看看一起做出来的东西";case "wait"->reason;case "tend"->r.id.equals(CafeService.operatorId(w))?"回到吧台，照应一下柜台前的人":"替"+actor(w,CafeService.operatorId(w)).name()+"照看吧台";default->reason;};
@@ -301,7 +233,7 @@ public final class ResidentSimulation {
         return previous==null||Duration.between(previous,at).getSeconds()>=Personality.of(a).inviteCooldownSeconds();
     }
     private static String pairKey(String a,String b){return a.compareTo(b)<0?a+":"+b:b+":"+a;}
-    private static void startConversation(CompanionWorld w,ResidentState a,ResidentState b,Project p,Instant at) {
+    static void startConversation(CompanionWorld w,ResidentState a,ResidentState b,Project p,Instant at) {
         p.invitationHistory.put(pairKey(a.id,b.id),at);
         // A chat can be a detour through an already meaningful afternoon, rather than a command to
         // discard that afternoon altogether.
@@ -385,35 +317,12 @@ public final class ResidentSimulation {
         }
         c.turns.add(new Turn(speaker,text,at));c.stage++;c.updatedAt=at;a.revision++;b.revision++;replaceActor(w,speaker,c.place,"talk",text,at.plusSeconds(24));
     }
-    private static void reflect(CompanionWorld w,ResidentState r,Instant at) {
-        if(Duration.between(r.lastReflectionAt,at).getSeconds()<120)return;
-        List<Memory> recent=w.memories.stream().filter(m->m.ownerId().equals(r.id)&&m.at().isAfter(r.lastReflectionAt)&&!m.sourceType().equals("reflection")).toList();
-        if(recent.stream().mapToInt(Memory::importance).sum()<22)return;
-        Memory salient=recent.stream().max(Comparator.comparingInt(Memory::importance).thenComparing(Memory::at)).orElseThrow();
-        Project topic=project(w,salient.topicId());
-        String title=topic==null?"刚才那件小事":"「"+topic.title+"」";
-        Memory encounter=recent.stream().filter(m->m.topicId().equals(salient.topicId())&&!m.sourceId().equals(r.id)&&IDS.contains(m.sourceId())).findFirst().orElse(null);
-        String partner=encounter==null?"邻居":actor(w,encounter.sourceId()).name();
-        String thought;
-        if(salient.text().contains("真的做出来"))thought=title+"做完了。我记得自己最后添的是哪一笔，也记得有几处不是我原来的做法。";
-        else if(recent.stream().anyMatch(m->m.text().contains("没有答应")))thought=partner+"说这次没空。我先把"+title+"里能自己做的部分收好。";
-        else if(encounter!=null&&encounter.sourceType().equals("heard"))thought="和"+partner+"聊过"+title+"。对方提的那件事我先记着，下次别又从头问。";
-        else if(encounter!=null)thought="我看见"+partner+"也动了手。"+title+"现在有一部分不是我做的。";
-        else thought="我把"+title+"推进了一点。还缺什么，等下次看到材料再说。";
-        var evidence=recent.stream().filter(m->Objects.equals(m.topicId(),salient.topicId())).sorted(Comparator.comparingInt(Memory::importance).reversed()).limit(3).map(Memory::id).toList();
-        memory(w,r.id,r.id,"reflection",at,salient.topicId(),thought,evidence,8);r.thought=thought;r.lastReflectionAt=at;
-    }
-    private static void newWish(CompanionWorld w,ResidentState r,Instant at) {
-        boolean unfinished=w.projects.stream().anyMatch(p->p.ownerId.equals(r.id)&&!p.status.equals("celebrating"));
-        if(unfinished)return;
-        Project previous=w.projects.stream().filter(p->p.ownerId.equals(r.id)&&p.completedAt!=null).max(Comparator.comparing(p->p.completedAt)).orElse(null);
-        if(previous==null||Duration.between(previous.completedAt,at).getSeconds()<240)return;
-        int variation=Math.floorMod((w.id+r.id+at.atZone(ZoneId.of(w.timezone)).toLocalDate()+w.projects.size()).hashCode(),3);
-        String title=switch(r.id){case "owner"->List.of("雨天的一壶分享茶","给晚归邻居的留言杯垫","带一本书来换一段故事").get(variation);case "student"->List.of("把难题讲给邻居听","安静角的互助便签","今天只读一页的小书签").get(variation);case "artist"->List.of("画下邻居最喜欢的一扇窗","一张有四种颜色的地图","给花盆画一个新名字").get(variation);default->List.of("一人认领一株新芽","把雨水留给明天的花","交换一种照顾植物的办法").get(variation);};
-        String kind=r.id.equals("artist")?"poster":r.id.equals("gardener")?"flowers":r.id.equals("owner")?"tea":"books";
-        propose(w,r,TownPlaces.isHome(actor(w,r.id).place())?"cafe":actor(w,r.id).place(),title,kind,
-            "上次和邻居一起做成了「"+previous.title+"」，想把那一点默契接着用下去。",ownEvidence(w,r.id,previous.id),at);
-    }
+    // reflect() and newWish() used to live here. Both were already unreachable - nothing called
+    // either one - and they are removed rather than moved so the next batch builds reflection from
+    // scratch instead of inheriting a corpse. What the metrics counted as "reflections" was never
+    // this method: it is applyDecision() below storing the model's own stated reason for an action
+    // as a reflection-typed memory. The town has had no reflection mechanism at all.
+
     public static boolean proposeDecision(CompanionWorld w,String id,long residentRevision,long intentRevision,String place,String title,String objectKind,String reason,List<String> evidence,Instant now) {
         ResidentState r=state(w,id);
         if(r==null||r.revision!=residentRevision||w.intentRevision!=intentRevision||!TownPlaces.contains(w,place)||TownPlaces.isHome(place))return false;
@@ -693,11 +602,6 @@ public final class ResidentSimulation {
     }
     private static String knownStatus(ResidentState r,String id){ProjectKnowledge p=r.knownProjects.get(id);return p==null?"idea":p.status();}
     public static String knownPlace(ResidentState r,Project p){ProjectKnowledge known=r.knownProjects.get(p.id);return known==null?p.place:known.place();}
-    public static List<Memory> retrieve(CompanionWorld w,String id,Instant now) {
-        ResidentState r=state(w,id);
-        return w.memories.stream().filter(m->m.ownerId().equals(id)).sorted(Comparator.comparingDouble((Memory m)->
-            m.importance()+8.0/(1+Math.max(0,Duration.between(m.at(),now).toMinutes())/10.0)+(Objects.equals(m.topicId(),r.goal)?8:0)).reversed()).limit(10).toList();
-    }
     public static ResidentState state(CompanionWorld w,String id){return w.residentStates.stream().filter(r->r.id.equals(id)).findFirst().orElse(null);}
     public static boolean mayTend(CompanionWorld w,String id){return CafeService.mayTend(w,id);}
     public static String cafeOperatorId(CompanionWorld w){return CafeService.operatorId(w);}
@@ -705,17 +609,6 @@ public final class ResidentSimulation {
      * calls this and there is no automatic migration/recruitment: callers supply their id, name,
      * role and livelihood description, then the resident gets the same neutral state/home/plan
      * machinery as everyone else. */
-    public static boolean addResident(CompanionWorld w,String id,String name,String role,String occupation,Instant now){
-        if(id==null||!id.matches("[a-z][a-z0-9-]{1,30}")||name==null||name.isBlank()||role==null||role.isBlank()||occupation==null||occupation.isBlank()||state(w,id)!=null||w.residents.stream().anyMatch(a->a.id().equals(id)))return false;
-        TownPlaces.seed(w);TownPlaces.addHome(w,id);
-        ResidentState r=new ResidentState();r.id=id;r.energy=65;r.social=55;r.curiosity=55;r.mood="刚搬来，还在认路";r.occupation=occupation;r.thought="先熟悉这里，也想找一件能长期做下去的事";r.lastSocialAt=now;r.lastReflectionAt=now;r.energyUpdatedAt=now;r.usualSleepMinute=23*60;r.usualWakeMinute=7*60;r.sleepScheduleSeeded=true;r.revision=1;r.lifeIntent=lifeIntent(w,r,null,occupation,"active",now);r.careerIntent=lifeIntent(w,r,null,occupation,"active",now);
-        for(ResidentState other:w.residentStates)if(!other.id.equals("self")){r.relationships.put(other.id,40);other.relationships.put(id,40);}
-        w.residentStates.add(r);w.residents.add(new Actor(id,name,role,TownPlaces.homeOf(id),"rest","刚搬来，先在住处整理东西",180,260,now.plusSeconds(60)));
-        memory(w,id,id,"seed",now,null,"我刚搬到这条街，想慢慢把“"+occupation+"”过成能维持生活的事，也先允许自己休息和认识邻居。",List.of(),7);
-        schedule(w,r,"rest",TownPlaces.homeOf(id),null,"刚搬来，先在住处整理东西",now,1200);return true;
-    }
-    // The avatar is not in w.residents (that list stays exactly the four NPCs the frontend already
-    // renders); "self" resolves to w.avatar instead so any resident-facing lookup still finds it.
     public static Actor actor(CompanionWorld w,String id){return "self".equals(id)?w.avatar:w.residents.stream().filter(a->a.id().equals(id)).findFirst().orElseThrow();}
     public static Project project(CompanionWorld w,String id){return w.projects.stream().filter(p->p.id.equals(id)).findFirst().orElse(null);}
     public static boolean knows(CompanionWorld w,String id,String topic){return w.memories.stream().anyMatch(m->m.ownerId().equals(id)&&Objects.equals(m.topicId(),topic)&&!m.sourceType().equals("reflection"));}
@@ -734,7 +627,7 @@ public final class ResidentSimulation {
     private static int scaledDelta(ResidentState owner,int delta){return (int)Math.round(delta*Personality.of(owner).intensity());}
     static void replaceActor(CompanionWorld w,String id,String place,String activity,String label,Instant until){for(int i=0;i<w.residents.size();i++){Actor a=w.residents.get(i);if(a.id().equals(id))w.residents.set(i,new Actor(id,a.name(),a.role(),place,activity,label,a.x(),a.y(),until));}}
     static void replaceRole(CompanionWorld w,String id,String role){for(int i=0;i<w.residents.size();i++){Actor a=w.residents.get(i);if(a.id().equals(id))w.residents.set(i,new Actor(id,a.name(),role,a.place(),a.activity(),a.label(),a.x(),a.y(),a.until()));}}
-    private static void project(CompanionWorld w,String id,String title,String kind,String place,String owner,String object,String description,int needed){Project p=new Project();p.id=id;p.title=title;p.kind=kind;p.place=place;p.ownerId=owner;p.objectKind=object;p.description=description;p.status="idea";p.needed=needed;p.members.add(owner);w.projects.add(p);}
+    static void project(CompanionWorld w,String id,String title,String kind,String place,String owner,String object,String description,int needed){Project p=new Project();p.id=id;p.title=title;p.kind=kind;p.place=place;p.ownerId=owner;p.objectKind=object;p.description=description;p.status="idea";p.needed=needed;p.members.add(owner);w.projects.add(p);}
     static String memory(CompanionWorld w,String owner,String source,String type,Instant at,String topic,String text,List<String> evidence,int importance){
         if(type.equals("reflection")){Memory existing=w.memories.stream().filter(m->m.ownerId().equals(owner)&&m.sourceType().equals(type)&&m.text().equals(text)).findFirst().orElse(null);if(existing!=null)return existing.id();}
         String id="m2-"+(++w.eventSequence);w.memories.add(new Memory(id,owner,source,type,at,text,topic,evidence,importance));while(w.memories.size()>200) {
