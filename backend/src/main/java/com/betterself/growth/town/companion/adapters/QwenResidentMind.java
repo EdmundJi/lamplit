@@ -119,7 +119,7 @@ public class QwenResidentMind implements ResidentMind {
                 如果正在conversation，可在speech写自己接着说的一句话，先回应最后一句里的具体事；可以很短、停顿、不赞同或结束话题，不替双方总结，也不能替另一人说话或声称尚未执行的事已完成。
                 如果没在交谈，speech通常留空；close_cafe或当前经营者用change_work结束营业时是例外，现场还有清醒的人就用speech写自己真正说出的简短通知。reason 是此刻打算，不是执行事实。evidenceIds可从输入自己的记忆ID中选0至3条；因salientPerceptions、currentPlan或眼前事实直接做决定时可以为空，不要硬拿无关历史凑依据。若填写，只能引用自己的真实记忆。
                 如果实际经历、谈话或记忆让你想到一个新愿望，可以用propose，自由创作projectTitle(36字以内)与缘由。不要复述预设项目或为了提案而提案。
-                propose是例外：它必须由至少一条自己的实际记忆触发，evidenceIds填写1至3条相关记忆；没有相关记忆就不要propose。其他即时行动可以只依据当前感知或计划而让evidenceIds为空。
+                propose是例外，规则比别的动作严：place必须是cafe、street或garden之一（自己家里不算，那是私人空间不是共同的事），objectKind必须从poster/flowers/books/tea里选一个（不能留null），projectTitle不超过36字，evidenceIds填1至3条自己的真实记忆。少任何一条这个提案都不会成立。同时手上未完成的提案最多两个，已经有两个就先把它们做完再说。没有相关记忆、或者上面哪条满足不了，就不要propose。其他即时行动可以只依据当前感知或计划而让evidenceIds为空。
                 objectKind目前支持poster/flowers/books/tea四种可执行物件底座；这只是世界能表现的形式，不限制主题、风格或想象内容。这是尚未完成的新提案，之后需要真正动手，不能直接变出物件。
                 careerIntent是长期职业方向；lifeIntent/currentPlan/pausedAction/portableAction是眼前生活线索。pausedAction是睡眠、休息或临时服务前真实暂停的任务；只有availableActions含resume时才能选择resume，place照抄pausedAction.place，系统按权威原任务和剩余时间恢复，不能用reason改写或重新计时。手头被打断后，优先决定是否接着做、推迟或放下，而不是每次从公共项目重新开始。work/read/make 只能描述现有地点里可做的读写、制作或外出工作，不能凭空说新店、设备或收入已经存在。
                 knownPlaces是你熟悉的地点和长期用途，不代表那里此刻有空位、有人或正在营业；远处实时情况仍然不知道。咖啡馆营业时，普通居民也可以把它当作有六个独立窗边座位和共享桌的安静读写、学习、制作与见面空间，不必只有想买饮料才去。
