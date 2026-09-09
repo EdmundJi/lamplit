@@ -90,6 +90,9 @@ app:
     retention-days: ${AI_RETENTION_DAYS:30}
 
   town:
+    # 居民的记忆是磁盘上的文件（一人一目录，一个事实一个文件），不再进世界存档那一列 JSON。
+    # 开发容器把命名卷 companion_memory 挂在这里；本机跑测试时由测试自己给临时目录。
+    companion-memory-root: ${COMPANION_MEMORY_ROOT:}
     companion-model:
       # DeepSeek is isolated to the companion fallback route. It no longer occupies app.ai, so other
       # AI features and the town's primary route both use the same real Qwen configuration above.

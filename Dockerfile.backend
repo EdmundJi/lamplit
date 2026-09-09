@@ -3,6 +3,11 @@ FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
 COPY backend/target/growth-backend-0.0.1-SNAPSHOT.jar app.jar
 
+# 居民的记忆是这个目录下的文件，不在数据库里。部署时必须把它挂成持久卷，
+# 否则每次发版所有人都会失忆。见 deploy/compose.dev.yaml 里的 companion_memory。
+ENV COMPANION_MEMORY_ROOT=/var/lib/growth/memory
+VOLUME ["/var/lib/growth/memory"]
+
 EXPOSE 8080
 
 ENTRYPOINT ["java", "-jar", "app.jar"]

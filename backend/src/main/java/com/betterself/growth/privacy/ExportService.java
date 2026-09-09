@@ -1,5 +1,6 @@
 package com.betterself.growth.privacy;
 
+import com.betterself.growth.town.companion.application.MemoryStore;
 import com.betterself.growth.execution.IdempotencyService;
 import com.betterself.growth.shared.api.ApiException;
 import com.betterself.growth.shared.id.PublicIdGenerator;
@@ -35,6 +36,7 @@ public class ExportService {
     private final IdempotencyService idempotency;
     private final ObjectMapper objectMapper;
     private final Clock clock;
+    private final MemoryStore companionMemories;
 
     public ExportService(
         JdbcTemplate jdbc,
@@ -42,7 +44,8 @@ public class ExportService {
         PublicIdGenerator ids,
         IdempotencyService idempotency,
         ObjectMapper objectMapper,
-        Clock clock
+        Clock clock,
+        MemoryStore companionMemories
     ) {
         this.jdbc = jdbc;
         this.storage = storage;
@@ -50,6 +53,7 @@ public class ExportService {
         this.idempotency = idempotency;
         this.objectMapper = objectMapper;
         this.clock = clock;
+        this.companionMemories = companionMemories;
     }
 
     @Transactional
@@ -171,7 +175,22 @@ public class ExportService {
             add(zip, "task_events.csv", csv(events));
             add(zip, "role_progress.csv", csv(roleProgress));
             Map<String, Object> town = new LinkedHashMap<>();
-            town.put("companion", jdbc.queryForList("select state_json,updated_at from town_companion_world where user_id=?", userId));
+            List<Map<String, Object>> saves = jdbc.queryForList("select state_json,updated_at from town_companion_world where user_id=?", userId);
+            town.put("companion", saves);
+            // The save above no longer carries memories - they live in their own files now (see
+            // FileMemoryStore), so an export that only shipped state_json would quietly have stopped
+            // including the part of the town that is most personal. Owner ids come out of the save
+            // itself, so a hand-authored resident is exported without this class knowing who lives here.
+            Map<String, Object> remembered = new LinkedHashMap<>();
+            for (Map<String, Object> save : saves) {
+                Object stateJson = save.get("state_json");
+                if (stateJson == null) continue;
+                for (var node : objectMapper.readTree(stateJson.toString()).path("residentStates")) {
+                    String owner = node.path("id").asText(null);
+                    if (owner != null && !remembered.containsKey(owner)) remembered.put(owner, companionMemories.byOwner(userId, owner));
+                }
+            }
+            town.put("memories", remembered);
             add(zip, "town_experience.json", objectMapper.writeValueAsString(town));
             zip.finish();
             return bytes.toByteArray();

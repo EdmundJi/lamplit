@@ -30,7 +30,7 @@ public record Personality(int extroversion, int conscientiousness, int sensitivi
     // counter" duty-of-care behavior is expected to read - and, per this batch, the hook a future
     // reflect() write is expected to move, possibly downward, from a bad day at the counter.
     // student (小川, 备考生): guards quiet and follow-through above almost everything else - the one
-    // least likely to seek company or abandon what she is doing, but notices detail.
+    // least likely to seek company or abandon what he is doing, but notices detail.
     // artist (知夏, 插画师): the one who says yes and then, sometimes, does not follow through - low
     // conscientiousness paired with the sharpest eye for detail when she does pay attention. This is
     // a genuinely low score, not a placeholder - it must never be mistaken for "unseeded".

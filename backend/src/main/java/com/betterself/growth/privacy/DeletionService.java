@@ -1,5 +1,6 @@
 package com.betterself.growth.privacy;
 
+import com.betterself.growth.town.companion.application.MemoryStore;
 import com.betterself.growth.auth.SessionService;
 import com.betterself.growth.shared.api.ApiException;
 import com.betterself.growth.shared.id.PublicIdGenerator;
@@ -23,12 +24,14 @@ public class DeletionService {
     private final SessionService sessions;
     private final PublicIdGenerator ids;
     private final Clock clock;
+    private final MemoryStore companionMemories;
 
-    public DeletionService(JdbcTemplate jdbc, SessionService sessions, PublicIdGenerator ids, Clock clock) {
+    public DeletionService(JdbcTemplate jdbc, SessionService sessions, PublicIdGenerator ids, Clock clock, MemoryStore companionMemories) {
         this.jdbc = jdbc;
         this.sessions = sessions;
         this.ids = ids;
         this.clock = clock;
+        this.companionMemories = companionMemories;
     }
 
     @Transactional
@@ -89,6 +92,11 @@ public class DeletionService {
             jdbc.update("update ai_memory set content = '[DELETED]', status = 'DELETED', deleted_at = ? where user_id = ?", Timestamp.from(clock.instant()), userId);
             jdbc.update("update attachment set scan_status = 'DELETED', deleted_at = ? where user_id = ?", Timestamp.from(clock.instant()), userId);
             jdbc.update("delete from town_companion_world where user_id=?", userId);
+            // Residents' memories are files on disk now, not a column in the save above. Dropping the
+            // save alone would leave the whole memory directory behind - exactly the kind of hole
+            // docs/02-modules.md warns about when it says deletion has to take the memory directory
+            // with it. This runs outside the SQL transaction and is idempotent by design.
+            companionMemories.deleteUser(userId);
             String receipt = sha256("deletion:" + userId + ":" + clock.instant());
             jdbc.update(
                 "update deletion_request set status = 'COMPLETED', completed_at = ?, completion_receipt_hash = ? where user_id = ? and status = 'PROCESSING'",

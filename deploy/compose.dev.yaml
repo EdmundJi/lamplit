@@ -82,6 +82,7 @@ services:
     entrypoint: ["/entrypoint.sh"]
     environment:
       SERVER_PORT: "8080"
+      COMPANION_MEMORY_ROOT: /var/lib/growth/memory
       MYSQL_HOST: mysql
       MYSQL_PORT: "3306"
       MYSQL_DATABASE: ${MYSQL_DATABASE:-growth}
@@ -137,6 +138,9 @@ services:
       # target 用独立卷盖住宿主机那份：容器和你本机的 ./mvnw 各编各的，互不干扰。
       - backend_target:/workspace/backend/target
       - maven_cache:/root/.m2
+      # 居民的记忆是文件，不是数据库里的一列。放命名卷里，devtools 每两秒的热重启和
+      # docker compose up 重建都不会把它们抹掉——放在容器临时文件系统里就会。
+      - companion_memory:/var/lib/growth/memory
     depends_on:
       mysql:
         condition: service_healthy
@@ -193,6 +197,8 @@ volumes:
     name: ${COMPOSE_PROJECT_NAME:-growth}_maven_cache
   backend_target:
     name: ${COMPOSE_PROJECT_NAME:-growth}_backend_target
+  companion_memory:
+    name: ${COMPOSE_PROJECT_NAME:-growth}_companion_memory
   frontend_node_modules:
     name: ${COMPOSE_PROJECT_NAME:-growth}_frontend_node_modules
   frontend_vite_cache:

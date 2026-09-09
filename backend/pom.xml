@@ -85,6 +85,14 @@
             <artifactId>mysql-connector-j</artifactId>
             <scope>runtime</scope>
         </dependency>
+        <!-- 居民记忆的元数据索引。正文是 memory/<用户>/<居民>/*.md，SQLite 只存可查询的元数据，
+             丢了可以从文件重建（见 FileMemoryStore）。刻意不进 MySQL：记忆是一人一目录的文件，
+             不走 db/migration。 -->
+        <dependency>
+            <groupId>org.xerial</groupId>
+            <artifactId>sqlite-jdbc</artifactId>
+            <version>3.50.1.0</version>
+        </dependency>
         <dependency>
             <groupId>com.fasterxml.jackson.datatype</groupId>
             <artifactId>jackson-datatype-jsr310</artifactId>
