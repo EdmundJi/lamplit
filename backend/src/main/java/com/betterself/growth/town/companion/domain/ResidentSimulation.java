@@ -1111,11 +1111,36 @@ public final class ResidentSimulation {
     }
     /** 阿满: being near people is what lets her get ahead of a conflict before it starts, so an idle
      * moment defaults her toward wherever people already are. */
+    /** Where the people actually are right now, of the public places, or null if nobody is anywhere -
+     * counting only who a person standing on the street could see, never anything internal. The cafe
+     * wins ties, because a shut room full of nobody is not "where people are" and the cafe is where
+     * they usually end up. */
+    private static String wherePeopleAre(CompanionWorld w,String exceptId,Instant at){
+        String best=null;int most=0;
+        for(String place:List.of("cafe","garden","street")){
+            if("cafe".equals(place)&&!CafeService.acceptingOrders(w))continue;
+            int here=0;
+            for(ResidentState o:w.residentStates){
+                if(o.id.equals(exceptId)||"self".equals(o.id))continue;
+                Actor a=actor(w,o.id);
+                if(place.equals(a.place())&&!Set.of("walk","travel","sleep","away").contains(a.activity()))here++;
+            }
+            if(here>most){most=here;best=place;}
+        }
+        return best;
+    }
     private static boolean placeHabitBeAroundPeople(CompanionWorld w,ResidentState r,Instant at){
-        if("cafe".equals(actor(w,r.id).place())||!CafeService.acceptingOrders(w))return false;
+        // "没什么事就往人多的地方坐" used to mean "go to the cafe", full stop - the place was hard
+        // coded, so the one instinct in town that is explicitly about being near people could not
+        // notice where people were. It mattered: the garden holds two of the four shared things in
+        // town and is the only public place no habit ever visits (docs/03 has said so for a while),
+        // so both sat unfinished for want of hands while the person whose whole default is to go
+        // where people are walked past them to an empty room.
+        String people=wherePeopleAre(w,r.id,at);
+        if(people==null||people.equals(actor(w,r.id).place()))return false;
         if(!habitEligible(w,r,"be_around_people",PLACE_HABIT_MIN_GAP_SECONDS,at))return false;
-        firePlaceHabit(w,r,"be_around_people","observe","cafe","没什么事，去咖啡馆那边坐坐",
-            "没说什么，往咖啡馆那边去了。",at,900);
+        firePlaceHabit(w,r,"be_around_people","observe",people,"没什么事，去"+placeName(people)+"那边坐坐",
+            "没说什么，往"+placeName(people)+"那边去了。",at,900);
         return true;
     }
 
@@ -1189,10 +1214,18 @@ public final class ResidentSimulation {
     private static boolean placeHabitStartOwnThing(CompanionWorld w,ResidentState r,Instant at){
         Project own=w.projects.stream()
             .filter(p->r.id.equals(p.ownerId)&&knows(w,r.id,p.id)&&!Set.of("ready","celebrating").contains(p.status))
+            .filter(p->p.contributors.size()>=p.needed||p.progress<SOLO_PROGRESS_CAP)
             .filter(p->!"cafe".equals(p.place)||CafeService.acceptingOrders(w))
             .min(Comparator.comparingInt(p->p.progress))
             .orElse(null);
-        if(own==null||own.progress>=SOLO_PROGRESS_CAP)return false;
+        // Stop only when the thing is genuinely stuck for want of hands - going back to it alone
+        // then is not a reflex, it is avoidance. Once it HAS enough hands the cap no longer applies
+        // and there is ordinary work left to do, so keep going: seed-exchange sat at 77% with both of
+        // its two people already on it, and its owner walked away from it for four straight days
+        // because this compared against the bare 75 without asking whether 75 was still the ceiling.
+        if(own==null)return false;
+        if(own.contributors.size()<own.needed&&own.progress>=SOLO_PROGRESS_CAP)return false;
+        if(own.progress>=100)return false;
         // Normally only where they already are: a reflex does not walk you across town, and letting
         // this one do so quietly killed a signature habit - it relocated the student to the cafe
         // before his own cafe-window default ever got a turn, and that default's own condition is
