@@ -29,6 +29,15 @@ public final class TownPlaces {
     public static String homeOf(String residentId) { return "home-" + residentId; }
     public static boolean isHome(String place) { return place != null && place.startsWith("home-"); }
     public static Set<String> places() { return PLACES; }
+    /** Shared places are fixed, but a deliberately authored resident can bring a home without
+     * becoming a new hard-coded enum entry. */
+    public static boolean contains(CompanionWorld w,String place){return PLACES.contains(place)||w.locations.stream().anyMatch(l->l.id().equals(place));}
+    static void addHome(CompanionWorld w,String residentId){
+        String home=homeOf(residentId);
+        if(w.locations.stream().noneMatch(l->l.id().equals(home)))w.locations.add(new Location(home,"home",residentId));
+        if(position(w,home+"-bed")==null)w.positions.add(position(home+"-bed",home,"bed",residentId,1));
+        if(position(w,home+"-desk")==null)w.positions.add(position(home+"-desk",home,"desk",residentId,1));
+    }
 
     /** A position kind that cannot be borrowed even when nothing shared is free: the coffee machine
      * and counter are the owner's tools, not a spare chair. See {@code claim()}'s fallback filter. */
@@ -49,12 +58,28 @@ public final class TownPlaces {
             w.positions.add(position("cafe-window-seat", "cafe", "seat", "student", 1));
             w.positions.add(position("garden-bench", "garden", "bench", null, 3));
             w.positions.add(position("garden-plot", "garden", "plot", "gardener", 1));
-            for (String id : RESIDENT_IDS) w.positions.add(position(homeOf(id) + "-bed", homeOf(id), "bed", id, 1));
+            for (String id : RESIDENT_IDS) {
+                w.positions.add(position(homeOf(id) + "-bed", homeOf(id), "bed", id, 1));
+                w.positions.add(position(homeOf(id) + "-desk", homeOf(id), "desk", id, 1));
+            }
         }
+        // Repair saves created after beds existed but before home desks did, including manually
+        // authored residents whose ids are intentionally absent from RESIDENT_IDS.
+        for (Location location : new ArrayList<>(w.locations))
+            if ("home".equals(location.kind()) && location.ownerId() != null) addHome(w, location.ownerId());
+        ensureQuietCafeSeats(w);
         ensureCounter(w);
     }
+    private static void ensureQuietCafeSeats(CompanionWorld w){
+        // The original window place stays the student's owned seat. Five neighbouring one-person
+        // desks are public and independently claimable; they are not extra capacity on one slot.
+        for(int index=2;index<=6;index++){String id="cafe-window-"+index;if(position(w,id)==null)w.positions.add(position(id,"cafe","seat",null,1));}
+    }
     private static void ensureCounter(CompanionWorld w) {
-        if (position(w, "cafe-counter") == null) w.positions.add(position("cafe-counter", "cafe", EQUIPMENT, "owner", 1));
+        String operator=w.cafeOperatorId==null?"owner":w.cafeOperatorId;
+        Position counter=position(w,"cafe-counter");
+        if (counter == null) w.positions.add(position("cafe-counter", "cafe", EQUIPMENT, operator, 1));
+        else if(operator.equals(counter.ownerId)||"owner".equals(counter.ownerId)&&!"owner".equals(operator))counter.ownerId=operator;
     }
     private static Position position(String id, String place, String kind, String owner, int capacity) {
         Position p = new Position(); p.id = id; p.place = place; p.kind = kind; p.ownerId = owner; p.capacity = capacity; return p;
@@ -81,7 +106,7 @@ public final class TownPlaces {
         // Matched by kind too (when the caller asked for one): an owner reclaims a specific spot of
         // theirs - the counter when they mean to work it, a shared table when they don't - rather than
         // always landing on whichever position they happen to own first at this place.
-        Position mine = here.stream().filter(p -> residentId.equals(p.ownerId) && (kind == null || kind.equals(p.kind))).findFirst().orElse(null);
+        Position mine = here.stream().filter(p -> (residentId.equals(p.ownerId) || (EQUIPMENT.equals(p.kind) && CafeService.mayTend(w,residentId))) && (kind == null || kind.equals(p.kind))).findFirst().orElse(null);
         if (mine != null) {
             boolean displaced = !mine.occupantIds.isEmpty();
             List<String> displacedIds = new ArrayList<>(mine.occupantIds);
@@ -97,7 +122,7 @@ public final class TownPlaces {
             // An owned seat can be borrowed when nothing shared is free; an owned piece of equipment
             // (the coffee machine, the counter) cannot - falling back onto someone else's tools is not
             // the same thing as falling back onto their chair.
-            .filter(p -> p.ownerId == null || p.ownerId.equals(residentId) || !EQUIPMENT.equals(p.kind))
+            .filter(p -> p.ownerId == null || p.ownerId.equals(residentId) || !EQUIPMENT.equals(p.kind) || CafeService.mayTend(w,residentId))
             .sorted(preference).findFirst().orElse(null);
         if (choice != null) { seat(w, residentId, choice); return Outcome.SEATED; }
         return Outcome.WAITING;
@@ -106,5 +131,10 @@ public final class TownPlaces {
         p.occupantIds.add(residentId);
         ResidentState r = ResidentSimulation.state(w, residentId);
         if (r != null) r.positionId = p.id;
+    }
+    /** A completed takeover changes the actual equipment owner; an assist/delegation only grants
+     * temporary use through CafeService.mayTend and therefore does not silently transfer property. */
+    static void transferCafeCounter(CompanionWorld w,String operatorId){
+        w.cafeOperatorId=operatorId;ensureCounter(w);Position counter=position(w,"cafe-counter");counter.ownerId=operatorId;
     }
 }

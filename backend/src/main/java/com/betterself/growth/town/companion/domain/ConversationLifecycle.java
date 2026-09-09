@@ -14,7 +14,8 @@ public final class ConversationLifecycle {
     private ConversationLifecycle() {}
     public static final int OPERATION_TIMEOUT_SECONDS=45;
     public record Operation(String conversationId,String speakerId,long turnVersion,String operationId,long intentRevision,Instant startedAt) {}
-    public record Utterance(String text,boolean leave,String feeling,String stance,String adjustment,List<String> evidenceIds,String emoji) {
+    public record Utterance(String text,boolean leave,String feeling,String stance,String adjustment,List<String> evidenceIds,String emoji,String workAction,String workTarget) {
+        public Utterance(String text,boolean leave,String feeling,String stance,String adjustment,List<String> evidenceIds,String emoji){this(text,leave,feeling,stance,adjustment,evidenceIds,emoji,"none",null);}
         public Utterance(String text,boolean leave,String feeling,String stance,String adjustment,List<String> evidenceIds){this(text,leave,feeling,stance,adjustment,evidenceIds,null);}
     }
     public record Recollection(String text,String feeling,List<String> evidenceIds) {}
@@ -33,7 +34,7 @@ public final class ConversationLifecycle {
         }
         if("fallback".equals(c.mode)&&Duration.between(c.updatedAt,now).getSeconds()>=8) {
             String speaker=c.nextSpeakerId==null?c.participantIds.getLast():c.nextSpeakerId;
-            String line=c.turns.isEmpty()?"本来想说点什么，忽然又想先把手上的事收好。等会儿有空再聊。":"你刚才说的，我会再想一想。我们先各自忙一会儿，回头再说。";
+            String line=c.turns.isEmpty()?switch(speaker){case "student"->"我先把这页看完。";case "owner"->"等一下，我先看着手上这杯。";case "artist"->"刚才那个颜色……算了，等会儿再说。";case "gardener"->"我先去看看那盆苗。";default->"我先忙手上这点。";}:"嗯，先这样吧。";
             appendSpeech(w,c,speaker,line,"rules",List.of(),null,now);
             finish(w,c,now,"这段谈话先告一段落");
         }
@@ -58,7 +59,9 @@ public final class ConversationLifecycle {
         // An agreement is only this speaker's commitment, not a claim about anyone else's decision.
         if((reply.stance().equals("accept")||reply.stance().equals("adjust"))&&(p==null||!knows(w,speaker,c.topicId)))return false;
         if(reply.stance().equals("adjust")&&(!p.ownerId.equals(speaker)||reply.adjustment()==null||reply.adjustment().isBlank()||reply.adjustment().length()>160))return false;
+        if(!validWorkTurn(w,c,speaker,reply))return false;
         appendSpeech(w,c,speaker,reply.text(),"model",reply.evidenceIds(),reply.emoji(),now);
+        if(!applyWorkTurn(w,c,speaker,reply,now))throw new IllegalStateException("validated work turn could not apply");
         self.mood=reply.feeling();c.feelings.put(speaker,reply.feeling());
         self.social=Math.min(100,self.social+6);
         boolean deferredCommitment=reply.text().matches("(?s).*(明天|后天|下周|改天|改日|过几天|明早|明晚|等有空|等考完|等忙完).*");
@@ -78,6 +81,26 @@ public final class ConversationLifecycle {
         w.modelStatus=""+actor(w,speaker).name()+"刚接着说了一句";w.revision++;
         if(reply.leave()||c.turns.size()>=8)finish(w,c,now,"说完这一句，彼此道别了");
         return true;
+    }
+    /** Work authority is born only in a real, validated turn between the two people at the same
+     * place.  Text is still their own; these fields merely make its operational meaning unambiguous. */
+    private static boolean applyWorkTurn(CompanionWorld w,Conversation c,String speaker,Utterance reply,Instant now){
+        String action=reply.workAction()==null?"none":reply.workAction();if("none".equals(action))return true;
+        String other=other(c,speaker);if(!"cafe".equals(c.place)||!together(w,c)||!Set.of("offer_assist","offer_delegate","offer_takeover","accept_work","reject_work","end_work").contains(action))return false;
+        if(action.startsWith("offer_"))return ResidentSimulation.proposeWorkArrangement(w,speaker,action.substring(6),other,reply.text(),reply.evidenceIds(),now);
+        if("accept_work".equals(action))return ResidentSimulation.acceptWorkArrangement(w,speaker,reply.workTarget(),reply.evidenceIds(),now);
+        return ResidentSimulation.endWorkArrangement(w,speaker,reply.workTarget(),"reject_work".equals(action)?"rejected":"ended",now);
+    }
+    private static boolean validWorkTurn(CompanionWorld w,Conversation c,String speaker,Utterance reply){
+        String action=reply.workAction()==null?"none":reply.workAction();if("none".equals(action))return true;
+        if(!"cafe".equals(c.place)||!together(w,c)||!Set.of("offer_assist","offer_delegate","offer_takeover","accept_work","reject_work","end_work").contains(action))return false;
+        String other=other(c,speaker);
+        if(action.startsWith("offer_")){String kind=action.substring(6);String operator=CafeService.operatorId(w);return Objects.equals(reply.workTarget(),other)&&("assist".equals(kind)?other.equals(operator):speaker.equals(operator));}
+        WorkArrangement a=w.workArrangements.stream().filter(x->Objects.equals(x.id,reply.workTarget())&&Set.of("proposed","active").contains(x.status)).findFirst().orElse(null);
+        if(a==null)return false;
+        if("accept_work".equals(action))return "proposed".equals(a.status)&&speaker.equals("assist".equals(a.kind)?CafeService.operatorId(w):a.workerId);
+        if("reject_work".equals(action))return "proposed".equals(a.status)&&(speaker.equals(a.proposerId)||speaker.equals(a.workerId)||speaker.equals(CafeService.operatorId(w)));
+        return "active".equals(a.status)&&(speaker.equals(a.proposerId)||speaker.equals(a.workerId)||speaker.equals(CafeService.operatorId(w)));
     }
     public static void failTurn(CompanionWorld w,Operation op,Instant now) {
         Conversation c=find(w,op.conversationId());
@@ -103,7 +126,7 @@ public final class ConversationLifecycle {
     public static void finish(CompanionWorld w,Conversation c,Instant now,String reason) {
         if(!"active".equals(c.status))return;
         c.status="ended";c.endedAt=now;c.endReason=reason;clearPending(c);c.turnVersion++;
-        for(String id:c.participantIds){ResidentState r=state(w,id);r.plan=null;r.lastSocialAt=now;r.revision++;}
+        for(String id:c.participantIds){ResidentState r=state(w,id);r.plan=null;ResidentSimulation.resumeSuspended(w,r,now);r.lastSocialAt=now;r.revision++;}
         if(!c.turns.isEmpty()) {
             // Rule conversations have the same source-backed recollection boundary; no fake model label.
             ensureTurnMemories(w,c,now);
@@ -143,8 +166,7 @@ public final class ConversationLifecycle {
         if(c.summarizedParticipants.contains(id)||c.turns.isEmpty())return;
         String other=other(c,id);Turn last=c.turns.stream().filter(t->t.speakerId().equals(other)).reduce((a,b)->b).orElse(c.turns.getLast());
         String quote=last.text().length()>90?last.text().substring(0,90)+"…":last.text();
-        String attribution=last.speakerId().equals(id)?"我当时说":"我记得对方说";
-        String text="刚才和"+actor(w,other).name()+"聊了一会儿。"+attribution+"：“"+quote+"” 我想等做过之后，再看看自己的感觉会不会变。";
+        String text=last.speakerId().equals(id)?"我当时说：“"+quote+"”":actor(w,other).name()+"刚才提到：“"+quote+"”";
         var allIds=c.turnMemoryIds.getOrDefault(id,List.of());int quotedTurn=c.turns.indexOf(last);
         List<String> evidence=new ArrayList<>();
         if(quotedTurn<allIds.size()&&w.memories.stream().anyMatch(m->m.id().equals(allIds.get(quotedTurn))))evidence.add(allIds.get(quotedTurn));

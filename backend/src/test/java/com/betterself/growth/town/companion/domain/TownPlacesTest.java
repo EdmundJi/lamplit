@@ -33,6 +33,7 @@ class TownPlacesTest {
         // With the shared table full, a non-owner sits at the (otherwise free) window seat instead
         // of being told to wait.
         TownPlaces.position(w, "cafe-worktable").capacity = 0;
+        for(int index=2;index<=6;index++)TownPlaces.position(w,"cafe-window-"+index).capacity=0;
         assertThat(TownPlaces.claim(w, "owner", "cafe", "seat", now)).isEqualTo(TownPlaces.Outcome.SEATED);
         assertThat(TownPlaces.position(w, "cafe-window-seat").occupantIds).containsExactly("owner");
         // The seat's actual owner arrives and wants it back - the visitor yields it.
@@ -57,9 +58,9 @@ class TownPlacesTest {
 
     @Test void whenTheOwnedSpotIsUnavailableAVisitorSwitchesToAnUnownedOneInstead() {
         var w = world();
-        // The window seat belongs to the student; anyone else prefers the shared table instead.
+        // The original window seat belongs to the student; anyone else takes a public quiet desk.
         assertThat(TownPlaces.claim(w, "artist", "cafe", "seat", now)).isEqualTo(TownPlaces.Outcome.SEATED);
-        assertThat(ResidentSimulation.state(w, "artist").positionId).isEqualTo("cafe-worktable");
+        assertThat(ResidentSimulation.state(w, "artist").positionId).isEqualTo("cafe-window-2");
     }
 
     @Test void anOwnedSeatCanBeBorrowedButAnOwnedPieceOfEquipmentCannot() {
@@ -74,6 +75,7 @@ class TownPlacesTest {
         // owner's equipment the way they could fall back onto someone else's chair - they wait instead.
         TownPlaces.position(w, "cafe-worktable").capacity = 1; // artist above already fills it
         TownPlaces.claim(w, "student", "cafe", "seat", now); // fills their own window seat too
+        for(int index=2;index<=6;index++)TownPlaces.position(w,"cafe-window-"+index).capacity=0;
         assertThat(TownPlaces.claim(w, "gardener", "cafe", null, now)).isEqualTo(TownPlaces.Outcome.WAITING);
         assertThat(TownPlaces.position(w, "cafe-counter").occupantIds).isEmpty();
     }
@@ -98,6 +100,36 @@ class TownPlacesTest {
         TownPlaces.seed(w);
         assertThat(TownPlaces.position(w, "cafe-counter")).isNotNull();
         assertThat(TownPlaces.position(w, "cafe-counter").ownerId).isEqualTo("owner");
+    }
+
+    @Test void sixWindowStudyPlacesAreIndependentAndOnlyTheOriginalBelongsToTheStudent(){
+        var w=world();
+        assertThat(TownPlaces.position(w,"cafe-window-seat").ownerId).isEqualTo("student");
+        assertThat(TownPlaces.position(w,"cafe-window-2").ownerId).isNull();
+        assertThat(TownPlaces.position(w,"cafe-window-3").ownerId).isNull();
+        for(int index=2;index<=6;index++){var position=TownPlaces.position(w,"cafe-window-"+index);assertThat(position.ownerId).isNull();assertThat(position.capacity).isEqualTo(1);}
+        TownPlaces.position(w,"cafe-worktable").capacity=0;
+        assertThat(TownPlaces.claim(w,"student","cafe","seat",now)).isEqualTo(TownPlaces.Outcome.SEATED);
+        assertThat(TownPlaces.claim(w,"artist","cafe","seat",now)).isEqualTo(TownPlaces.Outcome.SEATED);
+        assertThat(TownPlaces.claim(w,"gardener","cafe","seat",now)).isEqualTo(TownPlaces.Outcome.SEATED);
+        assertThat(java.util.Set.of(ResidentSimulation.state(w,"student").positionId,ResidentSimulation.state(w,"artist").positionId,ResidentSimulation.state(w,"gardener").positionId))
+            .containsExactlyInAnyOrder("cafe-window-seat","cafe-window-2","cafe-window-3");
+
+        w.positions.removeIf(position->position.id.matches("cafe-window-[2-6]"));
+        TownPlaces.seed(w);
+        for(int index=2;index<=6;index++)assertThat(TownPlaces.position(w,"cafe-window-"+index)).isNotNull();
+    }
+
+    @Test void cafeReadingWritingAndMakingClaimARealSeatInsteadOfOnlyDrawingOne(){
+        for(String action:java.util.List.of("read","work","make")){
+            CompanionWorld w=CompanionRules.join("cafe-seat-"+action,"我","Asia/Shanghai",now,true);
+            w.conversations.stream().filter(c->"active".equals(c.status)).forEach(c->ConversationLifecycle.finish(w,c,now,"测试准备"));
+            var artist=ResidentSimulation.state(w,"artist");artist.plan=null;TownPlaces.release(w,"artist");ResidentSimulation.replaceActor(w,"artist","cafe","idle","等下一步",now.plusSeconds(60));
+            assertThat(ResidentSimulation.applyDecision(w,"artist",artist.revision,w.intentRevision,"cafe",action,null,"在这里做一会儿",null,java.util.List.of(),now)).isTrue();
+            assertThat(artist.positionId).isNotNull();
+            assertThat(TownPlaces.position(w,artist.positionId).place).isEqualTo("cafe");
+            assertThat(TownPlaces.position(w,artist.positionId).kind).isEqualTo("seat");
+        }
     }
 
     @Test void releasingFreesTheSpotForSomeoneElse() {

@@ -12,10 +12,36 @@ public final class ResidentSimulation {
      * whether as initiator or partner - see the "tend" doc comment at its one use site below for why
      * "tend" belongs in this set even though it is not a passive/absent state like the other four. */
     private static final Set<String> UNAVAILABLE_FOR_CONVERSATION = Set.of("travel","sleep","rest","away","tend");
+    private static LifeIntent lifeIntent(CompanionWorld w,ResidentState r,String goalId,String purpose,String status,Instant at){
+        // Intent ids are local descriptive state, never world events.  Keeping them out of the event
+        // sequence preserves the deterministic social simulation/replay that already keys choices on
+        // that sequence.
+        LifeIntent intent=new LifeIntent();intent.id="life-"+r.id+"-"+at.toEpochMilli();intent.goalId=goalId;intent.purpose=purpose;intent.status=status;intent.formedAt=at;intent.updatedAt=at;return intent;
+    }
+    /** Old worlds used a public-project id as the entire life of a resident.  Keep that id as a
+     * possible thread, but seed a resident-owned purpose so private work, rest and a change of life
+     * have somewhere durable to live. */
+    private static void reconcileLife(CompanionWorld w,Instant at){
+        if(w.cafeOperatorId==null||state(w,w.cafeOperatorId)==null)w.cafeOperatorId="owner";
+        for(ResidentState r:w.residentStates){
+            if(r.id.equals("self"))continue;
+            if(r.occupation==null||r.occupation.isBlank())r.occupation=defaultOccupation(r.id);
+            if(r.lifeIntent==null)r.lifeIntent=lifeIntent(w,r,r.goal,r.occupation,"active",at);
+            if(r.careerIntent==null)r.careerIntent=lifeIntent(w,r,null,r.occupation+"。我知道总得找到能长期做下去的事，但也允许自己先歇一歇、慢慢想。","active",at);
+            if(r.lifeIntent.status==null)r.lifeIntent.status="active";
+            if(!r.sleepScheduleSeeded){r.usualSleepMinute=23*60;r.usualWakeMinute=7*60;r.sleepScheduleSeeded=true;}
+        }
+    }
+    private static String defaultOccupation(String id){return switch(id){case "owner"->"经营咖啡馆，也想留下自己的时间";case "student"->"备考，也在摸索以后想过怎样的日子";case "artist"->"画画、接零散的创作活";case "gardener"->"照看花草和邻里的小事";default->"找一件能长期做下去的事";};}
+    private static void setLifeIntent(CompanionWorld w,ResidentState r,String goalId,String purpose,String status,Instant at){
+        if(r.lifeIntent==null||!Objects.equals(r.lifeIntent.purpose,purpose)||!Objects.equals(r.lifeIntent.goalId,goalId))r.lifeIntent=lifeIntent(w,r,goalId,purpose,status,at);
+        else {r.lifeIntent.status=status;r.lifeIntent.updatedAt=at;}
+    }
     public static void initialize(CompanionWorld w,Instant now) {
         if(w.simulationVersion>=2)return;
         long initialRevision=w.revision;
-        w.simulationVersion=3; w.residentStates.clear();w.projects.clear();w.objects.clear();w.conversations.clear();
+        w.simulationVersion=4; w.residentStates.clear();w.projects.clear();w.objects.clear();w.conversations.clear();
+        CafeService.reconcileSchedule(w,now);
         TownPlaces.seed(w);ensureAvatarState(w);
         boolean modelMode=w.modelConversationsEnabled;w.modelConversationsEnabled=false;
         Instant past=now.minusSeconds(90);
@@ -26,13 +52,19 @@ public final class ResidentSimulation {
         for(int i=0;i<4;i++) {
             ResidentState r=new ResidentState();r.id=IDS.get(i);r.energy=i==1?42:74-i*5;r.social=i==0?48:62;r.curiosity=60+i*8;
             r.mood=i==1?"有点紧绷":"有所期待";r.goal=w.projects.get(i).id;r.thought=w.projects.get(i).description;
-            r.lastSocialAt=past.minusSeconds(120);r.lastReflectionAt=past;r.revision=1;
+            r.occupation=switch(r.id){case "owner"->"经营咖啡馆，也想留下自己的时间";case "student"->"备考，也在摸索以后想过怎样的日子";case "artist"->"画画、接零散的创作活";default->"照看花草和邻里的小事";};
+            r.lifeIntent=lifeIntent(w,r,null,r.occupation+"。我知道总得找到能长期做下去的事，但也允许自己先歇一歇、慢慢想。","active",past);
+            r.careerIntent=lifeIntent(w,r,null,r.occupation+"。我知道总得找到能长期做下去的事，但也允许自己先歇一歇、慢慢想。","active",past);
+            r.lastSocialAt=past.minusSeconds(120);r.lastReflectionAt=past;r.energyUpdatedAt=past;r.usualSleepMinute=23*60;r.usualWakeMinute=7*60;r.sleepScheduleSeeded=true;r.revision=1;
             for(String other:IDS)if(!other.equals(r.id))r.relationships.put(other,other.equals("owner")?62:38+Math.floorMod((w.id+r.id+other).hashCode(),20));
             w.residentStates.add(r);
             Project own=w.projects.get(i);r.knownProjects.put(own.id,new ProjectKnowledge(own.id,own.place,own.status,own.progress,past,r.id));
             memory(w,r.id,"history","seed",past.minusSeconds(86400),r.goal,r.thought,List.of(),7);
-            String place=i<2?"cafe":i==2?"cafe":"garden";
-            schedule(w,r,i==1?"study":"observe",place,null,i==1?"先守住今天的复习时间":"看看邻居手上的事，再决定从哪里开始",past,36+i*7);
+            boolean open="open".equals(w.cafeStatus);
+            String place=open?(i<3?"cafe":"garden"):TownPlaces.homeOf(r.id);
+            String action=open?(i==1?"study":"observe"):switch(r.id){case "student"->"study";case "artist"->"make";case "gardener"->"work";default->"rest";};
+            String reason=open?(i==1?"先守住今天的复习时间":"看看邻居手上的事，再决定从哪里开始"):switch(r.id){case "student"->"在自己桌前看书";case "artist"->"在家收一收没画完的线稿";case "gardener"->"在家整理种子和工具";default->"店还没开，先在家歇一会儿";};
+            schedule(w,r,action,place,null,reason,past,open?36+i*7:1800);
         }
         // Shared history is split into individual perspectives, rather than a global script.
         memory(w,"artist","owner","seed",past.minusSeconds(3600),"reading-night","阿禾昨天问我能不能帮她画一张读书小聚的招贴，我说可以先聊聊。",List.of(),8);
@@ -45,33 +77,37 @@ public final class ResidentSimulation {
         w.simulatedAt=past;
         for(int i=1;i<=15;i++)step(w,past.plusSeconds(i*6L));
         w.simulatedAt=now;
-        // Ensure arrival opens onto an unfinished social moment, including the two night owls.
-        ResidentState owner=state(w,"owner"),artist=state(w,"artist");
-        schedule(w,owner,"observe","cafe",null,"等知夏看看桌上还没定稿的招贴",now,42);
-        schedule(w,artist,"observe","cafe",null,"想先问清小聚想让人记住什么",now,48);
-        owner.lastSocialAt=now.minusSeconds(120);artist.lastSocialAt=now.minusSeconds(120);
-        w.conversations.stream().filter(c->c.status.equals("active")).forEach(c->c.status="ended");
         w.modelConversationsEnabled=modelMode;
-        startConversation(w,owner,artist,w.projects.get(0),now);
-        event(w,now,"arrival","street",List.of(),"小街的日子早就开始了。咖啡馆里，一张招贴还没有定稿。",null);
+        if("open".equals(w.cafeStatus)){
+            ResidentState owner=state(w,"owner"),artist=state(w,"artist");
+            schedule(w,owner,"observe","cafe",null,"等知夏看看桌上还没定稿的招贴",now,42);
+            schedule(w,artist,"observe","cafe",null,"想先问清小聚想让人记住什么",now,48);
+            owner.lastSocialAt=now.minusSeconds(120);artist.lastSocialAt=now.minusSeconds(120);
+            w.conversations.stream().filter(c->c.status.equals("active")).forEach(c->c.status="ended");
+            startConversation(w,owner,artist,w.projects.get(0),now);
+            event(w,now,"arrival","street",List.of(),"小街的日子早就开始了。咖啡馆里，一张招贴还没有定稿。",null);
+        } else event(w,now,"arrival","street",List.of(),"小街安静下来。咖啡馆已经打烊，居民们各自在家。",null);
         w.revision=initialRevision;
     }
     public static void advance(CompanionWorld w,Instant now) {
         initialize(w,now);
         reconcileLegacyPlaces(w,now);
+        reconcileLife(w,now);
+        CafeService.reconcileSchedule(w,now);
         deduplicateReflections(w);
         if(w.simulatedAt==null)w.simulatedAt=now;
         long elapsed=Duration.between(w.simulatedAt,now).getSeconds();
         if(elapsed>900) {
             // Reconcile needs gently, then at most 24 seconds of recent life. No offline model calls.
             w.simulatedAt=now.minusSeconds(24);
-            for(ResidentState r:w.residentStates){r.energy=Math.max(45,r.energy);r.social=Math.max(40,r.social);}
+            for(ResidentState r:w.residentStates){r.energy=Math.max(35,r.energy);r.social=Math.max(40,r.social);r.energyUpdatedAt=w.simulatedAt;}
             for(Conversation c:w.conversations)if(c.status.equals("active"))ConversationLifecycle.finish(w,c,now,"离开期间这段谈话已经告一段落");
         }
         int steps=0;
         while(!w.simulatedAt.plusSeconds(6).isAfter(now)&&steps++<10){w.simulatedAt=w.simulatedAt.plusSeconds(6);step(w,w.simulatedAt);}
     }
     private static void step(CompanionWorld w,Instant at) {
+        CafeService.reconcileSchedule(w,at);
         ConversationLifecycle.recoverSummaries(w,at);
         // The coffee/water chain has its own clock, independent of whose plan is currently running:
         // a request keeps waiting, gets picked up, or goes cold on real elapsed time even while its
@@ -80,189 +116,52 @@ public final class ResidentSimulation {
         for(Conversation c:new ArrayList<>(w.conversations))if(c.status.equals("active"))continueConversation(w,c,at);
         for(ResidentState r:w.residentStates) {
             // The avatar's own state is present so it can be perceived and can hold a position, but
-            // its activity stays entirely user-driven (CompanionRules); it never runs the autonomous
-            // choose()/complete() loop the four NPCs use.
+            // its activity stays entirely user-driven (CompanionRules); it never runs the resident
+            // plan-completion loop.
             if(r.id.equals("self"))continue;
             perceive(w,r,at);
             // The owner's sense of responsibility for the counter builds every tick someone is
             // waiting, whatever else the owner is currently doing - not only when they are free to
             // decide. See CafeService.accruePressure.
-            if(r.id.equals(CafeService.OWNER))CafeService.accruePressure(w,r,at);
-            // Emotionally volatile residents swing harder in both directions; steady ones barely move.
-            double intensity=Personality.of(r).intensity();
-            boolean resting=r.plan!=null&&Set.of("rest","sleep").contains(r.plan.action());
-            r.energy=clamp(r.energy+(resting?1.8*intensity:-.16*intensity));r.social=clamp(r.social-.16*intensity);r.curiosity=clamp(r.curiosity+.18);
+            if(CafeService.mayTend(w,r.id))CafeService.accruePressure(w,r,at);
+            settleEnergy(w,r,at);
             if(activeConversation(w,r.id)!=null)continue;
-            // Duty can pre-empt a plan already running, not only wait for the next natural decision
-            // point - this is what makes "他放下手上正在做的事去准备" actually happen instead of the
-            // owner only ever being free to serve once whatever else they were doing has run its
-            // course. See CafeService.decideInterrupt for the extra margin and cooldown that keep
-            // this from thrashing.
-            if(r.id.equals(CafeService.OWNER)&&r.plan!=null&&at.isBefore(r.plan.endsAt())&&!dutyCannotInterrupt(r))interruptForDuty(w,r,at);
-            if(r.plan!=null&&!at.isBefore(r.plan.endsAt())){Plan completed=r.plan;complete(w,r,at);if(r.plan==completed)r.plan=null;}
-            if(r.plan==null)choose(w,r,at);
+            if(r.plan!=null&&!at.isBefore(r.plan.endsAt())){Plan completed=r.plan;complete(w,r,at);if(r.plan==completed){r.plan=null;if(!Set.of("sleep","open_cafe").contains(completed.action()))resumeSuspended(w,r,at);}}
+            if(r.plan==null)awaitDecision(w,r,at);
         }
-        for(ResidentState r:w.residentStates) {
-            // Extroverts recover their appetite for company faster than introverts do.
-            if(r.id.equals("self")||activeConversation(w,r.id)!=null||r.plan==null||UNAVAILABLE_FOR_CONVERSATION.contains(r.plan.action())||Duration.between(r.lastSocialAt,at).getSeconds()<Personality.of(r).socialRefractorySeconds())continue;
-            // "tend" is in UNAVAILABLE_FOR_CONVERSATION for a reason that is not obvious from its
-            // name alone: ConversationLifecycle.finish() unconditionally nulls out both
-            // participants' r.plan when a conversation ends. If the owner were pulled into a new
-            // conversation mid-"tend" (or mid-travel-to-tend), that null-out would silently discard
-            // the tend plan before complete()/finishTending() ever ran on it - the associated
-            // ServiceRequest would be stuck at "preparing" forever (there is no tick-based reaper for
-            // "preparing" the way there is for "waiting"/"delivered"), and CafeService.request()'s own
-            // "already has an open request" guard would then permanently block that resident from
-            // ever asking for another drink. This is exactly what an end-to-end multi-day run caught
-            // that no hand-built unit test could - see CafeServiceTest's own end-to-end test.
-            Actor a=actor(w,r.id);
-            ResidentState partner=w.residentStates.stream().filter(other->!other.id.equals(r.id)&&!other.id.equals("self")&&activeConversation(w,other.id)==null
-                && other.plan!=null&&!UNAVAILABLE_FOR_CONVERSATION.contains(other.plan.action())
-                && actor(w,other.id).place().equals(a.place())&&Duration.between(other.lastSocialAt,at).getSeconds()>=Personality.of(other).socialRefractorySeconds()
-                && w.projects.stream().anyMatch(p->canInvite(w,r,other,p,at)))
-                .max(Comparator.comparingDouble(other->r.relationships.getOrDefault(other.id,40)+(100-other.social)*.3)).orElse(null);
-            if(partner==null||TownPlaces.isHome(a.place()))continue;
-            Project topic=w.projects.stream().filter(p->canInvite(w,r,partner,p,at))
-                .max(Comparator.comparingInt(p->(!knows(w,partner.id,p.id)?50:0)+(p.ownerId.equals(r.id)?20:0)+(p.id.equals(r.goal)?15:0))).orElse(null);
-            if(topic!=null){startConversation(w,r,partner,topic,at);break;}
-        }
-        for(ResidentState r:w.residentStates){if(r.id.equals("self"))continue;reflect(w,r,at);newWish(w,r,at);CafeService.reflectOnDuty(w,r,at);}
+        // The model is each resident's decision-maker. Rule-only fallback completes already approved
+        // physical work but does not manufacture a reflection, social choice or new intention.
+        CafeService.finishClosingIfEmpty(w,at);
         syncLegacyObjects(w);
     }
-    /** True while duty has nothing left to pre-empt: the owner is already tending the counter or
-     * already travelling there, or - deliberately excluded from mid-plan interruption entirely -
-     * genuinely asleep. A sleeping person does not get woken up to pour coffee; sleep already stops a
-     * resident from being pulled into a conversation for the same reason (see step()'s invite loop),
-     * and duty follows the same rule rather than becoming the one thing that can reach through it. */
-    private static boolean dutyCannotInterrupt(ResidentState r){return "tend".equals(r.plan.action())||("travel".equals(r.plan.action())&&"tend".equals(r.desiredAction))||"sleep".equals(r.plan.action());}
-    /** The mid-plan half of the duty-vs-everything-else competition (see CafeService's own doc for
-     * the free-to-choose half, still run from choose() below): weighs the same dutyPressure against
-     * the same personalPull, but through the stricter decideInterrupt gate, and only actually cuts
-     * the current plan short if that gate says yes. Recording the interruption (when it costs the
-     * owner's own unfinished project something) and starting the walk back to the counter are exactly
-     * what choose() already does for the free-to-choose case - this just reaches the same outcome
-     * from mid-plan instead of from an empty plan. */
-    private static void interruptForDuty(CompanionWorld w,ResidentState r,Instant at) {
-        Project current=project(w,r.goal);
-        boolean unfinished=current!=null&&!Set.of("ready","celebrating").contains(current.status);
-        CafeService.Decision duty=CafeService.decideInterrupt(w,r,Personality.of(r),current,unfinished,at);
-        if(duty==null)return;
-        if(duty.interruptsOwnProject())CafeService.recordInterruption(w,r,current,at);
-        CafeService.beginPreparing(w,duty.requestId(),at);
-        r.lastDutyInterruptionAt=at;
-        moveOrSchedule(w,r,"tend","cafe",duty.requestId(),duty.reason(),at,CafeService.PREP_SECONDS);
+
+    private static void awaitDecision(CompanionWorld w,ResidentState r,Instant at){
+        Actor current=actor(w,r.id);
+        if(!"idle".equals(current.activity())||!at.isBefore(current.until()))
+            replaceActor(w,r.id,current.place(),"idle",w.modelConversationsEnabled?"停下来想下一步":"暂时没有新的安排",at.plusSeconds(300));
     }
-    private static void choose(CompanionWorld w,ResidentState r,Instant at) {
-        Personality personality=Personality.of(r);
-        int hour=at.atZone(ZoneId.of(w.timezone)).getHour();
-        boolean quietNight=hour<6||hour>=23;
-        boolean nightOwl=r.id.equals("owner")||r.id.equals("artist");
-        if(r.energy<28||quietNight&&!nightOwl&&hour!=5){moveOrSchedule(w,r,"sleep",TownPlaces.homeOf(r.id),null,"先睡一会儿，明天还想把自己的小事做好",at,100);return;}
-        // Away for work: the three non-owner residents each have their own deterministic, staggered
-        // daytime window (see WORK_WINDOW) during which they leave the shared street/cafe/garden
-        // entirely rather than crowding into them - "早上街空了，傍晚陆续回来". The owner is the one
-        // exception: their work already happens at the cafe, so they never leave this way (see the
-        // cafe bias on the idle default near the end of this method instead). This claims the same
-        // home bed nighttime sleep does - "地图外休眠当作在工作" - but the action is "away", not
-        // "sleep": they are awake and working, not resting, so this must NOT get the same tick's
-        // energy regeneration real sleep does (see the `resting` flag in step() above), or everyone's
-        // energy would stay pinned near 100 for good and the whole rest-at-cafe -> coffee-request
-        // chain this batch depends on would starve for lack of anyone ever running low on energy
-        // again - exactly what happened during this batch's own end-to-end verification run.
-        if(awayForWork(r.id,hour)){moveOrSchedule(w,r,"away",TownPlaces.homeOf(r.id),null,workReason(r.id),at,300);return;}
-        if(r.energy<46){moveOrSchedule(w,r,"rest","cafe",null,"先喝口热水，别把想做的事变成负担",at,45);return;}
-        Project current=project(w,r.goal);
-        boolean unfinished=current!=null&&!Set.of("ready","celebrating").contains(current.status);
-        // Responsibility as pressure, not a rule: the owner never gets an "if someone is waiting, go
-        // serve them" branch. Every time the owner is free to choose, CafeService.decide() weighs the
-        // pressure that has been quietly accumulating against everything else pulling at them right
-        // now, and either side can win - see CafeService's own doc for the competition itself.
-        if(r.id.equals(CafeService.OWNER)) {
-            CafeService.Decision duty=CafeService.decide(w,r,personality,current,unfinished,at);
-            if(duty!=null) {
-                if(duty.interruptsOwnProject())CafeService.recordInterruption(w,r,current,at);
-                CafeService.beginPreparing(w,duty.requestId(),at);
-                moveOrSchedule(w,r,"tend","cafe",duty.requestId(),duty.reason(),at,CafeService.PREP_SECONDS);
-                return;
-            }
-        }
-        // Low-conscientiousness residents sometimes drift away from their own unfinished project
-        // before it is done, deterministically (a hash of who/what/when, never Math.random) rather
-        // than always grinding a commitment through to the end.
-        boolean givingUp=unfinished&&current.ownerId.equals(r.id)&&abandonsNow(w,r,current,personality,at);
-        Project goal=current;
-        if(current==null||knownStatus(r,current.id).equals("celebrating")||givingUp) {
-            goal=w.projects.stream().filter(p->knows(w,r.id,p.id)&&!knownStatus(r,p.id).equals("celebrating")&&!(givingUp&&p.id.equals(current.id)))
-                .min(Comparator.comparingInt(p->r.knownProjects.getOrDefault(p.id,new ProjectKnowledge(p.id,p.place,"idea",0,at,r.id)).progress()-(p.members.contains(r.id)?35:0))).orElse(givingUp?current:null);
-            if(goal!=null&&goal!=current){
-                if(givingUp)memory(w,r.id,r.id,"reflection",at,current.id,"手上的「"+current.title+"」还没做完，我又想去看看别的事了。",ownEvidence(w,r.id,current.id),5);
-                r.goal=goal.id;r.thought=givingUp?"心思飘到别处，先去看看"+actor(w,goal.ownerId).name()+"那边的事。":"自己的事告一段落了，想看看能不能帮上"+actor(w,goal.ownerId).name()+"。";
-            }
-        }
-        if(goal!=null&&knownStatus(r,goal.id).equals("ready")) {
-            moveOrSchedule(w,r,"celebrate",knownPlace(r,goal),goal.id,"去看看大家一起做出来的"+goal.title,at,48);return;
-        }
-        if(r.social<personality.socialThreshold()||goal!=null&&goal.contributors.size()<goal.needed&&r.knownProjects.getOrDefault(goal.id,new ProjectKnowledge(goal.id,goal.place,"idea",0,at,r.id)).progress()>=45) {
-            ResidentState friend=w.residentStates.stream().filter(o->!o.id.equals(r.id)&&!o.id.equals("self")&&!TownPlaces.isHome(actor(w,o.id).place())
-                &&w.projects.stream().anyMatch(p->canInvite(w,r,o,p,at)))
-                .max(Comparator.comparingInt(o->r.relationships.getOrDefault(o.id,40)+(goalNeeds(w,r,o)?100:0))).orElse(null);
-            if(friend!=null){moveOrSchedule(w,r,"invite",actor(w,friend.id).place(),friend.id,"想当面问问"+actor(w,friend.id).name()+"愿不愿意一起做",at,36);return;}
-        }
-        if(goal!=null) {
-            String place=knownPlace(r,goal);
-            if(w.weather.equals("rain")&&place.equals("garden")) {
-                if(actor(w,r.id).place().equals("garden"))moveOrSchedule(w,r,"relocate","cafe",goal.id,"把能搬动的准备材料带到檐下，免得淋湿",at,18);
-                else moveOrSchedule(w,r,"observe","garden",null,"先去看看花园里的材料，哪些需要避雨",at,18);
-                return;
-            }
-            moveOrSchedule(w,r,goal.ownerId.equals(r.id)?"create":"help",place,goal.id,
-                goal.ownerId.equals(r.id)?"把心里的小愿望往前做一点":"答应过的帮忙，想认真做完",at,42+Math.floorMod((w.id+r.id+w.eventSequence).hashCode(),20));return;
-        }
-        // The owner's idle default leans toward the cafe during business hours - a soft bias on this
-        // one fallback branch, not a rule that forbids leaving (duty itself still runs entirely on
-        // dutyPressure vs. personalPull in CafeService). Off business hours, or for anyone else, the
-        // old rain/clear default is unchanged. See "店主的价值来自他偶尔不在" - occasional wandering
-        // stays possible through every other branch above (helping a neighbour, an invitation, rain),
-        // this just stops "no goal, clear weather" from defaulting him to the garden every time.
-        String defaultPlace=w.weather.equals("rain")?"cafe"
-            :r.id.equals(CafeService.OWNER)&&CafeService.businessHours(w,at)?"cafe":"garden";
-        moveOrSchedule(w,r,"observe",defaultPlace,null,"没有急事，想看看今天有哪些新变化",at,55);
-    }
-    /** Each non-owner resident's own daytime away-from-town window: [start, end) local hours,
-     * deterministic and staggered so they do not all leave or return together ("陆续回来"). The owner
-     * is deliberately absent from this table - their work is the cafe itself, see the cafe bias on
-     * the idle default above instead. */
-    private static final Map<String,int[]> WORK_WINDOW = Map.of(
-        "gardener", new int[]{8, 11},
-        "student",  new int[]{11, 14},
-        "artist",   new int[]{15, 18}
-    );
-    private static boolean awayForWork(String residentId, int hour) {
-        int[] window = WORK_WINDOW.get(residentId);
-        return window != null && hour >= window[0] && hour < window[1];
-    }
-    private static String workReason(String residentId) {
-        return switch (residentId) {
-            case "gardener" -> "一早去别处的花圃忙活，先不在家门口";
-            case "student" -> "去自习室待一段，晚点才回这条街";
-            case "artist" -> "出门写生、送稿子去了，暂时不在附近";
-            default -> "出门忙自己的事了";
+
+    /** Energy follows simulated elapsed time, not the number of service calls or completed actions.
+     * Values are game tuning: roughly sixteen ordinary waking hours from full to very low, and about
+     * eight hours of sleep from very low back toward full. */
+    static void settleEnergy(CompanionWorld w,ResidentState r,Instant at){
+        if(r.energyUpdatedAt==null){r.energyUpdatedAt=at;return;}
+        long seconds=Duration.between(r.energyUpdatedAt,at).getSeconds();
+        if(seconds<=0)return;
+        String action=r.plan==null?actor(w,r.id).activity():r.plan.action();
+        double hourly=switch(action==null?"idle":action){
+            case "sleep"->10.0;
+            case "rest"->8.0;
+            case "study","read"->-7.5;
+            case "work","make","create","help","tend","away"->-8.0;
+            case "travel","walk"->-7.0;
+            default->-6.0;
         };
-    }
-    private static boolean goalNeeds(CompanionWorld w,ResidentState r,ResidentState other){Project p=project(w,r.goal);return p!=null&&!p.contributors.contains(other.id);}
-    /** Deterministic stand-in for "did this resident's follow-through fail this time": a hash of the
-     * world, resident, project and a five-minute time bucket (so it does not flicker every 6-second
-     * tick) compared against the personality's own abandon threshold. Same inputs always give the
-     * same answer, so a replay of the same world produces the same choices. */
-    private static boolean abandonsNow(CompanionWorld w,ResidentState r,Project goal,Personality personality,Instant at) {
-        int threshold=personality.abandonThreshold();
-        if(threshold<=0)return false;
-        int hash=Math.floorMod((w.id+r.id+goal.id+(at.getEpochSecond()/300)).hashCode(),100);
-        return hash<threshold;
+        r.energy=clamp(r.energy+hourly*seconds/3600.0);r.energyUpdatedAt=at;
     }
     private static void complete(CompanionWorld w,ResidentState r,Instant at) {
         Plan p=r.plan;
-        if(p.action().equals("travel")){schedule(w,r,r.desiredAction,p.place(),p.targetId(),p.reason(),at,42);return;}
+        if(p.action().equals("travel")){int duration=r.desiredDurationSeconds>0?r.desiredDurationSeconds:42;schedule(w,r,r.desiredAction,p.place(),p.targetId(),p.reason(),at,duration);return;}
         if(p.action().equals("relocate")) {
             Project project=project(w,p.targetId());
             if(project!=null&&actor(w,r.id).place().equals("cafe")&&project.place.equals("garden")) {
@@ -270,6 +169,12 @@ public final class ResidentSimulation {
                 for(int i=0;i<w.objects.size();i++){WorldObject o=w.objects.get(i);if(Objects.equals(o.projectId(),project.id))w.objects.set(i,new WorldObject(o.id(),o.kind(),"cafe",o.label(),o.state(),o.projectId()));}
                 event(w,at,"adapt","cafe",List.of(r.id),actor(w,r.id).name()+"把「"+project.title+"」的材料带到了檐下，免得淋湿。",project.id);
                 memory(w,r.id,r.id,"observed",at,project.id,"我把「"+project.title+"」的材料搬到了咖啡馆檐下。",List.of(),6);
+            }
+        } else if(p.action().equals("invite")) {
+            ResidentState partner=state(w,p.targetId());Project topic=project(w,r.goal);
+            if(partner!=null&&canTalkTo(w,r.id,partner.id)){
+                if(topic!=null&&canInvite(w,r,partner,topic,at))startConversation(w,r,partner,topic,at);
+                else startLifeConversation(w,r,partner,at);
             }
         } else if(Set.of("create","help").contains(p.action())) {
             Project project=project(w,p.targetId());
@@ -290,13 +195,12 @@ public final class ResidentSimulation {
                 event(w,at,"contribution",project.place,List.of(r.id),text,project.id);
                 for(ResidentState other:w.residentStates)if(!other.id.equals(r.id)&&!other.id.equals("self")&&actor(w,other.id).place().equals(project.place)&&!actor(w,other.id).activity().equals("walk"))
                     witnessContribution(w,other,r,project,text,evidence,at);
-                r.energy=clamp(r.energy-4);r.curiosity=clamp(r.curiosity-10);r.mood=first?"有点得意":"踏实";
                 if(project.progress==100){project.completedAt=at;event(w,at,"ready",project.place,new ArrayList<>(project.contributors),"「"+project.title+"」准备好了，和最初一个人的想法已经不太一样。",project.id);}
             }
         } else if(p.action().equals("celebrate")) {
             Project project=project(w,p.targetId());
             if(project!=null&&project.status.equals("ready")) {
-                project.status="celebrating";r.mood="开心";r.social=clamp(r.social+20);
+                project.status="celebrating";
                 event(w,at,"celebration",project.place,new ArrayList<>(project.contributors),actor(w,r.id).name()+"招呼大家来看「"+project.title+"」。这一次，桌边多了几个熟悉的位置。",project.id);
                 for(String member:project.contributors)if(actor(w,member).place().equals(project.place)&&!actor(w,member).activity().equals("walk")) {
                     boolean detail=Personality.of(state(w,member)).sensitivity()>=65;
@@ -304,9 +208,33 @@ public final class ResidentSimulation {
                     memory(w,member,r.id,"observed",at,project.id,text,List.of(),9);
                 }
             }
-        } else if(p.action().equals("rest")||p.action().equals("sleep")){r.energy=clamp(r.energy+18);r.mood="松弛";}
-        else if(p.action().equals("observe")){r.curiosity=clamp(r.curiosity-16);r.social=clamp(r.social-5);}
+        } else if(p.action().equals("open_cafe")){CafeService.openForDay(w,r.id,p.reason(),at);}
         else if(p.action().equals("tend")){CafeService.finishTending(w,r,p.targetId(),at);}
+    }
+    /** Put aside a concrete action rather than throwing it away.  The remaining time is rebuilt from
+     * the interruption instant, so an old end timestamp cannot make a returned-to action complete
+     * immediately. */
+    private static void suspend(ResidentState r,Instant at){
+        if(r.plan==null||r.suspendedAction!=null)return;
+        long remaining=Math.max(1,Duration.between(at,r.plan.endsAt()).getSeconds());
+        SuspendedAction paused=new SuspendedAction();
+        paused.plan=new Plan(r.plan.id(),r.plan.action(),r.plan.place(),r.plan.targetId(),r.plan.reason(),at,at.plusSeconds(remaining));
+        paused.desiredAction=r.desiredAction;paused.desiredDurationSeconds=r.desiredDurationSeconds;paused.pausedAt=at;
+        r.suspendedAction=paused;
+    }
+    /** Restoring is a normal scheduling transition, including a journey that was interrupted on the
+     * street.  This is deliberately called only after the interrupting action actually completes. */
+    static void resumeSuspended(CompanionWorld w,ResidentState r,Instant at){
+        SuspendedAction paused=r.suspendedAction;if(paused==null||paused.plan==null)return;
+        Plan p=paused.plan;
+        if("cafe".equals(p.place())&&!"open".equals(w.cafeStatus))return;
+        r.suspendedAction=null;
+        int remaining=(int)Math.max(1,Duration.between(p.startedAt(),p.endsAt()).getSeconds());
+        if("travel".equals(p.action())){
+            r.desiredAction=paused.desiredAction;r.desiredDurationSeconds=paused.desiredDurationSeconds;
+            r.plan=new Plan("p-"+(++w.eventSequence),"travel",p.place(),p.targetId(),p.reason(),at,at.plusSeconds(remaining));
+            r.revision++;r.thought="继续"+p.reason();replaceActor(w,r.id,"street","walk","继续去"+placeName(p.place()),r.plan.endsAt());
+        } else moveOrSchedule(w,r,p.action(),p.place(),p.targetId(),p.reason(),at,remaining);
     }
     /** The same contribution is witnessed by everyone present, but what each observer actually
      * writes into their own memory depends on how much attention to detail they personally pay - not
@@ -323,20 +251,16 @@ public final class ResidentSimulation {
     }
     private static void moveOrSchedule(CompanionWorld w,ResidentState r,String action,String place,String target,String reason,Instant at,int duration) {
         if(!actor(w,r.id).place().equals(place)) {
-            r.desiredAction=action;r.plan=new Plan("p-"+(++w.eventSequence),"travel",place,target,reason,at,at.plusSeconds(12));
+            r.desiredAction=action;r.desiredDurationSeconds=duration;r.plan=new Plan("p-"+(++w.eventSequence),"travel",place,target,reason,at,at.plusSeconds(12));
             r.revision++;r.thought=reason;
             TownPlaces.release(w,r.id); // stepping away frees up the spot right away, not 12 seconds from now
             replaceActor(w,r.id,"street","walk","准备去"+placeName(place)+"："+reason,r.plan.endsAt());
         } else schedule(w,r,action,place,target,reason,at,duration);
     }
     private static void schedule(CompanionWorld w,ResidentState r,String action,String place,String target,String reason,Instant at,int duration) {
-        // Wanting to rest at the cafe specifically (as opposed to at home) is where a coffee/water
-        // request is actually made - CafeService owns everything from here; this line only starts the
-        // chain. The resident's own energy recovery below is unrelated and unchanged either way, so a
-        // request that never gets fulfilled cannot strand anyone at low energy.
-        if(action.equals("rest")&&place.equals("cafe")&&!r.id.equals(CafeService.OWNER))CafeService.request(w,r,at);
         r.plan=new Plan("p-"+(++w.eventSequence),action,place,target,reason,at,at.plusSeconds(duration));r.revision++;r.thought=reason;
-        String label=switch(action){case "create","help"->"动手准备"+(project(w,target)==null?"手上的小事":"「"+project(w,target).title+"」");case "study"->"在窗边复习，想守住一点安静";case "invite"->reason;case "sleep"->"睡着了，给明天留一点精神";case "rest"->"捧着杯子歇一会儿";case "celebrate"->"想请大家看看一起做出来的东西";case "wait"->reason;case "tend"->"回到吧台，照应一下柜台前的人";default->reason;};
+        r.desiredAction=null;r.desiredDurationSeconds=0;
+        String label=switch(action){case "create","help"->"动手准备"+(project(w,target)==null?"手上的小事":"「"+project(w,target).title+"」");case "study"->"在窗边复习，想守住一点安静";case "invite"->reason;case "sleep"->"睡着了，给明天留一点精神";case "rest"->"捧着杯子歇一会儿";case "celebrate"->"想请大家看看一起做出来的东西";case "wait"->reason;case "tend"->r.id.equals(CafeService.operatorId(w))?"回到吧台，照应一下柜台前的人":"替"+actor(w,CafeService.operatorId(w)).name()+"照看吧台";default->reason;};
         replaceActor(w,r.id,place,action,label,r.plan.endsAt());
         // "能站的地方都能去" (04-decisions.md): a named position is only claimed for the handful of
         // things that are genuinely owned and capacity-limited - a bed, the owner's coffee machine,
@@ -345,12 +269,11 @@ public final class ResidentSimulation {
         // the resident is loosely "at" the place, exactly where the frontend's own walkable-area
         // pathing already puts a standing actor. This is also why the garden's four named spots no
         // longer force four people into a pile - most of what happens there never claims one.
-        String kind=preferredKind(action);
+        String kind=preferredKind(action,place);
         if(kind==null){TownPlaces.release(w,r.id);return;}
         TownPlaces.Outcome outcome=TownPlaces.claim(w,r.id,place,kind,at);
         if(outcome==TownPlaces.Outcome.WAITING) {
-            // Only sleep/tend/study ever reach here now, so this is the genuinely-scarce case: the
-            // one bed, the one counter, the one window seat is taken. Stand by a moment instead of
+            // Only a bed, counter, study seat or home desk reaches here, so this is the genuinely-scarce case. Stand by a moment instead of
             // being placed on top of someone.
             String waitReason="这里现在坐满了，先在旁边等一等";
             r.plan=new Plan("p-"+(++w.eventSequence),"wait",place,target,waitReason,at,at.plusSeconds(12));r.thought=waitReason;
@@ -360,10 +283,11 @@ public final class ResidentSimulation {
     /** Which actions still need a named, owned position claimed - see the "能站的地方都能去" note in
      * schedule() above. Null means this action never claims one at all, not merely "any spot will
      * do". */
-    private static String preferredKind(String action) {
+    private static String preferredKind(String action,String place) {
+        if(TownPlaces.isHome(place)&&Set.of("study","read","work","make").contains(action))return "desk";
+        if("cafe".equals(place)&&Set.of("study","read","work","make").contains(action))return "seat";
         return switch(action) {
-            case "study"->"seat";
-            case "sleep","away"->"bed";
+            case "sleep"->"bed";
             case "tend"->"equipment";
             default->null;
         };
@@ -379,29 +303,41 @@ public final class ResidentSimulation {
     private static String pairKey(String a,String b){return a.compareTo(b)<0?a+":"+b:b+":"+a;}
     private static void startConversation(CompanionWorld w,ResidentState a,ResidentState b,Project p,Instant at) {
         p.invitationHistory.put(pairKey(a.id,b.id),at);
+        // A chat can be a detour through an already meaningful afternoon, rather than a command to
+        // discard that afternoon altogether.
+        suspend(a,at);suspend(b,at);
         Conversation c=new Conversation();c.id="c-"+(++w.eventSequence);c.place=actor(w,a.id).place();c.topicId=p.id;c.status="active";c.participantIds.add(a.id);c.participantIds.add(b.id);c.startedAt=at;c.updatedAt=at;
-        if(w.modelConversationsEnabled&&(w.modelRetryAfter==null||!at.isBefore(w.modelRetryAfter))){
+        // A production/model conversation never drops into the rule-authored agreement script just
+        // because the provider is cooling down. ConversationLifecycle will end it neutrally if the
+        // model is unavailable; only explicit rule-only historical runs use the template below.
+        if(w.modelConversationsEnabled){
             c.mode="model";c.nextSpeakerId=a.id;w.conversations.add(c);a.lastSocialAt=at;b.lastSocialAt=at;
             replaceActor(w,a.id,c.place,"talk","想和"+actor(w,b.id).name()+"聊聊，正在组织语言",at.plusSeconds(45));
             replaceActor(w,b.id,c.place,"talk","停下手里的事，等对方开口",at.plusSeconds(45));
             event(w,at,"conversation",c.place,List.of(a.id,b.id),actor(w,a.id).name()+"叫住了"+actor(w,b.id).name()+"。",p.id);
             while(w.conversations.size()>24)w.conversations.removeFirst();return;
         }
-        String invitation=switch(p.objectKind){case "poster"->"如果让你留下一种颜色，你会选什么？";case "flowers"->"这里的新芽，能不能也在你窗前住下来？";case "tea"->"一壶茶可以有几种泡法，想不想试试你的那一种？";default->"要不要带一本读到一半的书来，不一定非得读完才分享？";};
+        String invitation=switch(p.objectKind){case "poster"->"你看这个，哪块颜色最像你？";case "flowers"->"有株苗多出来了。你窗边放得下吗？";case "tea"->"茶我泡了两种。你要不要尝一口？";default->"你那本读到一半的书，也带来吧？";};
         // A's own private fondness for b (never visible to b, and never sent to anyone else's model
         // context - see ResidentDirector.perspective()) can let itself show once, the first time it
         // is high enough; after that it does not keep repeating the same tell every single time.
         boolean fond=a.relationships.getOrDefault(b.id,40)>55;
         boolean alreadyShown=Boolean.TRUE.equals(a.affectionExpressed.get(b.id));
         if(fond&&!alreadyShown)a.affectionExpressed.put(b.id,true);
-        String opener=fond&&!alreadyShown?"想到你上次说的话了。":"要是你现在方便，";
-        c.turns.add(new Turn(a.id,"我在琢磨「"+p.title+"」。"+opener+invitation,at));
+        String opener=fond&&!alreadyShown?"你上次说的，我还记着。":"";
+        c.turns.add(new Turn(a.id,opener+invitation,at));
         w.conversations.add(c);a.lastSocialAt=at;b.lastSocialAt=at;
         replaceActor(w,a.id,c.place,"talk",c.turns.getFirst().text(),at.plusSeconds(36));replaceActor(w,b.id,c.place,"talk","停下手里的事，听听对方",at.plusSeconds(36));
         var shared=a.knownProjects.get(p.id);if(shared!=null)b.knownProjects.put(p.id,new ProjectKnowledge(shared.id(),shared.place(),shared.status(),shared.progress(),at,a.id));
         memory(w,b.id,a.id,"heard",at,p.id,actor(w,a.id).name()+"当面告诉我，正在准备「"+p.title+"」。",ownEvidence(w,a.id,p.id),7);
         event(w,at,"conversation",c.place,List.of(a.id,b.id),actor(w,a.id).name()+"叫住了"+actor(w,b.id).name()+"，聊起「"+p.title+"」。",p.id);
         while(w.conversations.size()>24)w.conversations.removeFirst();
+    }
+    /** A conversation may be about a shift, a possible new life, or an unresolved arrangement;
+     * it does not need a public project to be a legitimate encounter. */
+    private static void startLifeConversation(CompanionWorld w,ResidentState a,ResidentState b,Instant at){
+        suspend(a,at);suspend(b,at);Conversation c=new Conversation();c.id="c-"+(++w.eventSequence);c.place=actor(w,a.id).place();c.topicId="life";c.status="active";c.participantIds.add(a.id);c.participantIds.add(b.id);c.startedAt=at;c.updatedAt=at;c.mode=w.modelConversationsEnabled?"model":"fallback";c.nextSpeakerId=a.id;w.conversations.add(c);a.lastSocialAt=at;b.lastSocialAt=at;
+        replaceActor(w,a.id,c.place,"talk","想聊聊手头的生活安排",at.plusSeconds(45));replaceActor(w,b.id,c.place,"talk","停下来听听对方的打算",at.plusSeconds(45));event(w,at,"conversation",c.place,List.of(a.id,b.id),actor(w,a.id).name()+"和"+actor(w,b.id).name()+"聊起最近的生活安排。",null);
     }
     private static void continueConversation(CompanionWorld w,Conversation c,Instant at) {
         if(ConversationLifecycle.tick(w,c,at))return;
@@ -413,32 +349,32 @@ public final class ResidentSimulation {
             speaker=b.id;
             boolean reluctant=b.energy<40||b.id.equals("student")&&p.kind.equals("gathering")||b.relationships.getOrDefault(a.id,40)<32;
             c.accepted=!reluctant;
-            text=reluctant?(b.id.equals("student")?"我还得复习。大家聚在一起会不会太吵？如果能留一块安静的地方，我才想帮忙。":"我现在有点累，怕随口答应了又做不好。能不能先做一小部分？")
-                :b.id.equals("artist")?"我想画得像真的有人住在这里，不只是漂亮。让每个人留一个自己的颜色，怎么样？"
-                :b.id.equals("gardener")?"可以呀。不过花不是装饰完就不管的，能不能也给愿意照顾它的人留个位置？":"我可以帮你整理一下。先做小一点，别让准备本身太累。";
+            text=reluctant?(b.id.equals("student")?"我还要复习。真要聚的话，给我留个安静点的位置。":"今天不行，我脑子已经转不动了。要不我只帮一小会儿？")
+                :b.id.equals("artist")?"这块太整齐了。让我留点真的人住过的痕迹？"
+                :b.id.equals("gardener")?"苗能放，不过得有人记得浇水。你管，还是我管？":"我能帮你理一理。先说最急的是哪件？";
             b.mood=reluctant?"有些犹豫":"被需要";relation(a,b,reluctant?-3:4);
         } else if(n==2) {
             speaker=a.id;
             if(!c.accepted && b.energy<32) {
-                text="那今天先不约你了，你安心歇着。这件事可以慢慢来，别因为我不好意思拒绝。";
+                text="行，你先歇。";
                 a.mood="更体谅了";
             } else if(!c.accepted) {
-                text="你说得对，我刚才只顾着自己的兴奋。那就留出安静角，先做一点，累了随时停。";
+                text="那就把安静角留出来。别的先照旧。";
                 p.description="听过"+actor(w,b.id).name()+"的顾虑，改成小规模准备，并给安静和休息留位置。";
                 a.mood="重新想过了";c.accepted=true;
                 event(w,at,"change_of_mind",c.place,List.of(a.id,b.id),actor(w,a.id).name()+"因为"+actor(w,b.id).name()+"的顾虑，改了「"+p.title+"」的做法。",p.id);
-            } else text="这个主意比我一个人想的好。你按自己的做法来，我们不用做成一模一样的东西。";
+            } else text=switch(b.id){case "artist"->"行，那块留给你。别画得太规矩。";case "gardener"->"浇水我来记。你帮我看看放哪儿合适。";case "student"->"安静的位置我留着。";default->"最急的是把材料归一下。别的先放着。";};
         } else if(n==3) {
             speaker=b.id;
             if(!c.accepted) {
-                text="谢谢你理解。这次我先休息，等精神好一点再来看看。";
+                text="好，那我先歇。";
                 c.turns.add(new Turn(speaker,text,at));c.stage++;c.updatedAt=at;relation(a,b,2);
                 a.revision++;b.revision++;
                 memory(w,a.id,b.id,"heard",at,p.id,actor(w,b.id).name()+"说今天想先休息，没有答应参与。",ownEvidence(w,a.id,p.id),6);
                 event(w,at,"declined",c.place,List.of(a.id,b.id),actor(w,b.id).name()+"婉拒了这一次邀请，"+actor(w,a.id).name()+"决定不催促。",p.id);
                 replaceActor(w,speaker,c.place,"talk",text,at.plusSeconds(12));return;
             }
-            text="那我愿意试试。等手上这一点收好，我就去帮你。";
+            text=switch(b.id){case "student"->"行。等我把这页看完。";case "artist"->"行，留一块给我。";case "gardener"->"行，我晚点把苗拿来。";default->"行，我收完台面就来。";};
             if(!p.members.contains(b.id))p.members.add(b.id);b.goal=p.id;b.thought="听过对方的安排后，我愿意试着一起做一点。";
             relation(a,b,6);b.social=clamp(b.social+18);a.social=clamp(a.social+18);
             String evidence=memory(w,b.id,a.id,"heard",at,p.id,"我们当面商量过「"+p.title+"」，对方接受了我的想法，我答应做一小部分。",ownEvidence(w,b.id,p.id),8);
@@ -459,11 +395,11 @@ public final class ResidentSimulation {
         Memory encounter=recent.stream().filter(m->m.topicId().equals(salient.topicId())&&!m.sourceId().equals(r.id)&&IDS.contains(m.sourceId())).findFirst().orElse(null);
         String partner=encounter==null?"邻居":actor(w,encounter.sourceId()).name();
         String thought;
-        if(salient.text().contains("真的做出来"))thought=title+"做出来以后，我才发现，大家不同的做法可以留在同一件东西里。下次还想给别人的主意留个位置。";
-        else if(recent.stream().anyMatch(m->m.text().contains("没有答应")))thought="聊到"+title+"时，"+partner+"没有答应。我提醒自己，关系好也不代表对方随时有空。";
-        else if(encounter!=null&&encounter.sourceType().equals("heard"))thought="这次商量"+title+"，"+partner+"愿意把自己的顾虑说出来。我开始觉得，听完这些话比急着把人拉进来更重要。";
-        else if(encounter!=null)thought="看到"+partner+"为"+title+"动手以后，我对一起做事多了一点信心。这是我从这次经历里得到的感觉。";
-        else thought="亲手做了"+title+"的一部分，我才知道光有主意还不够。下一步想把需要别人帮忙的地方说得更具体。";
+        if(salient.text().contains("真的做出来"))thought=title+"做完了。我记得自己最后添的是哪一笔，也记得有几处不是我原来的做法。";
+        else if(recent.stream().anyMatch(m->m.text().contains("没有答应")))thought=partner+"说这次没空。我先把"+title+"里能自己做的部分收好。";
+        else if(encounter!=null&&encounter.sourceType().equals("heard"))thought="和"+partner+"聊过"+title+"。对方提的那件事我先记着，下次别又从头问。";
+        else if(encounter!=null)thought="我看见"+partner+"也动了手。"+title+"现在有一部分不是我做的。";
+        else thought="我把"+title+"推进了一点。还缺什么，等下次看到材料再说。";
         var evidence=recent.stream().filter(m->Objects.equals(m.topicId(),salient.topicId())).sorted(Comparator.comparingInt(Memory::importance).reversed()).limit(3).map(Memory::id).toList();
         memory(w,r.id,r.id,"reflection",at,salient.topicId(),thought,evidence,8);r.thought=thought;r.lastReflectionAt=at;
     }
@@ -480,7 +416,7 @@ public final class ResidentSimulation {
     }
     public static boolean proposeDecision(CompanionWorld w,String id,long residentRevision,long intentRevision,String place,String title,String objectKind,String reason,List<String> evidence,Instant now) {
         ResidentState r=state(w,id);
-        if(r==null||r.revision!=residentRevision||w.intentRevision!=intentRevision||!TownPlaces.places().contains(place)||TownPlaces.isHome(place))return false;
+        if(r==null||r.revision!=residentRevision||w.intentRevision!=intentRevision||!TownPlaces.contains(w,place)||TownPlaces.isHome(place))return false;
         if(title==null||title.isBlank()||title.length()>36||reason==null||reason.length()>160||!Set.of("poster","flowers","books","tea").contains(objectKind==null?"":objectKind))return false;
         if(evidence==null||evidence.isEmpty()||evidence.stream().anyMatch(e->w.memories.stream().noneMatch(m->m.ownerId().equals(id)&&m.id().equals(e))))return false;
         if(w.projects.stream().filter(p->p.ownerId.equals(id)&&!p.status.equals("celebrating")).count()>=2)return false;
@@ -495,15 +431,224 @@ public final class ResidentSimulation {
         while(w.projects.size()>16){Project old=w.projects.stream().filter(p->p.status.equals("celebrating")).findFirst().orElse(null);if(old==null)break;w.projects.remove(old);}
         while(w.objects.size()>20)w.objects.removeFirst();
     }
+    /** An offer records only one side of a social arrangement.  It does not grant equipment use;
+     * acceptance below is intentionally a separate, auditable transition. */
+    public static boolean proposeWorkArrangement(CompanionWorld w,String proposerId,String kind,String otherId,String note,Instant now){
+        return proposeWorkArrangement(w,proposerId,kind,otherId,note,List.of(),now);
+    }
+    public static boolean proposeWorkArrangement(CompanionWorld w,String proposerId,String kind,String otherId,String note,List<String> evidence,Instant now){
+        ResidentState proposer=state(w,proposerId),other=state(w,otherId);String operator=CafeService.operatorId(w);
+        if(proposer==null||other==null||proposerId.equals(otherId)||!Set.of("assist","delegate","takeover").contains(kind)||note==null||note.isBlank()||note.length()>160)return false;
+        boolean valid="assist".equals(kind)?Objects.equals(otherId,operator):Objects.equals(proposerId,operator);
+        if(!valid)return false;
+        WorkArrangement a=new WorkArrangement();a.id="work-"+(++w.eventSequence);a.kind=kind;a.place="cafe";a.proposerId=proposerId;a.workerId="assist".equals(kind)?proposerId:otherId;a.status="proposed";a.note=note;a.proposedAt=now;a.proposerEvidenceIds.addAll(evidence);w.workArrangements.add(a);
+        memory(w,proposerId,proposerId,"observed",now,"work","assist".equals(kind)?"我提出可以替对方照看一阵吧台。":"我提出把吧台的责任交给对方。",List.of(),6);
+        event(w,now,"work_offer","cafe",List.of(proposerId,otherId),actor(w,proposerId).name()+"提出了关于咖啡馆的安排。",null);return true;
+    }
+    /** Both people must say yes before the helper can use the counter.  A takeover additionally
+     * transfers the concrete counter owner; delegation and help remain use permissions only. */
+    public static boolean acceptWorkArrangement(CompanionWorld w,String accepterId,String arrangementId,Instant now){
+        return acceptWorkArrangement(w,accepterId,arrangementId,List.of(),now);
+    }
+    public static boolean acceptWorkArrangement(CompanionWorld w,String accepterId,String arrangementId,List<String> evidence,Instant now){
+        WorkArrangement a=w.workArrangements.stream().filter(x->Objects.equals(x.id,arrangementId)&&"proposed".equals(x.status)).findFirst().orElse(null);
+        if(a==null)return false;String operator=CafeService.operatorId(w);String required="assist".equals(a.kind)?operator:a.workerId;
+        if(!Objects.equals(required,accepterId))return false;
+        a.status="active";a.acceptedAt=now;a.workerEvidenceIds.addAll(evidence);
+        if("takeover".equals(a.kind)){String former=CafeService.operatorId(w);TownPlaces.transferCafeCounter(w,a.workerId);w.cafeOperating=true;state(w,a.workerId).occupation="经营咖啡馆";state(w,a.workerId).careerIntent=lifeIntent(w,state(w,a.workerId),null,"试着把咖啡馆经营下去","active",now);replaceRole(w,a.workerId,"咖啡馆经营者");if(!former.equals(a.workerId))replaceRole(w,former,"前店主，正在找新的生活方向");}
+        else {state(w,a.workerId).occupation="assist".equals(a.kind)?"在高峰时替人照看吧台":"受托照看咖啡馆";replaceRole(w,a.workerId,"assist".equals(a.kind)?"咖啡馆帮工":"受托经营者");}
+        memory(w,accepterId,accepterId,"observed",now,"work","我明确答应了这份关于咖啡馆的安排。",List.of(),7);
+        event(w,now,"work_agreement","cafe",List.of(a.proposerId,accepterId),"关于咖啡馆的安排被两个人说清楚了。",null);return true;
+    }
+    /** Either participant may decline an offer or end an active arrangement; ended arrangements
+     * never regain equipment authority if the counter later reopens. */
+    public static boolean endWorkArrangement(CompanionWorld w,String residentId,String arrangementId,String status,Instant now){
+        WorkArrangement a=w.workArrangements.stream().filter(x->Objects.equals(x.id,arrangementId)&&Set.of("proposed","active").contains(x.status)).findFirst().orElse(null);
+        if(a==null||!Set.of("rejected","ended").contains(status)||(!residentId.equals(a.proposerId)&&!residentId.equals(a.workerId)&&!residentId.equals(CafeService.operatorId(w))))return false;
+        a.status=status;a.endedAt=now;event(w,now,"work_"+status,"cafe",List.of(residentId),actor(w,residentId).name()+"没有继续这份咖啡馆安排。",null);return true;
+    }
+    /** Choosing another life can close the counter.  It never invents a replacement resident. */
+    public static boolean changeOccupation(CompanionWorld w,String residentId,String occupation,Instant now){
+        return changeOccupation(w,residentId,occupation,null,now);
+    }
+    public static boolean changeOccupation(CompanionWorld w,String residentId,String occupation,String closingSpeech,Instant now){
+        ResidentState r=state(w,residentId);if(r==null||occupation==null||occupation.isBlank()||occupation.length()>80)return false;
+        if(Objects.equals(CafeService.operatorId(w),residentId)){
+            if("open".equals(w.cafeStatus)&&"cafe".equals(actor(w,residentId).place())&&closingSpeech!=null&&!closingSpeech.isBlank())CafeService.closeForDay(w,residentId,closingSpeech,now);
+            CafeService.pauseOperation(w,residentId,now);
+            for(Conversation conversation:new ArrayList<>(w.conversations))if("active".equals(conversation.status)&&"cafe".equals(conversation.place))ConversationLifecycle.finish(w,conversation,now,"经营者暂停营业，这段谈话先停在这里");
+            moveFocusedAvatarHome(w,now);
+        }
+        r.occupation=occupation;r.goal=null;r.plan=null;r.suspendedAction=null;TownPlaces.release(w,residentId);r.careerIntent=lifeIntent(w,r,null,"试着过上"+occupation+"的日子","active",now);
+        if(Objects.equals(CafeService.operatorId(w),residentId))replaceRole(w,residentId,"正在转向"+occupation);
+        memory(w,residentId,residentId,"reflection",now,"work","我想把日子往“"+occupation+"”的方向试一试，先不把这当成已经成功。",List.of(),7);
+        event(w,now,"occupation_change",actor(w,residentId).place(),List.of(residentId),actor(w,residentId).name()+"正在重新想自己想做什么。",null);return true;
+    }
+    /** Called only after an authorized open_cafe action physically completes. The prior direction is
+     * kept in the new description instead of being silently erased by returning to the counter. */
+    static void markCafeReturned(CompanionWorld w,String residentId,String reason,Instant at){
+        if(!Objects.equals(CafeService.operatorId(w),residentId))return;
+        ResidentState r=state(w,residentId);if(r==null)return;
+        String previous=r.occupation==null||r.occupation.isBlank()?"未记录":r.occupation;
+        if(previous.startsWith("恢复咖啡馆经营；此前方向："))previous=previous.substring("恢复咖啡馆经营；此前方向：".length());
+        String chosenReason=reason==null||reason.isBlank()?"本人选择重新开门":reason;
+        r.occupation="恢复咖啡馆经营；此前方向："+previous;
+        r.careerIntent=lifeIntent(w,r,null,"恢复咖啡馆经营："+chosenReason+"；此前方向："+previous,"active",at);r.lifeIntent=lifeIntent(w,r,null,chosenReason,"active",at);
+        replaceRole(w,residentId,"咖啡馆经营者");r.revision++;
+    }
+    public record PortableAction(String action,String reason,int remainingSeconds) {}
+
+    /** Only unusually strong body signals enter the resident's conscious context. Internal values
+     * remain simulation state and are never exposed to the language model. */
+    public static List<String> salientPerceptions(CompanionWorld w,String residentId,Instant at){
+        ResidentState r=state(w,residentId);if(r==null)return List.of();List<String> result=new ArrayList<>();
+        if(r.energy<=8)result.add("困得几乎做不了需要专注的事");
+        else if(r.energy<=20)result.add("已经很累，注意力很难维持");
+        if("closing".equals(w.cafeStatus)&&"cafe".equals(actor(w,residentId).place()))result.add("咖啡馆正在打烊，店里不再接新单");
+        else if("closed".equals(w.cafeStatus)&&"cafe".equals(actor(w,residentId).place()))result.add("咖啡馆已经关门");
+        if(CafeService.mayTend(w,residentId)&&"cafe".equals(actor(w,residentId).place())&&CafeService.oldestWaitingRequestId(w)!=null)result.add("柜台前有人在等");
+        ServiceRequest ownWait=w.serviceRequests.stream().filter(request->residentId.equals(request.requesterId)&&"waiting".equals(request.status)&&"cafe".equals(actor(w,residentId).place())).findFirst().orElse(null);
+        if(ownWait!=null&&Duration.between(ownWait.requestedAt,at).getSeconds()>=120)result.add("这杯已经等了一阵，还没有人来做");
+        return List.copyOf(result);
+    }
+    public static String cafeScheduleCue(CompanionWorld w,String residentId,Instant at){return CafeService.scheduleCue(w,residentId,at);}
+    public static List<String> routineCues(CompanionWorld w,String residentId,Instant at){
+        ResidentState r=state(w,residentId);if(r==null||!r.sleepScheduleSeeded||"sleep".equals(actor(w,residentId).activity()))return List.of();
+        ZonedDateTime local=at.atZone(ZoneId.of(w.timezone));int minute=local.getHour()*60+local.getMinute();
+        boolean inWindow=r.usualSleepMinute<r.usualWakeMinute?minute>=r.usualSleepMinute&&minute<r.usualWakeMinute:minute>=r.usualSleepMinute||minute<r.usualWakeMinute;
+        return inWindow?List.of("到了我平常睡觉的时间"):List.of();
+    }
+    public static String cafeNotice(CompanionWorld w,String residentId){
+        if(!"closing".equals(w.cafeStatus)||!"cafe".equals(actor(w,residentId).place()))return null;
+        return CafeService.latestClosingNotice(w,residentId);
+    }
+    private static boolean canTalkTo(CompanionWorld w,String speakerId,String otherId){
+        ResidentState other=state(w,otherId);if(other==null||speakerId.equals(otherId)||"self".equals(otherId)||activeConversation(w,otherId)!=null)return false;
+        Actor speaker=actor(w,speakerId),candidate=actor(w,otherId);
+        return speaker.place().equals(candidate.place())&&!Set.of("walk","travel","sleep","rest","away","tend").contains(candidate.activity());
+    }
+    public static PortableAction portableAction(CompanionWorld w,String residentId,Instant at){
+        ResidentState r=state(w,residentId);if(r==null||!"closing".equals(w.cafeStatus)||!"cafe".equals(actor(w,residentId).place()))return null;
+        Plan plan=portablePlan(r);if(plan==null)return null;
+        int remaining=(int)Math.max(1,Duration.between(at,plan.endsAt()).getSeconds());
+        if(r.suspendedAction!=null&&plan==r.suspendedAction.plan)remaining=(int)Math.max(1,Duration.between(plan.startedAt(),plan.endsAt()).getSeconds());
+        return new PortableAction(plan.action(),plan.reason(),remaining);
+    }
+    public static List<String> availableActions(CompanionWorld w,String residentId,Instant at){
+        ResidentState r=state(w,residentId);if(r==null)return List.of();
+        LinkedHashSet<String> actions=new LinkedHashSet<>(List.of("observe","rest","study","work","read","make","sleep","change_work"));
+        if(r.plan!=null&&!("cafe".equals(actor(w,residentId).place())&&!"open".equals(w.cafeStatus)))actions.add("continue");
+        if(w.projects.stream().anyMatch(p->knows(w,residentId,p.id)&&!Set.of("ready","celebrating").contains(p.status)))actions.add("create");
+        if(w.projects.stream().anyMatch(p->knows(w,residentId,p.id)&&p.members.contains(residentId)&&!Set.of("ready","celebrating").contains(p.status)))actions.add("help");
+        if(w.residentStates.stream().anyMatch(other->canTalkTo(w,residentId,other.id)))actions.add("invite");
+        if(CafeService.mayTend(w,residentId)&&"cafe".equals(actor(w,residentId).place())&&CafeService.oldestWaitingRequestId(w)!=null)actions.add("tend");
+        if(CafeService.acceptingOrders(w)&&"cafe".equals(actor(w,residentId).place())&&!residentId.equals(CafeService.operatorId(w))
+            &&w.serviceRequests.stream().noneMatch(request->residentId.equals(request.requesterId)&&Set.of("waiting","preparing","delivered").contains(request.status)))actions.add("request_drink");
+        if(CafeService.mayManage(w,residentId)&&"closed".equals(w.cafeStatus))actions.add("open_cafe");
+        if(CafeService.mayManage(w,residentId)&&"open".equals(w.cafeStatus)&&"cafe".equals(actor(w,residentId).place())&&!"sleep".equals(actor(w,residentId).activity()))actions.add("close_cafe");
+        if(portableAction(w,residentId,at)!=null)actions.add("continue_home");
+        PausedAction paused=pausedAction(w,residentId,at);if(paused!=null&&(!"cafe".equals(paused.place())||"open".equals(w.cafeStatus)))actions.add("resume");
+        if(w.projects.stream().filter(project->residentId.equals(project.ownerId)&&!"celebrating".equals(project.status)).count()<2)actions.add("propose");
+        return List.copyOf(actions);
+    }
+    public static boolean configureCafeHours(CompanionWorld w,int openMinute,int closeMinute){
+        if(openMinute<0||openMinute>=1440||closeMinute<0||closeMinute>=1440||openMinute==closeMinute)return false;
+        w.cafeOpenMinute=openMinute;w.cafeCloseMinute=closeMinute;w.revision++;return true;
+    }
+    public static boolean configureSleepHours(CompanionWorld w,String residentId,int sleepMinute,int wakeMinute){
+        ResidentState r=state(w,residentId);if(r==null||sleepMinute<0||sleepMinute>=1440||wakeMinute<0||wakeMinute>=1440||sleepMinute==wakeMinute)return false;
+        r.usualSleepMinute=sleepMinute;r.usualWakeMinute=wakeMinute;r.sleepScheduleSeeded=true;r.revision++;w.revision++;return true;
+    }
+    private static final Set<String> PORTABLE_ACTIONS=Set.of("study","read","work","make");
+    public record PausedAction(String action,String place,String reason,int remainingSeconds) {}
+    public static PausedAction pausedAction(CompanionWorld w,String residentId,Instant at){
+        ResidentState r=state(w,residentId);if(r==null||r.suspendedAction==null||r.suspendedAction.plan==null)return null;
+        Plan plan=r.suspendedAction.plan;int remaining=(int)Math.max(1,Duration.between(plan.startedAt(),plan.endsAt()).getSeconds());String effectivePlace=plan.place();
+        if(PORTABLE_ACTIONS.contains(plan.action())&&"cafe".equals(plan.place())&&!"open".equals(w.cafeStatus)&&TownPlaces.isHome(actor(w,residentId).place()))effectivePlace=TownPlaces.homeOf(residentId);
+        return new PausedAction(plan.action(),effectivePlace,plan.reason(),remaining);
+    }
+    private static Plan portablePlan(ResidentState r){
+        if(r.plan!=null&&PORTABLE_ACTIONS.contains(r.plan.action()))return r.plan;
+        return r.suspendedAction!=null&&r.suspendedAction.plan!=null&&PORTABLE_ACTIONS.contains(r.suspendedAction.plan.action())?r.suspendedAction.plan:null;
+    }
+    private static boolean continueAtHome(CompanionWorld w,ResidentState r,Instant at){
+        PortableAction view=portableAction(w,r.id,at);Plan plan=portablePlan(r);if(view==null||plan==null)return false;
+        String target=plan.targetId();r.plan=null;r.suspendedAction=null;
+        moveOrSchedule(w,r,view.action(),TownPlaces.homeOf(r.id),target,view.reason(),at,view.remainingSeconds());return true;
+    }
+    private static boolean closeCafe(CompanionWorld w,ResidentState manager,String speech,Instant at){
+        if(!CafeService.closeForDay(w,manager.id,speech,at))return false;
+        for(Conversation c:new ArrayList<>(w.conversations))if("active".equals(c.status)&&"cafe".equals(c.place))ConversationLifecycle.finish(w,c,at,"店里开始打烊，这段谈话先停在这里");
+        if(manager.plan!=null&&("tend".equals(manager.plan.action())||"travel".equals(manager.plan.action())&&"tend".equals(manager.desiredAction))){manager.plan=null;manager.suspendedAction=null;}
+        moveFocusedAvatarHome(w,at);return true;
+    }
+    private static void moveFocusedAvatarHome(CompanionWorld w,Instant at){
+        if(w.avatar==null||!"cafe".equals(w.avatar.place()))return;
+        Actor a=w.avatar;String home=TownPlaces.homeOf("self");
+        w.avatar=new Actor(a.id(),a.name(),a.role(),home,a.activity(),a.label(),a.x(),a.y(),a.until());
+        TownPlaces.release(w,"self");TownPlaces.claim(w,"self",home,Set.of("focus","study").contains(a.activity())?"desk":null,at);
+    }
+    private static int sleepDurationSeconds(CompanionWorld w,ResidentState r,Instant at){
+        ZonedDateTime local=at.atZone(ZoneId.of(w.timezone));int wakeMinute=r.sleepScheduleSeeded?r.usualWakeMinute:7*60;
+        ZonedDateTime wake=local.withHour(wakeMinute/60).withMinute(wakeMinute%60).withSecond(0).withNano(0);
+        if(!wake.isAfter(local))wake=wake.plusDays(1);
+        if(!routineCues(w,r.id,at).isEmpty())return (int)Math.max(90*60,Duration.between(local,wake).getSeconds());
+        double hours=Math.max(1.5,Math.min(4.0,(65-r.energy)/10.0));return (int)Math.round(hours*3600);
+    }
     public static boolean applyDecision(CompanionWorld w,String residentId,long residentRevision,long intentRevision,String place,String action,String target,String reason,String speech,List<String> evidence,Instant now) {
         ResidentState r=state(w,residentId);if(r==null||r.revision!=residentRevision||w.intentRevision!=intentRevision)return false;
         // The model still speaks of "home" generically; the resident's own home is what that resolves to.
         String resolvedPlace="home".equals(place)?TownPlaces.homeOf(residentId):place;
-        if(!TownPlaces.places().contains(resolvedPlace)||TownPlaces.isHome(resolvedPlace)&&!resolvedPlace.equals(TownPlaces.homeOf(residentId))||!Set.of("observe","create","help","invite","rest","study").contains(action))return false;
+        if(!TownPlaces.contains(w,resolvedPlace)||TownPlaces.isHome(resolvedPlace)&&!resolvedPlace.equals(TownPlaces.homeOf(residentId))||!Set.of("continue","resume","observe","create","help","invite","rest","sleep","study","work","read","make","request_drink","tend","open_cafe","close_cafe","continue_home","offer_assist","offer_delegate","offer_takeover","accept_work","change_work").contains(action))return false;
         if(reason==null||reason.isBlank()||reason.length()>160||speech!=null&&speech.length()>180)return false;
         if(evidence==null||evidence.stream().anyMatch(id->w.memories.stream().noneMatch(m->m.id().equals(id)&&m.ownerId().equals(residentId))))return false;
+        if("continue".equals(action)){
+            if("cafe".equals(actor(w,residentId).place())&&!"open".equals(w.cafeStatus))return false;
+            if(r.plan!=null){r.thought=reason;return appliedThought(w,r,residentId,reason,r.plan.targetId(),now);}
+            if(r.suspendedAction==null)return false;Plan paused=r.suspendedAction.plan;resumeSuspended(w,r,now);
+            if(r.plan==null)return false;return appliedThought(w,r,residentId,reason,paused==null?null:paused.targetId(),now);
+        }
+        if("continue_home".equals(action)){
+            if(!resolvedPlace.equals(TownPlaces.homeOf(residentId))||!continueAtHome(w,r,now))return false;
+            return appliedThought(w,r,residentId,reason,null,now);
+        }
+        if("resume".equals(action)){
+            PausedAction paused=pausedAction(w,residentId,now);if(paused==null||!resolvedPlace.equals(paused.place())||("cafe".equals(paused.place())&&!"open".equals(w.cafeStatus)))return false;
+            Plan stored=r.suspendedAction.plan;
+            if(!stored.place().equals(paused.place()))r.suspendedAction.plan=new Plan(stored.id(),stored.action(),paused.place(),stored.targetId(),stored.reason(),stored.startedAt(),stored.endsAt());
+            r.plan=null;resumeSuspended(w,r,now);if(r.plan==null)return false;
+            return appliedThought(w,r,residentId,reason,r.plan.targetId(),now);
+        }
+        if("close_cafe".equals(action)){
+            if(!"cafe".equals(resolvedPlace)||!closeCafe(w,r,speech,now))return false;
+            return appliedThought(w,r,residentId,reason,null,now);
+        }
+        if("open_cafe".equals(action)){
+            if(!"cafe".equals(resolvedPlace)||!CafeService.mayManage(w,residentId)||!"closed".equals(w.cafeStatus))return false;
+            if(r.plan!=null)suspend(r,now);
+            moveOrSchedule(w,r,"open_cafe","cafe",null,reason,now,30);
+            return appliedThought(w,r,residentId,reason,null,now);
+        }
+        if("request_drink".equals(action)){
+            if(!"cafe".equals(resolvedPlace)||!"cafe".equals(actor(w,residentId).place())||!availableActions(w,residentId,now).contains("request_drink"))return false;
+            Plan current=r.plan;int before=w.serviceRequests.size();CafeService.request(w,r,now);if(w.serviceRequests.size()==before)return false;
+            if(current==null)moveOrSchedule(w,r,"rest","cafe",w.serviceRequests.getLast().id,"等刚才点的饮料",now,1200);
+            else if(!"rest".equals(current.action())){suspend(r,now);moveOrSchedule(w,r,"rest","cafe",w.serviceRequests.getLast().id,"等刚才点的饮料",now,1200);}
+            return appliedThought(w,r,residentId,reason,w.serviceRequests.getLast().id,now);
+        }
+        if("cafe".equals(resolvedPlace)&&!"open".equals(w.cafeStatus))return false;
+        if("sleep".equals(action)&&!resolvedPlace.equals(TownPlaces.homeOf(residentId)))return false;
         if(Set.of("create","help").contains(action)){Project p=project(w,target);if(p==null||!knows(w,r.id,p.id)||!p.place.equals(resolvedPlace)||Set.of("ready","celebrating").contains(p.status))return false;}
-        if(action.equals("invite")&&(target==null||state(w,target)==null||!actor(w,target).place().equals(actor(w,r.id).place())))return false;
+        if(action.equals("invite")&&(target==null||!canTalkTo(w,residentId,target)))return false;
+        if(action.equals("tend")){
+            if(!"cafe".equals(resolvedPlace)||!CafeService.mayTend(w,residentId))return false;
+            if(target==null)target=CafeService.oldestWaitingRequestId(w);
+            String requestId=target;
+            if(requestId==null||w.serviceRequests.stream().noneMatch(request->requestId.equals(request.id)&&"waiting".equals(request.status)&&"cafe".equals(request.place)))return false;
+            if(r.plan!=null)suspend(r,now);CafeService.beginPreparing(w,target,now);
+        }
+        if(Set.of("offer_assist","offer_delegate","offer_takeover","accept_work").contains(action))return false;
+        if(action.equals("change_work")){if(!changeOccupation(w,residentId,reason,speech,now))return false;return appliedThought(w,r,residentId,reason,null,now);}
         // Model may enrich this resident's current speaking turn; never invent the other party's reply.
         Conversation c=activeConversation(w,residentId);
         if(c!=null) {
@@ -512,12 +657,26 @@ public final class ResidentSimulation {
             for(String listener:c.participantIds)if(!listener.equals(r.id)&&actor(w,listener).place().equals(c.place))
                 memory(w,listener,r.id,"heard",now,c.topicId,actor(w,r.id).name()+"当面说：“"+speech+"”",evidence,6);
             replaceActor(w,r.id,c.place,"talk",speech,now.plusSeconds(24));
-        } else moveOrSchedule(w,r,action,resolvedPlace,target,reason,now,60);
+        } else {
+            if(Set.of("rest","sleep").contains(action)&&r.plan!=null){
+                suspend(r,now);
+                if(!"open".equals(w.cafeStatus)&&"cafe".equals(actor(w,r.id).place())&&TownPlaces.isHome(resolvedPlace)
+                    &&r.suspendedAction!=null&&r.suspendedAction.plan!=null&&PORTABLE_ACTIONS.contains(r.suspendedAction.plan.action())){
+                    Plan paused=r.suspendedAction.plan;
+                    r.suspendedAction.plan=new Plan(paused.id(),paused.action(),TownPlaces.homeOf(r.id),paused.targetId(),paused.reason(),paused.startedAt(),paused.endsAt());
+                }
+            }
+            else if(!"tend".equals(action))r.suspendedAction=null;
+            if(Set.of("work","read","make").contains(action))setLifeIntent(w,r,null,reason,"active",now);
+            int duration="tend".equals(action)?CafeService.PREP_SECONDS:"sleep".equals(action)?sleepDurationSeconds(w,r,now):"rest".equals(action)?1200:Set.of("study","read","work","make").contains(action)?1800:60;
+            moveOrSchedule(w,r,action,resolvedPlace,target,reason,now,duration);
+        }
         if(!evidence.isEmpty())memory(w,r.id,r.id,"reflection",now,r.goal,reason,evidence,7);
         w.modelStatus="模型刚为"+actor(w,r.id).name()+"补充了一个念头";w.revision++;r.revision++;
         event(w,now,"thought",actor(w,r.id).place(),List.of(r.id),actor(w,r.id).name()+"想了想："+reason,target);
         return true;
     }
+    private static boolean appliedThought(CompanionWorld w,ResidentState r,String residentId,String reason,String target,Instant now){w.modelStatus="模型刚为"+actor(w,residentId).name()+"补充了一个念头";w.revision++;r.revision++;event(w,now,"thought",actor(w,r.id).place(),List.of(r.id),actor(w,r.id).name()+"想了想："+reason,target);return true;}
     private static void perceive(CompanionWorld w,ResidentState r,Instant now) {
         Actor a=actor(w,r.id);if(a.activity().equals("walk")||a.activity().equals("sleep"))return;
         boolean detailSensitive=Personality.of(r).sensitivity()>=65;
@@ -540,6 +699,21 @@ public final class ResidentSimulation {
             m.importance()+8.0/(1+Math.max(0,Duration.between(m.at(),now).toMinutes())/10.0)+(Objects.equals(m.topicId(),r.goal)?8:0)).reversed()).limit(10).toList();
     }
     public static ResidentState state(CompanionWorld w,String id){return w.residentStates.stream().filter(r->r.id.equals(id)).findFirst().orElse(null);}
+    public static boolean mayTend(CompanionWorld w,String id){return CafeService.mayTend(w,id);}
+    public static String cafeOperatorId(CompanionWorld w){return CafeService.operatorId(w);}
+    /** Explicit authoring entry point for a future manually designed neighbour.  No simulation path
+     * calls this and there is no automatic migration/recruitment: callers supply their id, name,
+     * role and livelihood description, then the resident gets the same neutral state/home/plan
+     * machinery as everyone else. */
+    public static boolean addResident(CompanionWorld w,String id,String name,String role,String occupation,Instant now){
+        if(id==null||!id.matches("[a-z][a-z0-9-]{1,30}")||name==null||name.isBlank()||role==null||role.isBlank()||occupation==null||occupation.isBlank()||state(w,id)!=null||w.residents.stream().anyMatch(a->a.id().equals(id)))return false;
+        TownPlaces.seed(w);TownPlaces.addHome(w,id);
+        ResidentState r=new ResidentState();r.id=id;r.energy=65;r.social=55;r.curiosity=55;r.mood="刚搬来，还在认路";r.occupation=occupation;r.thought="先熟悉这里，也想找一件能长期做下去的事";r.lastSocialAt=now;r.lastReflectionAt=now;r.energyUpdatedAt=now;r.usualSleepMinute=23*60;r.usualWakeMinute=7*60;r.sleepScheduleSeeded=true;r.revision=1;r.lifeIntent=lifeIntent(w,r,null,occupation,"active",now);r.careerIntent=lifeIntent(w,r,null,occupation,"active",now);
+        for(ResidentState other:w.residentStates)if(!other.id.equals("self")){r.relationships.put(other.id,40);other.relationships.put(id,40);}
+        w.residentStates.add(r);w.residents.add(new Actor(id,name,role,TownPlaces.homeOf(id),"rest","刚搬来，先在住处整理东西",180,260,now.plusSeconds(60)));
+        memory(w,id,id,"seed",now,null,"我刚搬到这条街，想慢慢把“"+occupation+"”过成能维持生活的事，也先允许自己休息和认识邻居。",List.of(),7);
+        schedule(w,r,"rest",TownPlaces.homeOf(id),null,"刚搬来，先在住处整理东西",now,1200);return true;
+    }
     // The avatar is not in w.residents (that list stays exactly the four NPCs the frontend already
     // renders); "self" resolves to w.avatar instead so any resident-facing lookup still finds it.
     public static Actor actor(CompanionWorld w,String id){return "self".equals(id)?w.avatar:w.residents.stream().filter(a->a.id().equals(id)).findFirst().orElseThrow();}
@@ -559,6 +733,7 @@ public final class ResidentSimulation {
     private static void bump(ResidentState owner,String otherId,int delta){owner.relationships.compute(otherId,(k,v)->Math.max(0,Math.min(100,(v==null?40:v)+delta)));}
     private static int scaledDelta(ResidentState owner,int delta){return (int)Math.round(delta*Personality.of(owner).intensity());}
     static void replaceActor(CompanionWorld w,String id,String place,String activity,String label,Instant until){for(int i=0;i<w.residents.size();i++){Actor a=w.residents.get(i);if(a.id().equals(id))w.residents.set(i,new Actor(id,a.name(),a.role(),place,activity,label,a.x(),a.y(),until));}}
+    static void replaceRole(CompanionWorld w,String id,String role){for(int i=0;i<w.residents.size();i++){Actor a=w.residents.get(i);if(a.id().equals(id))w.residents.set(i,new Actor(id,a.name(),role,a.place(),a.activity(),a.label(),a.x(),a.y(),a.until()));}}
     private static void project(CompanionWorld w,String id,String title,String kind,String place,String owner,String object,String description,int needed){Project p=new Project();p.id=id;p.title=title;p.kind=kind;p.place=place;p.ownerId=owner;p.objectKind=object;p.description=description;p.status="idea";p.needed=needed;p.members.add(owner);w.projects.add(p);}
     static String memory(CompanionWorld w,String owner,String source,String type,Instant at,String topic,String text,List<String> evidence,int importance){
         if(type.equals("reflection")){Memory existing=w.memories.stream().filter(m->m.ownerId().equals(owner)&&m.sourceType().equals(type)&&m.text().equals(text)).findFirst().orElse(null);if(existing!=null)return existing.id();}
@@ -613,13 +788,19 @@ public final class ResidentSimulation {
         for(ResidentState r:w.residentStates) {
             if(r.id.equals("self"))continue;
             Actor a=actor(w,r.id);
-            if(a.place().equals("home"))replaceActor(w,r.id,TownPlaces.homeOf(r.id),a.activity(),a.label(),a.until());
-            if(r.positionId==null||TownPlaces.position(w,r.positionId)==null)TownPlaces.claim(w,r.id,actor(w,r.id).place(),null,now);
+            if(a.place().equals("home")){
+                String home=TownPlaces.homeOf(r.id);replaceActor(w,r.id,home,a.activity(),a.label(),a.until());
+                // A pre-place save can say "sleeping at home" while its old flat plan still points
+                // at the shared cafe.  The visible, concrete old action wins during repair; without
+                // this it immediately walks the resident back out of their newly repaired home.
+                if("sleep".equals(a.activity()))r.plan=new Plan("legacy-sleep-"+r.id,"sleep",home,null,a.label(),now,a.until());
+            }
+            if(r.positionId==null||TownPlaces.position(w,r.positionId)==null){String place=actor(w,r.id).place();TownPlaces.claim(w,r.id,place,r.plan==null?null:preferredKind(r.plan.action(),place),now);}
         }
         if(w.avatar!=null) {
             if(w.avatar.place().equals("home"))w.avatar=new Actor(w.avatar.id(),w.avatar.name(),w.avatar.role(),TownPlaces.homeOf("self"),w.avatar.activity(),w.avatar.label(),w.avatar.x(),w.avatar.y(),w.avatar.until());
             ResidentState self=state(w,"self");
-            if(self.positionId==null||TownPlaces.position(w,self.positionId)==null)TownPlaces.claim(w,"self",w.avatar.place(),null,now);
+            if(self.positionId==null||TownPlaces.position(w,self.positionId)==null)TownPlaces.claim(w,"self",w.avatar.place(),Set.of("focus","study").contains(w.avatar.activity())&&TownPlaces.isHome(w.avatar.place())?"desk":null,now);
         }
     }
     /** The one legacy WorldObject that used to advertise a "state" nobody ever wrote back: keep it

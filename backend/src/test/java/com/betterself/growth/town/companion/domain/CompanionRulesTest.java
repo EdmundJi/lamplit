@@ -40,7 +40,8 @@ class CompanionRulesTest {
         var tokyo=CompanionRules.join("a","我","Asia/Tokyo",Instant.parse("2026-09-08T16:00:00Z"));
         assertThat(tokyo.period).isEqualTo("night");
         assertThat(tokyo.residents).anyMatch(r->TownPlaces.isHome(r.place()));
-        assertThat(tokyo.residents).anyMatch(r->r.place().equals("cafe"));
+        assertThat(tokyo.cafeStatus).isEqualTo("closed");
+        assertThat(tokyo.residents).noneMatch(r->r.place().equals("cafe"));
     }
     @Test void aModelCannotActOnCancelledIntentOrSomeoneElsesEvidence(){
         var w=world();var r=ResidentSimulation.state(w,"owner");long revision=r.revision;
@@ -83,15 +84,14 @@ class CompanionRulesTest {
         assertThat(reflections.stream().map(m->m.ownerId()+":"+m.text()).toList()).doesNotHaveDuplicates();
         assertThat(reflections).noneMatch(m->m.text().equals("我开始觉得，可以把自己的小愿望交给邻居们一起想；但这只是我现在的感觉。"));
     }
-    @Test void eachResidentSleepsInTheirOwnHomeNotASharedOne(){
-        // Start just before a quiet night so the two non-night-owl residents (student, gardener)
-        // are forced home to sleep within the loop below, regardless of their current energy.
+    @Test void aResidentsSleepDecisionUsesTheirOwnHomeNotASharedOne(){
         var start=Instant.parse("2026-09-08T14:50:00Z"); // 22:50 in Asia/Shanghai
-        var w=CompanionRules.join("sleep-world","我","Asia/Shanghai",start);
+        var w=CompanionRules.join("sleep-world","我","Asia/Shanghai",start,true);
         java.util.Map<String,String> sleepingAt=new java.util.HashMap<>();
-        for(int second=6;second<=3600;second+=6){
-            CompanionRules.advance(w,start.plusSeconds(second));
-            for(var r:w.residentStates)if(r.plan!=null&&r.plan.action().equals("sleep"))sleepingAt.put(r.id,ResidentSimulation.actor(w,r.id).place());
+        for(var r:w.residentStates){
+            if(r.id.equals("self"))continue;
+            assertThat(ResidentSimulation.applyDecision(w,r.id,r.revision,w.intentRevision,"home","sleep",null,"今晚想睡了",null,java.util.List.of(),start)).isTrue();
+            sleepingAt.put(r.id,ResidentSimulation.actor(w,r.id).place());
         }
         assertThat(sleepingAt).isNotEmpty();
         // Each sleeper is in their own bedroom, never the single shared "home" the old bug produced.
@@ -111,6 +111,7 @@ class CompanionRulesTest {
         for(int i=0;i<w.residents.size();i++){var a=w.residents.get(i);
             if(a.id().equals("gardener"))w.residents.set(i,new CompanionWorld.Actor(a.id(),a.name(),a.role(),"cafe","observe",a.label(),a.x(),a.y(),now.plusSeconds(200)));}
         TownPlaces.position(w,"cafe-worktable").capacity=0; // the shared table is out
+        for(int index=2;index<=6;index++)TownPlaces.position(w,"cafe-window-"+index).capacity=0;
         TownPlaces.claim(w,"student","cafe","seat",now); // the window seat's real owner is using it
         var gardener=ResidentSimulation.state(w,"gardener");gardener.plan=null;
         boolean applied=ResidentSimulation.applyDecision(w,"gardener",gardener.revision,w.intentRevision,"cafe","study",null,"想去咖啡馆看看","",

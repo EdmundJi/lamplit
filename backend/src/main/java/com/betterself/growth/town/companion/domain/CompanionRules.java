@@ -38,7 +38,8 @@ public final class CompanionRules {
             Instant ended=w.focus.endsAt(); w.focus=null;
             finishActive(w,"专注时间到了，先伸个懒腰。Todo 留给你确认。", "done");
             diary(w,ended,"安静地专注了一会儿。时间到了，接下来喝水休息；任务是否完成，仍由你决定。");
-            w.avatar=actor("self",w.name,"小街住民","cafe","water","喝杯水，松松肩膀",now.plusSeconds(60));
+            String place="open".equals(w.cafeStatus)?"cafe":TownPlaces.homeOf("self");
+            w.avatar=actor("self",w.name,"小街住民",place,"water","喝杯水，松松肩膀",now.plusSeconds(60));
             placeAvatar(w,now);
         }
         if(w.focus==null && !now.isBefore(w.avatar.until())) {
@@ -69,7 +70,7 @@ public final class CompanionRules {
     private static void start(CompanionWorld w, Intent i, Instant now) {
         String action=i.resolvedKind==null?i.kind:i.resolvedKind;
         i.status="active"; i.feedback="focus".equals(action)?"去咖啡馆坐好，陪你专注。":"好，就去做这件事。";
-        String place=switch(action){case "home","rest"->TownPlaces.homeOf("self");case "flowers"->"garden";case "walk","ponder"->"street";default->"cafe";};
+        String place=switch(action){case "home","rest"->TownPlaces.homeOf("self");case "flowers"->"garden";case "walk","ponder"->"street";default->"open".equals(w.cafeStatus)?"cafe":TownPlaces.homeOf("self");};
         String label=switch(action){case "focus"->"在公共书桌安静专注";case "visit"->"去咖啡馆看看邻居在做什么";case "study"->"找个位置，安静读几页书";case "ponder"->"在街边想一想，还没决定怎么实现这个念头";case "home"->"回到住处，整理今天";case "rest"->"靠一会儿，让脑子放空";case "flowers"->"看看刚开的花";case "water"->"喝一杯温水";default->"沿着小街慢慢散步";};
         Instant until=now.plusSeconds(action.equals("focus")?i.durationMinutes*60L:120);
         if(action.equals("focus")) w.focus=new Focus(i.taskId,now,until);
@@ -83,7 +84,7 @@ public final class CompanionRules {
      * it the same way they would with each other. */
     private static void placeAvatar(CompanionWorld w, Instant now) {
         ResidentSimulation.ensureAvatarState(w);
-        String kind=switch(w.avatar.activity()){case "focus","study"->"seat";case "home","rest"->"bed";case "flowers"->"plot";case "walk","ponder"->"bench";default->null;};
+        String kind=switch(w.avatar.activity()){case "focus","study"->TownPlaces.isHome(w.avatar.place())?"desk":"seat";case "home","rest"->"bed";case "flowers"->"plot";case "walk","ponder"->"bench";default->null;};
         TownPlaces.claim(w,"self",w.avatar.place(),kind,now);
     }
     private static void finishActive(CompanionWorld w,String feedback,String status) {
@@ -93,7 +94,7 @@ public final class CompanionRules {
         int hour=now.atZone(ZoneId.of(w.timezone)).getHour();
         int phase=(int)((now.getEpochSecond()/120)%8);
         String action=(hour<7||hour>=23)?"home":switch(phase){case 0->"water";case 1->"rest";case 2->"walk";case 3->"flowers";default->"study";};
-        String place=switch(action){case "home","rest"->TownPlaces.homeOf("self");case "flowers"->"garden";case "walk","ponder"->"street";default->"cafe";};
+        String place=switch(action){case "home","rest"->TownPlaces.homeOf("self");case "flowers"->"garden";case "walk","ponder"->"street";default->"open".equals(w.cafeStatus)?"cafe":TownPlaces.homeOf("self");};
         String label=switch(action){case "home"->"回家休息，灯光轻轻暗下来";case "rest"->"歇一小会儿";case "water"->"记得给自己倒杯水";case "walk"->"出门透透气";case "flowers"->"在花园看看新叶";default->"翻开书，安静读上几页";};
         if(!w.avatar.activity().equals(action)) diary(w,now,label+"。");
         Actor a=actor("self",w.name,"小街住民",place,action,label,now.plusSeconds(120));

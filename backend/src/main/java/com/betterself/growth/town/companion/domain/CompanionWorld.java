@@ -40,6 +40,24 @@ public class CompanionWorld {
      * made of the owner, in real time, allowed to break at any link. Self-healing on an old save via
      * the empty-list default - nobody had made a request yet. */
     public List<ServiceRequest> serviceRequests = new ArrayList<>();
+    /** The resident currently responsible for deciding whether the cafe opens.  It starts with the
+     * original owner, but is deliberately world state rather than an id baked into the rules: a
+     * signed handover can change it and an old save simply heals back to "owner". */
+    public String cafeOperatorId = "owner";
+    /** An operator may decide they are done before anyone takes over.  A closed counter is a valid
+     * social outcome, not an error that silently revives the old proprietor. */
+    public boolean cafeOperating = true;
+    /** A resident-configurable daily custom expressed in local minutes.  These are schedule cues for
+     * the operator's model, never a timer that silently opens or closes the shop on their behalf. */
+    public int cafeOpenMinute = 9 * 60;
+    public int cafeCloseMinute = 21 * 60;
+    /** Physical state, changed only by an operator action (or inferred once while repairing an old
+     * save). `closing` means an actual closing announcement happened and no new orders are accepted. */
+    public String cafeStatus;
+    public Instant cafeStatusChangedAt;
+    /** Small, human-scale agreements around the counter.  They are not contracts or an economy:
+     * their only job is to distinguish an offer from both people actually agreeing to a responsibility. */
+    public List<WorkArrangement> workArrangements = new ArrayList<>();
     /** One resident's ask for a drink from the owner and everything that happened to it. `status`
      * moves waiting -> preparing -> delivered -> consumed, or off the happy path to abandoned (gave up
      * or left before being served) or cold (delivered but never picked up) - both broken-link outcomes
@@ -52,7 +70,34 @@ public class CompanionWorld {
     }
     public static class ResidentState {
         public String id, mood, goal, thought, desiredAction, positionId;
+        /** Reserved for an explicitly remembered livelihood concern.  There is deliberately no
+         * clock-driven work quota or automatic "unemployed" penalty behind this value. */
+        public double livelihoodPressure;
+        /** Their current self-description of how they keep a place in the town.  It is allowed to
+         * change; no map building or income ledger is implied by the text. */
+        public String occupation;
+        /** The resident's coarse, self-formed through-line. It deliberately outlives the short
+         * {@link #plan}: walking to the cafe, stopping to make a drink, and returning to the work
+         * all belong to one intention rather than three unrelated choices. Old saves leave this null
+         * and ResidentSimulation fills it from the existing goal on their next advance. */
+        public LifeIntent lifeIntent;
+        /** Long-running livelihood direction.  Unlike lifeIntent it is never overwritten merely
+         * because a neighbour's project becomes the next short action. */
+        public LifeIntent careerIntent;
+        /** A real action that was set aside by a world reaction. The action itself is kept here,
+         * including its remaining duration, rather than regenerated after the interruption. */
+        public SuspendedAction suspendedAction;
+        /** Destination-action metadata while the current plan is travel. The action plan remains the
+         * only physical authority; these fields simply preserve what should begin on arrival. */
+        public int desiredDurationSeconds;
         public double energy, social, curiosity;
+        /** Last instant included in elapsed-time energy integration. Old saves leave it null and the
+         * next simulation step starts the clock without inventing a missing night's physiology. */
+        public Instant energyUpdatedAt;
+        /** Hand-authored daily custom. It becomes a model-visible time cue, never an automatic sleep
+         * command; the seeded flag allows midnight (0) to remain a valid configured minute. */
+        public boolean sleepScheduleSeeded;
+        public int usualSleepMinute, usualWakeMinute;
         /** This resident's own personality: writable, per-instance state, exactly like energy/social/
          * curiosity above - not a lookup by id. {@code personalitySeeded} is an explicit flag, not a
          * sentinel value, precisely so a legitimately low score (e.g. the artist's low
@@ -104,6 +149,24 @@ public class CompanionWorld {
         public Map<String,Boolean> anticipatesRefill = new LinkedHashMap<>();
         public Map<String,Instant> lastServedAt = new LinkedHashMap<>();
         public Map<String,Instant> lastProactiveAt = new LinkedHashMap<>();
+    }
+    /** A sparse resident-owned purpose, separate from the timer-backed action currently underway. */
+    public static class LifeIntent {
+        public String id, goalId, purpose, status;
+        public Instant formedAt, updatedAt, lastActedAt;
+    }
+    /** A paused action keeps both its remaining timer and travel's deferred destination action. */
+    public static class SuspendedAction {
+        public Plan plan;
+        public String desiredAction;
+        public int desiredDurationSeconds;
+        public Instant pausedAt;
+    }
+    public static class WorkArrangement {
+        public String id, kind, place, proposerId, workerId, status, note;
+        public Instant proposedAt, acceptedAt, endedAt;
+        public List<String> proposerEvidenceIds = new ArrayList<>();
+        public List<String> workerEvidenceIds = new ArrayList<>();
     }
     /** A place a resident can be: the three shared places, or one resident's own home. `ownerId` is
      * null for a shared place. */
