@@ -60,15 +60,13 @@ public final class ResidentSeed {
      * threshold - its only job is to shape what a resident writes into memory and what they avoid
      * saying, the same way the docs describe it.
      *
-     * <p>There is deliberately no field on {@link ResidentState} to hold this yet - CompanionWorld.java
-     * belongs to another agent this wave. The next wave should add parallel String fields there (for
-     * example {@code personaWant}, {@code personaOught}, {@code personaActing}, {@code
-     * personaMemoryBias}, {@code personaLooseningNote}) and self-heal them from {@link #narrative} the
-     * same way {@code occupation} is self-healed above in {@link #reconcileLife} and personality is
-     * self-healed in {@link Personality#of} - then read them into ResidentMind.Context alongside
-     * occupation so a resident's model actually sees its own voice, not just its job title.
+     * <p>There is deliberately no field on {@link ResidentState} to hold this - unlike {@code
+     * occupation} it never changes per world and needs no self-healing, so ResidentDirector simply
+     * calls {@link #narrative} fresh every {@code perspective()} and copies the text into its own
+     * {@code ResidentMind.Context.PersonaView}, leaving CompanionWorld.java (another agent's file this
+     * wave) untouched.
      */
-    record PersonalityNarrative(String wantSelf,String oughtSelf,String actingSelf,String memoryBias,String looseningNote) {}
+    public record PersonalityNarrative(String wantSelf,String oughtSelf,String actingSelf,String memoryBias,String looseningNote) {}
 
     private static final Map<String,PersonalityNarrative> NARRATIVES = Map.of(
         "owner", new PersonalityNarrative(
@@ -109,10 +107,11 @@ public final class ResidentSeed {
             "一次次替别人圆场，却发现没人注意到她自己怎么样，可能来一次突然的、不像她的爆发——这条最有戏剧性，必须来自累积，不能预写。周野说破，阿满圆场：这一对是这条街新的日常张力来源。")
     );
 
-    /** Package-visible until {@link ResidentState} grows the fields described above; see this
-     * class's {@link PersonalityNarrative} javadoc. Returns {@code null} for an id this batch did not
-     * author text for (the avatar, or any future manually-added resident) rather than guessing. */
-    static PersonalityNarrative narrative(String residentId){return NARRATIVES.get(residentId);}
+    /** Public so {@code application.ResidentDirector} can read it straight into {@code
+     * ResidentMind.Context} without CompanionWorld.java growing any persona fields - see this class's
+     * {@link PersonalityNarrative} javadoc. Returns {@code null} for an id this batch did not author
+     * text for (the avatar "self", or any future manually-added resident) rather than guessing. */
+    public static PersonalityNarrative narrative(String residentId){return NARRATIVES.get(residentId);}
     public static void initialize(CompanionWorld w,Instant now) {
         if(w.simulationVersion>=2)return;
         long initialRevision=w.revision;

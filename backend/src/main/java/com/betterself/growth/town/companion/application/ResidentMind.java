@@ -53,7 +53,7 @@ public interface ResidentMind {
                    List<String> salientPerceptions,List<String> routineCues,List<MemoryView> memories,List<ActorView> nearby,
                    List<WorldObjectView> visibleObjects,List<KnownPlaceView> knownPlaces,List<KnownProject> knownProjects,List<TurnView> conversation,
                    LifeIntentView lifeIntent,LifeIntentView careerIntent,PlanView currentPlan,List<WorkArrangementView> workArrangements,
-                   String occupation,List<String> availableActions,String cafeOperatorId,List<String> cafeRoleFacts,boolean canTend,List<ServiceRequestView> visibleServiceRequests,
+                   String occupation,PersonaView persona,List<String> availableActions,String cafeOperatorId,List<String> cafeRoleFacts,boolean canTend,List<ServiceRequestView> visibleServiceRequests,
                    String cafeStatus,String cafeScheduleCue,String cafeNotice,PausedActionView pausedAction,PortableActionView portableAction) {
         /** Source-compatible constructor for existing model fixtures.  New runtime contexts always
          * use the qualitative canonical shape above; legacy numeric arguments are intentionally
@@ -63,10 +63,23 @@ public interface ResidentMind {
                        java.util.Map<String,Integer> relationships,List<Memory> memories,List<Actor> nearby,
                        List<WorldObject> visibleObjects,List<KnownProject> knownProjects,List<Turn> conversation){
             this(residentId,localTime,weather,actorView(self),goal,List.of(),List.of(),memoryViews(memories),actorViews(nearby),
-                objectViews(visibleObjects),List.of(),knownProjects,turnViews(conversation),null,null,null,List.of(),null,
+                objectViews(visibleObjects),List.of(),knownProjects,turnViews(conversation),null,null,null,List.of(),null,null,
                 List.of("observe","rest","study","work","read","make","sleep","change_work","propose"),null,List.of(),false,List.of(),null,null,null,null,null);
         }
     }
+    /**
+     * The three-layer personality text (see {@code ResidentSeed.PersonalityNarrative}), copied
+     * verbatim for whichever six residents have it authored - {@code null} for the avatar ("self")
+     * and for any resident this batch never wrote text for, never guessed. Text only, never a score:
+     * nothing here may gate {@code availableActions} or any other capability, and it never carries a
+     * single character of user input (the avatar's context always sends {@code null}). {@code
+     * wantSelf}/{@code oughtSelf} explain a resident's own motive to the model, never as an order;
+     * {@code actingSelf} shapes how {@code reason}/{@code speech} are said, not what they contain;
+     * {@code memoryBias} is what this resident tends to write into a memory of the same event; {@code
+     * looseningNote} is the repeated real experience after which they let the usually-collected side
+     * show a little.
+     */
+    record PersonaView(String wantSelf,String oughtSelf,String actingSelf,String memoryBias,String looseningNote) {}
     record ActorView(String id,String name,String role,String place,String activity,String label) {}
     record MemoryView(String id,String ownerId,String sourceId,String sourceType,String at,String text,String topicId,List<String> evidenceIds) {}
     record TurnView(String speakerId,String text,String at,String source,String emoji) {}
