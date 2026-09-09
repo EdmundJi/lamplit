@@ -46,6 +46,15 @@ public class CompanionWorld {
      * bookkeeping - a timestamp, never sent to any model - self-healing on an old save via the empty
      * map default, exactly like {@link #serviceRequests} above. */
     public Map<String,Instant> encounterCooldowns = new LinkedHashMap<>();
+    /** "上次看到他时的样子" - for a pair where one of them has already decided NOT to approach the
+     * other, what the scene looked like at the moment of that decision, keyed by the same sorted
+     * "a:b" pair key. While the scene still looks like this, the rules do not put the question again:
+     * having decided to leave someone alone, you do not reconsider every N minutes, you reconsider
+     * when something about them changes. Dropped the moment the two are no longer standing in the
+     * same place, so walking out and coming back is a fresh sight rather than the same one.
+     * Simulation-internal, never sent to any model, self-healing on an old save via the empty map
+     * default. See ResidentSimulation's "encounterFingerprint". */
+    public Map<String,String> declinedEncounters = new LinkedHashMap<>();
     /** Face-to-face facts waiting for the resident to decide what, if anything, to do about them.
      * The rules put two people in front of each other and stop there (docs/04's 相遇是外部事实); this
      * queue is that fact, not a decision. Generative Agents asks the same question of every

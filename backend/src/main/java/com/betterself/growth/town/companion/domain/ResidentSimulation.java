@@ -244,6 +244,7 @@ public final class ResidentSimulation {
         // The model is each resident's decision-maker. Rule-only fallback completes already approved
         // physical work but does not manufacture a reflection, social choice or new intention.
         expirePendingEncounters(w,at);
+        expireDeclinedEncounters(w);
         CafeService.finishClosingIfEmpty(w,at);
         syncLegacyObjects(w);
     }
@@ -715,6 +716,11 @@ public final class ResidentSimulation {
             String key=pairKey(resident.id,other.id);
             Instant last=w.encounterCooldowns.get(key);
             if(last!=null&&Duration.between(last,at).getSeconds()<encounterCooldownSeconds(resident.id,other.id))continue;
+            // Already decided to leave this person alone, and nothing about the scene has changed
+            // since. Not a timer - a re-noticing. See encounterFingerprint.
+            String seen=encounterFingerprint(w,resident.id,other.id,place);
+            if(seen.equals(w.declinedEncounters.get(key)))continue;
+            w.declinedEncounters.remove(key);
             w.encounterCooldowns.put(key,at);
             // The rules stop here. Standing in front of someone is a fact; what to do about it is the
             // resident's own call, answered by a model through applyReaction below.
@@ -780,9 +786,50 @@ public final class ResidentSimulation {
      * ResidentReflectionTest's own beliefs already use, e.g. "artist:seat:owner") and is not
      * superseded. When one is found, its own {@code importance} (1-10, a structured field, not text)
      * scales how much rarer the habit becomes - a belief the resident holds strongly dampens it harder
-     * than an offhand one. This can only ever weaken a habit, never strengthen it: telling the two
-     * directions apart would mean reading what the belief actually concludes, which is exactly the
-     * text-understanding the rules must never do (see this batch's own report for that boundary). */
+     * than an offhand one. This can only ever weaken a habit, never strengthen it, whatever the belief
+     * actually concludes - partly because telling the two directions apart would mean reading the text,
+     * which is exactly the understanding the rules must never do, and partly because that is the
+     * honest reading anyway: a reflex you have noticed in yourself and formed a standing view about
+     * has stopped being entirely automatic, whether or not you approve of it. Which is the whole point
+     * of the layer above - see {@link #habitTraits} for the half that lets a resident notice at all. */
+    /** One of this resident's own default reflexes, in their own words, paired with the exact
+     * supersedesKey a belief has to carry to stand over it. This is the half of the loop that was
+     * missing: the rules could already read a belief filed under "habit:&lt;居民&gt;:&lt;习惯&gt;" and turn
+     * the matching habit down ({@link #habitBeliefDamping}), but nothing ever told a resident that
+     * such a key existed, so no resident ever wrote one and the whole path was unreachable.
+     * <p>The description is deliberately the reflex as an observer would describe it - what this
+     * person tends to do - and says nothing about what filing a belief under the key will DO. A
+     * resident who is told "say this and you will do it less" is following an instruction; one who is
+     * shown what they keep doing and reaches their own conclusion about it is the thing this whole
+     * layer is for. Which of these ever gets written, and in which direction, stays the resident's. */
+    public record HabitTrait(String key,String description) {}
+    private static final Map<String,List<String[]>> HABIT_TRAITS = Map.of(
+        "owner",List.of(new String[]{"tidy","心里不痛快的时候不说出来，去擦桌子、把杯子重新摆一遍"},
+                        new String[]{"mind_cafe","一闲下来就想回店里看看，哪怕没人叫"}),
+        "student",List.of(new String[]{"quiet","被打断之后就不再多说，把书翻回原来那页接着看"},
+                          new String[]{"study_cafe","没别的安排就往咖啡馆靠窗那个位置坐，点杯常喝的看书"}),
+        "artist",List.of(new String[]{"hide","刚做完一件东西，反而先转过去放好，不急着拿给谁看"},
+                         new String[]{"seek_inspiration","想不出画什么的时候不硬画，去咖啡馆看人"}),
+        "gardener",List.of(new String[]{"handwork","旁边有人的时候不搭话，先去把手边松掉的东西钉紧"},
+                           new String[]{"tend_garden","没事就往花园去，手上顺带点东西"},
+                           new String[]{"deliver_seedling","想找人的时候不空手去，带一株苗"}),
+        "fixer",List.of(new String[]{"check","路过就伸手推一推、试试稳不稳，话不多"},
+                        new String[]{"check_cafe","闲下来往店里走，看看有没有要搭把手的"}),
+        "weaver",List.of(new String[]{"smooth","气氛一僵就先动手挪东西，替人找个台阶，不点破"},
+                         new String[]{"be_around_people","没什么事就往人多的地方坐"}));
+    /** What to offer this resident when they are reflecting. Empty for anyone with no default reflexes
+     * of their own (the avatar, above all: its habits are the user's, not ours to name). */
+    public static List<HabitTrait> habitTraits(String residentId){
+        return HABIT_TRAITS.getOrDefault(residentId,List.of()).stream()
+            .map(t->new HabitTrait("habit:"+residentId+":"+t[0],t[1])).toList();
+    }
+    /** A belief may only ever stand over one of the reflecting resident's OWN habits. Anything else
+     * under the reserved prefix - somebody else's habit, or a habit nobody has - is not a belief about
+     * oneself and is refused rather than quietly filed. */
+    private static boolean validHabitKey(String residentId,String supersedesKey){
+        return !supersedesKey.startsWith("habit:")
+            ||habitTraits(residentId).stream().anyMatch(t->t.key().equals(supersedesKey));
+    }
     private static double habitBeliefDamping(CompanionWorld w,String residentId,String habitId){
         String key="habit:"+residentId+":"+habitId;
         return w.memories.stream()
@@ -1068,13 +1115,36 @@ public final class ResidentSimulation {
      * walk up to someone ten minutes after noticing them. Also the window inside which a rule-only
      * world (no model at all) falls back to greeting on the resident's behalf. */
     private static final long PENDING_ENCOUNTER_TTL_SECONDS = 90;
-    /** After deciding NOT to approach someone, this is how long before the rules will point the same
-     * pair out to each other again. Shorter than {@link #ENCOUNTER_COOLDOWN_SECONDS} - "not right
-     * now" is a smaller statement than "we just talked" - but not by much, and twelve minutes was
-     * far too short: a measured run asked one pair the same question six times in a row and got back
-     * the same sentence almost verbatim each time. Nobody reconsiders saying hello to the same person
-     * every twelve minutes; having decided to leave someone alone, you leave them alone for a while. */
-    public static final long DECLINED_ENCOUNTER_COOLDOWN_SECONDS = 30*60;
+    /** What one resident can see of another across a room, as one comparable string: where they both
+     * are, what the other is doing, and what the looker themself is doing. This is the whole basis on
+     * which a declined encounter gets asked again.
+     * <p>It replaces a thirty-minute declined-encounter cooldown, and the reason is that the thirty
+     * minutes was ours, not the town's. People do not re-decide whether to say hello on a timer; they
+     * re-notice someone when something changes - he closes his book and stands up, he walks in off
+     * the street, I finish what I was doing and look up. Generative Agents has the same shape: a
+     * reaction is asked of an *observation*, and a scene that has not changed produces no new
+     * observation to react to. An earlier twelve-minute version asked one pair the same question six
+     * times in a row and got back the same sentence almost verbatim; widening it to thirty only made
+     * the same wrong thing rarer.
+     * <p>Deliberately only observable things. No {@code energy}, no {@code social}, no
+     * {@code lastSocialAt} - not because this string ever reaches a model (it does not; it is
+     * simulation bookkeeping like every other cooldown here) but because a change nobody in the room
+     * could see is not a reason for anybody in the room to look up again. */
+    private static String encounterFingerprint(CompanionWorld w,String residentId,String otherId,String place){
+        return place+"|"+actor(w,residentId).activity()+"|"+actor(w,otherId).activity();
+    }
+    /** Drops the "I already decided to leave them alone" impression for any pair that is no longer
+     * standing in the same place. Without this, someone could walk out, come back doing the exact
+     * same thing, and be filtered out as unchanged - but walking back in is precisely the case
+     * ("他从街上走进来了") this whole mechanism exists to catch. The impression lasts as long as the
+     * two are in the room together, and no longer. */
+    private static void expireDeclinedEncounters(CompanionWorld w){
+        w.declinedEncounters.keySet().removeIf(key->{
+            String[] pair=key.split(":",2);
+            if(pair.length!=2||state(w,pair[0])==null||state(w,pair[1])==null)return true;
+            return !actor(w,pair[0]).place().equals(actor(w,pair[1]).place());
+        });
+    }
 
     /** Drops face-to-face facts that reality has overtaken: one of them walked off, one of them is
      * already talking to somebody, or nobody got round to answering in time. A model outage must not
@@ -1143,7 +1213,11 @@ public final class ResidentSimulation {
             default->{
                 // Not approaching is still something that happened to this resident, and it is the
                 // resident's own reason for it that gets written down, not a rule's guess.
-                w.encounterCooldowns.put(pairKey(resident.id,other.id),now.plusSeconds(DECLINED_ENCOUNTER_COOLDOWN_SECONDS-ENCOUNTER_COOLDOWN_SECONDS));
+                // Not a cooldown: what they looked like when the answer was "not right now". The
+                // rules ask again when that stops being true, and not before.
+                w.encounterCooldowns.remove(pairKey(resident.id,other.id));
+                w.declinedEncounters.put(pairKey(resident.id,other.id),
+                    encounterFingerprint(w,resident.id,other.id,pending.place));
                 memory(w,resident.id,resident.id,"observed",now,null,"在"+placeName(pending.place)+"遇见"+otherName+"，"+reason,evidence,4);
             }
         }
@@ -1563,6 +1637,7 @@ public final class ResidentSimulation {
         for(String evidenceId:evidenceIds)
             if(w.memories.stream().noneMatch(m->m.id().equals(evidenceId)&&m.ownerId().equals(residentId)))return false;
         if(supersedesKey!=null&&(supersedesKey.isBlank()||supersedesKey.length()>80))return false;
+        if(supersedesKey!=null&&!validHabitKey(residentId,supersedesKey))return false;
         // A conclusion that names what it supersedes is, by construction, standing in for the
         // resident's ongoing view of a recurring topic - that is exactly what a belief is (see
         // Memory's doc comment). One that supersedes nothing is a one-off reflection instead. The
