@@ -121,6 +121,31 @@ class JointActionMetricTest {
         assertThat(((List<?>) joint.get("episodes"))).hasSize(1);
     }
 
+    /** The looser reading, and the one the town is far likelier to reach first: two people put their
+     * hands on one project on the same day without ever being there at the same moment. They still
+     * made one thing together, so it is counted - beside the simultaneous number, never folded in. */
+    @SuppressWarnings("unchecked") @Test void twoPeopleBuildingOneThingOnDifferentAfternoonsStillCounts() {
+        CompanionWorld w = world();
+        TimelineCollector collector = new TimelineCollector();
+        w.simulatedAt = T0;
+        contribution(w, "owner", "reading-night", T0);
+        contribution(w, "student", "reading-night", T0.plusSeconds(6 * 3600));
+        contribution(w, "artist", "quiet-corner", T0.plusSeconds(3600)); // one pair of hands only
+        collector.capture(w);
+        Map<String, Object> joint = (Map<String, Object>) MetricsExporter.compute(
+            collector.entries().stream().sorted(java.util.Comparator.comparing(e -> (String) e.get("at"))).toList(),
+            collector, w).get("jointAction");
+        assertThat((Map<String, Integer>) joint.get("sharedBuildsPerDay")).containsEntry("2026-09-09", 1);
+        assertThat((Map<String, Integer>) joint.get("distinctContributorsPerProject"))
+            .containsEntry("reading-night", 2).containsEntry("quiet-corner", 1);
+        assertThat(joint.get("chosenTotal")).as("they were never there at the same time").isEqualTo(0);
+    }
+
+    private void contribution(CompanionWorld w, String actorId, String projectId, Instant at) {
+        w.events.add(new CompanionWorld.WorldEvent("ev-" + w.events.size(), at, "contribution", "cafe",
+            List.of(actorId), actorId + " 添了一笔", projectId));
+    }
+
     @Test void theTargetIsCarriedInTheMetricSoARunEitherMeetsItOrVisiblyDoesNot() {
         CompanionWorld w = world();
         Map<String, Object> joint = joint(w, 10);

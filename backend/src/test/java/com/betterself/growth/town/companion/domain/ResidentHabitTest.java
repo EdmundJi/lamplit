@@ -153,6 +153,75 @@ class ResidentHabitTest {
         assertThat(owner.lastHabitAt).as("a standing, importance-9 belief damps the habit far past this window").doesNotContainKey("tidy");
     }
 
+    // ---- two people on one thing: the reflex half ------------------------------------------------
+
+    /** Steps one continuous clock forward - a habit that walks somebody somewhere and then works
+     * there needs the trip AND the work to run out, so the simulated time cannot be rewound between
+     * the two the way {@link #runUntilHabitFires} would if it were called first. */
+    private void runUntilContribution(CompanionWorld w, ResidentState r, String habitId, java.util.function.BooleanSupplier landed) {
+        Instant t = DAY;
+        for (int minute = 0; minute < 900 && !landed.getAsBoolean(); minute++) {
+            t = t.plusSeconds(60);
+            ResidentSimulation.step(w, t);
+        }
+    }
+
+    /** The measurement this exists for: across a full simulated day, `create` was offered to residents
+     * 216 times and chosen 0, `help` 216 and 0, `invite` 233 and 0, `join` 233 and 0. Nothing in this
+     * town was ever worked on by more than one person, so nothing communal was ever finished - a
+     * communal project stops dead at SOLO_PROGRESS_CAP until a second pair of hands arrives. */
+    @Test void theOwnerLaysDownTheFirstStrokeOfHisOwnGatheringWithoutBeingAsked() {
+        // An idea nobody has started is an idea nobody can join, and the person with the least excuse
+        // is whoever wanted it.
+        CompanionWorld w = world("own-gathering");
+        ResidentState owner = ResidentSimulation.state(w, "owner");
+        owner.plan = null; owner.suspendedAction = null;
+        ResidentSimulation.replaceActor(w, "owner", "cafe", "idle", "在店里", DAY);
+        CompanionWorld.Project gathering = w.projects.stream().filter(p -> "owner".equals(p.ownerId)).findFirst().orElseThrow();
+        assertThat(gathering.progress).as("nothing has been done to it yet").isZero();
+
+        runUntilContribution(w, owner, "own_gathering", () -> gathering.progress > 0);
+        assertThat(owner.lastHabitAt).as("the habit fired").containsKey("own_gathering");
+        assertThat(gathering.progress).as("his own thing is finally under way").isPositive();
+        assertThat(gathering.contributors).contains("owner");
+        assertThat(ResidentSimulation.unexplainedDeeds(w, "owner"))
+            .as("a reflex leaves a deed for him to account for later, never a rule-written motive")
+            .anyMatch(d -> "create".equals(d.action));
+    }
+
+    @Test void theFixerActuallyLendsTheHandHisOwnHabitSaysHeCameToLend() {
+        // placeHabitCheckCafe already says, in his own words, that he goes to the shop "看看有没有
+        // 需要搭把手的" - and then observes. This is the step it stopped one short of.
+        CompanionWorld w = world("lend-a-hand");
+        ResidentState fixer = ResidentSimulation.state(w, "fixer");
+        CompanionWorld.Project shared = w.projects.stream()
+            .filter(p -> "cafe".equals(p.place) && !"fixer".equals(p.ownerId)).findFirst().orElseThrow();
+        // He has to know about it before he can walk past it - the ordinary knowledge path.
+        ResidentSimulation.state(w, "fixer").knownProjects.put(shared.id,
+            new CompanionWorld.ProjectKnowledge(shared.id, shared.place, shared.status, shared.progress, DAY, shared.ownerId));
+        ResidentSimulation.memory(w, "fixer", shared.ownerId, "heard", DAY, shared.id,
+            "听说店里那件「" + shared.title + "」还没弄完。", List.of(), 5);
+        shared.progress = 40; shared.status = "active";
+        if (!shared.contributors.contains(shared.ownerId)) shared.contributors.add(shared.ownerId);
+        fixer.plan = null; fixer.suspendedAction = null;
+        ResidentSimulation.replaceActor(w, "fixer", TownPlaces.homeOf("fixer"), "idle", "在家里", DAY);
+
+        runUntilContribution(w, fixer, "lend_a_hand", () -> shared.contributors.contains("fixer"));
+        assertThat(fixer.lastHabitAt).as("the habit fired").containsKey("lend_a_hand");
+        assertThat(shared.contributors).as("a second pair of hands, which is the whole point").contains("fixer");
+        assertThat(shared.contributors.size()).isGreaterThanOrEqualTo(2);
+    }
+
+    @Test void theFixerNeverLendsAHandToHisOwnThingOrToOneAlreadyFinished() {
+        CompanionWorld w = world("lend-a-hand-limits");
+        ResidentState fixer = ResidentSimulation.state(w, "fixer");
+        for (CompanionWorld.Project p : w.projects) { p.status = "ready"; p.progress = 100; }
+        fixer.plan = null; fixer.suspendedAction = null;
+        ResidentSimulation.replaceActor(w, "fixer", "cafe", "idle", "在店里", DAY);
+        assertThat(runUntilHabitFires(w, fixer, "lend_a_hand", DAY, () -> {}))
+            .as("there is nothing unfinished to put a hand on").isFalse();
+    }
+
     // ---- the other half of item 3: a resident has to be able to NAME the habit ---------------------
 
     /** The damping rule above could already read a belief filed under "habit:<居民>:<习惯>". Nothing

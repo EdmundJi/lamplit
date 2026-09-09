@@ -401,7 +401,12 @@ public class ResidentDirector {
         // Retrieval follows the unfinished thread and the people actually in front of this resident,
         // rather than treating the current public project as their entire reason to remember.
         var memories=CompanionRecall.retrieve(w.memories,r.id,intentText+" "+planText+" "+people,now,10);
-        var known=w.projects.stream().filter(p->ResidentSimulation.knows(w,r.id,p.id)).map(p->{var view=r.knownProjects.get(p.id);return new ResidentMind.KnownProject(p.id,p.title,ResidentSimulation.knownPlace(r,p),projectStage(view==null?null:view.status(),view==null?0:view.progress()));}).toList();
+        var known=w.projects.stream().filter(p->ResidentSimulation.knows(w,r.id,p.id)).map(p->{
+            var view=r.knownProjects.get(p.id);
+            String startedBy=p.ownerId==null||p.ownerId.equals(r.id)?null:ResidentSimulation.actor(w,p.ownerId).name();
+            return new ResidentMind.KnownProject(p.id,p.title,ResidentSimulation.knownPlace(r,p),
+                projectStage(view==null?null:view.status(),view==null?0:view.progress(),ResidentSimulation.takesMoreThanOnePerson(p)),startedBy);
+        }).toList();
         var knownPlaces=knownPlaces();var cafeRoleFacts=cafeRoleFacts(w,r.id);
         var arrangements=w.workArrangements.stream().filter(a->Set.of("proposed","active").contains(a.status))
             .filter(a->r.id.equals(a.proposerId)||r.id.equals(a.workerId)||r.id.equals(w.cafeOperatorId))
@@ -440,7 +445,17 @@ public class ResidentDirector {
         return "见了会有些戒备";
     }
     private static String instant(Instant value){return value==null?null:value.toString();}
-    private static String projectStage(String status,int progress){if(Set.of("ready","celebrating").contains(status))return "已经完成";return progress<=0?"刚开始":progress<45?"做了一些":progress<80?"进行中":"大体完成";}
+    /** How far along a project is, in the words the resident who knows it would use. The middle case
+     * is the one that matters and the one that used to be missing: a project that takes more than one
+     * person and has reached {@link ResidentSimulation#SOLO_PROGRESS_CAP} has not "大体完成" - it has
+     * stopped, and it will stay stopped forever unless somebody else puts their hands on it. Mapping
+     * that state to a cheerful "进行中" told every resident in town that the thing was moving along
+     * fine without them, which is the single reason a measured day finished nothing. */
+    private static String projectStage(String status,int progress,boolean takesMoreThanOnePerson){
+        if(Set.of("ready","celebrating").contains(status))return "已经完成";
+        if(takesMoreThanOnePerson&&progress>=ResidentSimulation.SOLO_PROGRESS_CAP)return "一个人能做的都做完了，剩下的得有人一起动手才动得了";
+        return progress<=0?"刚开始":progress<45?"做了一些":progress<80?"进行中":"大体完成";
+    }
     private static List<ResidentMind.KnownPlaceView> knownPlaces(){return List.of(
         new ResidentMind.KnownPlaceView("home","自己的住处，有床和个人书桌；适合睡觉、休息，也能继续读写或制作。",List.of("sleep","rest","study","read","work","make")),
         // What someone standing at the door would think of, in the order they would think of it. The
@@ -448,9 +463,9 @@ public class ResidentDirector {
         // the seating and a poor account of what a cafe is for: across a whole simulated day nobody
         // ordered anything even once. A place has to advertise what it is good for before anyone can
         // choose it for that.
-        new ResidentMind.KnownPlaceView("cafe","营业时可进入的公共室内空间：可以点杯喝的坐一会儿，可以约人在这里碰面、拼个桌一起聊，也可以安静读书、学习、写作、制作。有六个独立窗边座位和一张共享讨论桌。吧台设备需要经营或帮工权限。",List.of("observe","rest","study","read","work","make","request_drink","invite","join")),
+        new ResidentMind.KnownPlaceView("cafe","营业时可进入的公共室内空间：可以点杯喝的坐一会儿，可以约人在这里碰面、拼个桌一起聊，也可以安静读书、学习、写作、制作。共享讨论桌上摆着还没做完的共同的事，谁都可以坐下添一笔，不必是起头的那个人。有六个独立窗边座位和一张共享讨论桌。吧台设备需要经营或帮工权限。",List.of("observe","rest","study","read","work","make","create","help","request_drink","invite","join")),
         new ResidentMind.KnownPlaceView("street","连接住处、咖啡馆和花园的小街，适合散步、观察和偶遇。",List.of("observe")),
-        new ResidentMind.KnownPlaceView("garden","公共花园，适合观察植物、照料花草或做与植物有关的事。",List.of("observe","work")));
+        new ResidentMind.KnownPlaceView("garden","公共花园，适合观察植物、照料花草或做与植物有关的事，也可以动手做在这里落地的共同的事。",List.of("observe","work","create","help")));
     }
     private static List<String> cafeRoleFacts(CompanionWorld w,String residentId){
         List<String> facts=new ArrayList<>();String operator=ResidentSimulation.cafeOperatorId(w);

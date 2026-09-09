@@ -168,8 +168,13 @@ public interface ResidentMind {
     record ServiceRequestView(String id,String requesterId,String kind,String status,String place) {}
     record PausedActionView(String action,String place,String reason,long remainingSeconds) {}
     record PortableActionView(String action,String reason,long remainingSeconds) {}
-    record KnownProject(String id,String title,String place,String stage) {
-        public KnownProject(String id,String title,String place){this(id,title,place,"刚开始");}
+    /** {@code startedBy} is whose idea it was, by name - the one social fact about a project that was
+     * missing entirely. Without it every project reads like a private to-do item, and nobody puts
+     * their hands on somebody else's to-do item. {@code stage} says in words how far along it is AND,
+     * when it applies, that it has stopped for want of another pair of hands (see
+     * ResidentSimulation's SOLO_PROGRESS_CAP) - a fact the town had but never told anyone. */
+    record KnownProject(String id,String title,String place,String stage,String startedBy) {
+        public KnownProject(String id,String title,String place){this(id,title,place,"刚开始",null);}
     }
     record Decision(String action,String place,String targetId,String reason,String speech,List<String> evidenceIds,String projectTitle,String objectKind) {}
 

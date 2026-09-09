@@ -307,7 +307,7 @@ public final class ResidentSimulation {
                 // out a contribution entirely.
                 int gain=Math.max(4,(first?25:12)+Personality.of(r).diligenceBonus());
                 // A communal project cannot finish through one resident's repeated work alone.
-                project.progress=Math.min(project.contributors.size()<project.needed?75:100,project.progress+gain);
+                project.progress=Math.min(project.contributors.size()<project.needed?SOLO_PROGRESS_CAP:100,project.progress+gain);
                 project.status=project.progress==100?"ready":"active";
                 project.description=actor(w,r.id).name()+"刚完成了一小部分；"+(project.progress==100?"已经可以一起看看了。":"还想听听别人的想法。");
                 w.objects.removeIf(o->Objects.equals(o.projectId(),project.id));
@@ -393,6 +393,12 @@ public final class ResidentSimulation {
         if(detail)driftPersonality(w,observer,"sensitivity",PERSONALITY_DRIFT_STEP,"noticed_detail",at);
         String text=detail?"我看见"+actorText:"隐约感觉到"+actor(w,actorState.id).name()+"又在忙「"+project.title+"」，具体做了什么我没太看清。";
         memory(w,observer.id,actorState.id,"observed",at,project.id,text,List.of(actorEvidenceId),detail?7:4);
+        // Someone who actually watched the work happen has seen how far along the thing in the room
+        // is. Without this the observer knows the project exists (the memory above is what "knows"
+        // reads) but knownProjects stays empty, so every project anybody ever witnessed reads back to
+        // them as "刚开始" - which is the exact opposite of the truth for one that has stalled at the
+        // solo cap, and the reading least likely to make anyone put their hands on it.
+        if(detail)observer.knownProjects.put(project.id,new ProjectKnowledge(project.id,project.place,project.status,project.progress,at,actorState.id));
     }
     private static void moveOrSchedule(CompanionWorld w,ResidentState r,String action,String place,String target,String reason,Instant at,int duration) {
         if(!actor(w,r.id).place().equals(place)) {
@@ -805,7 +811,8 @@ public final class ResidentSimulation {
     public record HabitTrait(String key,String description) {}
     private static final Map<String,List<String[]>> HABIT_TRAITS = Map.of(
         "owner",List.of(new String[]{"tidy","心里不痛快的时候不说出来，去擦桌子、把杯子重新摆一遍"},
-                        new String[]{"mind_cafe","一闲下来就想回店里看看，哪怕没人叫"}),
+                        new String[]{"mind_cafe","一闲下来就想回店里看看，哪怕没人叫"},
+                        new String[]{"own_gathering","店里一闲就先给自己张罗的那场聚会弄一点，还没跟谁说"}),
         "student",List.of(new String[]{"quiet","被打断之后就不再多说，把书翻回原来那页接着看"},
                           new String[]{"study_cafe","没别的安排就往咖啡馆靠窗那个位置坐，点杯常喝的看书"}),
         "artist",List.of(new String[]{"hide","刚做完一件东西，反而先转过去放好，不急着拿给谁看"},
@@ -814,7 +821,8 @@ public final class ResidentSimulation {
                            new String[]{"tend_garden","没事就往花园去，手上顺带点东西"},
                            new String[]{"deliver_seedling","想找人的时候不空手去，带一株苗"}),
         "fixer",List.of(new String[]{"check","路过就伸手推一推、试试稳不稳，话不多"},
-                        new String[]{"check_cafe","闲下来往店里走，看看有没有要搭把手的"}),
+                        new String[]{"check_cafe","闲下来往店里走，看看有没有要搭把手的"},
+                        new String[]{"lend_a_hand","看见别人没做完的事搁在那儿，不问就上手添一笔"}),
         "weaver",List.of(new String[]{"smooth","气氛一僵就先动手挪东西，替人找个台阶，不点破"},
                          new String[]{"be_around_people","没什么事就往人多的地方坐"}));
     /** What to offer this resident when they are reflecting. Empty for anyone with no default reflexes
@@ -951,8 +959,11 @@ public final class ResidentSimulation {
             // own javadoc for why the cafe is the second half of this resident's default, not a
             // replacement for the first.
             case "gardener"->placeHabitTendGarden(w,r,at)||placeHabitBringSeedlingToCafe(w,r,at);
-            case "owner"->placeHabitMindTheCafe(w,r,at);
-            case "fixer"->placeHabitCheckCafe(w,r,at);
+            // The gathering comes before minding an empty counter: wanting to be needed is what both
+            // of these are, and only one of them ever produces something for anybody to need.
+            case "owner"->placeHabitStartOwnGathering(w,r,at)||placeHabitMindTheCafe(w,r,at);
+            // Lending a hand first, then the trip that was only ever a pretext for lending one.
+            case "fixer"->placeHabitLendAHand(w,r,at)||placeHabitCheckCafe(w,r,at);
             case "weaver"->placeHabitBeAroundPeople(w,r,at);
             default->false;
         };
@@ -961,9 +972,12 @@ public final class ResidentSimulation {
      * for) the resident, then records the departure as a deed exactly like a micro-habit does - only
      * what an observer standing at the starting place would have seen, never why. */
     private static void firePlaceHabit(CompanionWorld w,ResidentState r,String habitId,String action,String place,String reason,String note,Instant at,int duration){
+        firePlaceHabit(w,r,habitId,action,place,null,reason,note,at,duration);
+    }
+    private static void firePlaceHabit(CompanionWorld w,ResidentState r,String habitId,String action,String place,String target,String reason,String note,Instant at,int duration){
         String from=actor(w,r.id).place();
         r.lastHabitAt.put(habitId,at);
-        moveOrSchedule(w,r,action,place,null,reason,at,duration);
+        moveOrSchedule(w,r,action,place,target,reason,at,duration);
         recordDeed(w,r.id,action,from,note,at);
     }
     /** 小川: occupation is studying for an exam, and the actual complaint behind this half of item 1
@@ -1047,6 +1061,58 @@ public final class ResidentSimulation {
         if(!habitEligible(w,r,"be_around_people",PLACE_HABIT_MIN_GAP_SECONDS,at))return false;
         firePlaceHabit(w,r,"be_around_people","observe","cafe","没什么事，去咖啡馆那边坐坐",
             "没说什么，往咖啡馆那边去了。",at,900);
+        return true;
+    }
+
+    /** A shared thing this resident knows about, that by its own nature needs more than one person,
+     * that is not finished, and that they have not put their hands on yet. Ones somebody has already
+     * started come first: joining something under way is a smaller step than starting something
+     * nobody has touched, and it is the one that unblocks {@link #SOLO_PROGRESS_CAP}. */
+    private static Project sharedThingToLendAHandTo(CompanionWorld w,ResidentState r,boolean skipOwn){
+        return w.projects.stream()
+            .filter(p->knows(w,r.id,p.id)&&!Set.of("ready","celebrating").contains(p.status))
+            .filter(ResidentSimulation::takesMoreThanOnePerson)
+            .filter(p->!p.contributors.contains(r.id)&&(!skipOwn||!r.id.equals(p.ownerId)))
+            .filter(p->!"cafe".equals(p.place)||CafeService.acceptingOrders(w))
+            .max(Comparator.comparingInt(p->p.contributors.size()))
+            .orElse(null);
+    }
+    /** 周野: {@link #placeHabitCheckCafe} above already says, in his own actingSelf's words, that he
+     * goes to the shop "看看有没有需要搭把手的" - and then observes. That is the whole of it: he
+     * arrives to lend a hand and never lends one. This is the step it stops one short of.
+     * <p>Why a rule may put a resident's hands on a shared thing at all, when nothing else here does:
+     * a communal project stops dead at {@link #SOLO_PROGRESS_CAP} until a second person arrives, and
+     * a measured day offered {@code create} 216 times and got it chosen zero, so the second person
+     * never came and nothing in this town has ever been finished by more than one person. A man whose
+     * own written self is "直接问、直接说" walking past a half-finished shared thing and putting a
+     * hand on it before deciding to is precisely the reflex layer - the account of why he did it comes
+     * afterwards, from him, through the ordinary deed/explanation path, and may well be wrong.
+     * <p>Never his own project: this habit is about other people's unfinished things, which is also
+     * the only version of it that can lift a project past the solo cap. */
+    private static boolean placeHabitLendAHand(CompanionWorld w,ResidentState r,Instant at){
+        Project shared=sharedThingToLendAHandTo(w,r,true);
+        if(shared==null)return false;
+        if(!habitEligible(w,r,"lend_a_hand",PLACE_HABIT_MIN_GAP_SECONDS,at))return false;
+        firePlaceHabit(w,r,"lend_a_hand","create",shared.place,shared.id,"看见「"+shared.title+"」还搁在那儿，顺手搭把手",
+            "没问谁，走过去在「"+shared.title+"」上添了一笔。",at,900);
+        return true;
+    }
+    /** 阿禾: "想被需要" is his own actingSelf, and {@link #placeHabitMindTheCafe} already defaults him
+     * back toward the counter on it. The thing he actually wants people for is his own - a reading
+     * night in his own shop - and an idea nobody has started is an idea nobody can join. Somebody has
+     * to lay down the first stroke before "剩下的得有人一起动手" is even true of it, and the person
+     * with the least excuse not to is whoever wanted it. Only ever his own, and only while the shop
+     * is open: this is a man tidying toward his own gathering, not the town's general handyman. */
+    private static boolean placeHabitStartOwnGathering(CompanionWorld w,ResidentState r,Instant at){
+        Project own=w.projects.stream()
+            .filter(p->r.id.equals(p.ownerId)&&knows(w,r.id,p.id)&&!Set.of("ready","celebrating").contains(p.status))
+            .filter(p->!"cafe".equals(p.place)||CafeService.acceptingOrders(w))
+            .min(Comparator.comparingInt(p->p.progress))
+            .orElse(null);
+        if(own==null||own.progress>=SOLO_PROGRESS_CAP)return false;
+        if(!habitEligible(w,r,"own_gathering",PLACE_HABIT_MIN_GAP_SECONDS,at))return false;
+        firePlaceHabit(w,r,"own_gathering","create",own.place,own.id,"趁店里还闲，先给「"+own.title+"」弄一点",
+            "没跟谁说，先动手给「"+own.title+"」弄了一点。",at,1800);
         return true;
     }
 
@@ -1468,6 +1534,16 @@ public final class ResidentSimulation {
         }
     }
     private static String knownStatus(ResidentState r,String id){ProjectKnowledge p=r.knownProjects.get(id);return p==null?"idea":p.status();}
+    /** How far a project can get on one person's repeated work before it simply stops. A measured day
+     * produced zero completions and this is why: four of the five projects in town need more than one
+     * pair of hands, they all sat here, and nothing anywhere said so. The number was invisible in the
+     * only place it mattered - see ResidentDirector's projectStage, which now spends it on a sentence
+     * rather than mapping 75 to a cheerful "进行中". */
+    public static final int SOLO_PROGRESS_CAP = 75;
+    /** Whether this project is, by its own nature, something more than one person has to be part of.
+     * A property of the project as it was described when anyone first heard of it ("收集四个人眼里的
+     * 小街"), not live state - so telling a resident this reveals nothing they were not already told. */
+    public static boolean takesMoreThanOnePerson(Project p){return p!=null&&p.needed>1;}
     public static String knownPlace(ResidentState r,Project p){ProjectKnowledge known=r.knownProjects.get(p.id);return known==null?p.place:known.place();}
     public static ResidentState state(CompanionWorld w,String id){return w.residentStates.stream().filter(r->r.id.equals(id)).findFirst().orElse(null);}
     public static boolean mayTend(CompanionWorld w,String id){return CafeService.mayTend(w,id);}

@@ -269,6 +269,32 @@ public final class MetricsExporter {
         out.put("daysMeetingTarget", chosenPerDay.values().stream().filter(n -> n >= 3).count());
         out.put("distinctDays", chosenPerDay.size());
         out.put("episodes", kept);
+        // The other, looser reading of "一起做同一件事", and the one far more likely to actually
+        // happen: two people put their hands on one project on the same day without ever standing
+        // there at the same moment. They still made one thing together. Counted from the rules' own
+        // "contribution" events, once per (day, project) no matter how many times each contributed,
+        // and reported beside the simultaneous number rather than folded into it - the two say
+        // different things and a single blended figure would hide which one the town is managing.
+        Map<String, java.util.Set<String>> handsPerDayProject = new TreeMap<>();
+        for (Map<String, Object> e : entries) {
+            if (!"event".equals(e.get("kind"))) continue;
+            Map<String, Object> extra = (Map<String, Object>) e.get("extra");
+            if (extra == null || !"contribution".equals(extra.get("eventType")) || extra.get("projectId") == null) continue;
+            String key = ((String) e.get("at")).substring(0, 10) + "|" + extra.get("projectId");
+            for (String id : ((String) e.get("actorId")).split(",")) handsPerDayProject.computeIfAbsent(key, k -> new java.util.LinkedHashSet<>()).add(id);
+        }
+        Map<String, Integer> sharedBuildsPerDay = new TreeMap<>();
+        for (var e : handsPerDayProject.entrySet())
+            if (e.getValue().size() >= 2) sharedBuildsPerDay.merge(e.getKey().substring(0, e.getKey().indexOf('|')), 1, Integer::sum);
+        out.put("sharedBuildsPerDay", sharedBuildsPerDay);
+        out.put("sharedBuildsTotal", sharedBuildsPerDay.values().stream().mapToInt(Integer::intValue).sum());
+        // Every project that anybody touched at all, and by how many different people - the rawest
+        // form of the diagnosis this whole line of work started from (a communal project stops dead
+        // at 75% until a second pair of hands arrives, and across a measured day none ever came).
+        Map<String, Integer> handsPerProject = new TreeMap<>();
+        for (var e : handsPerDayProject.entrySet())
+            handsPerProject.merge(e.getKey().substring(e.getKey().indexOf('|') + 1), e.getValue().size(), Math::max);
+        out.put("distinctContributorsPerProject", handsPerProject);
         // Context, never part of the total: conversations are together too, but the town already
         // makes plenty and folding them in would let the number pass without anything changing.
         long conversations = entries.stream().filter(e -> "dialogue".equals(e.get("kind"))).count();
@@ -338,6 +364,10 @@ public final class MetricsExporter {
           .append(joint.get("daysMeetingTarget")).append(" / ").append(joint.get("distinctDays")).append('\n');
         sb.append("- 分类计数：").append(joint.get("byKind"))
           .append("（sameActivity 是碰巧同处一室做同类事，不计入上面的主动数）\n");
+        sb.append("- 同一天里被两个以上的人动过手的项目数：").append(joint.get("sharedBuildsTotal"))
+          .append("，按天：").append(joint.get("sharedBuildsPerDay"))
+          .append("（不要求同时在场——他们仍然是一起做出了一件东西）\n");
+        sb.append("- 每个项目最多有几个人动过手：").append(joint.get("distinctContributorsPerProject")).append('\n');
         for (Object rowObj : (List<Object>) joint.get("episodes")) {
             Map<String, Object> row = (Map<String, Object>) rowObj;
             if ("sameActivity".equals(row.get("kind"))) continue;
