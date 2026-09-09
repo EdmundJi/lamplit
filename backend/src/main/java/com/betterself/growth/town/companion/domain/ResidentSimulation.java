@@ -994,8 +994,13 @@ public final class ResidentSimulation {
             // which is what putting a hand on somebody's unfinished thing is. It comes after his own
             // garden, which is still his first default, and before the errand that was already the
             // second half of the same instinct.
-            case "gardener"->placeHabitTendGarden(w,r,at)||placeHabitLendAHand(w,r,at)
-                ||placeHabitStartOwnThing(w,r,at)||placeHabitBringSeedlingToCafe(w,r,at);
+            // The errand to the cafe stays ahead of lending a hand, and deliberately: his own
+            // default already keeps him in the one public place nobody else visits, and the whole
+            // point of that errand is that living far and working alone is answered by going toward
+            // people. Putting lend-a-hand first quietly undid it - the thing he would lend a hand to
+            // is usually the one in his own garden, so he never left.
+            case "gardener"->placeHabitTendGarden(w,r,at)||placeHabitBringSeedlingToCafe(w,r,at)
+                ||placeHabitLendAHand(w,r,at)||placeHabitStartOwnThing(w,r,at);
             // The gathering comes before minding an empty counter: wanting to be needed is what both
             // of these are, and only one of them ever produces something for anybody to need.
             case "owner"->placeHabitStartOwnThing(w,r,at)||placeHabitMindTheCafe(w,r,at);
@@ -1142,6 +1147,13 @@ public final class ResidentSimulation {
     private static boolean placeHabitLendAHand(CompanionWorld w,ResidentState r,Instant at){
         Project shared=sharedThingToLendAHandTo(w,r,true);
         if(shared==null)return false;
+        // Where he already is, never a trip - the same rule placeHabitStartOwnThing follows, and for
+        // a reason worth stating once: a habit that MOVES somebody can permanently kill another whose
+        // own condition is "not already there". It happened twice while this was being written (the
+        // student stopped ever going to the cafe window; the gardener stopped ever running his
+        // errand), and both times the damage was silent. So: the signature habits are the ones that
+        // take you somewhere, and these two only ever act on what is already in front of you.
+        if(!actor(w,r.id).place().equals(shared.place))return false;
         if(!habitEligible(w,r,"lend_a_hand",PLACE_HABIT_MIN_GAP_SECONDS,at))return false;
         firePlaceHabit(w,r,"lend_a_hand","create",shared.place,shared.id,"看见「"+shared.title+"」还搁在那儿，顺手搭把手",
             "没问谁，走过去在「"+shared.title+"」上添了一笔。",at,900);
@@ -1613,7 +1625,20 @@ public final class ResidentSimulation {
      * machinery as everyone else. */
     public static Actor actor(CompanionWorld w,String id){return "self".equals(id)?w.avatar:w.residents.stream().filter(a->a.id().equals(id)).findFirst().orElseThrow();}
     public static Project project(CompanionWorld w,String id){return w.projects.stream().filter(p->p.id.equals(id)).findFirst().orElse(null);}
-    public static boolean knows(CompanionWorld w,String id,String topic){return w.memories.stream().anyMatch(m->m.ownerId().equals(id)&&Objects.equals(m.topicId(),topic)&&!m.sourceType().equals("reflection"));}
+    /** Whether this resident knows of a thing at all. Two ways, and both are ordinary: they carry a
+     * memory that is about it (anything but a reflection - you cannot come to know a fact by
+     * speculating), or they carry an entry about it in their own knownProjects, which is exactly what
+     * "what I know about this project" means and is written by every legitimate path there is -
+     * seeding, being told in conversation, being invited, and watching somebody work on it.
+     * <p>The second half used to be missing, and it was only ever true by accident that it did not
+     * matter: knownProjects happened to be populated in step with a memory. It stopped being true the
+     * moment residents could hear of a project without also being handed a progress figure. */
+    public static boolean knows(CompanionWorld w,String id,String topic){
+        if(topic==null)return false;
+        ResidentState r=state(w,id);
+        if(r!=null&&r.knownProjects.containsKey(topic))return true;
+        return w.memories.stream().anyMatch(m->m.ownerId().equals(id)&&Objects.equals(m.topicId(),topic)&&!m.sourceType().equals("reflection"));
+    }
     public static Conversation activeConversation(CompanionWorld w,String id){return w.conversations.stream().filter(c->c.status.equals("active")&&c.participantIds.contains(id)).findFirst().orElse(null);}
     /** Each side's own private affection number moves independently, scaled by that side's own
      * emotional volatility - not by the same shared delta. A applies its own scaled change to its own

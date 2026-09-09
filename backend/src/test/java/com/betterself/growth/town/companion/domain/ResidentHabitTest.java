@@ -174,6 +174,12 @@ class ResidentHabitTest {
         // An idea nobody has started is an idea nobody can join, and the person with the least excuse
         // is whoever wanted it.
         CompanionWorld w = world("own-gathering");
+        // Nobody else in the way: with the noticeboard now telling everyone about everyone's things,
+        // a neighbour who wanders in can genuinely get to his project before he does - which is the
+        // whole point of the rest of this work, and exactly what this one test must not measure.
+        for (ResidentState other : w.residentStates)
+            if (!other.id.equals("owner") && !other.id.equals("self"))
+                other.plan = new Plan("park-" + other.id, "sleep", TownPlaces.homeOf(other.id), null, "隔离", DAY, DAY.plusSeconds(90_000));
         ResidentState owner = ResidentSimulation.state(w, "owner");
         owner.plan = null; owner.suspendedAction = null;
         ResidentSimulation.replaceActor(w, "owner", "cafe", "idle", "在店里", DAY);
@@ -204,7 +210,8 @@ class ResidentHabitTest {
         shared.progress = 40; shared.status = "active";
         if (!shared.contributors.contains(shared.ownerId)) shared.contributors.add(shared.ownerId);
         fixer.plan = null; fixer.suspendedAction = null;
-        ResidentSimulation.replaceActor(w, "fixer", TownPlaces.homeOf("fixer"), "idle", "在家里", DAY);
+        // Already in the room with it: lending a hand acts on what is in front of you, never a trip.
+        ResidentSimulation.replaceActor(w, "fixer", "cafe", "idle", "在店里", DAY);
 
         runUntilContribution(w, fixer, "lend_a_hand", () -> shared.contributors.contains("fixer"));
         assertThat(fixer.lastHabitAt).as("the habit fired").containsKey("lend_a_hand");

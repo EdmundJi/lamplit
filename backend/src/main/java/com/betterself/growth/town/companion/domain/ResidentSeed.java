@@ -145,6 +145,27 @@ public final class ResidentSeed {
         memory(w,"artist","owner","seed",past.minusSeconds(3600),"reading-night","阿禾昨天问我能不能帮她画一张读书小聚的招贴，我说可以先聊聊。",List.of(),8);
         w.projects.get(0).members.add("artist");
         state(w,"artist").knownProjects.put("reading-night",new ProjectKnowledge("reading-night","cafe","idea",0,past,"owner"));
+        // Six people on one street, and every one of these is a thing somebody wants OTHER people
+        // for - they are pinned on the board by the front door, not kept in a drawer.
+        // Without this, "knows" (which reads a non-reflection memory carrying the topic) was true
+        // only of your own, so nobody could ever put a hand on anybody else's thing - not through a
+        // model decision, which validates against knownProjects, and not through a habit either. A
+        // measured rule-only run showed exactly what that produces: one resident adding to his own
+        // thing five times over two days, stopped at the solo cap for want of a second pair of hands
+        // that could not possibly have arrived, because nobody else in town had ever heard of it.
+        // Recorded as knowledge rather than as a remembered event each: knowing what the board says
+        // is not the same as remembering an afternoon, and handing everyone four extra memories at
+        // startup pushed the whole town past its own reflection-frequency guard for no good reason.
+        // What they get is exactly what the board says and nothing more - the thing exists, whose it
+        // is, where it happens, and that nobody has started it yet, which is true of all of them at
+        // this moment. How any of them is getting on later is something they will have to see or be
+        // told, through the ordinary paths.
+        for(ResidentState r:w.residentStates){
+            if("self".equals(r.id))continue;
+            for(Project p:w.projects)
+                if(!r.id.equals(p.ownerId)&&!r.knownProjects.containsKey(p.id))
+                    r.knownProjects.put(p.id,new ProjectKnowledge(p.id,p.place,p.status,p.progress,past,"noticeboard"));
+        }
         w.objects.add(new WorldObject("worktable","table","cafe","一张可共用的长桌","available",null));
         w.objects.add(new WorldObject("noticeboard","board","street","门前留言板","empty",null));
         w.objects.add(new WorldObject("flowerbed","flowers","garden","等待移栽的新芽","growing","seed-exchange"));

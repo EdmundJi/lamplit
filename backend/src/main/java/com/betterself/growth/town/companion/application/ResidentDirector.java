@@ -452,7 +452,11 @@ public class ResidentDirector {
      * that state to a cheerful "进行中" told every resident in town that the thing was moving along
      * fine without them, which is the single reason a measured day finished nothing. */
     private static String projectStage(String status,int progress,boolean takesMoreThanOnePerson){
-        if(Set.of("ready","celebrating").contains(status))return "已经完成";
+        // Null status means this resident knows OF the thing without having seen how it is getting
+        // on - hearsay off the noticeboard, say. Set.of(...).contains(null) throws, and this only
+        // never blew up because "knows" used to be true, by accident, exactly when knownProjects
+        // also had an entry.
+        if(status!=null&&Set.of("ready","celebrating").contains(status))return "已经完成";
         if(takesMoreThanOnePerson&&progress>=ResidentSimulation.SOLO_PROGRESS_CAP)return "一个人能做的都做完了，剩下的得有人一起动手才动得了";
         return progress<=0?"刚开始":progress<45?"做了一些":progress<80?"进行中":"大体完成";
     }
