@@ -180,8 +180,8 @@ class ResidentHabitTest {
         CompanionWorld.Project gathering = w.projects.stream().filter(p -> "owner".equals(p.ownerId)).findFirst().orElseThrow();
         assertThat(gathering.progress).as("nothing has been done to it yet").isZero();
 
-        runUntilContribution(w, owner, "own_gathering", () -> gathering.progress > 0);
-        assertThat(owner.lastHabitAt).as("the habit fired").containsKey("own_gathering");
+        runUntilContribution(w, owner, "own_thing", () -> gathering.progress > 0);
+        assertThat(owner.lastHabitAt).as("the habit fired").containsKey("own_thing");
         assertThat(gathering.progress).as("his own thing is finally under way").isPositive();
         assertThat(gathering.contributors).contains("owner");
         assertThat(ResidentSimulation.unexplainedDeeds(w, "owner"))
@@ -210,6 +210,33 @@ class ResidentHabitTest {
         assertThat(fixer.lastHabitAt).as("the habit fired").containsKey("lend_a_hand");
         assertThat(shared.contributors).as("a second pair of hands, which is the whole point").contains("fixer");
         assertThat(shared.contributors.size()).isGreaterThanOrEqualTo(2);
+    }
+
+    /** The strong form of "两个人一起做同一件事": not two people who each did some of one thing on
+     * different afternoons, but two people with their hands on it at the same moment. You lend a
+     * hand to someone you can see working - so when there is such a person, that is the thing that
+     * gets chosen, ahead of an untouched project nobody is standing near. */
+    @Test void aHandIsLentToTheThingSomebodyIsActuallyStandingThereWorkingOn() {
+        CompanionWorld w = world("lend-a-hand-visible");
+        ResidentState fixer = ResidentSimulation.state(w, "fixer");
+        var cafeProjects = w.projects.stream().filter(p -> "cafe".equals(p.place) && !"fixer".equals(p.ownerId)).toList();
+        assertThat(cafeProjects).as("this test needs two cafe projects to choose between").hasSizeGreaterThan(1);
+        CompanionWorld.Project untouched = cafeProjects.get(0), underway = cafeProjects.get(1);
+        for (CompanionWorld.Project p : List.of(untouched, underway)) {
+            fixer.knownProjects.put(p.id, new CompanionWorld.ProjectKnowledge(p.id, p.place, p.status, p.progress, DAY, p.ownerId));
+            ResidentSimulation.memory(w, "fixer", p.ownerId, "heard", DAY, p.id, "听说「" + p.title + "」还没弄完。", List.of(), 5);
+        }
+        // Somebody is right there, hands on `underway`, for the rest of the day.
+        ResidentState worker = ResidentSimulation.state(w, underway.ownerId);
+        worker.plan = new Plan("worker-p", "create", "cafe", underway.id, "接着弄", DAY, DAY.plusSeconds(40_000));
+        ResidentSimulation.replaceActor(w, underway.ownerId, "cafe", "create", "接着弄", DAY.plusSeconds(40_000));
+        fixer.plan = null; fixer.suspendedAction = null;
+        ResidentSimulation.replaceActor(w, "fixer", "cafe", "idle", "在店里", DAY);
+
+        runUntilContribution(w, fixer, "lend_a_hand", () -> fixer.lastHabitAt.containsKey("lend_a_hand"));
+        assertThat(fixer.lastHabitAt).containsKey("lend_a_hand");
+        assertThat(fixer.plan).isNotNull();
+        assertThat(fixer.plan.targetId()).as("he went to the one with somebody standing at it").isEqualTo(underway.id);
     }
 
     @Test void theFixerNeverLendsAHandToHisOwnThingOrToOneAlreadyFinished() {

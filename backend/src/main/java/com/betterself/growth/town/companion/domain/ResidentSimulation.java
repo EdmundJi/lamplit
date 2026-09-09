@@ -834,19 +834,24 @@ public final class ResidentSimulation {
     private static final Map<String,List<String[]>> HABIT_TRAITS = Map.of(
         "owner",List.of(new String[]{"tidy","心里不痛快的时候不说出来，去擦桌子、把杯子重新摆一遍"},
                         new String[]{"mind_cafe","一闲下来就想回店里看看，哪怕没人叫"},
-                        new String[]{"own_gathering","店里一闲就先给自己张罗的那场聚会弄一点，还没跟谁说"}),
+                        new String[]{"own_thing","一闲下来就回头去弄自己那件没做完的事，没跟谁说"}),
         "student",List.of(new String[]{"quiet","被打断之后就不再多说，把书翻回原来那页接着看"},
-                          new String[]{"study_cafe","没别的安排就往咖啡馆靠窗那个位置坐，点杯常喝的看书"}),
+                          new String[]{"study_cafe","没别的安排就往咖啡馆靠窗那个位置坐，点杯常喝的看书"},
+                          new String[]{"own_thing","一闲下来就回头去弄自己那件没做完的事，没跟谁说"}),
         "artist",List.of(new String[]{"hide","刚做完一件东西，反而先转过去放好，不急着拿给谁看"},
-                         new String[]{"seek_inspiration","想不出画什么的时候不硬画，去咖啡馆看人"}),
+                         new String[]{"seek_inspiration","想不出画什么的时候不硬画，去咖啡馆看人"},
+                         new String[]{"own_thing","一闲下来就回头去弄自己那件没做完的事，没跟谁说"}),
         "gardener",List.of(new String[]{"handwork","旁边有人的时候不搭话，先去把手边松掉的东西钉紧"},
                            new String[]{"tend_garden","没事就往花园去，手上顺带点东西"},
-                           new String[]{"deliver_seedling","想找人的时候不空手去，带一株苗"}),
+                           new String[]{"deliver_seedling","想找人的时候不空手去，带一株苗"},
+                           new String[]{"own_thing","一闲下来就回头去弄自己那件没做完的事，没跟谁说"},
+                           new String[]{"lend_a_hand","看见别人没做完的事搁在那儿，不问就上手添一笔"}),
         "fixer",List.of(new String[]{"check","路过就伸手推一推、试试稳不稳，话不多"},
                         new String[]{"check_cafe","闲下来往店里走，看看有没有要搭把手的"},
                         new String[]{"lend_a_hand","看见别人没做完的事搁在那儿，不问就上手添一笔"}),
         "weaver",List.of(new String[]{"smooth","气氛一僵就先动手挪东西，替人找个台阶，不点破"},
-                         new String[]{"be_around_people","没什么事就往人多的地方坐"}));
+                         new String[]{"be_around_people","没什么事就往人多的地方坐"},
+                         new String[]{"lend_a_hand","看见别人没做完的事搁在那儿，不问就上手添一笔"}));
     /** What to offer this resident when they are reflecting. Empty for anyone with no default reflexes
      * of their own (the avatar, above all: its habits are the user's, not ours to name). */
     public static List<HabitTrait> habitTraits(String residentId){
@@ -974,19 +979,31 @@ public final class ResidentSimulation {
         if(activeConversation(w,r.id)!=null)return false;
         if(Set.of("sleep","travel","walk","away","tend","wait").contains(actor(w,r.id).activity()))return false;
         return switch(r.id){
-            case "student"->placeHabitStudyAtCafe(w,r,at);
-            case "artist"->placeHabitSeekInspiration(w,r,at);
+            // Signature habit first, own unfinished thing second, and that order matters: the
+            // student's own default is the cafe window, and putting anything ahead of it simply
+            // stopped him ever going there. It also reads better than it sounds - the signature
+            // habit is what takes you somewhere, and once you are there (its own condition is "not
+            // already at the cafe") it steps aside and you poke at your own thing instead.
+            case "student"->placeHabitStudyAtCafe(w,r,at)||placeHabitStartOwnThing(w,r,at);
+            case "artist"->placeHabitSeekInspiration(w,r,at)||placeHabitStartOwnThing(w,r,at);
             // Garden work still comes first whenever it is actually due; the cafe errand below only
             // gets a turn in the minutes that habit's own cooldown or hash roll leaves open - see its
             // own javadoc for why the cafe is the second half of this resident's default, not a
             // replacement for the first.
-            case "gardener"->placeHabitTendGarden(w,r,at)||placeHabitBringSeedlingToCafe(w,r,at);
+            // 青叔's own "用东西代替话——递一株苗" is help offered as an object rather than a sentence,
+            // which is what putting a hand on somebody's unfinished thing is. It comes after his own
+            // garden, which is still his first default, and before the errand that was already the
+            // second half of the same instinct.
+            case "gardener"->placeHabitTendGarden(w,r,at)||placeHabitLendAHand(w,r,at)
+                ||placeHabitStartOwnThing(w,r,at)||placeHabitBringSeedlingToCafe(w,r,at);
             // The gathering comes before minding an empty counter: wanting to be needed is what both
             // of these are, and only one of them ever produces something for anybody to need.
-            case "owner"->placeHabitStartOwnGathering(w,r,at)||placeHabitMindTheCafe(w,r,at);
+            case "owner"->placeHabitStartOwnThing(w,r,at)||placeHabitMindTheCafe(w,r,at);
             // Lending a hand first, then the trip that was only ever a pretext for lending one.
             case "fixer"->placeHabitLendAHand(w,r,at)||placeHabitCheckCafe(w,r,at);
-            case "weaver"->placeHabitBeAroundPeople(w,r,at);
+            // 阿满: "替别人找台阶" without saying anything - see her own habitSmooth, which is the
+            // wordless version applied to a room. This is the same instinct applied to a thing.
+            case "weaver"->placeHabitLendAHand(w,r,at)||placeHabitBeAroundPeople(w,r,at);
             default->false;
         };
     }
@@ -1096,8 +1113,19 @@ public final class ResidentSimulation {
             .filter(ResidentSimulation::takesMoreThanOnePerson)
             .filter(p->!p.contributors.contains(r.id)&&(!skipOwn||!r.id.equals(p.ownerId)))
             .filter(p->!"cafe".equals(p.place)||CafeService.acceptingOrders(w))
-            .max(Comparator.comparingInt(p->p.contributors.size()))
+            .max(Comparator.<Project>comparingInt(p->someoneIsWorkingOnItRightNow(w,p,r.id)?1:0)
+                .thenComparingInt(p->p.contributors.size()))
             .orElse(null);
+    }
+    /** Whether somebody else is, at this exact moment, standing where this thing is and working on
+     * it. Ranked above everything else in the choice above, because it is the difference between
+     * two people who each did some of one thing and two people doing one thing - and because it is
+     * the more human of the two anyway: you lend a hand to someone you can see working, not to an
+     * abstract entry on a list. Reads only what anybody standing in that room would see. */
+    private static boolean someoneIsWorkingOnItRightNow(CompanionWorld w,Project p,String exceptId){
+        return w.residentStates.stream().anyMatch(o->!o.id.equals(exceptId)&&!o.id.equals("self")
+            &&o.plan!=null&&Set.of("create","help").contains(o.plan.action())&&p.id.equals(o.plan.targetId())
+            &&actor(w,o.id).place().equals(p.place));
     }
     /** 周野: {@link #placeHabitCheckCafe} above already says, in his own actingSelf's words, that he
      * goes to the shop "看看有没有需要搭把手的" - and then observes. That is the whole of it: he
@@ -1119,21 +1147,30 @@ public final class ResidentSimulation {
             "没问谁，走过去在「"+shared.title+"」上添了一笔。",at,900);
         return true;
     }
-    /** 阿禾: "想被需要" is his own actingSelf, and {@link #placeHabitMindTheCafe} already defaults him
-     * back toward the counter on it. The thing he actually wants people for is his own - a reading
-     * night in his own shop - and an idea nobody has started is an idea nobody can join. Somebody has
-     * to lay down the first stroke before "剩下的得有人一起动手" is even true of it, and the person
-     * with the least excuse not to is whoever wanted it. Only ever his own, and only while the shop
-     * is open: this is a man tidying toward his own gathering, not the town's general handyman. */
-    private static boolean placeHabitStartOwnGathering(CompanionWorld w,ResidentState r,Instant at){
+    /** Poking at your own unfinished thing when you have nothing else on. Unlike every other habit in
+     * this file this one is not drawn from any single resident's actingSelf, and it applies to
+     * everybody, because it is not a personality trait - a person with an unfinished thing of their
+     * own, idle, in the place that thing lives, putting a bit more into it is about as close to a
+     * universal reflex as this town has.
+     * <p>It is here because an idea nobody has started is an idea nobody can join. Somebody has to
+     * lay down the first stroke before "剩下的得有人一起动手" is even true of a thing, and the person
+     * with the least excuse is whoever wanted it. Only ever their own, and never past the solo cap:
+     * once a thing has gone as far as one pair of hands can take it, going back to it alone is not a
+     * reflex, it is avoidance, and the rules do not put words in anybody's mouth about that. */
+    private static boolean placeHabitStartOwnThing(CompanionWorld w,ResidentState r,Instant at){
         Project own=w.projects.stream()
             .filter(p->r.id.equals(p.ownerId)&&knows(w,r.id,p.id)&&!Set.of("ready","celebrating").contains(p.status))
             .filter(p->!"cafe".equals(p.place)||CafeService.acceptingOrders(w))
             .min(Comparator.comparingInt(p->p.progress))
             .orElse(null);
         if(own==null||own.progress>=SOLO_PROGRESS_CAP)return false;
-        if(!habitEligible(w,r,"own_gathering",PLACE_HABIT_MIN_GAP_SECONDS,at))return false;
-        firePlaceHabit(w,r,"own_gathering","create",own.place,own.id,"趁店里还闲，先给「"+own.title+"」弄一点",
+        // Only ever where they already are. A reflex does not walk you across town - and letting this
+        // one do so quietly killed a signature habit: it relocated the student to the cafe before his
+        // own cafe-window default ever got a turn, and that default's own condition is "not already
+        // at the cafe", so it could never fire again for the rest of the day.
+        if(!actor(w,r.id).place().equals(own.place))return false;
+        if(!habitEligible(w,r,"own_thing",PLACE_HABIT_MIN_GAP_SECONDS,at))return false;
+        firePlaceHabit(w,r,"own_thing","create",own.place,own.id,"手上没别的事，先给「"+own.title+"」弄一点",
             "没跟谁说，先动手给「"+own.title+"」弄了一点。",at,1800);
         return true;
     }
