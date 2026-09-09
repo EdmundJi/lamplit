@@ -235,4 +235,22 @@ public class QwenResidentMind implements ResidentMind {
             """,ReflectDraft.class,decisionThinking);
     }
     private record ReflectInput(Context perspective,java.util.List<MemoryView> source,java.util.List<HabitTraitView> habits) {}
+
+    @Override public VentureDraft venture(VentureRequest request){return ventureMetered(request).value();}
+    @Override public Result<VentureDraft> ventureMetered(VentureRequest request){
+        return generateMetered("COMPANION_RESIDENT_VENTURE","""
+            你是perspective.self中的这一个居民。这条街上现在没有任何一件"需要不止一个人才做得成、而且还没做完"的事了——sharedThingsLeft是空的，你可以自己看。
+            问题只有一个：**你自己有没有想要一件什么事，是你一个人做不成的？**
+            大多数时候答案是没有。没有就把title留空，这是一个真实而且常见的答案，不是失败，也不要为了填满而编一个。
+            只有当你自己的记忆里确实有什么东西一直搁在那儿——某次谈话里没接住的话、某个反复出现的念头、你羡慕过或者遗憾过的某件事——才把它写成一件具体的、要在这条街上发生的事。
+            这件事必须是**要有别人一起才成立**的：一个人关起门来能做完的，不属于这里。
+            place只能是cafe、street、garden之一（自己家里不算，那是私人空间不是共同的地方）。objectKind从poster/flowers/books/tea里选一个，这只是世界能表现的形式，不限制主题。
+            title不超过36个汉字，reason一两句说清楚你为什么想要它，不超过80个汉字。evidenceIds填1到3条真正让你想到它的自己的记忆。
+            不要复述已经存在过的项目，也不要把愿望写成已经发生的事。
+            只返回JSON字段title,place,objectKind,reason,evidenceIds，不输出推理过程。
+            """,new VentureInput(request.perspective(),request.sharedThingsLeft()),"""
+            {"type":"object","required":["title","place","objectKind","reason","evidenceIds"],"properties":{"title":{"type":["string","null"]},"place":{"type":["string","null"],"enum":["cafe","street","garden",null]},"objectKind":{"type":["string","null"],"enum":["poster","flowers","books","tea",null]},"reason":{"type":["string","null"]},"evidenceIds":{"type":"array","items":{"type":"string"}}}}
+            """,VentureDraft.class,decisionThinking);
+    }
+    private record VentureInput(Context perspective,java.util.List<KnownProject> sharedThingsLeft) {}
 }

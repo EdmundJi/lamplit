@@ -145,6 +145,21 @@ public final class ResidentSeed {
         memory(w,"artist","owner","seed",past.minusSeconds(3600),"reading-night","阿禾昨天问我能不能帮她画一张读书小聚的招贴，我说可以先聊聊。",List.of(),8);
         w.projects.get(0).members.add("artist");
         state(w,"artist").knownProjects.put("reading-night",new ProjectKnowledge("reading-night","cafe","idea",0,past,"owner"));
+        w.objects.add(new WorldObject("worktable","table","cafe","一张可共用的长桌","available",null));
+        w.objects.add(new WorldObject("noticeboard","board","street","门前留言板","empty",null));
+        w.objects.add(new WorldObject("flowerbed","flowers","garden","等待移栽的新芽","growing","seed-exchange"));
+        // Two hand-authored newcomers (docs/04-decisions.md: 新增居民由我们手动设计, never the
+        // simulation itself). 周野 gets a new home of his own, next to 青叔's garden; 阿满 shares 知夏's
+        // home as a flat-mate - her own bed and her own desk inside home-artist, not a new building
+        // (TownPlaces.addFlatmate keeps those genuinely separate, unlike the old four-in-one-bed bug).
+        TownPlaces.addHome(w,"fixer");
+        newcomer(w,"fixer","周野","修东西的人",FIXER_OCCUPATION,past);
+        TownPlaces.addFlatmate(w,"weaver","artist");
+        ResidentState weaver=newcomer(w,"weaver","阿满","做手工的人",WEAVER_OCCUPATION,past);
+        // Judgement call: they already agreed to move in together before this world's story opens,
+        // so their mutual regard starts a little warmer than the flat "just met" 40 a newcomer gets
+        // with everyone else - the brief did not specify a number, only that they are flat-mates.
+        weaver.relationships.put("artist",55);state(w,"artist").relationships.put("weaver",55);
         // Six people on one street, and every one of these is a thing somebody wants OTHER people
         // for - they are pinned on the board by the front door, not kept in a drawer.
         // Without this, "knows" (which reads a non-reflection memory carrying the topic) was true
@@ -166,21 +181,6 @@ public final class ResidentSeed {
                 if(!r.id.equals(p.ownerId)&&!r.knownProjects.containsKey(p.id))
                     r.knownProjects.put(p.id,new ProjectKnowledge(p.id,p.place,p.status,p.progress,past,"noticeboard"));
         }
-        w.objects.add(new WorldObject("worktable","table","cafe","一张可共用的长桌","available",null));
-        w.objects.add(new WorldObject("noticeboard","board","street","门前留言板","empty",null));
-        w.objects.add(new WorldObject("flowerbed","flowers","garden","等待移栽的新芽","growing","seed-exchange"));
-        // Two hand-authored newcomers (docs/04-decisions.md: 新增居民由我们手动设计, never the
-        // simulation itself). 周野 gets a new home of his own, next to 青叔's garden; 阿满 shares 知夏's
-        // home as a flat-mate - her own bed and her own desk inside home-artist, not a new building
-        // (TownPlaces.addFlatmate keeps those genuinely separate, unlike the old four-in-one-bed bug).
-        TownPlaces.addHome(w,"fixer");
-        newcomer(w,"fixer","周野","修东西的人",FIXER_OCCUPATION,past);
-        TownPlaces.addFlatmate(w,"weaver","artist");
-        ResidentState weaver=newcomer(w,"weaver","阿满","做手工的人",WEAVER_OCCUPATION,past);
-        // Judgement call: they already agreed to move in together before this world's story opens,
-        // so their mutual regard starts a little warmer than the flat "just met" 40 a newcomer gets
-        // with everyone else - the brief did not specify a number, only that they are flat-mates.
-        weaver.relationships.put("artist",55);state(w,"artist").relationships.put("weaver",55);
         // The one memory nobody else has (docs/01-requirements.md's seeded anomaly for 小川): a
         // hand-placed FICTIONAL seed, not a real observed system event. It exists to be told,
         // believed, doubted or garbled by whoever he tells it to later - not as evidence that the

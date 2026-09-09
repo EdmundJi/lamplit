@@ -53,6 +53,31 @@ public interface ResidentMind {
     default Result<ReflectDraft> reflectMetered(ReflectRequest request){return new Result<>(reflect(request),null);}
 
     /**
+     * "There is nothing left in this town that you and anyone else could be doing together. Is there
+     * something you want that you could not do on your own?"
+     *
+     * <p>This exists because of one measurement, repeated across several runs and unmoved by rewriting
+     * ten separate lines of prompt: {@code propose} was offered to residents 472 times in a two-day run
+     * and chosen zero, as were {@code invite} (285), {@code join} (285), {@code help} (173) and
+     * {@code celebrate} (261) - about 1800 chances, two takers. Over the same two days the same model,
+     * asked whether to say something to a person standing in front of it, said yes 67 times out of 127.
+     *
+     * <p>The difference is not the wording, it is the shape of the question. An ordinary decision is a
+     * flat menu of some twenty actions, and at any given instant "carry on reading" is a locally
+     * sensible answer while "start something that needs other people" is a discretionary extra sitting
+     * twentieth on the list - so it loses every comparison it is ever in. Asked on its own, about a
+     * situation that is actually in front of the resident, it wins about half. Generative Agents makes
+     * the same split for the same reason: reactions are asked of an observation, not chosen off a list
+     * of everything a person could possibly do.
+     *
+     * <p>The rules decide only WHEN this is worth asking - when every shared thing this resident knows
+     * of has finished or stalled beyond their reach - and never what anybody wants. A resident is
+     * free to want nothing; most of the time that is the right answer and an empty draft says so.
+     */
+    default VentureDraft venture(VentureRequest request){throw new UnsupportedOperationException("Venture unavailable");}
+    default Result<VentureDraft> ventureMetered(VentureRequest request){return new Result<>(venture(request),null);}
+
+    /**
      * Token-metered variants of the three calls above. Additive on purpose: implementations that only
      * override the plain methods (every existing fake/mock ResidentMind, including test doubles) keep
      * compiling unchanged and simply report no usage, which callers must treat as "nothing to record" -
@@ -99,6 +124,14 @@ public interface ResidentMind {
      * one of these in themselves should reach for it. */
     record HabitTraitView(String key,String description) {}
     record ReflectRequest(Context perspective,List<MemoryView> source,List<HabitTraitView> habits) {}
+    /** {@code sharedThingsLeft} is what this resident still knows of that anybody could put a hand on -
+     * empty is the whole reason this call is being made, and it is handed over rather than described
+     * so the resident can see for themselves that there is nothing rather than being told so. */
+    record VentureRequest(Context perspective,List<KnownProject> sharedThingsLeft) {}
+    /** A null or blank {@code title} means "nothing I want badly enough right now", which is a real
+     * and common answer and is not a failure. Otherwise the same four things a proposal has always
+     * needed, validated by exactly the same rules any other proposal goes through. */
+    record VentureDraft(String title,String place,String objectKind,String reason,List<String> evidenceIds) {}
     /** {@code supersedesKey} non-null means this resident has genuinely noticed something recurring
      * across {@code source} and is naming it as a standing belief about someone or something, replacing
      * whatever they previously believed under the same key; null means an ordinary one-off reflection

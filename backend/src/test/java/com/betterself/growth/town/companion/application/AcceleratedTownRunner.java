@@ -345,6 +345,11 @@ public final class AcceleratedTownRunner {
             Map<String,Object> input=new LinkedHashMap<>();input.put("residentId",request.perspective().residentId());input.put("source",request.source());
             return capture("reflect",input,()->delegate.reflectMetered(request));
         }
+        public VentureDraft venture(VentureRequest request){return ventureMetered(request).value();}
+        public Result<VentureDraft> ventureMetered(VentureRequest request){
+            Map<String,Object> input=new LinkedHashMap<>();input.put("residentId",request.perspective().residentId());input.put("sharedThingsLeft",request.sharedThingsLeft());
+            return capture("venture",input,()->delegate.ventureMetered(request));
+        }
         private <T>Result<T> capture(String type,Object input,java.util.function.Supplier<Result<T>> call){
             Map<String,Object> row=new LinkedHashMap<>();row.put("callType",type);row.put("input",input);
             try{Result<T> result=call.get();row.put("status","generated");row.put("output",result.value());row.put("usage",result.usage());calls.add(row);return result;}

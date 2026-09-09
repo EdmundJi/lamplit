@@ -183,6 +183,10 @@ public class CompanionWorld {
         public boolean personalitySeeded;
         public long revision;
         public Instant lastSocialAt, lastReflectionAt;
+        /** When this resident was last asked whether they want something they cannot do alone. Kept
+         * separate from every other cadence because the question is only worth asking when the town
+         * has actually run dry - see ResidentSimulation.needsVenture. */
+        public Instant lastVentureAt;
         public Plan plan;
         public Map<String,Integer> relationships = new LinkedHashMap<>();
         /** Whether THIS resident has ever let their own private fondness for another show in

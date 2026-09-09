@@ -571,6 +571,41 @@ public final class ResidentSimulation {
     // this method: it is applyDecision() below storing the model's own stated reason for an action
     // as a reflection-typed memory. The town has had no reflection mechanism at all.
 
+    /** The shortest gap between asking one resident whether they want something new. Long, because the
+     * question is only asked when the town has nothing shared left at all, and because a person who
+     * has just said "no, nothing" does not become a different person an hour later. */
+    private static final long VENTURE_MIN_GAP_SECONDS = 8*3600L;
+    /** Everything this resident knows of that THEY could still put a hand on. Unfinished, and either
+     * they have not touched it yet - in which case a thing stopped dead for want of hands is not an
+     * obstacle, it is precisely the opening - or they have, and it still has room to move (it is not
+     * capped short of the people it needs). When this is empty the town has genuinely run out of
+     * things to do together, which is the state that produced four consecutive measured days of zero
+     * joint action and the only state {@link #needsVenture} fires in. */
+    public static List<Project> sharedThingsLeft(CompanionWorld w,String residentId){
+        return w.projects.stream()
+            .filter(p->knows(w,residentId,p.id)&&!Set.of("ready","celebrating").contains(p.status))
+            .filter(p->p.progress<100)
+            .filter(p->!p.contributors.contains(residentId)||p.contributors.size()>=p.needed)
+            .toList();
+    }
+    /** Whether it is worth asking this resident if they want something they cannot do alone. Never
+     * while they are mid-conversation, never for the avatar (its wishes are the user's), never when
+     * they already have two unfinished ideas of their own, and never when there is still something in
+     * town to join - wanting a new thing while a half-finished one sits there is not the gap this is
+     * for. */
+    public static boolean needsVenture(CompanionWorld w,String residentId,Instant at){
+        ResidentState r=state(w,residentId);
+        if(r==null||"self".equals(residentId)||activeConversation(w,residentId)!=null)return false;
+        if(Set.of("sleep","away","travel").contains(actor(w,residentId).activity()))return false;
+        if(r.lastVentureAt!=null&&Duration.between(r.lastVentureAt,at).getSeconds()<VENTURE_MIN_GAP_SECONDS)return false;
+        if(w.projects.stream().filter(p->residentId.equals(p.ownerId)&&!"celebrating".equals(p.status)).count()>=2)return false;
+        return sharedThingsLeft(w,residentId).isEmpty();
+    }
+    /** Records that the question was put, whatever the answer was. Asked and declined still counts:
+     * the point of the cadence is not to keep asking someone who has nothing they want. */
+    public static void markVentureAsked(CompanionWorld w,String residentId,Instant at){
+        ResidentState r=state(w,residentId);if(r!=null)r.lastVentureAt=at;
+    }
     public static boolean proposeDecision(CompanionWorld w,String id,long residentRevision,long intentRevision,String place,String title,String objectKind,String reason,List<String> evidence,Instant now) {
         ResidentState r=state(w,id);
         if(r==null||r.revision!=residentRevision||w.intentRevision!=intentRevision||!TownPlaces.contains(w,place)||TownPlaces.isHome(place))return false;
@@ -582,6 +617,13 @@ public final class ResidentSimulation {
     private static void propose(CompanionWorld w,ResidentState r,String place,String title,String kind,String reason,List<String> evidence,Instant now) {
         String id="wish-"+(++w.eventSequence);
         project(w,id,title,"shared",place,r.id,kind,reason,2);r.knownProjects.put(id,new ProjectKnowledge(id,place,"idea",0,now,r.id));r.goal=id;r.thought=reason;r.mood="又有了一个小主意";r.revision++;
+        // On the board by the front door, like every other shared thing in town. Without this a new
+        // wish is known only to whoever had it, which makes it exactly as unjoinable as the seeded
+        // projects were before the board existed - and an idea nobody can join is not a shared thing,
+        // it is a private to-do item that happens to say it needs two people.
+        for(ResidentState other:w.residentStates)
+            if(!other.id.equals(r.id)&&!"self".equals(other.id)&&!other.knownProjects.containsKey(id))
+                other.knownProjects.put(id,new ProjectKnowledge(id,place,"idea",0,now,r.id));
         memory(w,r.id,r.id,"observed",now,id,"我在纸上写下一个还没实现的愿望：「"+title+"」。",List.of(),7);
         if(!evidence.isEmpty())memory(w,r.id,r.id,"reflection",now,id,reason,evidence,8);
         event(w,now,"new_wish",actor(w,r.id).place(),List.of(r.id),actor(w,r.id).name()+"写下一个新愿望：「"+title+"」。",id);

@@ -49,7 +49,8 @@ public class RoutingResidentMind implements ResidentMind {
         @Value("${app.town.companion-model.routes.dayplan:qwen,deepseek}") String dayPlanRoute,
         @Value("${app.town.companion-model.routes.react:qwen,deepseek}") String reactRoute,
         @Value("${app.town.companion-model.routes.explain:qwen,deepseek}") String explainRoute,
-        @Value("${app.town.companion-model.routes.reflect:qwen,deepseek}") String reflectRoute
+        @Value("${app.town.companion-model.routes.reflect:qwen,deepseek}") String reflectRoute,
+        @Value("${app.town.companion-model.routes.venture:qwen,deepseek}") String ventureRoute
     ) {
         this.mindsByProvider = new LinkedHashMap<>();
         this.mindsByProvider.put("deepseek", deepseek);
@@ -72,7 +73,8 @@ public class RoutingResidentMind implements ResidentMind {
             // mean every resident's own account of their recent behaviour, and every reflection, simply
             // never happens, with nothing in this file looking wrong.
             "explain", parseRoute(explainRoute),
-            "reflect", parseRoute(reflectRoute)
+            "reflect", parseRoute(reflectRoute),
+            "venture", parseRoute(ventureRoute)
         );
         // Matches the pre-routing gate exactly: the companion model as a whole is only ever "on" when
         // the general AI provider is the real one (app.ai.provider=qwen) and the town toggle allows it.
@@ -117,6 +119,10 @@ public class RoutingResidentMind implements ResidentMind {
         return attempt("explain", mind -> mind.explainMetered(request));
     }
 
+    @Override public VentureDraft venture(VentureRequest request) { return ventureMetered(request).value(); }
+    @Override public Result<VentureDraft> ventureMetered(VentureRequest request) {
+        return attempt("venture", mind -> mind.ventureMetered(request));
+    }
     @Override public ReflectDraft reflect(ReflectRequest request) { return reflectMetered(request).value(); }
     @Override public Result<ReflectDraft> reflectMetered(ReflectRequest request) {
         return attempt("reflect", mind -> mind.reflectMetered(request));
