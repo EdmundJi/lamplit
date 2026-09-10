@@ -7,11 +7,8 @@ const emit = defineEmits<{ apply: [template: GoalTemplate] }>()
 
 <template>
   <section class="template-band band" aria-labelledby="template-title">
-    <div class="template-head">
-      <div>
-        <p class="eyebrow">目标模板</p>
-        <h2 id="template-title">从熟悉的场景开始</h2>
-      </div>
+    <div class="section-title template-head">
+      <h2 id="template-title">目标模板</h2>
       <span>选择后可继续调整</span>
     </div>
     <div class="template-grid">
@@ -36,9 +33,8 @@ const emit = defineEmits<{ apply: [template: GoalTemplate] }>()
 </template>
 
 <style scoped>
-.template-band { padding-top: 26px; }
-.template-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
-.template-head h2 { margin: 0; font-size: 18px; }
+.template-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
+.template-head h2 { margin: 0; font: inherit; color: inherit; }
 .template-head > span { color: var(--muted); font-size: 13px; white-space: nowrap; }
 .template-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
 .template-card { min-height: 190px; display: grid; grid-template-rows: auto auto 1fr; gap: 12px; align-items: start; padding: 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--ink); text-align: left; }

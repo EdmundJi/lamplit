@@ -82,6 +82,8 @@ input[type='checkbox'], input[type='radio'], input[type='range'] { accent-color:
 
 h1, h2, h3, p, a, label { overflow-wrap: anywhere; }
 .page-description { color: var(--muted); margin: 10px 0 0; font-size: 14px; line-height: 1.7; }
+/* /today's period tint lives on the workspace (full width) rather than .page (max-width 1144px), so it fills the shell instead of showing as a narrower band. */
+.workspace:has(> .today-page) { background: linear-gradient(180deg, var(--period-tint) 0, transparent 360px); }
 .dialog-backdrop { position: fixed; inset: 0; z-index: 50; background: rgb(10 29 20 / 48%); backdrop-filter: blur(3px); }
 body:has([aria-modal='true']) .desktop-pet:not(.standalone), body:has([aria-modal='true']) .global-unread-bar { visibility: hidden; pointer-events: none; }
 @media (max-width:760px) { .desktop-pet:not(.standalone) { max-width: calc(100vw - 24px); } }

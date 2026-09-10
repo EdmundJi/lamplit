@@ -141,10 +141,7 @@ onBeforeUnmount(() => {
 <template>
   <section class="page page--scene partners-page">
     <header class="page-head partner-head">
-      <div>
-        <p class="eyebrow">伙伴小屋</p>
-        <h1>今天也来陪陪它</h1>
-      </div>
+      <h1>今天也来陪陪它</h1>
       <div class="wallet-pill" aria-label="金币余额">
         <span class="coin-mark" aria-hidden="true"><Coins :size="18" /></span>
         <span class="wallet-copy"><small>我的金币</small><strong>{{ wallet.coinBalance }}</strong></span>
@@ -198,16 +195,13 @@ onBeforeUnmount(() => {
             <span class="species-token" :data-species="selectedPet.speciesCode">{{ selectedPet.speciesName }}</span>
             <span>{{ selectedPet.breed }} · {{ selectedPet.furColor }}</span>
           </div>
-          <div class="name-row">
-            <h2 id="partner-title">{{ selectedPet.name }}</h2>
-            <strong class="level-badge">LV.{{ selectedPet.level }}</strong>
-          </div>
+          <h2 id="partner-title">{{ selectedPet.name }}</h2>
           <p class="companion-copy">正在你的小屋里放松，看到你来会很开心。</p>
+          <dl class="stats pet-stats">
+            <div><dt>等级</dt><dd>LV.{{ selectedPet.level }}</dd></div>
+            <div><dt><Heart :size="12" fill="currentColor" />好感度</dt><dd>{{ selectedPet.affection }} / {{ selectedPet.nextLevelAffection }}</dd></div>
+          </dl>
           <div class="affection-panel">
-            <div class="level-row">
-              <span><Heart :size="15" fill="currentColor" />好感度</span>
-              <strong>{{ selectedPet.affection }} / {{ selectedPet.nextLevelAffection }}</strong>
-            </div>
             <div class="progress" aria-label="好感度进度"><span :style="{ width: `${progressPercent}%` }" /></div>
             <small>每日首次互动可获得 2 点好感度</small>
           </div>
@@ -239,8 +233,7 @@ onBeforeUnmount(() => {
         <div class="desktop-pet-control">
           <span class="desktop-pet-icon" aria-hidden="true"><MonitorUp :size="22" /></span>
           <div>
-            <p class="eyebrow">PC 桌宠</p>
-            <h2 id="desktop-pet-title">让{{ selectedPet.name }}陪在桌面一角</h2>
+            <h2 id="desktop-pet-title">PC 桌宠</h2>
             <p>{{ isDesktopPet ? '当前正在使用这位伙伴。桌宠会跟随你浏览今日、目标和洞察页面。' : '一次只能设置一位桌宠，新的选择会自动替换当前伙伴。' }}</p>
           </div>
           <button type="button" :class="isDesktopPet ? 'secondary' : 'interact-button'" @click="toggleDesktopPet">
@@ -258,10 +251,7 @@ onBeforeUnmount(() => {
 
       <form v-if="panel" class="band stack pet-form" @submit.prevent="savePet">
         <div class="form-head">
-          <div>
-            <p class="eyebrow">{{ panel === 'edit' ? '自定义伙伴' : '选择伙伴' }}</p>
-            <h2>{{ panel === 'edit' ? '修改名字、种类和颜色' : '创建新的 2D 小动物' }}</h2>
-          </div>
+          <h2>{{ panel === 'edit' ? '自定义伙伴' : '选择伙伴' }}</h2>
           <button class="dialogue-close" type="button" aria-label="关闭伙伴资料" @click="panel = null"><X :size="18" /></button>
         </div>
         <div v-if="panel === 'create'" class="species-grid" aria-label="选择动物">
@@ -288,7 +278,7 @@ onBeforeUnmount(() => {
 
       <section class="companion-roster band" aria-labelledby="roster-title">
         <div class="section-head">
-          <div><p class="eyebrow">伙伴列表</p><h2 id="roster-title">今天想陪谁</h2></div>
+          <h2 id="roster-title">伙伴列表</h2>
           <span class="section-count">{{ profile.pets.length }} 位伙伴</span>
         </div>
         <div class="pet-list">
@@ -305,7 +295,7 @@ onBeforeUnmount(() => {
 
       <section class="shop band" aria-labelledby="shop-title">
         <div class="section-head shop-head">
-          <div><p class="eyebrow">小屋商店</p><h2 id="shop-title">带一份小礼物回去</h2></div>
+          <h2 id="shop-title">小屋商店</h2>
           <div class="shop-tools">
             <ShoppingBag :size="20" aria-hidden="true" />
             <SegmentedControl
@@ -353,7 +343,6 @@ onBeforeUnmount(() => {
   color: var(--pet-ink);
 }
 
-.partners-page .eyebrow { color: var(--pet-coral-strong); letter-spacing: 0; }
 .partner-head { align-items: center; }
 .partner-head h1 { max-width: 16ch; font-family: ui-rounded, "SF Pro Rounded", "PingFang SC", sans-serif; color: var(--pet-ink); }
 
@@ -374,16 +363,17 @@ onBeforeUnmount(() => {
 .pet-panel { min-width: 0; display: grid; gap: 16px; padding-right: 8px; }
 .identity-line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; color: var(--pet-muted); font-size: 13px; }
 .species-token { min-height: 28px; display: inline-flex; align-items: center; padding: 0 10px; border-radius: 999px; background: #e9f4ec; color: #3d795c; font-weight: 800; }
-.name-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .pet-panel h2, .section-head h2, .pet-form h2, .desktop-pet-control h2 { margin: 0; font-family: ui-rounded, "SF Pro Rounded", "PingFang SC", sans-serif; font-size: 22px; letter-spacing: 0; }
 .pet-panel h2 { min-width: 0; overflow-wrap: anywhere; font-size: 34px; line-height: 1.1; }
-.level-badge { flex: 0 0 auto; min-height: 34px; display: inline-flex; align-items: center; padding: 0 10px; border: 1px solid #9bb9dd; border-radius: var(--radius); background: #eef5ff; color: #436b9a; font-size: 13px; }
 .companion-copy { margin: -3px 0 0; color: var(--pet-muted); line-height: 1.65; }
+.pet-stats { display: flex; flex-wrap: wrap; gap: 0; margin: 4px 0 0; }
+.pet-stats > div { padding: 0 18px; border-right: 1px solid var(--pet-line); }
+.pet-stats > div:first-child { padding-left: 0; }
+.pet-stats > div:last-child { border-right: 0; }
+.pet-stats dt { display: inline-flex; align-items: center; gap: 5px; margin: 0; color: var(--pet-muted); font-size: 12px; }
+.pet-stats dt svg { color: var(--pet-coral); }
+.pet-stats dd { margin: 4px 0 0; color: var(--pet-coral-strong); font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .affection-panel { display: grid; gap: 10px; padding: 14px; border: 1px solid var(--pet-line); border-radius: var(--radius-card); background: var(--pet-paper); }
-.level-row { display: flex; justify-content: space-between; gap: 12px; color: var(--pet-muted); font-size: 14px; }
-.level-row span { display: inline-flex; align-items: center; gap: 6px; }
-.level-row svg { color: var(--pet-coral); }
-.level-row strong { color: var(--pet-coral-strong); }
 .affection-panel small { color: var(--pet-muted); font-size: 11px; }
 .partners-page .progress { height: 10px; background: #f2e3d3; }
 .partners-page .progress > span { background: linear-gradient(90deg, var(--pet-coral), var(--pet-gold), var(--pet-mint)); }
@@ -402,7 +392,6 @@ onBeforeUnmount(() => {
 .desktop-pet-setting { padding: 18px 0; }
 .desktop-pet-control { display: grid; grid-template-columns: 46px minmax(0, 1fr) auto; align-items: center; gap: 13px; }
 .desktop-pet-icon { width: 46px; height: 46px; display: grid; place-items: center; border: 1px solid #a9c6b6; border-radius: var(--radius-card); background: #e7f2eb; color: #42745a; }
-.desktop-pet-control .eyebrow { margin-bottom: 3px; }
 .desktop-pet-control h2 { font-size: 18px; }
 .desktop-pet-control p:last-child { margin: 5px 0 0; color: var(--pet-muted); font-size: 12px; line-height: 1.55; }
 .desktop-pet-control > button { min-width: 122px; }
@@ -510,7 +499,6 @@ onBeforeUnmount(() => {
   .home-scene { border-radius: var(--radius-scene) var(--radius-scene) var(--radius-card) var(--radius-card); }
   .pet-area { min-height: 280px; border-radius: var(--radius-scene) var(--radius-scene) var(--radius) var(--radius); }
   .scene-label { top: 14px; left: 15px; }
-  .name-row { align-items: flex-start; }
   .pet-panel h2 { font-size: 28px; }
   .pet-list { grid-auto-columns: minmax(206px, 82vw); }
   .shop-item { grid-template-columns: 82px minmax(0, 1fr); gap: 10px; }
@@ -556,7 +544,7 @@ onBeforeUnmount(() => {
 .partners-page .wallet-copy small { color: var(--muted); }
 .partners-page .interaction-option, .partners-page .shop-tabs { background: var(--surface); color: var(--ink); border-color: var(--border); }
 .partners-page .interaction-option.active, .partners-page .interaction-option:hover, .partners-page .pet-card.selected, .partners-page .species-grid button.active { background: var(--primary-soft); color: var(--primary-strong); border-color: var(--primary); }
-.partners-page .field input, .partners-page .species-token, .partners-page .level-badge, .partners-page .desktop-pet-icon { background: var(--surface-muted); color: var(--primary-strong); border-color: var(--border); }
+.partners-page .field input, .partners-page .species-token, .partners-page .desktop-pet-icon { background: var(--surface-muted); color: var(--primary-strong); border-color: var(--border); }
 .partners-page .scene-label, .partners-page .dialogue-bar { background: var(--surface); color: var(--ink); border-color: var(--border); box-shadow: var(--shadow-soft); }
 .partners-page .dialogue-bar::after { background: var(--surface); border-color: var(--border); }
 .partners-page .dialogue-action { background: var(--primary-soft); color: var(--primary-strong); }

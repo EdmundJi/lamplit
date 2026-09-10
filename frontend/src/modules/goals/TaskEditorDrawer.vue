@@ -41,7 +41,6 @@ function chooseRoleByCode(code: string) {
     <button type="button" class="drawer-close secondary" :disabled="busy" @click="emit('cancel')" aria-label="关闭任务编辑">关闭</button>
     <div class="task-builder-head">
       <div>
-        <p class="eyebrow">周期任务</p>
         <h2>添加任务</h2>
       </div>
       <span v-if="presetDraw" class="refresh-quota">今日还可换 {{ presetDraw.refreshesRemaining }} 次</span>

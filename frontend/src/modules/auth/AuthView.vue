@@ -79,7 +79,6 @@ function backToLogin() {
         <span>更好的自己 · Better Self</span>
       </div>
       <div class="intro-copy">
-        <p class="eyebrow">一座由日常行动建成的小镇</p>
         <h1>更好的自己</h1>
         <p class="intro-lead">让每一步，<br>长成看得见的生活。</p>
         <p class="intro-detail">把长期目标放回今天，用一件可以完成的小事，慢慢建立属于你的节奏。</p>
@@ -188,7 +187,6 @@ function backToLogin() {
 .brand-line { display: inline-flex; align-items: center; gap: 12px; color: #694936; font-size: 13px; font-weight: 800; letter-spacing: 0; text-transform: uppercase; }
 .seal { width: 42px; height: 42px; display: grid; place-items: center; border-radius: var(--radius-card); background: #b94f3b; color: white; font-size: 16px; font-weight: 900; line-height: 1; }
 .intro-copy { max-width: 610px; }
-.auth-intro .eyebrow { color: #8f4433; }
 .intro-copy h1 { margin: 12px 0 15px; max-width: 9em; font-family: ui-rounded, "SF Pro Rounded", "PingFang SC", sans-serif; font-size: 64px; line-height: 1.02; letter-spacing: 0; }
 .intro-lead { margin: 0 0 10px; color: #53382b; font-size: 23px; font-weight: 750; line-height: 1.45; }
 .intro-detail { max-width: 500px; margin: 0; color: #6e4d3a; line-height: 1.8; }
@@ -253,7 +251,6 @@ fieldset label { font-size: 14px; }
 .brand-line { color: #d3dfce; letter-spacing: .08em; font-weight: 500; font-size: 12px; }
 .seal { background: var(--sun); color: var(--forest); border-radius: var(--radius-card) var(--radius-card) var(--radius) var(--radius); }
 .intro-copy { position: relative; z-index: 1; margin-top: 40px; }
-.auth-intro .eyebrow { color: #b1c3a7; font-size: 11px; }
 .intro-copy h1 { font-size: 17px; line-height: 1.5; font-weight: 500; margin: 10px 0 16px; }
 .intro-lead { font-size: clamp(34px, 3.6vw, 54px); font-weight: 650; line-height: 1.35; letter-spacing: -1px; color: var(--on-forest); margin-bottom: 20px; }
 .intro-detail { max-width: 360px; color: #b8cdbb; font-size: 13px; }

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { CalendarClock, ChevronLeft, ChevronRight, Clock3, ListPlus, Pause, Play, Plus, RefreshCw, CheckCircle2 } from 'lucide-vue-next'
+import EmptyState from '../../shared/ui/EmptyState.vue'
 import { disclose as vDisclose } from '../../shared/ui/interaction/disclose'
 import { rruleLabel, roleNames, statusLabel, type Goal, type Task } from './goals.logic'
 
@@ -32,11 +33,8 @@ const emit = defineEmits<{
 <template>
   <section class="workspace" aria-label="目标任务工作区">
     <div class="goal-column">
-      <div class="section-head">
-        <div>
-          <p class="eyebrow">我的方向</p>
-          <h2>目标</h2>
-        </div>
+      <div class="section-title section-head">
+        <h2>目标</h2>
         <div class="stack-arrows">
           <button class="icon-button" type="button" aria-label="上一个目标" :disabled="!canPrevGoals" @click="emit('prev')">
             <ChevronLeft :size="17" />
@@ -86,17 +84,14 @@ const emit = defineEmits<{
           </button>
         </article>
       </div>
-      <div v-else class="empty goal-empty">
-        <h3>还没有目标</h3>
-        <p>先定义一个 14-84 天的清晰结果。</p>
-        <button class="primary" type="button" @click="emit('open-goal')"><Plus :size="17" />新建目标</button>
-      </div>
+      <EmptyState v-else sprite="flowers_1" title="还没有目标" description="先定义一个 14-84 天的清晰结果。">
+        <template #actions><button class="secondary" type="button" @click="emit('open-goal')"><Plus :size="17" />新建目标</button></template>
+      </EmptyState>
     </div>
 
     <div class="task-column">
-      <div class="section-head">
+      <div class="section-title section-head">
         <div>
-          <p class="eyebrow">当前目标</p>
           <h2>{{ currentGoal ? currentGoal.title : '待添加任务' }}</h2>
           <p v-if="currentGoal" class="task-column-note">完成标准：{{ currentGoal.description || '尚未填写' }}</p>
         </div>
@@ -130,14 +125,11 @@ const emit = defineEmits<{
           </div>
         </article>
       </div>
-      <div v-else-if="currentGoal" class="empty task-empty">
-        <CalendarClock :size="24" />
-        <h3>这个目标还没有任务</h3>
-        <button v-if="currentGoal.status === 'ACTIVE'" class="secondary" type="button" @click="emit('open-task', currentGoal.publicId)">
-          <ListPlus :size="16" />
-          添加任务
-        </button>
-      </div>
+      <EmptyState v-else-if="currentGoal" sprite="duck_duckling_yellow_idle_1" title="这个目标还没有任务">
+        <template v-if="currentGoal.status === 'ACTIVE'" #actions>
+          <button class="secondary" type="button" @click="emit('open-task', currentGoal.publicId)"><ListPlus :size="16" />添加任务</button>
+        </template>
+      </EmptyState>
       <p v-else class="empty">创建目标后即可添加任务。</p>
     </div>
   </section>
@@ -145,10 +137,9 @@ const emit = defineEmits<{
 
 <style scoped>
 .workspace { display: grid; grid-template-columns: minmax(0, .9fr) minmax(380px, 1.25fr); gap: 24px; padding: 0 0 28px; }
-.goal-column, .task-column { min-width: 0; padding: 22px; border: 1px solid var(--border); background: var(--surface); border-radius: var(--radius-panel); }
-.goal-column { background: var(--surface-muted); }
+.goal-column, .task-column { min-width: 0; }
 .section-head, .goal-top, .task-row-main, .goal-footer { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-.section-head h2 { margin: 0; font-size: 18px; }
+.section-head h2 { margin: 0; font: inherit; color: inherit; }
 .goal-more { position: relative; }
 .goal-more summary { display: grid; place-items: center; min-width: 62px; height: 36px; padding: 0 12px; border: 1px solid var(--border); border-radius: var(--radius); cursor: pointer; list-style: none; font-size: 13px; font-weight: 650; color: var(--muted); }
 .goal-more summary::-webkit-details-marker { display: none; }
@@ -179,9 +170,6 @@ const emit = defineEmits<{
 .task-row > p { margin: 9px 0 0; color: var(--muted); font-size: 13px; line-height: 1.55; overflow-wrap: anywhere; }
 .task-meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px 14px; margin-top: 13px; padding-top: 11px; border-top: 1px solid var(--surface-muted); color: var(--muted); font-size: 12px; }
 .task-meta svg { flex: none; color: var(--accent); }
-.task-empty, .goal-empty { display: grid; justify-items: center; gap: 8px; margin-top: 12px; border: 1px dashed var(--border); border-radius: var(--radius); padding: 38px 18px; }
-.task-empty h3, .goal-empty h3 { margin: 0; color: var(--ink); font-size: 16px; }
-.task-empty svg { color: var(--accent); }
 @media (prefers-reduced-motion: no-preference) {
   .goal-card.current, .task-row { animation: item-enter var(--motion-medium) var(--ease) both; }
 }
@@ -189,9 +177,6 @@ const emit = defineEmits<{
 @media (max-width: 900px) {
   .workspace { grid-template-columns: 1fr; }
   .goal-card { min-height: 290px; }
-}
-@media (max-width: 760px) {
-  .goal-column, .task-column { padding: 16px; }
 }
 @media (max-width: 520px) {
   .goal-card { min-height: 360px; }

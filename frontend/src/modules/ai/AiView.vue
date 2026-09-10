@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { ArrowRight, ClipboardCheck, FileJson2, History, Loader2, Plus, Send, ShieldCheck, SlidersHorizontal, Sparkles, Timer } from 'lucide-vue-next'
+import { ArrowRight, ClipboardCheck, History, Loader2, Plus, Send, ShieldCheck, SlidersHorizontal, Sparkles, Timer } from 'lucide-vue-next'
 import { disclose as vDisclose } from '../../shared/ui/interaction/disclose'
 import SegmentedControl from '../../shared/ui/interaction/SegmentedControl.vue'
 import SnapSlider from '../../shared/ui/interaction/SnapSlider.vue'
 import { api } from '../../shared/api/client'
 import { postSse } from '../../shared/api/sse'
 import MarkdownDocument from '../../shared/ui/MarkdownDocument.vue'
+import EmptyState from '../../shared/ui/EmptyState.vue'
 import { pickThinkingMessage } from './ai-thinking'
 import { saveGoalDraft, type GoalDraft } from './goal-draft'
 
@@ -235,11 +236,7 @@ onBeforeUnmount(() => {
 <template>
   <section class="page page--talk ai-page">
     <header class="page-head">
-      <div>
-        <p class="eyebrow">内容由 AI 生成，请核对后使用</p>
-        <h1>AI 助手</h1>
-        <p class="page-description">把还没理清的想法，一起变成可行动的下一步。</p>
-      </div>
+      <h1>AI 助手</h1>
       <button class="secondary" @click="reset">
         <Plus :size="17" />
         新会话
@@ -280,10 +277,12 @@ onBeforeUnmount(() => {
                 </Transition>
               </div>
             </div>
-            <div v-if="!messages.length && !loadingSession && !thinking" class="empty">
-              <h2>从一个具体问题开始</h2>
-              <p>例如：把本周目标拆成两项 25 分钟以内的行动，并说明为什么这么安排。</p>
-            </div>
+            <EmptyState
+              v-if="!messages.length && !loadingSession && !thinking"
+              sprite="dog_labrador_brown_idle_1"
+              title="从一个具体问题开始"
+              description="例如：把本周目标拆成两项 25 分钟以内的行动，并说明为什么这么安排。"
+            />
             <div v-if="loadingSession" class="session-loading" role="status" aria-live="polite">
               <Loader2 :size="18" class="spinning" />
               正在打开历史对话
@@ -298,15 +297,13 @@ onBeforeUnmount(() => {
               <Send :size="18" />
             </button>
           </form>
+          <p class="ai-disclaimer">内容由 AI 生成，请核对后使用</p>
         </div>
 
         <aside class="ai-side">
           <section class="goal-draft-panel" aria-labelledby="goal-draft-title">
-            <div class="panel-title">
-              <div><p class="eyebrow">任务推荐</p><h2 id="goal-draft-title">目标草案</h2></div>
-              <FileJson2 :size="19" />
-            </div>
-            <button v-if="!goalDraft" class="primary generate-goal" type="button" :disabled="!session || !messages.length || generatingGoal" @click="generateGoalTemplate">
+            <h2 id="goal-draft-title" class="section-title">任务推荐</h2>
+            <button v-if="!goalDraft" class="secondary generate-goal" type="button" :disabled="!session || !messages.length || generatingGoal" @click="generateGoalTemplate">
               <Loader2 v-if="generatingGoal" :size="17" class="spinning" />
               <Sparkles v-else :size="17" />
               {{ generatingGoal ? '正在生成' : '根据对话生成' }}
@@ -329,17 +326,14 @@ onBeforeUnmount(() => {
                 </div>
               </div>
               <details v-disclose class="json-preview"><summary>查看 JSON</summary><pre>{{ goalDraftJson }}</pre></details>
-              <div class="draft-actions"><button class="secondary" type="button" :disabled="generatingGoal" @click="generateGoalTemplate">重新生成</button><button class="primary" type="submit">一键填入<ArrowRight :size="16" /></button></div>
+              <div class="draft-actions"><button class="secondary" type="button" :disabled="generatingGoal" @click="generateGoalTemplate">重新生成</button><button class="secondary" type="submit">一键填入<ArrowRight :size="16" /></button></div>
             </form>
             <p v-else-if="!messages.length" class="draft-empty">完成一段对话后即可生成。</p>
           </section>
 
           <section class="history-panel" aria-labelledby="history-title">
             <div class="panel-title">
-              <div>
-                <p class="eyebrow">历史对话</p>
-                <h2 id="history-title">选择后继续聊</h2>
-              </div>
+              <h2 id="history-title" class="section-title">历史对话</h2>
               <button class="icon-button" type="button" aria-label="刷新历史对话" @click="loadHistory">
                 <Loader2 v-if="loadingHistory" :size="17" class="spinning" />
                 <History v-else :size="17" />
@@ -366,8 +360,7 @@ onBeforeUnmount(() => {
           </section>
 
           <section class="suggestion-panel" aria-labelledby="suggestion-title">
-            <p class="eyebrow">建议解释</p>
-            <h2 id="suggestion-title">采纳前先看四件事</h2>
+            <h2 id="suggestion-title" class="section-title">建议解释</h2>
             <div class="check-list">
               <article v-for="item in suggestionChecks" :key="item.title">
                 <component :is="item.icon" :size="18" />
@@ -402,10 +395,12 @@ onBeforeUnmount(() => {
 .composer { display: grid; grid-template-columns: minmax(0, 1fr) var(--control); align-items: end; gap: 10px; padding-top: 16px; }
 .composer textarea { min-height: 84px; resize: vertical; border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; background: var(--surface); color: var(--ink); }
 .composer .icon-button { align-self: end; }
-.ai-side { display: grid; gap: 14px; }
-.history-panel, .suggestion-panel, .goal-draft-panel { display: grid; gap: 14px; padding: 16px; border: 1px solid var(--border); border-radius: calc(var(--radius) + 4px); background: color-mix(in srgb, var(--surface) 90%, transparent); }
-.panel-title { display: flex; align-items: start; justify-content: space-between; gap: 12px; }
-.panel-title h2 { margin: 0; font-size: 18px; }
+.ai-disclaimer { margin: 8px 0 0; color: var(--muted); font-size: 12px; }
+.ai-side { display: grid; }
+.history-panel, .suggestion-panel, .goal-draft-panel { display: grid; gap: 14px; }
+.ai-side > section:first-child .section-title, .ai-side > section:first-child .panel-title { margin-top: 0; }
+.panel-title { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 32px 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+.panel-title .section-title { flex: 1; margin: 0; padding: 0; border: 0; }
 .spinning { animation: spin .8s linear infinite; }
 .history-list { display: grid; gap: 8px; }
 .history-item { min-height: 72px; display: grid; gap: 7px; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--ink); text-align: left; }
@@ -415,7 +410,6 @@ onBeforeUnmount(() => {
 .history-meta small { color: var(--muted); font-size: 12px; }
 .history-preview { color: var(--muted); font-size: 13px; line-height: 1.45; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .history-empty { margin: 0; color: var(--muted); font-size: 13px; }
-.goal-draft-panel .panel-title > svg { color: var(--primary); }
 .generate-goal { width: 100%; }
 .draft-empty, .draft-error { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
 .draft-error { color: var(--danger); }
@@ -444,7 +438,6 @@ onBeforeUnmount(() => {
 .thinking-copy-enter-active, .thinking-copy-leave-active { transition: opacity var(--motion-fast) var(--ease), transform var(--motion-fast) var(--ease); }
 .thinking-copy-enter-from { opacity: 0; transform: translateY(3px); }
 .thinking-copy-leave-to { opacity: 0; transform: translateY(-3px); }
-.suggestion-panel h2 { margin: 0; font-size: 18px; }
 .check-list { display: grid; gap: 12px; }
 .check-list article { display: grid; grid-template-columns: 22px 1fr; gap: 10px; padding-bottom: 12px; border-bottom: 1px solid var(--surface-muted); }
 .check-list article:last-child { border-bottom: 0; padding-bottom: 0; }
@@ -501,7 +494,6 @@ onBeforeUnmount(() => {
 .chat-column { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-panel); padding: 20px; }
 .chat { border: 0; padding: 10px 0; min-height: 360px; background: transparent; }
 .scene-tabs { border: 0; }
-.ai-side > section { border-radius: var(--radius-panel); background: var(--surface); }
 .message > span { border-radius: 50%; }
 .composer { border-top: 1px solid var(--border); }
 .composer textarea { background: var(--surface-muted); border-radius: var(--radius); }

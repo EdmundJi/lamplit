@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ArrowLeft, Send, Smile, Users } from 'lucide-vue-next'
 import { useAuthStore } from '../auth/auth.store'
+import EmptyState from '../../shared/ui/EmptyState.vue'
 import EmojiPicker from './EmojiPicker.vue'
 import ConversationRail from './ConversationRail.vue'
 import EmojiText from './EmojiText.vue'
@@ -82,11 +83,7 @@ onBeforeUnmount(stopPoll)
           </div>
         </article>
       </template>
-      <div v-else class="empty">
-        <Smile :size="26" />
-        <h3>群里还没有消息</h3>
-        <p>打个招呼，开始这段同行。</p>
-      </div>
+      <EmptyState v-else sprite="duck_brown_idle_1" title="群里还没有消息" description="打个招呼，开始这段同行。" />
     </div>
 
     <div class="composer">
@@ -125,10 +122,6 @@ onBeforeUnmount(stopPoll)
 .msg-bubble { min-width: 0; max-width: 70%; max-width: min(70%, 560px); padding: 9px 13px; border: 1px solid var(--border); border-radius: var(--radius) var(--radius-panel) var(--radius-panel) var(--radius-panel); background: var(--surface); color: var(--ink); overflow-wrap: break-word; }
 .msg-row.mine .msg-bubble { border-color: color-mix(in srgb, var(--primary) 36%, var(--border)); border-radius: var(--radius-panel) var(--radius) var(--radius-panel) var(--radius-panel); background: linear-gradient(145deg, var(--primary-soft), color-mix(in srgb, var(--primary-soft) 60%, var(--surface))); }
 .msg-time { color: var(--muted); font-size: 11px; padding: 0 2px; }
-.empty { border: 1px dashed var(--border); border-radius: var(--radius); padding: 30px 20px; display: grid; place-items: center; justify-items: center; gap: 7px; color: var(--muted); text-align: center; }
-.empty h3 { margin: 0; color: var(--ink); font-size: 16px; }
-.empty p { margin: 0; font-size: 13px; }
-.empty svg { color: var(--primary); }
 .composer { position: sticky; bottom: 0; margin-top: 14px; display: grid; gap: 10px; }
 .picker-wrap { justify-self: start; }
 .composer-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 9px; align-items: end; padding: 10px; border: 1px solid var(--border); border-radius: calc(var(--radius) + 4px); background: var(--surface); }

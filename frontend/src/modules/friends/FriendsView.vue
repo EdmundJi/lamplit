@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
-import { ChevronRight, MailCheck, MailPlus, MessageCircle, Send, UserPlus, Users, X } from 'lucide-vue-next'
+import { ChevronRight, MailCheck, MessageCircle, Send, UserPlus, Users, X } from 'lucide-vue-next'
 import { onDataChanged } from '../../shared/data-sync'
+import EmptyState from '../../shared/ui/EmptyState.vue'
 import { friendInitial as initial, memberSinceLabel, useFriendDirectory } from './friends.logic'
 
 const { list, loading, busy, error, feedback, load, sendRequest: submitRequest, accept, reject, remove } = useFriendDirectory()
@@ -33,14 +34,10 @@ onBeforeUnmount(stopDataSync)
 <template>
   <section class="page friends-page">
     <header class="page-head">
-      <div>
-        <p class="eyebrow">同行的伙伴</p>
-        <h1>好友</h1>
-        <p class="page-description">各自向前，也在彼此的生活里留一盏灯。</p>
-      </div>
+      <h1>好友</h1>
       <div class="page-head-actions">
         <span v-if="list.friends.length" class="friend-count"><Users :size="16" /><span>{{ list.friends.length }} 位好友</span></span>
-        <button class="primary" type="button" :aria-expanded="showAdd" aria-controls="add-friend-panel" @click="toggleAdd">
+        <button class="secondary" type="button" :aria-expanded="showAdd" aria-controls="add-friend-panel" @click="toggleAdd">
           <UserPlus :size="16" />{{ showAdd ? '收起添加' : '添加好友' }}
         </button>
       </div>
@@ -52,8 +49,8 @@ onBeforeUnmount(stopDataSync)
     </div>
 
     <form v-if="showAdd" id="add-friend-panel" class="band add-friend-band" @submit.prevent="sendRequest">
-      <div class="section-title">
-        <div><p class="eyebrow">添加好友</p><h2>通过注册邮箱找到对方</h2></div>
+      <div class="section-head">
+        <h2 class="section-title">添加好友</h2>
         <button class="icon-button" type="button" aria-label="收起添加好友" @click="showAdd = false"><X :size="18" /></button>
       </div>
       <div class="add-friend-row">
@@ -66,8 +63,8 @@ onBeforeUnmount(stopDataSync)
     <p v-if="loading" class="empty">正在整理好友列表…</p>
     <template v-else>
       <section v-if="list.incoming.length" class="band" aria-labelledby="incoming-title">
-        <div class="section-title">
-          <div><p class="eyebrow">待你决定</p><h2 id="incoming-title">收到的申请</h2></div>
+        <div class="section-head">
+          <h2 id="incoming-title" class="section-title">收到的申请</h2>
           <span class="section-count">{{ list.incoming.length }}</span>
         </div>
         <div class="request-list">
@@ -86,8 +83,8 @@ onBeforeUnmount(stopDataSync)
       </section>
 
       <section v-if="list.outgoing.length" class="band" aria-labelledby="outgoing-title">
-        <div class="section-title">
-          <div><p class="eyebrow">等待回应</p><h2 id="outgoing-title">发出的申请</h2></div>
+        <div class="section-head">
+          <h2 id="outgoing-title" class="section-title">发出的申请</h2>
           <span class="section-count">{{ list.outgoing.length }}</span>
         </div>
         <div class="request-list">
@@ -103,8 +100,8 @@ onBeforeUnmount(stopDataSync)
       </section>
 
       <section class="band" aria-labelledby="friends-title">
-        <div class="section-title">
-          <div><p class="eyebrow">成长中的朋友</p><h2 id="friends-title">好友列表</h2></div>
+        <div class="section-head">
+          <h2 id="friends-title" class="section-title">好友列表</h2>
           <span class="section-count">{{ list.friends.length }}</span>
         </div>
         <div v-if="list.friends.length" class="friend-grid">
@@ -120,11 +117,7 @@ onBeforeUnmount(stopDataSync)
             <RouterLink class="chat-entry" :to="`/friends/${item.publicId}/chat`" :aria-label="`给${item.displayName}发消息`" title="发消息"><MessageCircle :size="17" /></RouterLink>
           </article>
         </div>
-        <div v-else class="empty">
-          <MailPlus :size="26" />
-          <h3>还没有好友</h3>
-          <p>点右上角的「添加好友」，输入对方的注册邮箱，发送第一份同行邀请。</p>
-        </div>
+        <EmptyState v-else sprite="rabbit_brown_idle_1" title="还没有好友" description="点右上角的「添加好友」，输入对方的注册邮箱，发送第一份同行邀请。" />
       </section>
     </template>
   </section>
@@ -134,8 +127,8 @@ onBeforeUnmount(stopDataSync)
 .page-head-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .friend-count { display: inline-flex; align-items: center; gap: 8px; padding: 8px 13px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--primary); font-size: 13px; font-weight: 700; }
 .add-friend-band { display: grid; gap: 13px; }
-.section-title { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 4px; color: var(--primary); }
-.section-title h2 { margin: 0; font-size: 18px; color: var(--ink); }
+.section-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 32px 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+.section-head .section-title { flex: 1; margin: 0; padding: 0; border: 0; }
 .section-count { padding: 3px 9px; border-radius: 999px; background: var(--surface-muted); color: var(--muted); font-size: 12px; font-weight: 800; }
 .add-friend-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; }
 .add-friend-note { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.6; }
@@ -155,10 +148,6 @@ onBeforeUnmount(stopDataSync)
 .friend-copy small { color: var(--muted); font-size: 12px; }
 .incoming-card .friend-avatar { background: linear-gradient(145deg, var(--accent), color-mix(in srgb, var(--accent) 72%, var(--amber))); }
 .request-actions { display: flex; gap: 8px; }
-.empty { border: 1px dashed var(--border); border-radius: var(--radius); padding: 34px 20px; display: grid; place-items: center; justify-items: center; gap: 7px; color: var(--muted); text-align: center; }
-.empty h3 { margin: 0; color: var(--ink); font-size: 16px; }
-.empty p { margin: 0; font-size: 13px; }
-.empty svg { color: var(--primary); }
 @media (prefers-reduced-motion: no-preference) {
   .friend-card { animation: friend-enter var(--motion-medium) var(--ease) both; }
   .friend-card:nth-child(2) { animation-delay: 50ms; }

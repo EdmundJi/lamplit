@@ -24,7 +24,7 @@ onBeforeUnmount(stopDataSync)
 <template>
   <aside class="conversation-rail" aria-label="会话列表">
     <header>
-      <p class="eyebrow">消息</p>
+      <h2 class="section-title">消息</h2>
       <RouterLink to="/friends/chat">全部会话</RouterLink>
     </header>
     <p v-if="loading" class="rail-hint">正在读取会话…</p>
@@ -57,7 +57,7 @@ onBeforeUnmount(stopDataSync)
   .conversation-rail { display: block; width: 268px; flex: none; align-self: start; position: sticky; top: 24px; padding: 14px; border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface); max-height: calc(100vh - 140px); overflow-y: auto; }
 }
 .conversation-rail header { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
-.conversation-rail header .eyebrow { margin: 0; }
+.conversation-rail header .section-title { flex: 1; margin: 0; padding: 0; border: 0; font-size: 13px; color: var(--muted); }
 .conversation-rail header a { color: var(--muted); font-size: 12px; text-decoration: none; }
 .conversation-rail header a:hover { color: var(--primary); }
 .rail-hint { margin: 0; color: var(--muted); font-size: 13px; }

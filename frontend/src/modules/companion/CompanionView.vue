@@ -149,7 +149,7 @@ onBeforeUnmount(() => { town.dispose(); clearInterval(ticker); clearInterval(pol
   <main class="companion-page" :class="{ quiet }" aria-labelledby="companion-title">
     <header class="street-heading">
       <RouterLink class="back-link" to="/today" aria-label="回到今日"><ArrowLeft :size="17"/><span>今日</span></RouterLink>
-      <div class="street-brand"><span class="brand-symbol">✳</span><div><h1 id="companion-title">梧桐小街</h1><p>这里的生活，正在发生</p></div></div>
+      <div class="street-brand"><span class="brand-symbol">✳</span><div><h1 id="companion-title">梧桐小街</h1></div></div>
       <div class="street-tools"><span class="local-time">{{ time }} <span>· {{ world?.weather === 'rain' ? '细雨' : '晴' }} · {{ cafeStatusLabel }}</span></span><button class="tool-button" :aria-label="soundEnabled ? '关闭环境声' : '打开环境声'" :aria-pressed="soundEnabled" :disabled="!world" @click="soundEnabled = !soundEnabled; if (soundEnabled) quiet = false"><Volume2 v-if="soundEnabled" :size="17"/><VolumeX v-else :size="17"/><span>环境声{{ soundEnabled ? '开' : '关' }}</span></button><button class="tool-button" :aria-label="textBubbles ? '关闭文字气泡' : '打开文字气泡'" :title="textBubbles ? '关闭文字气泡' : '打开文字气泡'" :aria-pressed="textBubbles" @click="toggleTextBubbles"><MessageCircle :size="17"/><span>文字气泡</span></button><button class="tool-button" :aria-label="quiet ? '退出安静模式' : '安静模式'" :aria-pressed="quiet" @click="toggleQuiet"><Moon :size="17"/><span>{{ quiet ? '退出安静' : '安静模式' }}</span></button></div>
     </header>
     <p v-if="error" class="notice error" role="alert">{{ error }} <button class="text-button" :disabled="loading || busy" @click="town.load()">重新连接</button></p>

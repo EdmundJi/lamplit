@@ -135,7 +135,6 @@ async function finish() {
 
     <section v-if="step === 1" class="setup-band" aria-labelledby="scene-title">
       <div class="setup-title">
-        <p class="eyebrow">先选一个方向</p>
         <h1 id="scene-title">最近想把精力放在哪里？</h1>
       </div>
       <div class="scene-grid">
@@ -185,7 +184,7 @@ async function finish() {
 
     <section v-else-if="step === 3" class="setup-band" aria-labelledby="starters-title">
       <div class="setup-title starter-heading">
-        <div><p class="eyebrow">起步任务</p><h1 id="starters-title">先留下几件做得到的事</h1></div>
+        <h1 id="starters-title">先留下几件做得到的事</h1>
         <span>{{ selectedIds.length }} / 3</span>
       </div>
       <div v-if="loadingStarters" class="loading-state" role="status">正在准备起步任务…</div>

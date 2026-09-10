@@ -2,6 +2,7 @@
 import { nextTick } from 'vue'
 import { BatteryMedium, Check, Clock3, Gauge, Minimize2, Play, RotateCcw, SkipForward, Sparkles, TimerReset, Undo2, X } from 'lucide-vue-next'
 import TownPreview from '../../shared/ui/TownPreview.vue'
+import EmptyState from '../../shared/ui/EmptyState.vue'
 import SnapSlider from '../../shared/ui/interaction/SnapSlider.vue'
 import SegmentedControl from '../../shared/ui/interaction/SegmentedControl.vue'
 import { disclose as vDisclose } from '../../shared/ui/interaction/disclose'
@@ -63,22 +64,20 @@ async function submitCheck() {
 
     <section class="today-hero" aria-label="今日起点">
       <div class="next-step">
-        <div class="hero-label"><span class="live-dot" /> 今日起点 <span>留一点时间，给自己</span></div>
         <template v-if="loading"><h2>正在整理你的下一步…</h2><p>给今天，留一点真实的空间。</p></template>
         <template v-else-if="recommendedTasks[0]">
-          <p class="next-step-kicker">先做这一件</p>
+          <p class="next-step-kicker"><span class="live-dot" aria-hidden="true" />先做这一件</p>
           <h2>{{ recommendedTasks[0].taskTitle }}</h2>
           <p>{{ recommendedTasks[0].roleName || '属于你的成长行动' }}<span v-if="recommendedTasks[0].estimatedMinutes"> · 约 {{ recommendedTasks[0].estimatedMinutes }} 分钟</span></p>
           <div class="hero-actions"><button class="primary" :disabled="!canActOn(recommendedTasks[0])" @click="startFocus(recommendedTasks[0])"><Play :size="16" />专注这一步</button><button class="rhythm-toggle" :aria-expanded="showCheck" aria-controls="daily-rhythm" @click="showCheck = !showCheck"><BatteryMedium :size="16" />调整今日节奏</button></div>
         </template>
-        <template v-else><p class="next-step-kicker">每一步，都有它的意义</p><h2>{{ tasks.length ? '今天留下的努力，都在这里。' : '从一件做得到的小事开始。' }}</h2><p>{{ tasks.length ? '可以回望一下，也可以让自己休息片刻。' : '不用排满今天，先给一个想法留出位置。' }}</p><RouterLink class="button primary" :to="tasks.length ? '/insights' : '/goals'">{{ tasks.length ? '看看成长记录' : '安排一件小事' }}</RouterLink></template>
+        <template v-else><p class="next-step-kicker"><span class="live-dot" aria-hidden="true" />每一步，都有它的意义</p><h2>{{ tasks.length ? '今天留下的努力，都在这里。' : '从一件做得到的小事开始。' }}</h2><p>{{ tasks.length ? '可以回望一下，也可以让自己休息片刻。' : '不用排满今天，先给一个想法留出位置。' }}</p><RouterLink class="button primary" :to="tasks.length ? '/insights' : '/goals'">{{ tasks.length ? '看看成长记录' : '安排一件小事' }}</RouterLink></template>
       </div>
       <RouterLink class="today-scene" to="/town"><TownPreview /><span class="scene-caption"><span><strong>生活，在这里慢慢生长</strong><small>街角场景预览 · 去我的小镇</small></span><span class="scene-arrow">↗</span></span></RouterLink>
     </section>
     <button v-if="!recommendedTasks.length" class="rhythm-toggle standalone-rhythm" :aria-expanded="showCheck" aria-controls="daily-rhythm" @click="showCheck = !showCheck"><BatteryMedium :size="16" />调整今日节奏</button>
     <section v-show="showCheck" id="daily-rhythm" class="daily-check band" aria-labelledby="daily-check-title">
       <div class="check-copy">
-        <p class="eyebrow">每日状态检查</p>
         <h2 id="daily-check-title">今天用哪种节奏开始？</h2>
       </div>
       <div class="check-controls">
@@ -104,15 +103,15 @@ async function submitCheck() {
       </div>
     </section>
 
-    <p v-if="!loading && completedTaskCount" class="completion-count">今天已完成 {{ completedTaskCount }} 项</p>
+    <p v-if="!loading && (completedTaskCount || (checkSubmitted && activeAdvice !== 'KEEP'))" class="today-status muted" role="status" aria-live="polite">
+      <span v-if="completedTaskCount" class="completion-count">今天已完成 {{ completedTaskCount }} 项</span>
+      <span v-if="completedTaskCount && checkSubmitted && activeAdvice !== 'KEEP'"> · </span>
+      <span v-if="checkSubmitted && activeAdvice !== 'KEEP'" class="daily-guidance" :data-advice="activeAdvice">{{ dailyGuidance }}</span>
+    </p>
 
     <p v-if="loading" class="empty">正在整理今天的安排…</p>
     <template v-else-if="tasks.length">
-      <div v-if="checkSubmitted && activeAdvice !== 'KEEP'" class="daily-guidance" :data-advice="activeAdvice" role="status" aria-live="polite">
-        <BatteryMedium :size="17" />
-        <span>{{ dailyGuidance }}</span>
-      </div>
-      <div class="task-section-heading"><h2>今天的安排<span>{{ tasks.length }}</span></h2><span>每一步，都算数</span></div>
+      <h2 class="section-title task-section-heading">今天的安排<span v-if="tasks.length" class="section-count">{{ tasks.length }}</span></h2>
       <div class="task-list">
         <article v-for="task in recommendedTasks" :key="task.publicId" class="task-row" :class="{ recommended: recommendedPublicIds.has(task.publicId) }" :data-task-id="task.publicId">
           <div>
@@ -154,18 +153,18 @@ async function submitCheck() {
         </article>
       </div>
     </template>
-    <div v-else-if="!loading" class="empty">
-      <h2>今天还没有任务</h2>
-      <p>{{ activeGoals.length ? '目标已在上方显示，可以为它添加一项覆盖今天的周期任务。' : '可以从目标页安排一项小行动。' }}</p>
-      <RouterLink class="button primary" to="/goals">前往目标</RouterLink>
-    </div>
+    <EmptyState
+      v-else-if="!loading"
+      sprite="rabbit_brown_idle_1"
+      title="今天还没有任务"
+      :description="activeGoals.length ? '目标已在上方显示，可以为它添加一项覆盖今天的周期任务。' : '可以从目标页安排一项小行动。'"
+    >
+      <template #actions><RouterLink class="button primary" to="/goals">前往目标</RouterLink></template>
+    </EmptyState>
 
     <section v-if="activeGoals.length" class="goal-today band" aria-labelledby="today-goals-title">
-      <div class="goal-summary-head">
-        <div>
-          <p class="eyebrow">进行中的目标</p>
-          <h2 id="today-goals-title">今天仍在这个方向里</h2>
-        </div>
+      <div class="section-title goal-summary-head">
+        <h2 id="today-goals-title">今天仍在这个方向里</h2>
         <RouterLink class="button secondary" to="/goals">管理目标</RouterLink>
       </div>
       <div class="goal-strip">
@@ -180,8 +179,7 @@ async function submitCheck() {
 
     <section v-if="strainedTasks.length || recoveryChoice" class="recovery band" aria-labelledby="recovery-title">
       <div>
-        <p class="eyebrow">恢复计划</p>
-        <h2 id="recovery-title">中断之后，从更小的版本回来</h2>
+        <h2 id="recovery-title" class="section-title">中断之后，从更小的版本回来</h2>
         <p class="muted">延期、跳过或过期不会扣回历史努力。这里给你一个重新开始的入口。</p>
       </div>
       <div class="recovery-actions">
@@ -239,13 +237,15 @@ async function submitCheck() {
 <style scoped>
 .today-page { display: flex; flex-direction: column; gap: 20px; }
 .today-page > .page-head { margin-bottom: 4px; }
-.today-hero { display: grid; grid-template-columns: 1fr 1.1fr; border: 0; background: #182f29; border-radius: var(--radius-scene); min-height: 370px; color: #fff9e9; overflow: hidden; }
+.today-hero { display: grid; grid-template-columns: 55fr 45fr; border: 0; background: #182f29; border-radius: var(--radius-scene); min-height: 370px; color: #fff9e9; overflow: hidden; }
 .next-step { padding: 38px 0 38px 38px; min-width: 0; position: relative; z-index: 1; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; }
-.hero-label { display: flex; align-items: center; gap: 8px; color: #d6c795; font-size: 11px; letter-spacing: .12em; font-weight: 500; }
-.hero-label > span:last-child { margin-left: 8px; letter-spacing: 0; }
-.live-dot { width: 6px; height: 6px; border-radius: 50%; background: #e6c875; }
-.next-step .next-step-kicker { margin: 32px 0 12px; font-size: 11px; color: #bac9bc; }
-.next-step h2 { font-size: clamp(26px, 2.7vw, 38px); line-height: 1.45; letter-spacing: -.8px; font-weight: 550; text-wrap: balance; margin: 0; }
+.live-dot { display: inline-block; width: 6px; height: 6px; margin-right: 7px; vertical-align: middle; border-radius: 50%; background: #e6c875; }
+@media (prefers-reduced-motion: no-preference) {
+  .live-dot { animation: live-pulse 2s var(--ease) infinite; }
+}
+@keyframes live-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+.next-step .next-step-kicker { margin: 32px 0 12px; font-size: 11px; color: #bac9bc; display: flex; align-items: center; }
+.next-step h2 { font-size: clamp(24px, 2.4vw, 30px); line-height: 1.45; letter-spacing: -.8px; font-weight: 550; text-wrap: balance; margin: 0; }
 .next-step p { color: #bac9bc; font-size: 13px; margin: 14px 0 28px; }
 .hero-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 16px; }
 .rhythm-toggle { display: inline-flex; align-items: center; gap: 6px; background: transparent; color: var(--muted); font-size: 12px; padding: 0; }
@@ -277,7 +277,7 @@ async function submitCheck() {
 }
 .feedback-banner strong { display: block; margin-top: 3px; color: var(--amber); font: 700 13px Inter, "PingFang SC", sans-serif; }
 .daily-check { display: grid; grid-template-columns: minmax(260px, .52fr) minmax(0, 1fr); gap: 18px 26px; align-items: stretch; padding: 20px; border: 1px solid var(--border); border-radius: var(--radius-card); background: color-mix(in srgb, var(--surface) 88%, transparent); overflow: hidden; }
-.check-copy h2, .recovery h2 { margin: 0; font-size: 18px; }
+.check-copy h2 { margin: 0; font-size: 18px; }
 .check-controls { min-width: 0; display: grid; grid-template-columns: minmax(220px, 320px) minmax(0, 1fr); gap: 16px; align-items: center; }
 .mood-control { min-width: 0; }
 .minutes-control { min-width: 0; width: 100%; display: grid; grid-template-columns: max-content minmax(140px, 1fr); gap: 14px; align-items: center; color: var(--muted); font-size: 13px; }
@@ -286,8 +286,8 @@ async function submitCheck() {
 .check-result svg { color: var(--primary); }
 .check-result p { margin: 4px 0 0; color: var(--muted); line-height: 1.55; }
 .goal-today { display: grid; gap: 14px; }
-.goal-summary-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-.goal-summary-head h2 { margin: 0; font-size: 18px; }
+.goal-summary-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
+.goal-summary-head h2 { margin: 0; font: inherit; color: inherit; }
 .goal-strip { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .goal-strip article { min-height: 136px; display: grid; align-content: start; gap: 8px; padding: 14px; border: 1px solid var(--border); border-radius: var(--radius); background: color-mix(in srgb, var(--surface) 88%, transparent); }
 .goal-strip h3 { margin: 0; font-size: 16px; line-height: 1.35; }
@@ -297,20 +297,19 @@ async function submitCheck() {
 .recovery .muted { margin-bottom: 0; }
 .recovery-actions { display: flex; flex-wrap: wrap; gap: 9px; justify-content: flex-end; }
 .recovery-actions button[aria-pressed='true'] { border-color: var(--primary); color: var(--primary); font-weight: 700; }
-.task-list { display: grid; gap: 0; border-top: 1px solid var(--border); }
+.task-list { display: grid; gap: 0; }
 .task-row { min-height: 100px; display: flex; align-items: center; justify-content: space-between; gap: 16px; border: 0; border-bottom: 1px solid var(--border); border-radius: 0; padding: 20px 8px; background: transparent; }
 .task-row:hover { background: var(--surface); border-color: color-mix(in srgb, var(--primary) 24%, var(--border)); }
 .task-row h2 { font-size: 16px; margin: 4px 0; }
 .task-row time { font-size: 13px; color: var(--muted); }
 .task-row.recommended { background: transparent; }
 .recommended-badge { margin-left: 8px; padding: 2px 8px; border-radius: 999px; background: var(--primary-soft); color: var(--primary-strong); font-size: 10px; font-weight: 500; }
-.daily-guidance { display: flex; align-items: center; gap: 9px; margin-bottom: 12px; padding: 12px 15px; border: 1px solid color-mix(in srgb, var(--primary) 32%, var(--border)); border-radius: var(--radius); background: color-mix(in srgb, var(--primary-soft) 55%, var(--surface)); color: var(--primary-strong); font-size: 13px; font-weight: 700; }
-.daily-guidance[data-advice='SHRINK'] { border-color: color-mix(in srgb, var(--amber) 40%, var(--border)); background: color-mix(in srgb, var(--amber) 10%, var(--surface)); color: var(--amber); }
+.today-status { margin: 0; font-size: 13px; }
+.today-status .daily-guidance[data-advice='SHRINK'] { color: var(--amber); font-weight: 600; }
 .task-row .actions { flex-wrap: nowrap; }
 .task-row .icon-button { border: 1px solid var(--border); }
 .focus-button { color: var(--primary); }
 .button { display: inline-flex; align-items: center; text-decoration: none; }
-.empty .button { margin-top: 10px; }
 .action-panel, .focus-panel { position: fixed; z-index: 20; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(420px, calc(100vw - 32px)); display: grid; gap: 16px; padding: 24px; border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface); box-shadow: var(--shadow); }
 .action-panel input { width: 100%; }
 .focus-panel { text-align: center; }
@@ -354,11 +353,8 @@ async function submitCheck() {
 .next-step > .primary, .hero-actions > .primary { background: #e8cf92; color: #20372e; min-height: 46px; padding: 0 22px; border-radius: var(--radius-card); }
 .next-step > .primary:hover, .hero-actions > .primary:hover { background: #f2deb1; }
 .hero-actions .rhythm-toggle { color: #d0dbd0; }
-.hero-label > span:last-child { color: #b0c0b4; font-size: 10px; }
-.task-section-heading { display: flex; align-items: baseline; justify-content: space-between; margin-top: 8px; margin-bottom: -16px; gap: 12px; }
-.task-section-heading h2 { margin: 0; font-size: 18px; font-weight: 600; }
-.task-section-heading h2 span { margin-left: 10px; font: 400 13px Inter, sans-serif; color: var(--muted); }
-.task-section-heading > span { color: var(--muted); font-size: 11px; }
+.task-section-heading { display: flex; align-items: baseline; gap: 10px; }
+.task-section-heading .section-count { font: 400 13px Inter, sans-serif; color: var(--muted); }
 .task-row > div:first-child { min-width: 0; }
 .task-row h2 { font-size: 16px; font-weight: 550; overflow-wrap: anywhere; }
 .task-row .status { font-size: 11px; font-weight: 500; color: var(--muted); }
@@ -369,9 +365,7 @@ async function submitCheck() {
 .goal-strip article { background: transparent; border: 0; border-left: 2px solid var(--primary-soft); border-radius: 0; padding: 4px 18px; min-height: 100px; }
 .goal-strip p { font-size: 13px; }
 @media (min-width: 761px) and (max-width: 1100px) {
-  .today-hero { grid-template-columns: 1.05fr 1fr; }
   .next-step { padding: 28px 0 28px 26px; }
-  .hero-label > span:last-child { display: none; }
   .check-controls { grid-template-columns: 1fr; }
 }
 @media (max-width: 760px) {
@@ -381,7 +375,6 @@ async function submitCheck() {
   .today-hero { min-height: 0; }
   .next-step { padding: 8px 24px 28px; }
   .next-step h2 { font-size: 27px; }
-  .hero-label { font-size: 10px; }
   .next-step .next-step-kicker { margin: 20px 0 8px; }
   .next-step p { margin-bottom: 20px; }
   .scene-caption strong { font-size: 13px; }

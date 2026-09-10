@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, type Component } from 'vue'
-import { AlertTriangle, Download, LogOut, Monitor, Moon, Paintbrush, PanelsTopLeft, RotateCcw, Sparkles, Sun, Trash2, Zap } from 'lucide-vue-next'
+import { AlertTriangle, Download, LogOut, Monitor, Moon, PanelsTopLeft, RotateCcw, Sparkles, Sun, Trash2, Zap } from 'lucide-vue-next'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../auth/auth.store'
 import {
@@ -78,7 +78,6 @@ function replayWelcome() {
   <section class="page settings-page">
     <header class="page-head">
       <div>
-        <p class="eyebrow">照顾你的使用感受</p>
         <h1>设置</h1>
       </div>
       <button class="secondary" @click="logout">
@@ -90,19 +89,13 @@ function replayWelcome() {
     <p v-if="error" class="error" role="alert">{{ error }}</p>
 
     <section class="band">
-      <h2>使用模式</h2>
+      <h2 class="section-title">使用模式</h2>
       <p>极简模式只保留执行清单。切换模式不会改变已有任务，偏好保存在当前设备。</p>
       <button class="secondary" :aria-pressed="mode.minimal" @click="switchWorkspaceMode($event)">{{ mode.minimal ? '切换成长模式' : '切换极简清单' }}</button>
     </section>
 
     <section class="band appearance-section">
-      <div class="section-title">
-        <Paintbrush :size="19" />
-        <div>
-          <h2>外观风格</h2>
-          <p class="muted">选择一种让你愿意每天回来看看自己的氛围。</p>
-        </div>
-      </div>
+      <h2 class="section-title">外观风格</h2>
 
       <div class="appearance-grid">
         <fieldset class="option-group">
@@ -184,7 +177,7 @@ function replayWelcome() {
     </section>
 
     <section v-if="prefs" class="band">
-      <h2>AI 数据保留</h2>
+      <h2 class="section-title">AI 数据保留</h2>
       <p class="muted">对话到期后自动删除；安全事件按独立政策最小化保留。</p>
       <div class="actions">
         <SegmentedControl
@@ -197,7 +190,7 @@ function replayWelcome() {
     </section>
 
     <section class="band">
-      <h2>通知</h2>
+      <h2 class="section-title">通知</h2>
       <p class="muted">选择在哪里收到提醒。每个渠道每天都有条数上限，不会连续打扰。</p>
       <div v-for="n in notifications" :key="n.channel" class="setting-row">
         <div>
@@ -209,7 +202,7 @@ function replayWelcome() {
     </section>
 
     <section class="band">
-      <h2>数据导出</h2>
+      <h2 class="section-title">数据导出</h2>
       <p class="muted">导出文件保留 24 小时，下载链接有效 15 分钟。</p>
       <div class="actions">
         <button class="secondary" @click="createExport">
@@ -221,7 +214,7 @@ function replayWelcome() {
     </section>
 
     <section class="band danger-zone">
-      <h2>注销账户</h2>
+      <h2 class="section-title">注销账户</h2>
       <template v-if="deletion?.status === 'COOLING_OFF'">
         <p>账户处于 7 天冷静期。计划处理时间：{{ new Date(deletion.processAfter!).toLocaleString() }}</p>
         <button class="secondary" @click="cancelDeletion">撤销注销</button>
@@ -248,23 +241,6 @@ function replayWelcome() {
 </template>
 
 <style scoped>
-h2 {
-  margin: 0 0 10px;
-  font-size: 18px;
-}
-
-.section-title {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  margin-bottom: 18px;
-}
-
-.section-title > svg {
-  margin-top: 3px;
-  color: var(--primary);
-}
-
 .appearance-section {
   padding-top: 24px;
   padding-bottom: 26px;
@@ -440,10 +416,7 @@ h2 {
   .theme-preview { height: 72px; }
   .current-style { grid-column: 1 / -1; }
 }
-.settings-page { max-width: 1060px; }
-.settings-page > .band { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-panel); padding: 24px; margin-bottom: 18px; }
 .swatches button { border-radius: var(--radius-panel); }
 .theme-preview { border-radius: var(--radius-card); }
 .settings-page .danger-zone { border-color: color-mix(in srgb, var(--danger) 35%, var(--border)); }
-@media (max-width: 760px) { .settings-page > .band { padding: 18px; } }
 </style>

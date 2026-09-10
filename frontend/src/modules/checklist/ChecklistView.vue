@@ -4,6 +4,7 @@ import { Check, Plus, GripVertical, MoreHorizontal, ArrowUp, ArrowDown, Clock3, 
 import { useDragSort } from '../../shared/ui/interaction/use-drag-sort'
 import { disclose as vDisclose } from '../../shared/ui/interaction/disclose'
 import SegmentedControl from '../../shared/ui/interaction/SegmentedControl.vue'
+import EmptyState from '../../shared/ui/EmptyState.vue'
 import { useChecklist, type ChecklistTask } from './checklist.logic'
 
 const listTabOptions = [
@@ -104,7 +105,13 @@ function shift(task: ChecklistTask, offset: number) {
           </div>
         </li>
       </ul>
-      <div v-if="!active.length && !loadError" class="list-empty"><Check v-if="completed.length" :size="27" /><p>{{ completed.length ? '都做好了。' : tab === 'today' ? '今天还没有待办。' : '清单是空的。' }}</p><span>{{ completed.length ? '有新的事情，随时记下来。' : '在上方写下第一件事。' }}</span></div>
+      <EmptyState
+        v-if="!active.length && !loadError"
+        class="list-empty"
+        :sprite="completed.length ? 'chicken_white_idle_1' : 'rabbit_brown_idle_1'"
+        :title="completed.length ? '都做好了。' : tab === 'today' ? '今天还没有待办。' : '清单是空的。'"
+        :description="completed.length ? '有新的事情，随时记下来。' : '在上方写下第一件事。'"
+      />
       <details v-if="completed.length" v-disclose class="completed-list"><summary>已完成 {{ completed.length }} 项</summary><ul><li v-for="task in completed" :key="task.publicId"><Check :size="15" /><span>{{ task.taskTitle }}</span></li></ul></details>
     </template>
   </section>
@@ -150,10 +157,10 @@ button:disabled { opacity: .45; cursor: default; }
 .list-feedback { display: flex; gap: 18px; align-items: center; margin-top: 14px; font-size: 12px; color: var(--muted); }
 .list-feedback button { display: inline-flex; gap: 5px; align-items: center; }
 .checklist-error { font-size: 13px; color: var(--danger, #ad3636); }
-.list-empty { padding: 52px 0; text-align: center; color: var(--muted); }
-.list-empty svg { margin: auto; }
-.list-empty p { font-size: 15px; color: var(--ink); margin: 12px 0 8px; }
-.list-empty span { font-size: 13px; }
+.list-empty { padding: 52px 0; text-align: center; }
+.list-empty :deep(.empty-sprite) { margin: 0 auto 14px; }
+.list-empty :deep(h3) { font-size: 15px; margin: 0 0 8px; }
+.list-empty :deep(p) { font-size: 13px; }
 .completed-list { margin-top: 32px; color: var(--muted); font-size: 13px; }
 .completed-list summary { cursor: pointer; padding: 12px 0; }
 .completed-list ul { margin-top: 8px; }

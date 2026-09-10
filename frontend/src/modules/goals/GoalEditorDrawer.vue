@@ -25,7 +25,6 @@ const emit = defineEmits<{ submit: []; cancel: [] }>()
   <form class="band stack editor goal-drawer" role="dialog" aria-modal="true" aria-label="新建目标" tabindex="-1" @submit.prevent="emit('submit')">
     <button type="button" class="drawer-close secondary" :disabled="busy" @click="emit('cancel')" aria-label="关闭目标编辑">关闭</button>
     <div>
-      <p class="eyebrow">目标定义</p>
       <h2>新建目标</h2>
       <p class="support-line"><Sparkles :size="16" />{{ goalPrompt }}</p>
     </div>
