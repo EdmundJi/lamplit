@@ -1,10 +1,12 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { createPinia, setActivePinia } from 'pinia'
+import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 import { companionApi } from './companion.api'
-import { clockText, focusRemaining, useCompanionWorld } from './companion.store'
+import { clockText, focusRemaining, useCompanionWorld, useTownWorld } from './companion.store'
+import { notifyDataChanged } from '../../shared/data-sync'
 import type { Snapshot, World } from './companion.types'
 vi.mock('./companion.api', () => ({ companionApi: { load: vi.fn(), join: vi.fn(), advance: vi.fn(), intend: vi.fn(), cancel: vi.fn() } }))
 const snapshot = (revision = 1): Snapshot => ({ joined: true, world: { id: 'world-a', revision, intents: [], focus: null, residents: [], memories: [], diary: [] } as unknown as World })
-beforeEach(() => vi.resetAllMocks())
+beforeEach(() => { vi.resetAllMocks(); setActivePinia(createPinia()) })
 describe('authoritative companion world', () => {
   it('does not replace a newer intent result with a stale in-flight snapshot', async () => {
     let finishRead!: (value: Snapshot) => void
@@ -61,15 +63,110 @@ describe('authoritative companion world', () => {
     expect(town.feedback.value).toBe('已经到花园，看看刚开的花。')
   })
 
-  it('does not install a response after the page is disposed', async () => {
+  it('dispose is a no-op: the shared world keeps whatever an in-flight read installs', async () => {
+    // useCompanionWorld() now returns the same shared Pinia store every other consumer (the
+    // street strip, /town) reads too, so one caller "leaving" must never blank data those other
+    // consumers may still be showing.
     let finishRead!: (value: Snapshot) => void
     vi.mocked(companionApi.load).mockImplementation(() => new Promise(resolve => { finishRead = resolve }))
     const town = useCompanionWorld(); const read = town.load(); town.dispose(); finishRead(snapshot()); await read
-    expect(town.world.value).toBeNull()
+    expect(town.world.value?.id).toBe('world-a')
   })
   it('formats elapsed deadlines without negative or restarted timers', () => {
     expect(clockText(focusRemaining('2026-09-08T00:25:00Z', Date.parse('2026-09-08T00:00:00Z')))).toBe('25:00')
     expect(clockText(focusRemaining('2026-09-08T00:25:00Z', Date.parse('2026-09-07T23:59:59Z'), '2026-09-08T00:00:00Z'))).toBe('25:00')
     expect(clockText(focusRemaining('2026-09-08T00:25:00Z', Date.parse('2026-09-09T00:00:00Z')))).toBe('00:00')
+  })
+  it('shares one authoritative world between every consumer sharing the active Pinia instance', async () => {
+    vi.mocked(companionApi.load).mockResolvedValue(snapshot(7))
+    const streetStrip = useCompanionWorld()
+    const townPage = useCompanionWorld()
+    await streetStrip.load()
+    // A second, independent useCompanionWorld() call sees the same load - not a copy that still
+    // needs its own fetch.
+    expect(townPage.world.value?.revision).toBe(7)
+    expect(townPage.world.value).toBe(streetStrip.world.value)
+    // The raw store instance (what the future street-strip lifecycle owner reaches for directly)
+    // is that same one world too.
+    expect(useTownWorld().world).toBe(streetStrip.world.value)
+  })
+})
+
+describe('shared world lifecycle: polling, visibility and data-sync', () => {
+  let town!: ReturnType<typeof useTownWorld>
+  beforeEach(async () => {
+    vi.mocked(companionApi.advance).mockResolvedValue(snapshot())
+    vi.mocked(companionApi.load).mockResolvedValue(snapshot())
+    vi.useFakeTimers()
+    town = useTownWorld()
+    await town.load() // seed a world so every poll tick below is a clean, isolated advance() call
+    vi.mocked(companionApi.advance).mockClear()
+  })
+  afterEach(() => {
+    // Real listeners were registered on the shared document/window - always tear them down, even
+    // if an assertion above already failed, or a later test's timers would fire into this one's
+    // (now-stale) closures too.
+    town.stop(); town.stop(); town.stop()
+    vi.useRealTimers()
+  })
+  it('polls on an interval only while start()ed, and stop() ends it', async () => {
+    town.start({ intervalMs: 1000 })
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(companionApi.advance).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(companionApi.advance).toHaveBeenCalledTimes(3)
+    town.stop()
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(companionApi.advance).toHaveBeenCalledTimes(3)
+  })
+  it('start() is idempotent: several consumers share one timer, and only the last stop() ends it', async () => {
+    town.start({ intervalMs: 1000 })
+    town.start({ intervalMs: 1000 }) // a second consumer - must not double the timer
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(companionApi.advance).toHaveBeenCalledTimes(1)
+    town.stop() // one consumer leaves - the other keeps it running
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(companionApi.advance).toHaveBeenCalledTimes(2)
+    town.stop() // the last consumer leaves - now it really stops
+    await vi.advanceTimersByTimeAsync(3000)
+    expect(companionApi.advance).toHaveBeenCalledTimes(2)
+  })
+  it('skips a scheduled poll while the tab is hidden', async () => {
+    town.start({ intervalMs: 1000 })
+    vi.stubGlobal('document', { ...document, hidden: true })
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(companionApi.advance).not.toHaveBeenCalled()
+    vi.unstubAllGlobals()
+  })
+  it('refreshes immediately on visibilitychange once the tab becomes visible again', async () => {
+    town.start({ intervalMs: 60000 })
+    document.dispatchEvent(new Event('visibilitychange'))
+    await vi.advanceTimersByTimeAsync(0) // flushes the microtask load(true) kicks off
+    expect(companionApi.advance).toHaveBeenCalledTimes(1)
+  })
+  it('setInterval(ms) re-arms an already-running timer at the new cadence', async () => {
+    town.start({ intervalMs: 1000 })
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(companionApi.advance).toHaveBeenCalledTimes(1)
+    town.setInterval(5000)
+    await vi.advanceTimersByTimeAsync(1000) // the old 1s cadence must no longer fire
+    expect(companionApi.advance).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(4000)
+    expect(companionApi.advance).toHaveBeenCalledTimes(2)
+  })
+  it('refreshes right away when today\'s tasks change elsewhere on the page, but only once started', async () => {
+    notifyDataChanged('tasks')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(companionApi.advance).not.toHaveBeenCalled()
+    town.start({ intervalMs: 60000 })
+    notifyDataChanged(['tasks'])
+    await vi.advanceTimersByTimeAsync(0)
+    expect(companionApi.advance).toHaveBeenCalledTimes(1)
+    notifyDataChanged(['today'])
+    await vi.advanceTimersByTimeAsync(0)
+    expect(companionApi.advance).toHaveBeenCalledTimes(2)
+    notifyDataChanged(['goals']) // unrelated area - no refresh
+    await vi.advanceTimersByTimeAsync(0)
+    expect(companionApi.advance).toHaveBeenCalledTimes(2)
   })
 })

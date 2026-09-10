@@ -17,7 +17,7 @@
   import CompanionScene from '/src/modules/companion/CompanionScene.vue'
   import { CAFE_SERVICE } from '/src/modules/companion/companion-art.ts'
   createApp({ setup() {
-    const night = ref(false), chat = ref(false), overview = ref(false), rain = ref(false)
+    const night = ref(false), chat = ref(false), overview = ref(false), rain = ref(false), textBubbles = ref(false)
     const residents = ref([
       { id: 'self', name: '小满', role: 'user', location: 'cafe', activity: 'read', action: '读一会儿书' },
       { id: 'ahe', name: '阿禾', role: '店主', location: 'cafe', activity: 'drink', action: '喝口咖啡' },
@@ -59,6 +59,7 @@
       setPlace: value => { explicitPlace.value = value; overview.value = false },
       setCafeOpen: value => { cafeOpen.value = value },
       reset: () => { residents.value = baseResidents.map(r => ({ ...r })) },
+      setTextBubbles: value => { textBubbles.value = value },
       service: showService, allSeats: showAllSeats, windowRow: showWindowRow, servicePoints: CAFE_SERVICE,
     }
     return () => [h('h1', '慢慢小街 · 午后的生活'), h('nav', [
@@ -70,7 +71,8 @@
       h('button', { onClick: showAllSeats }, '看五席入座'),
       h('button', { onClick: showWindowRow }, '看窗边与讨论区'),
       h('button', { onClick: () => overview.value = !overview.value }, overview.value ? '聚焦生活区' : '看看全街'),
-    ]), h(CompanionScene, { residents: residents.value, selectedPlace: explicitPlace.value ?? (cafeFocus.value ? 'cafe' : undefined), cafeOpen: cafeOpen.value, weather: rain.value ? 'rain' : 'clear', minutes: night.value ? 1260 : 840, overview: overview.value,
+      h('button', { onClick: () => textBubbles.value = !textBubbles.value }, textBubbles.value ? '关文字气泡' : '开文字气泡'),
+    ]), h(CompanionScene, { residents: residents.value, selectedPlace: explicitPlace.value ?? (cafeFocus.value ? 'cafe' : undefined), cafeOpen: cafeOpen.value, weather: rain.value ? 'rain' : 'clear', minutes: night.value ? 1260 : 840, overview: overview.value, textBubbles: textBubbles.value,
       projects: [
         { id: 'poster', title: '窗边海报', place: 'cafe', status: 'working', progress: 75, objectKind: 'poster' },
         { id: 'flowers', title: '一瓶小花', place: 'cafe', status: 'working', progress: 60, objectKind: 'flowers' },

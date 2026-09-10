@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 vi.mock('phaser', () => ({ default: { Scene: class {} } }))
-import { residentPosition, scenePlace, visibleActivity, conversationPosition, rainFallsOutside } from './companion-scene'
+import { residentPosition, scenePlace, visibleActivity, conversationPosition, rainFallsOutside, isSpeaking } from './companion-scene'
 
 describe('authoritative activity presentation', () => {
   it('keeps rain outdoors while retaining it on the street and in the garden', () => {
@@ -78,5 +78,23 @@ describe('positionId-authoritative placement (TownPlaces two-layer place model)'
     expect(residentPosition('cafe', 0, 'focus', '', 'some-future-position-id')).toEqual({ x: 438, y: 176 })
     expect(residentPosition('cafe', 0, 'focus', '', null)).toEqual({ x: 438, y: 176 })
     expect(residentPosition('cafe', 0, 'focus')).toEqual({ x: 438, y: 176 })
+  })
+})
+
+describe('a speech bubble is gated on its own speaker only', () => {
+  // Regression for: giving one conversation participant a backend positionId sends them on a
+  // short walk to their newly authoritative seat (their place+index guess no longer matches the
+  // real slot). The old speech gate additionally required every OTHER actor sharing this
+  // speaker's conversationId to have also finished walking, so that unrelated walk blanked the
+  // stationary, currently-speaking partner's bubble too - see harness repro captured in
+  // scratchpad/runs/t1 (before/after screenshots) for this exact scenario end to end.
+  it('shows the current speaker once they themselves have arrived, regardless of a conversation partner still walking', () => {
+    expect(isSpeaking('achuan', 'achuan', true)).toBe(true)
+  })
+  it('hides the bubble while the speaker themselves is still walking to their own target', () => {
+    expect(isSpeaking('ahe', 'ahe', false)).toBe(false)
+  })
+  it('never shows a bubble for a resident whose turn it is not', () => {
+    expect(isSpeaking('ahe', 'achuan', true)).toBe(false)
   })
 })

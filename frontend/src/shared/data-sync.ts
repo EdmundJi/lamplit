@@ -9,6 +9,7 @@ export type DataArea =
   | 'partners'
   | 'social'
   | 'settings'
+  | 'town'
   | 'all'
 
 export const DATA_CHANGED_EVENT = 'better-self:data-changed'
