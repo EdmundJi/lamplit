@@ -125,8 +125,9 @@ public final class TimelineCollector {
      * conversations by the dozen and folding them in here would make the number meaningless.
      */
     private void captureJointAction(CompanionWorld w) {
-        Instant at = w.simulatedAt == null ? w.updatedAt : w.simulatedAt;
-        if (at == null) return;
+        Instant atNow = w.simulatedAt == null ? w.updatedAt : w.simulatedAt;
+        if (atNow == null) return;
+        Instant at = atNow;
         Map<String, ResidentState> byId = new HashMap<>();
         for (ResidentState r : w.residentStates) byId.put(r.id, r);
         Map<String, Actor> actors = new HashMap<>();
@@ -151,6 +152,27 @@ public final class TimelineCollector {
             String projectId = e.getKey().substring(0, e.getKey().lastIndexOf('@'));
             String place = e.getKey().substring(e.getKey().lastIndexOf('@') + 1);
             noteJointEpisode(w, "sharedProject", place, projectId, e.getValue(), at);
+        }
+
+        // Tier 1b: standing round a finished thing together. Counted with the chosen ones and
+        // labelled apart from them, because it is a different thing from working side by side: they
+        // are not making it any more, they were called over to look at what they made. It was left
+        // out of the first version of this metric by oversight rather than by decision - "create or
+        // help" was all that came to mind - and it stayed invisible for as long as celebrating did.
+        Map<String, List<String>> byGathering = new LinkedHashMap<>();
+        for (var e : byId.entrySet()) {
+            ResidentState r = e.getValue();
+            Actor a = actors.get(r.id);
+            if (r.plan == null || a == null || a.activity().equals("walk")) continue;
+            if (!"celebrate".equals(r.plan.action()) || r.plan.targetId() == null) continue;
+            if (!a.place().equals(r.plan.place())) continue;
+            byGathering.computeIfAbsent(r.plan.targetId() + "@" + a.place(), k -> new ArrayList<>()).add(r.id);
+        }
+        for (var e : byGathering.entrySet()) {
+            if (e.getValue().size() < 2) continue;
+            claimed.addAll(e.getValue());
+            int split = e.getKey().lastIndexOf('@');
+            noteJointEpisode(w, "gathered", e.getKey().substring(split + 1), e.getKey().substring(0, split), e.getValue(), atNow);
         }
 
         // Tier 2: somebody went over and sat with somebody else.

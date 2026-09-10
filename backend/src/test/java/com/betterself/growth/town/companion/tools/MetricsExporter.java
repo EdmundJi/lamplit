@@ -269,7 +269,7 @@ public final class MetricsExporter {
                 chosenPerDay.merge(((String) e.get("startedAt")).substring(0, 10), 1, Integer::sum);
             }
         }
-        out.put("byKind", byKind);
+            out.put("byKind", byKind);
         out.put("chosenTotal", chosen);
         out.put("chosenPerDay", chosenPerDay);
         // The target this whole line of work is aimed at, stated in the metric itself so a run either
@@ -368,7 +368,7 @@ public final class MetricsExporter {
 
         Map<String, Object> joint = (Map<String, Object>) metrics.get("jointAction");
         sb.append("## 两个人一起做同一件事\n\n");
-        sb.append("- 主动的（共同项目 + 主动过去坐下）：").append(joint.get("chosenTotal"))
+        sb.append("- 主动的（共同项目 + 围着做出来的东西 + 主动过去坐下）：").append(joint.get("chosenTotal"))
           .append("，按天：").append(joint.get("chosenPerDay")).append('\n');
         sb.append("- 达标天数（每天≥").append(joint.get("targetPerDay")).append("）：")
           .append(joint.get("daysMeetingTarget")).append(" / ").append(joint.get("distinctDays")).append('\n');

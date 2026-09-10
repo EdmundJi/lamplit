@@ -356,6 +356,17 @@ public final class ResidentSimulation {
                     // A shared, happy moment is real steadying experience, not a reason - the opposite
                     // pull from "interrupted" below, on the same dimension a repeated interruption erodes.
                     driftPersonality(w,state(w,member),"volatility",-PERSONALITY_DRIFT_STEP,"celebration",at);
+                    // Standing round it together, not each being written a private note about it. A
+                    // celebration IS several people doing one thing at once; the old version gave
+                    // everyone a memory of a gathering that never actually occupied anybody's time,
+                    // so from the outside nothing happened. Whoever called them over keeps their own
+                    // plan; the rest get the short stretch of standing there, which they are free to
+                    // leave the moment anything else comes up.
+                    ResidentState guest=state(w,member);
+                    if(!member.equals(r.id)&&guest!=null&&activeConversation(w,member)==null){
+                        if(guest.plan!=null)suspend(guest,at);
+                        schedule(w,guest,"celebrate",project.place,project.id,"过去看看一起做出来的东西",at,900);
+                    }
                 }
             }
         } else if(p.action().equals("open_cafe")){CafeService.openForDay(w,r.id,p.reason(),at);}
@@ -887,6 +898,7 @@ public final class ResidentSimulation {
     private static final Map<String,List<String[]>> HABIT_TRAITS = Map.of(
         "owner",List.of(new String[]{"tidy","心里不痛快的时候不说出来，去擦桌子、把杯子重新摆一遍"},
                         new String[]{"mind_cafe","一闲下来就想回店里看看，哪怕没人叫"},
+                        new String[]{"show_what_we_made","一起做出来的东西刚成形，就想招呼人过来看"},
                         new String[]{"own_thing","一闲下来就回头去弄自己那件没做完的事，没跟谁说"}),
         "student",List.of(new String[]{"quiet","被打断之后就不再多说，把书翻回原来那页接着看"},
                           new String[]{"study_cafe","没别的安排就往咖啡馆靠窗那个位置坐，点杯常喝的看书"},
@@ -901,7 +913,8 @@ public final class ResidentSimulation {
                            new String[]{"lend_a_hand","看见别人没做完的事搁在那儿，不问就上手添一笔"}),
         "fixer",List.of(new String[]{"check","路过就伸手推一推、试试稳不稳，话不多"},
                         new String[]{"check_cafe","闲下来往店里走，看看有没有要搭把手的"},
-                        new String[]{"lend_a_hand","看见别人没做完的事搁在那儿，不问就上手添一笔"}),
+                        new String[]{"lend_a_hand","看见别人没做完的事搁在那儿，不问就上手添一笔"},
+                        new String[]{"show_what_we_made","一起做出来的东西刚成形，就想招呼人过来看"}),
         "weaver",List.of(new String[]{"smooth","气氛一僵就先动手挪东西，替人找个台阶，不点破"},
                          new String[]{"be_around_people","没什么事就往人多的地方坐"},
                          new String[]{"lend_a_hand","看见别人没做完的事搁在那儿，不问就上手添一笔"}));
@@ -1052,16 +1065,16 @@ public final class ResidentSimulation {
             // point of that errand is that living far and working alone is answered by going toward
             // people. Putting lend-a-hand first quietly undid it - the thing he would lend a hand to
             // is usually the one in his own garden, so he never left.
-            case "gardener"->placeHabitTendGarden(w,r,at)||placeHabitBringSeedlingToCafe(w,r,at)
+            case "gardener"->placeHabitShowWhatWeMade(w,r,at)||placeHabitTendGarden(w,r,at)||placeHabitBringSeedlingToCafe(w,r,at)
                 ||placeHabitLendAHand(w,r,at)||placeHabitStartOwnThing(w,r,at);
             // The gathering comes before minding an empty counter: wanting to be needed is what both
             // of these are, and only one of them ever produces something for anybody to need.
-            case "owner"->placeHabitStartOwnThing(w,r,at)||placeHabitMindTheCafe(w,r,at);
+            case "owner"->placeHabitShowWhatWeMade(w,r,at)||placeHabitStartOwnThing(w,r,at)||placeHabitMindTheCafe(w,r,at);
             // Lending a hand first, then the trip that was only ever a pretext for lending one.
-            case "fixer"->placeHabitLendAHand(w,r,at)||placeHabitCheckCafe(w,r,at);
+            case "fixer"->placeHabitShowWhatWeMade(w,r,at)||placeHabitLendAHand(w,r,at)||placeHabitCheckCafe(w,r,at);
             // 阿满: "替别人找台阶" without saying anything - see her own habitSmooth, which is the
             // wordless version applied to a room. This is the same instinct applied to a thing.
-            case "weaver"->placeHabitLendAHand(w,r,at)||placeHabitBeAroundPeople(w,r,at);
+            case "weaver"->placeHabitShowWhatWeMade(w,r,at)||placeHabitLendAHand(w,r,at)||placeHabitBeAroundPeople(w,r,at);
             default->false;
         };
     }
@@ -1221,6 +1234,31 @@ public final class ResidentSimulation {
         return w.residentStates.stream().anyMatch(o->!o.id.equals(exceptId)&&!o.id.equals("self")
             &&o.plan!=null&&Set.of("create","help").contains(o.plan.action())&&p.id.equals(o.plan.targetId())
             &&actor(w,o.id).place().equals(p.place));
+    }
+    /** Calling people over to a thing you helped make, once it is finished and you are standing next
+     * to it. This is the eighth "compiles clean, feature is dead" path in this file and the one that
+     * stayed dead longest: celebrate had a completion branch, then a menu entry, and across four
+     * measured runs it was offered 1,658 times and chosen essentially never, leaving every finished
+     * thing in town unseen. It is the same menu problem as everything else social - twentieth on a
+     * flat list loses every comparison it is in - so it stops being a menu item and becomes what it
+     * actually is for most people: something you just do.
+     * <p>Deliberately not everybody. 知夏's own actingSelf is "真做完时反而突然怕拿出来", and she has
+     * a habit that says exactly that ({@link #habitHide}); a rule that made her show her work would
+     * be overwriting the person. The ones who get it are the ones whose own written selves already
+     * reach outward - 阿禾 wanting to be needed, 青叔 handing over an object instead of a sentence,
+     * 阿满 getting ahead of a room, 周野 saying the thing directly. */
+    private static boolean placeHabitShowWhatWeMade(CompanionWorld w,ResidentState r,Instant at){
+        Project finished=w.projects.stream()
+            .filter(p->"ready".equals(p.status)&&p.contributors.contains(r.id))
+            .filter(p->p.place.equals(actor(w,r.id).place()))
+            .filter(p->!"cafe".equals(p.place)||CafeService.acceptingOrders(w))
+            .findFirst().orElse(null);
+        if(finished==null)return false;
+        if(!habitEligible(w,r,"show_what_we_made",PLACE_HABIT_MIN_GAP_SECONDS,at))return false;
+        firePlaceHabit(w,r,"show_what_we_made","celebrate",finished.place,finished.id,
+            "「"+finished.title+"」做出来了，想让大家看看",
+            "没等谁开口，先招呼了一声，让人过来看「"+finished.title+"」。",at,1800);
+        return true;
     }
     /** 周野: {@link #placeHabitCheckCafe} above already says, in his own actingSelf's words, that he
      * goes to the shop "看看有没有需要搭把手的" - and then observes. That is the whole of it: he

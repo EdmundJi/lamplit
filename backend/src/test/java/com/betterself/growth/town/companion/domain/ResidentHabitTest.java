@@ -366,6 +366,52 @@ class ResidentHabitTest {
         assertThat(hers.contributors).as("and then she can finally get to her own thing").contains("artist");
     }
 
+    /** The eighth "compiles clean, feature is dead" path, and the one that stayed dead longest.
+     * celebrate had a completion branch, then (after being wired up) a menu entry - and across four
+     * measured runs it was offered 1,658 times and chosen essentially never, so every finished thing
+     * in town went unseen. Same menu problem as every other social action; so it stops being a menu
+     * item and becomes what it is for most people: something you just do. */
+    @Test void whoeverHelpedMakeItCallsTheOthersOverWithoutWaitingToBeAsked() {
+        CompanionWorld w = world("show-what-we-made");
+        CompanionWorld.Project done = w.projects.stream().filter(p -> "cafe".equals(p.place)).findFirst().orElseThrow();
+        done.status = "ready"; done.progress = 100;
+        done.contributors.clear(); done.contributors.add("owner"); done.contributors.add("fixer");
+        for (String id : List.of("owner", "fixer")) {
+            ResidentState r = ResidentSimulation.state(w, id);
+            r.plan = null; r.suspendedAction = null;
+            ResidentSimulation.replaceActor(w, id, "cafe", "idle", "在店里", DAY);
+        }
+        ResidentState owner = ResidentSimulation.state(w, "owner");
+
+        runUntilContribution(w, owner, "show_what_we_made", () -> "celebrating".equals(done.status));
+        assertThat(done.status).as("it finally gets shown to somebody").isEqualTo("celebrating");
+        assertThat(w.events).anyMatch(e -> "celebration".equals(e.type()) && done.id.equals(e.projectId()));
+        // And somebody is actually standing round it, not each handed a private note about a
+        // gathering that occupied nobody's time. A celebration is several people doing one thing.
+        // Either contributor may be the one who calls it, and the caller's own plan clears the
+        // moment it completes - so the invariant is that a guest was put there, not who.
+        assertThat(w.residentStates).anyMatch(r -> r.plan != null
+            && "celebrate".equals(r.plan.action()) && done.id.equals(r.plan.targetId()));
+        assertThat(w.memories).anyMatch(m -> m.text().contains("真的做出来了"));
+    }
+
+    /** 知夏's own actingSelf is "真做完时反而突然怕拿出来", and she has a habit that says exactly
+     * that. A rule that made her show her work would be overwriting the person. */
+    @Test void theOneWhoHidesHerWorkIsNeverMadeToShowIt() {
+        CompanionWorld w = world("show-what-we-made-not-artist");
+        CompanionWorld.Project done = w.projects.stream().filter(p -> "garden".equals(p.place)).findFirst().orElseThrow();
+        done.status = "ready"; done.progress = 100;
+        done.contributors.clear(); done.contributors.add("artist");
+        ResidentState artist = ResidentSimulation.state(w, "artist");
+        artist.plan = null; artist.suspendedAction = null;
+        ResidentSimulation.replaceActor(w, "artist", "garden", "idle", "在花园", DAY);
+
+        Instant t = DAY;
+        for (int minute = 0; minute < 900; minute++) { t = t.plusSeconds(60); ResidentSimulation.step(w, t); }
+        assertThat(artist.lastHabitAt).doesNotContainKey("show_what_we_made");
+        assertThat(done.status).isEqualTo("ready");
+    }
+
     // ---- the other half of item 3: a resident has to be able to NAME the habit ---------------------
 
     /** The damping rule above could already read a belief filed under "habit:<居民>:<习惯>". Nothing
