@@ -27,11 +27,14 @@ button:disabled { cursor: not-allowed; opacity: .62; }
 .page-head > * { min-width: 0; }
 .page-head h1 { margin: 0; color: var(--ink); font-size: 28px; font-weight: 600; line-height: 1.25; letter-spacing: -.01em; }
 .eyebrow { margin: 0 0 8px; color: var(--muted); font-size: 12px; font-weight: 500; }
-.band { position: relative; border-top: 1px solid color-mix(in srgb, var(--border) 78%, transparent); padding: 28px 0; }
+.band { position: relative; border-top: 1px solid color-mix(in srgb, var(--border) 78%, transparent); padding: 20px 0; }
 :root[data-density='compact'] .band { padding: 15px 0; }
 .band:last-child { border-bottom: 1px solid var(--border); }
 /* A section's own heading, used inline in the page flow instead of another card. */
 .section-title { margin: 32px 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); color: var(--ink); font-size: 15px; font-weight: 600; }
+/* .section-title/.section-head opens with its own top margin, meant for mid-page spacing; when it's the first thing in a .band (or right after .page-head) that margin stacks with the band's own padding/border and .page-head's margin-bottom, ballooning the gap between sections. Zero it in those spots. */
+.band > .section-title:first-child, .band > .section-head:first-child { margin-top: 0; }
+.page-head + .band, .page-head + .section-title { margin-top: 0; }
 .empty { padding: 14px 0; text-align: left; color: var(--muted); font-size: 13px; line-height: 1.7; border: 0; border-radius: 0; background: none; }
 .empty h2, .empty h3 { color: var(--ink); font-size: 14px; font-weight: 600; margin: 0 0 4px; }
 .error { color: var(--danger); background: color-mix(in srgb, var(--danger) 8%, var(--surface)); border: 1px solid color-mix(in srgb, var(--danger) 22%, var(--border)); border-left: 3px solid var(--danger); border-radius: var(--radius); padding: 12px 14px; }
