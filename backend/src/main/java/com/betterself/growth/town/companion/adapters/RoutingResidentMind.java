@@ -125,6 +125,10 @@ public class RoutingResidentMind implements ResidentMind {
     @Override public Result<VentureDraft> ventureMetered(VentureRequest request) {
         return attempt("venture", mind -> mind.ventureMetered(request));
     }
+    @Override public PromiseOfferDraft promiseOffer(PromiseOfferRequest request) { return promiseOfferMetered(request).value(); }
+    @Override public Result<PromiseOfferDraft> promiseOfferMetered(PromiseOfferRequest request) {
+        return attempt("promise", mind -> mind.promiseOfferMetered(request));
+    }
     @Override public PromiseThought promiseSettled(PromiseSettledRequest request) { return promiseSettledMetered(request).value(); }
     @Override public Result<PromiseThought> promiseSettledMetered(PromiseSettledRequest request) {
         return attempt("promise", mind -> mind.promiseSettledMetered(request));

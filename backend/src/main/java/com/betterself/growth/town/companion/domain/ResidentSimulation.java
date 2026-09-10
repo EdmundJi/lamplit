@@ -621,6 +621,55 @@ public final class ResidentSimulation {
     public static void markVentureAsked(CompanionWorld w,String residentId,Instant at){
         ResidentState r=state(w,residentId);if(r!=null)r.lastVentureAt=at;
     }
+    /** How long to wait before putting the promise question to the same person again. A full
+     * simulated day, not merely "a while": someone with nothing they wanted to commit to this
+     * afternoon may well feel differently once the day has turned over, but does not become a
+     * different person an hour later, so asking again inside the same day is only pestering - the
+     * same reasoning {@link #VENTURE_MIN_GAP_SECONDS} already applies to the other separately-asked
+     * question, just at the shorter gap that question's own measurements called for. */
+    private static final long PROMISE_ASK_MIN_GAP_SECONDS = 24*3600L;
+    /** Whether the town, taken as a whole, still has at least one unfinished thing that takes more
+     * than one pair of hands. Deliberately NOT scoped to what this resident personally knows about or
+     * could join, unlike {@link #sharedThingsLeft} - the promise question is about committing to
+     * whoever is standing there face to face, not about this resident's own backlog of shared work,
+     * so it only needs the fact that the town has not run out of reasons for people to arrange to
+     * meet at all. */
+    private static boolean townHasUnfinishedSharedWork(CompanionWorld w){
+        return w.projects.stream().anyMatch(p->takesMoreThanOnePerson(p)&&!Set.of("ready","celebrating").contains(p.status));
+    }
+    /** Whether it is worth asking this resident the one question the model answers so differently
+     * from everything else on the action menu: "想不想跟眼前这个人说定一个时候". Measured runs put it
+     * on that twenty-item menu and got nothing back - create offered 342 times and chosen 0, invite
+     * 285/0, celebrate 1658/0 - while the same model, asked this on its own, said yes 53% of the
+     * time; the model was never the problem, sharing a menu with nineteen other options was. This
+     * gate exists only to decide when asking could mean anything at all: somebody is actually there
+     * to say it to, this resident is not already carrying a promise nobody has checked on yet, the
+     * town still has something worth arranging around, and they were not just asked a moment ago.
+     * <p>It deliberately does not lean toward yes or no - it only ever answers "is this moment worth
+     * the question", the same restraint {@link #needsVenture} already exercises for its own question.
+     * Whether to actually make a promise, to whom, and about what stays entirely this resident's own
+     * answer once asked; nothing here decides any of that for them. */
+    public static boolean needsPromiseAsk(CompanionWorld w,String residentId,Instant now){
+        ResidentState r=state(w,residentId);
+        if(r==null||"self".equals(residentId))return false;
+        Actor self=actor(w,residentId);
+        // Same "in place, awake, not mid-errand" reading of activity witnessPeople and promise() both
+        // already use for whether someone actually counts as present.
+        if(Set.of("walk","travel","sleep","away").contains(self.activity()))return false;
+        boolean someoneElseHere=w.residentStates.stream().anyMatch(o->!o.id.equals(residentId)
+            &&actor(w,o.id).place().equals(self.place())
+            &&!Set.of("walk","travel","sleep","away").contains(actor(w,o.id).activity()));
+        if(!someoneElseHere)return false;
+        if(r.lastPromiseAskedAt!=null&&Duration.between(r.lastPromiseAskedAt,now).getSeconds()<PROMISE_ASK_MIN_GAP_SECONDS)return false;
+        if(w.promises.stream().anyMatch(p->residentId.equals(p.byId)&&p.settledAt==null))return false;
+        return townHasUnfinishedSharedWork(w);
+    }
+    /** Records that the question was put, whatever the answer was - same reasoning as
+     * {@link #markVentureAsked}: the point of the cadence is not to keep asking someone who just
+     * said no. */
+    public static void markPromiseAsked(CompanionWorld w,String residentId,Instant now){
+        ResidentState r=state(w,residentId);if(r!=null)r.lastPromiseAskedAt=now;
+    }
     public static boolean proposeDecision(CompanionWorld w,String id,long residentRevision,long intentRevision,String place,String title,String objectKind,String reason,List<String> evidence,Instant now) {
         ResidentState r=state(w,id);
         if(r==null||r.revision!=residentRevision||w.intentRevision!=intentRevision||!TownPlaces.contains(w,place)||TownPlaces.isHome(place))return false;

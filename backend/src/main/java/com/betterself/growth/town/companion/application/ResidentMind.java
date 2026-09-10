@@ -96,6 +96,27 @@ public interface ResidentMind {
      * was. What it meant is the resident's, the two of them may well disagree, and that disagreement is
      * the point. An answer of "nothing in particular" is a real answer and must stay easy to give.
      */
+    /**
+     * "There is someone standing in front of you. Is there anything you want to fix a time for?"
+     *
+     * <p>docs/06-society.md 三: a contract is a claim on the future, and until this existed the
+     * residents could only ever express what they were doing right now. The decision prompt even said
+     * so outright - 若只是想明天、改天或等有空再做，stance=consider - which was written to stop empty
+     * promises and cancelled the whole idea of a promise along with them.
+     *
+     * <p>Asked on its own rather than added to the action menu, for the reason the menu keeps proving:
+     * create 342 offers / 0 taken, invite 285/0, celebrate 1658/0, against react's 53% when the same
+     * model is asked the same thing as its own question.
+     *
+     * <p>The rules decide only whether the moment is worth a question - somebody is here, something in
+     * town still needs more than one pair of hands, this resident is not already carrying an unsettled
+     * promise. They have no view on whether a promise should be made, to whom, or about what. "Nothing
+     * I want to fix a time for" has to stay as easy an answer as any other, or this becomes a machine
+     * for generating obligations nobody meant.
+     */
+    default PromiseOfferDraft promiseOffer(PromiseOfferRequest request){throw new UnsupportedOperationException("Promise offer unavailable");}
+    default Result<PromiseOfferDraft> promiseOfferMetered(PromiseOfferRequest request){return new Result<>(promiseOffer(request),null);}
+
     default PromiseThought promiseSettled(PromiseSettledRequest request){throw new UnsupportedOperationException("Promise reaction unavailable");}
     default Result<PromiseThought> promiseSettledMetered(PromiseSettledRequest request){return new Result<>(promiseSettled(request),null);}
 
@@ -168,6 +189,15 @@ public interface ResidentMind {
      * resident now holds about that person - which is how "某人说话不算数" becomes something they hold
      * rather than something we computed. Empty text is a legitimate answer: nothing in particular. */
     record PromiseThought(String text,String supersedesKey,List<String> evidenceIds) {}
+    /** {@code peopleHere} is who is actually standing there to say it to; {@code thingsNeedingHands} is
+     * what in town still takes more than one person, handed over rather than described so the resident
+     * can see for themselves. Neither is a list of things they ought to promise. */
+    record PromiseOfferRequest(Context perspective,List<ActorView> peopleHere,List<KnownProject> thingsNeedingHands) {}
+    /** A null or blank {@code what} means "nothing I want to fix a time for", which is a real answer and
+     * the commonest one. {@code inHours} is how far ahead they mean, so the resident says "tonight" or
+     * "tomorrow morning" in their own terms rather than being handed a clock; the rules turn it into an
+     * instant and refuse anything past a day. */
+    record PromiseOfferDraft(String toId,String what,String place,Double inHours,List<String> evidenceIds) {}
 
     /** {@code supersedesKey} non-null means this resident has genuinely noticed something recurring
      * across {@code source} and is naming it as a standing belief about someone or something, replacing

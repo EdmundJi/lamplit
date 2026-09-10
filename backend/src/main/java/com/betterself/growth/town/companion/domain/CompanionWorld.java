@@ -239,6 +239,13 @@ public class CompanionWorld {
          * separate from every other cadence because the question is only worth asking when the town
          * has actually run dry - see ResidentSimulation.needsVenture. */
         public Instant lastVentureAt;
+        /** When this resident was last asked whether they want to make a promise to whoever they are
+         * standing with right now. A pure frequency gate, kept separate from every other cadence for
+         * the same reason {@link #lastVentureAt} is: a person who was just asked and said nothing
+         * does not become a different person a minute later, and pestering them about it defeats the
+         * point of asking at all. Never read by anything but the gate itself - see
+         * ResidentSimulation.needsPromiseAsk/markPromiseAsked - and never sent to any model. */
+        public Instant lastPromiseAskedAt;
         public Plan plan;
         public Map<String,Integer> relationships = new LinkedHashMap<>();
         /** Whether THIS resident has ever let their own private fondness for another show in

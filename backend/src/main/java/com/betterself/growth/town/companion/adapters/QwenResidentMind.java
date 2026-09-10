@@ -236,6 +236,25 @@ public class QwenResidentMind implements ResidentMind {
     }
     private record ReflectInput(Context perspective,java.util.List<MemoryView> source,java.util.List<HabitTraitView> habits) {}
 
+    @Override public PromiseOfferDraft promiseOffer(PromiseOfferRequest request){return promiseOfferMetered(request).value();}
+    @Override public Result<PromiseOfferDraft> promiseOfferMetered(PromiseOfferRequest request){
+        return generateMetered("COMPANION_RESIDENT_PROMISE_OFFER","""
+            你是perspective.self中的这一个居民。peopleHere是此刻和你在同一个地方、醒着的人。
+            问题只有一句：**你想不想跟其中某个人，把一件事说定一个时候？**
+            "说定一个时候"就是当面对他说：我什么时候会在哪儿做什么。说出口之后这件事就搁在那儿了——到了那个点，你在或者不在，他会知道，当时听见的人也会知道。
+            想说定就说，不想就不说，两种都很正常，而且"没有"是最常见的答案。不必为了回答这个问题凑一件事出来。
+            但也别因为"说了就得做到、万一做不到呢"而不说。做不到会怎么样这件事，这里没有规定，也没有人会替你或替他判定什么。
+            thingsNeedingHands是镇上那些一个人做不完、还没做完的事，给你看是让你自己看，不是让你从里面挑一件来许诺。你想说定的完全可以是别的：一起吃点什么、把某样东西带给谁、明早陪谁去一趟。
+            要说定的话：toId填peopleHere里那个人的id；what一句话，不超过40个汉字，写你会去做的那件事；place只能是cafe、street或garden（自己家里不算）；inHours是从现在算起大约几小时之后，可以是小数，最多24。
+            不想说定就把what留空（null），别的字段也留空。
+            evidenceIds填0到3条真正让你想到它的自己的记忆，没有就留空数组。
+            只返回JSON字段toId,what,place,inHours,evidenceIds，不输出推理过程。
+            """,new PromiseOfferInput(request.perspective(),request.peopleHere(),request.thingsNeedingHands()),"""
+            {"type":"object","required":["toId","what","place","inHours","evidenceIds"],"properties":{"toId":{"type":["string","null"]},"what":{"type":["string","null"]},"place":{"type":["string","null"],"enum":["cafe","street","garden",null]},"inHours":{"type":["number","null"]},"evidenceIds":{"type":"array","items":{"type":"string"}}}}
+            """,PromiseOfferDraft.class,decisionThinking);
+    }
+    private record PromiseOfferInput(Context perspective,java.util.List<ActorView> peopleHere,java.util.List<KnownProject> thingsNeedingHands) {}
+
     @Override public PromiseThought promiseSettled(PromiseSettledRequest request){return promiseSettledMetered(request).value();}
     @Override public Result<PromiseThought> promiseSettledMetered(PromiseSettledRequest request){
         return generateMetered("COMPANION_RESIDENT_PROMISE_SETTLED","""

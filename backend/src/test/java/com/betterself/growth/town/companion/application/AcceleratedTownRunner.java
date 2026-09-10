@@ -336,6 +336,12 @@ public final class AcceleratedTownRunner {
             Map<String,Object> input=new LinkedHashMap<>();input.put("perspective",request.perspective());input.put("partnerName",request.partnerName());input.put("transcript",ResidentMind.turnViews(request.transcript()));input.put("conversationMemories",request.conversationMemories());
             return capture("summary",input,()->delegate.summarizeConversationMetered(request));
         }
+        public PromiseOfferDraft promiseOffer(PromiseOfferRequest request){return promiseOfferMetered(request).value();}
+        public Result<PromiseOfferDraft> promiseOfferMetered(PromiseOfferRequest request){
+            Map<String,Object> input=new LinkedHashMap<>();input.put("residentId",request.perspective().residentId());
+            input.put("peopleHere",request.peopleHere());
+            return capture("promise_offer",input,()->delegate.promiseOfferMetered(request));
+        }
         public PromiseThought promiseSettled(PromiseSettledRequest request){return promiseSettledMetered(request).value();}
         public Result<PromiseThought> promiseSettledMetered(PromiseSettledRequest request){
             Map<String,Object> input=new LinkedHashMap<>();input.put("residentId",request.perspective().residentId());
