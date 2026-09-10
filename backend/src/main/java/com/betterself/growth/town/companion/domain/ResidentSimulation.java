@@ -783,10 +783,42 @@ public final class ResidentSimulation {
     }
     public static String cafeScheduleCue(CompanionWorld w,String residentId,Instant at){return CafeService.scheduleCue(w,residentId,at);}
     public static List<String> routineCues(CompanionWorld w,String residentId,Instant at){
-        ResidentState r=state(w,residentId);if(r==null||!r.sleepScheduleSeeded||"sleep".equals(actor(w,residentId).activity()))return List.of();
+        ResidentState r=state(w,residentId);if(r==null||"sleep".equals(actor(w,residentId).activity()))return List.of();
+        List<String> cues=new ArrayList<>();
         ZonedDateTime local=at.atZone(ZoneId.of(w.timezone));int minute=local.getHour()*60+local.getMinute();
-        boolean inWindow=r.usualSleepMinute<r.usualWakeMinute?minute>=r.usualSleepMinute&&minute<r.usualWakeMinute:minute>=r.usualSleepMinute||minute<r.usualWakeMinute;
-        return inWindow?List.of("到了我平常睡觉的时间"):List.of();
+        if(r.sleepScheduleSeeded){
+            boolean inWindow=r.usualSleepMinute<r.usualWakeMinute?minute>=r.usualSleepMinute&&minute<r.usualWakeMinute:minute>=r.usualSleepMinute||minute<r.usualWakeMinute;
+            if(inWindow)cues.add("到了我平常睡觉的时间");
+        }
+        cues.addAll(promiseCues(w,r,at));
+        return List.copyOf(cues);
+    }
+    /** How far ahead a promise this resident made starts being something they are aware of. */
+    static final int PROMISE_CUE_LEAD_SECONDS = 3 * 3600;
+    /**
+     * What you yourself said you would do, while there is still time to do it. Measured first, which is
+     * the only reason this exists: a half-day model run produced three promises and settled all three
+     * as {@code did_not_come} - not because anybody changed their mind, but because <b>nothing in the
+     * world ever told them their own promise was coming due</b>. Keeping it would have been an accident.
+     *
+     * <p>A rule that manufactures unreliability and then hands the town a norm about it is worse than no
+     * promise machinery at all, because every reader afterwards would take the pattern for a finding.
+     *
+     * <p>Stated as a fact and nothing else - what, where, roughly when. Not "you should go": routineCues
+     * is documented to the model as 习惯事实，不是命令, and going, forgetting, or deciding it is not worth
+     * it any more all have to stay available, or the promise is not a promise but a rail.
+     */
+    private static List<String> promiseCues(CompanionWorld w,ResidentState r,Instant at){
+        List<String> cues=new ArrayList<>();
+        for(CompanionWorld.Promise p:w.promises){
+            if(p.settledAt!=null||!p.byId.equals(r.id)||p.dueAt==null)continue;
+            long seconds=Duration.between(at,p.dueAt).getSeconds();
+            if(seconds>PROMISE_CUE_LEAD_SECONDS)continue;
+            String toName=state(w,p.toId)==null?p.toId:actor(w,p.toId).name();
+            String when=seconds<=0?"就是现在":seconds<15*60?"大约还有一刻钟":seconds<3600?"大约还有半小时多":"还有一两个小时";
+            cues.add("我答应过"+toName+"，会在"+placeName(p.place)+"做这件事："+p.what+"（"+when+"）");
+        }
+        return cues;
     }
     public static String cafeNotice(CompanionWorld w,String residentId){
         if(!"closing".equals(w.cafeStatus)||!"cafe".equals(actor(w,residentId).place()))return null;
