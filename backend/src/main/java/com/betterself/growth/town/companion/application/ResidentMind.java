@@ -74,6 +74,31 @@ public interface ResidentMind {
      * of has finished or stalled beyond their reach - and never what anybody wants. A resident is
      * free to want nothing; most of the time that is the right answer and an empty draft says so.
      */
+    /**
+     * A promise came due and the rules wrote down the one fact they are allowed to write down: at the
+     * hour that was named, the person who made it was there, or was not. This asks the other party -
+     * and anyone who was standing there when it was made - what they make of that.
+     *
+     * <p>It exists because of the most expensive thing this project has measured (docs/06-society.md
+     * 四): {@code celebrate} was offered 1658 times and chosen zero times, {@code create} 342/0,
+     * {@code invite} 285/0, while the same model asked {@code react} as its own separate question said
+     * yes 53% of the time. <b>An obligation nobody is ever asked about is never honoured.</b> Adding a
+     * promise object without adding this question would build a second celebrate: a perfect mechanism
+     * with a thousand chances and no uses.
+     *
+     * <p>docs names this question 「他没来，你怎么想」, and it is asked on the {@code did_not_come}
+     * case for exactly the reason above. It is asked on {@code came} too, and that is deliberate: a
+     * town where only the failures are ever worth a thought is one we shaped to produce grievances.
+     * Reputation is supposed to grow out of both halves.
+     *
+     * <p>The rules have no view on any of this. They never call it a betrayal, and they do not call it
+     * loyalty either - see ResidentSimulation's promise settlement, which writes only where the person
+     * was. What it meant is the resident's, the two of them may well disagree, and that disagreement is
+     * the point. An answer of "nothing in particular" is a real answer and must stay easy to give.
+     */
+    default PromiseThought promiseSettled(PromiseSettledRequest request){throw new UnsupportedOperationException("Promise reaction unavailable");}
+    default Result<PromiseThought> promiseSettledMetered(PromiseSettledRequest request){return new Result<>(promiseSettled(request),null);}
+
     default VentureDraft venture(VentureRequest request){throw new UnsupportedOperationException("Venture unavailable");}
     default Result<VentureDraft> ventureMetered(VentureRequest request){return new Result<>(venture(request),null);}
 
@@ -132,6 +157,18 @@ public interface ResidentMind {
      * and common answer and is not a failure. Otherwise the same four things a proposal has always
      * needed, validated by exactly the same rules any other proposal goes through. */
     record VentureDraft(String title,String place,String objectKind,String reason,List<String> evidenceIds) {}
+    /** One promise as the resident being asked knows it. {@code outcome} is only ever "came" or
+     * "did_not_come" - the fact, with no reading attached. {@code role} says which side of it this
+     * resident was on ("promised_to" / "witnessed" / "made_it"), because being the person who was
+     * waiting and being the person who happened to overhear it are not the same position. */
+    record PromiseView(String promiseId,String byId,String byName,String what,String place,String dueAt,String outcome,String role) {}
+    record PromiseSettledRequest(Context perspective,PromiseView promise,List<MemoryView> aboutThem) {}
+    /** Same shape as {@link ReflectDraft} and lands the same way, through applyReflection: a passing
+     * thought stores as one reflection, and a {@code supersedesKey} makes it the standing view this
+     * resident now holds about that person - which is how "某人说话不算数" becomes something they hold
+     * rather than something we computed. Empty text is a legitimate answer: nothing in particular. */
+    record PromiseThought(String text,String supersedesKey,List<String> evidenceIds) {}
+
     /** {@code supersedesKey} non-null means this resident has genuinely noticed something recurring
      * across {@code source} and is naming it as a standing belief about someone or something, replacing
      * whatever they previously believed under the same key; null means an ordinary one-off reflection

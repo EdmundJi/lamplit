@@ -236,6 +236,27 @@ public class QwenResidentMind implements ResidentMind {
     }
     private record ReflectInput(Context perspective,java.util.List<MemoryView> source,java.util.List<HabitTraitView> habits) {}
 
+    @Override public PromiseThought promiseSettled(PromiseSettledRequest request){return promiseSettledMetered(request).value();}
+    @Override public Result<PromiseThought> promiseSettledMetered(PromiseSettledRequest request){
+        return generateMetered("COMPANION_RESIDENT_PROMISE_SETTLED","""
+            你是perspective.self中的这一个居民。promise是一件当时当面说定的事：byName说了他会在什么时候、在哪儿、做什么。
+            那个时候到了。outcome记的只有一个事实——"came"是他人在那儿，"did_not_come"是他人不在那儿。没有别的意思，也没有人替你判断这算什么。
+            role是你当时的位置："promised_to"是他答应的是你，"witnessed"是你当时在旁边听见了，"made_it"是这话是你自己说的。
+            问题只有一句：**你怎么想？**
+            怎么想都行，而且各种想法一样正常：可以觉得没什么、本来也没多当真；可以替他想到一个理由；可以不痛快；可以觉得他做到了是理所当然的，也可以记住他真的来了；可以想到自己下次还找不找他。
+            也完全可以什么想法都没有——那就把text留空，那是真话。不要因为被问到了就凑一句出来，也不要因为"不该计较"或者"该大度一点"就把想说的话咽回去。
+            aboutThem是你自己关于这个人的一些记忆，可能有关也可能无关，不必每条都用上。
+            supersedesKey只在一种情况下填：你觉得这件事让你对**这个人**（或者对这条街上的事该怎么办）有了一个会长期带着走的看法。那就自己起一个简短代号（比如"周野-说定的事"），以后同一个key会替换你之前对同一件事的看法。
+            只是这一次的一点感想，就把supersedesKey留空。一次感想不比一个长期看法低一等，只是两回事。
+            text一两句话，不超过60个汉字，用你自己说话的方式写，不要写成对事情的总结或评语。
+            evidenceIds从aboutThem里选0到3条真正让你这么想的自己的记忆；没有就留空数组。
+            只返回JSON字段text,supersedesKey,evidenceIds，不输出推理过程。
+            """,new PromiseSettledInput(request.perspective(),request.promise(),request.aboutThem()),"""
+            {"type":"object","required":["text","supersedesKey","evidenceIds"],"properties":{"text":{"type":["string","null"]},"supersedesKey":{"type":["string","null"]},"evidenceIds":{"type":"array","items":{"type":"string"}}}}
+            """,PromiseThought.class,decisionThinking);
+    }
+    private record PromiseSettledInput(Context perspective,PromiseView promise,java.util.List<MemoryView> aboutThem) {}
+
     @Override public VentureDraft venture(VentureRequest request){return ventureMetered(request).value();}
     @Override public Result<VentureDraft> ventureMetered(VentureRequest request){
         return generateMetered("COMPANION_RESIDENT_VENTURE","""
