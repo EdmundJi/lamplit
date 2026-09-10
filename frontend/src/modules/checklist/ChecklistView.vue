@@ -109,16 +109,16 @@ h1 span { display: inline-block; margin-left: 12px; vertical-align: middle; font
 button, input { font: inherit; }
 button { cursor: pointer; }
 button:disabled { opacity: .45; cursor: default; }
-.list-tabs { display: flex; background: var(--surface-muted); padding: 4px; border-radius: 10px; }
-.list-tabs button { padding: 8px 16px; border: 0; border-radius: 7px; color: var(--muted); background: transparent; font-size: 13px; }
-.list-tabs button[aria-pressed=true] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 3px #0000000a; }
-.quick-add { display: flex; gap: 12px; align-items: center; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px 10px 18px; color: var(--muted); }
+.list-tabs { display: flex; background: var(--surface-muted); padding: 4px; border-radius: var(--radius-card); }
+.list-tabs button { padding: 8px 16px; border: 0; border-radius: var(--radius-card); color: var(--muted); background: transparent; font-size: 13px; }
+.list-tabs button[aria-pressed=true] { background: var(--surface); color: var(--ink); }
+.quick-add { display: flex; gap: 12px; align-items: center; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card); padding: 10px 12px 10px 18px; color: var(--muted); }
 .quick-add:focus-within { border-color: var(--primary); }
 .quick-add input { min-width: 0; flex: 1; border: 0; outline: none; box-shadow: none; padding: 10px 0; background: transparent; color: var(--ink); font-size: 15px; }
-.quick-add button { flex-shrink: 0; background: var(--primary); color: var(--on-primary, #fff); border: 0; border-radius: 7px; padding: 9px 14px; font-size: 13px; }
+.quick-add button { flex-shrink: 0; background: var(--primary); color: var(--on-primary, #fff); border: 0; border-radius: var(--radius-card); padding: 9px 14px; font-size: 13px; }
 .checklist-items, .completed-list ul { list-style: none; padding: 0; margin: 22px 0 0; }
 .checklist-row { position: relative; display: flex; align-items: center; gap: 12px; min-height: 64px; border-bottom: 1px solid var(--border); padding: 10px 0; }
-.drag-handle { color: var(--muted); opacity: .35; cursor: grab; display: grid; place-items: center; width: 22px; height: 44px; min-height: 0; padding: 0; border: 0; border-radius: 6px; background: transparent; flex-shrink: 0; touch-action: none; }
+.drag-handle { color: var(--muted); opacity: .35; cursor: grab; display: grid; place-items: center; width: 22px; height: 44px; min-height: 0; padding: 0; border: 0; border-radius: var(--radius); background: transparent; flex-shrink: 0; touch-action: none; }
 .checklist-row:hover .drag-handle, .drag-handle:focus-visible { opacity: 1; }
 /* The row being carried lifts above its neighbours while they slide aside underneath. */
 .is-dragging { z-index: 2; cursor: grabbing; border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow-soft); }
@@ -129,15 +129,15 @@ button:disabled { opacity: .45; cursor: default; }
 .task-text { flex: 1; min-width: 0; }
 .task-title { text-align: left; overflow-wrap: anywhere; width: 100%; border: 0; background: none; color: var(--ink); padding: 10px 0; line-height: 1.5; font-size: 15px; }
 .task-date { display: block; color: var(--muted); font-size: 11px; }
-.title-edit { width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 5px; background: var(--surface); color: var(--ink); }
+.title-edit { width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--ink); }
 .edit-actions { display: flex; flex-wrap: wrap; gap: 10px; font-size: 12px; margin-top: 8px; }
 .edit-actions button, .list-feedback button, .checklist-error button { background: none; border: 0; color: var(--primary); padding: 4px 0; }
 .edit-actions span { color: var(--muted); }
 .task-menu-wrap { position: relative; }
-.task-menu-toggle { border: 0; color: var(--muted); background: transparent; width: 44px; height: 44px; display: grid; place-items: center; border-radius: 8px; }
+.task-menu-toggle { border: 0; color: var(--muted); background: transparent; width: 44px; height: 44px; display: grid; place-items: center; border-radius: var(--radius-card); }
 .task-menu-toggle:hover { background: var(--surface-muted); }
-.task-menu { position: absolute; z-index: 5; right: 0; top: 40px; min-width: 152px; background: var(--surface); padding: 6px; border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 8px 24px #00000012; }
-.task-menu button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 12px; font-size: 13px; background: none; border: 0; border-radius: 6px; color: var(--ink); text-align: left; }
+.task-menu { position: absolute; z-index: 5; right: 0; top: 40px; min-width: 152px; background: var(--surface); padding: 6px; border: 1px solid var(--border); border-radius: var(--radius-card); box-shadow: var(--shadow); }
+.task-menu button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 12px; font-size: 13px; background: none; border: 0; border-radius: var(--radius); color: var(--ink); text-align: left; }
 .task-menu button:hover { background: var(--surface-muted); }
 .list-feedback { display: flex; gap: 18px; align-items: center; margin-top: 14px; font-size: 12px; color: var(--muted); }
 .list-feedback button { display: inline-flex; gap: 5px; align-items: center; }

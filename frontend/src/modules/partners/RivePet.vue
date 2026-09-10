@@ -307,7 +307,7 @@ defineExpose({ react })
   bottom: 9px;
   max-width: calc(100% - 20px);
   padding: 4px 7px;
-  border-radius: 4px;
+  border-radius: var(--radius);
   background: rgb(18 23 30 / 68%);
   color: white;
   font-size: 10px;
@@ -352,7 +352,7 @@ defineExpose({ react })
   gap: 2px;
   padding: 5px;
   border: 1px solid rgb(255 255 255 / 14%);
-  border-radius: 8px;
+  border-radius: var(--radius-card);
   background: rgb(24 30 38 / 92%);
   box-shadow: 0 12px 28px rgb(0 0 0 / 28%);
   backdrop-filter: blur(8px);
@@ -365,7 +365,7 @@ defineExpose({ react })
   gap: 7px;
   padding: 0 8px;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--radius);
   background: transparent;
   color: #e8e2da;
   font-size: 11px;
@@ -380,21 +380,21 @@ defineExpose({ react })
 .variant-menu button > span:nth-child(2) { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .variant-menu button em { font-style: normal; color: #ffd9a0; font-size: 10px; opacity: .85; }
 
-.variant-menu-enter-active, .variant-menu-leave-active { transition: opacity var(--motion-fast) ease, transform var(--motion-fast) ease; }
+.variant-menu-enter-active, .variant-menu-leave-active { transition: opacity var(--motion-fast) var(--ease), transform var(--motion-fast) var(--ease); }
 .variant-menu-enter-from, .variant-menu-leave-to { opacity: 0; transform: translateY(5px); }
 
 @media (prefers-reduced-motion: no-preference) {
-  .rive-pet.reacting[data-reaction='greet'] { animation: pet-greet 720ms ease; }
-  .rive-pet.reacting[data-reaction='play'] { animation: pet-play 720ms ease; }
-  .rive-pet.reacting[data-reaction='comfort'] { animation: pet-comfort 900ms ease; }
-  .rive-pet.reacting[data-reaction='celebrate'] { animation: pet-celebrate 820ms ease; }
-  .rive-pet.reacting[data-reaction='feed'] { animation: pet-feed 720ms ease; }
-  .rive-pet[data-species='SNAKE'] .static-pet { animation: snake-idle 3.4s ease-in-out infinite; }
-  .rive-pet[data-species='SNAKE'].reacting[data-reaction='play'] .static-pet { animation: snake-play 720ms ease; }
-  .rive-pet[data-species='SNAKE'].reacting[data-reaction='comfort'] .static-pet { animation: snake-comfort 900ms ease; }
-  .rive-pet[data-species='SNAKE'].reacting[data-reaction='celebrate'] .static-pet { animation: snake-celebrate 820ms ease; }
-  .rive-pet[data-species='FOX'].reacting[data-reaction='play'] canvas { animation: fox-play 720ms ease; }
-  .rive-pet[data-species='FOX'].reacting[data-reaction='celebrate'] canvas { animation: fox-celebrate 820ms ease; }
+  .rive-pet.reacting[data-reaction='greet'] { animation: pet-greet 720ms var(--ease); }
+  .rive-pet.reacting[data-reaction='play'] { animation: pet-play 720ms var(--ease); }
+  .rive-pet.reacting[data-reaction='comfort'] { animation: pet-comfort 900ms var(--ease); }
+  .rive-pet.reacting[data-reaction='celebrate'] { animation: pet-celebrate 820ms var(--ease); }
+  .rive-pet.reacting[data-reaction='feed'] { animation: pet-feed 720ms var(--ease); }
+  .rive-pet[data-species='SNAKE'] .static-pet { animation: snake-idle 3.4s var(--ease) infinite; }
+  .rive-pet[data-species='SNAKE'].reacting[data-reaction='play'] .static-pet { animation: snake-play 720ms var(--ease); }
+  .rive-pet[data-species='SNAKE'].reacting[data-reaction='comfort'] .static-pet { animation: snake-comfort 900ms var(--ease); }
+  .rive-pet[data-species='SNAKE'].reacting[data-reaction='celebrate'] .static-pet { animation: snake-celebrate 820ms var(--ease); }
+  .rive-pet[data-species='FOX'].reacting[data-reaction='play'] canvas { animation: fox-play 720ms var(--ease); }
+  .rive-pet[data-species='FOX'].reacting[data-reaction='celebrate'] canvas { animation: fox-celebrate 820ms var(--ease); }
 }
 
 @keyframes pet-greet {

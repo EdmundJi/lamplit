@@ -259,9 +259,9 @@ onMounted(load)
 .admin-stack { display: grid; gap: 18px; }
 .admin-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; margin-bottom: 20px; padding: 4px; background: var(--surface-muted); }
 .admin-tabs button { min-width: 0; border: 0; border-radius: calc(var(--radius) - 2px); background: transparent; color: var(--muted); }
-.admin-tabs button[aria-pressed='true'] { background: var(--surface); color: var(--primary); font-weight: 800; box-shadow: var(--shadow-soft); }
+.admin-tabs button[aria-pressed='true'] { background: var(--surface); color: var(--primary); font-weight: 800; }
 .admin-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
-.admin-metrics article { min-height: 116px; display: grid; grid-template-rows: auto auto 1fr; gap: 8px; padding: 18px; border: 1px solid var(--border); border-radius: var(--radius); background: color-mix(in srgb, var(--surface) 88%, transparent); box-shadow: var(--shadow-soft); }
+.admin-metrics article { min-height: 116px; display: grid; grid-template-rows: auto auto 1fr; gap: 8px; padding: 18px; border: 1px solid var(--border); border-radius: var(--radius); background: color-mix(in srgb, var(--surface) 88%, transparent); }
 .admin-metrics svg, .section-head svg { color: var(--primary); }
 .admin-metrics span, table small, .overview-grid span { color: var(--muted); font-size: 12px; }
 .admin-metrics strong, .overview-grid strong { align-self: end; font-size: 30px; line-height: 1; color: var(--primary); }
@@ -272,7 +272,7 @@ onMounted(load)
 .admin-form-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
 .secret-box { display: flex; align-items: center; gap: 8px; margin: 14px 0 0; padding: 12px; border-left: 3px solid var(--amber); background: color-mix(in srgb, var(--amber) 8%, var(--surface)); color: var(--ink); }
 .secret-box code { overflow-wrap: anywhere; }
-.table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow-soft); }
+.table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
 table { width: 100%; border-collapse: collapse; font-size: 13px; }
 th, td { text-align: left; padding: 11px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
 th { color: var(--primary-strong); background: var(--surface-muted); font-weight: 800; }
@@ -281,11 +281,11 @@ td select { min-height: 34px; border: 1px solid var(--border); border-radius: va
 .risk { font-weight: 800; color: var(--danger); }
 .spinning { animation: spin .8s linear infinite; }
 @media (prefers-reduced-motion: no-preference) {
-  .admin-metrics article, .band { animation: admin-enter var(--motion-medium) ease-out both; }
-  tr { transition: background-color var(--motion-fast) ease; }
+  .admin-metrics article, .band { animation: admin-enter var(--motion-medium) var(--ease) both; }
+  tr { transition: background-color var(--motion-fast) var(--ease); }
   tbody tr:hover { background: color-mix(in srgb, var(--primary) 5%, transparent); }
 }
-@keyframes admin-enter { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes admin-enter { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (max-width: 860px) {
   .admin-metrics, .overview-grid, .admin-form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }

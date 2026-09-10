@@ -334,7 +334,6 @@ h2 {
   background: var(--surface);
   color: var(--primary-strong);
   font-weight: 700;
-  box-shadow: var(--shadow-soft);
 }
 
 .swatches {
@@ -363,13 +362,13 @@ h2 {
   grid-template-columns: 26px minmax(0, 1fr);
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--preview-primary) 22%, var(--border));
-  border-radius: 6px;
+  border-radius: var(--radius);
   background: var(--preview-surface);
 }
 
 .preview-sidebar { background: var(--preview-primary); }
 .preview-content { display: grid; align-content: center; gap: 7px; padding: 10px; }
-.preview-content i { display: block; height: 8px; border-radius: 3px; background: color-mix(in srgb, var(--preview-primary) 24%, white); }
+.preview-content i { display: block; height: 8px; border-radius: var(--radius); background: color-mix(in srgb, var(--preview-primary) 24%, white); }
 .preview-content i:first-child { width: 64%; height: 11px; background: var(--preview-primary); }
 .preview-content i:last-child { width: 46%; background: var(--preview-accent); }
 .swatch-copy { min-width: 0; display: grid; gap: 3px; }
@@ -384,7 +383,7 @@ h2 {
 .swatches button[aria-pressed='true'] {
   border-color: var(--primary);
   background: color-mix(in srgb, var(--primary-soft) 48%, var(--surface));
-  box-shadow: inset 0 -3px 0 var(--primary), var(--shadow-soft);
+  box-shadow: inset 0 -3px 0 var(--primary);
 }
 
 .swatches button[aria-pressed='true'] .swatch-copy strong {
@@ -407,7 +406,7 @@ h2 {
   gap: 9px;
   color: var(--ink);
 }
-.current-style > span { width: 30px; height: 30px; flex: 0 0 auto; border: 3px solid var(--surface); border-radius: 50%; box-shadow: 0 0 0 1px var(--border); }
+.current-style > span { width: 30px; height: 30px; flex: 0 0 auto; border: 3px solid var(--surface); border-radius: 50%; }
 .current-style div { display: grid; gap: 1px; }
 .current-style small { color: var(--muted); font-size: 10px; }
 .current-style strong { font-size: 13px; }
@@ -447,12 +446,12 @@ h2 {
 
 @media (prefers-reduced-motion: no-preference) {
   .appearance-section {
-    animation: settings-rise var(--motion-medium) ease-out both;
+    animation: settings-rise var(--motion-medium) var(--ease) both;
   }
 }
 
 @keyframes settings-rise {
-  from { opacity: 0; transform: translateY(6px); }
+  from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
@@ -484,8 +483,8 @@ h2 {
 }
 .settings-page { max-width: 1060px; }
 .settings-page > .band { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-panel); padding: 24px; margin-bottom: 18px; }
-.swatches button { border-radius: var(--radius-panel); box-shadow: none; }
-.theme-preview { border-radius: 10px; }
+.swatches button { border-radius: var(--radius-panel); }
+.theme-preview { border-radius: var(--radius-card); }
 .settings-page .danger-zone { border-color: color-mix(in srgb, var(--danger) 35%, var(--border)); }
 @media (max-width: 760px) { .settings-page > .band { padding: 18px; } }
 </style>

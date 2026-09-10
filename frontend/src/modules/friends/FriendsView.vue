@@ -141,15 +141,15 @@ onBeforeUnmount(stopDataSync)
 .add-friend-note { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.6; }
 .request-list { display: grid; gap: 9px; margin-top: 10px; }
 .friend-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 10px; }
-.friend-card { min-width: 0; display: grid; gap: 0; padding: 0; border: 1px solid var(--border); border-radius: var(--radius); background: color-mix(in srgb, var(--surface) 90%, transparent); box-shadow: var(--shadow-soft); overflow: hidden; }
+.friend-card { min-width: 0; display: grid; gap: 0; padding: 0; border: 1px solid var(--border); border-radius: var(--radius); background: color-mix(in srgb, var(--surface) 90%, transparent); overflow: hidden; }
 .incoming-card, .outgoing-card { grid-template-columns: 44px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 13px 15px; }
 .friend-row { grid-template-columns: minmax(0, 1fr) auto; }
-.friend-link { min-width: 0; display: grid; grid-template-columns: 46px minmax(0, 1fr) auto; align-items: center; gap: 13px; padding: 13px 0 13px 15px; color: var(--ink); text-decoration: none; transition: background-color var(--motion-fast) ease; }
+.friend-link { min-width: 0; display: grid; grid-template-columns: 46px minmax(0, 1fr) auto; align-items: center; gap: 13px; padding: 13px 0 13px 15px; color: var(--ink); text-decoration: none; transition: background-color var(--motion-fast) var(--ease); }
 .friend-link:hover { background: color-mix(in srgb, var(--primary) 4%, var(--surface)); }
 .friend-link > svg { color: var(--muted); }
-.chat-entry { width: 46px; min-height: 100%; display: grid; place-items: center; border-left: 1px solid var(--border); color: var(--primary); text-decoration: none; transition: background-color var(--motion-fast) ease; }
+.chat-entry { width: 46px; min-height: 100%; display: grid; place-items: center; border-left: 1px solid var(--border); color: var(--primary); text-decoration: none; transition: background-color var(--motion-fast) var(--ease); }
 .chat-entry:hover { background: var(--primary-soft); }
-.friend-avatar { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 15px 15px 15px 5px; background: linear-gradient(145deg, var(--primary), color-mix(in srgb, var(--primary) 72%, var(--amber))); color: white; font-size: 19px; font-weight: 900; box-shadow: 0 10px 20px color-mix(in srgb, var(--primary) 20%, transparent); }
+.friend-avatar { width: 44px; height: 44px; display: grid; place-items: center; border-radius: var(--radius-panel) var(--radius-panel) var(--radius-panel) var(--radius); background: linear-gradient(145deg, var(--primary), color-mix(in srgb, var(--primary) 72%, var(--amber))); color: white; font-size: 19px; font-weight: 900; }
 .friend-copy { min-width: 0; display: grid; gap: 4px; }
 .friend-copy strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; }
 .friend-copy small { color: var(--muted); font-size: 12px; }
@@ -160,12 +160,12 @@ onBeforeUnmount(stopDataSync)
 .empty p { margin: 0; font-size: 13px; }
 .empty svg { color: var(--primary); }
 @media (prefers-reduced-motion: no-preference) {
-  .friend-card { animation: friend-enter var(--motion-medium) ease-out both; }
+  .friend-card { animation: friend-enter var(--motion-medium) var(--ease) both; }
   .friend-card:nth-child(2) { animation-delay: 50ms; }
   .friend-card:nth-child(3) { animation-delay: 100ms; }
   .friend-card:nth-child(4) { animation-delay: 150ms; }
 }
-@keyframes friend-enter { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes friend-enter { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 @media (max-width: 720px) {
   .friend-grid { grid-template-columns: 1fr; }
   .add-friend-row { grid-template-columns: 1fr; }
@@ -175,8 +175,8 @@ onBeforeUnmount(stopDataSync)
   .request-actions .primary, .request-actions .secondary { flex: 1; }
   .outgoing-card > .secondary { grid-column: 1 / -1; width: 100%; }
 }
-.friend-card { border-radius: var(--radius-panel); box-shadow: none; }
-.friend-avatar { border-radius: 50%; background: var(--primary-soft); color: var(--primary-strong); box-shadow: none; }
+.friend-card { border-radius: var(--radius-panel); }
+.friend-avatar { border-radius: 50%; background: var(--primary-soft); color: var(--primary-strong); }
 .add-friend-band { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-panel); padding: 24px; margin-bottom: 24px; }
 .friend-link { padding-block: 20px; }
 .friend-grid { gap: 16px; }

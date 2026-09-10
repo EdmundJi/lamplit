@@ -149,8 +149,8 @@ onBeforeUnmount(() => {
 .section-title { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; color: var(--primary); }
 .section-title h2 { margin: 0; font-size: 18px; color: var(--ink); }
 .attribute-grid { display: grid; gap: 10px; }
-.attribute-card { min-height: 116px; display: grid; grid-template-columns: 48px minmax(0, 1fr) 72px; align-items: center; gap: 14px; padding: 15px; border: 1px solid var(--border); border-left: 4px solid var(--attribute-color); border-radius: var(--radius); background: color-mix(in srgb, var(--surface) 90%, transparent); box-shadow: var(--shadow-soft); }
-.attribute-icon { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 14px; color: var(--attribute-color); background: color-mix(in srgb, var(--attribute-color) 11%, var(--surface)); }
+.attribute-card { min-height: 116px; display: grid; grid-template-columns: 48px minmax(0, 1fr) 72px; align-items: center; gap: 14px; padding: 15px; border: 1px solid var(--border); border-left: 4px solid var(--attribute-color); border-radius: var(--radius); background: color-mix(in srgb, var(--surface) 90%, transparent); }
+.attribute-icon { width: 44px; height: 44px; display: grid; place-items: center; border-radius: var(--radius-panel); color: var(--attribute-color); background: color-mix(in srgb, var(--attribute-color) 11%, var(--surface)); }
 .attribute-main { min-width: 0; display: grid; gap: 8px; }
 .attribute-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .attribute-heading > div { min-width: 0; display: flex; align-items: baseline; gap: 8px; }
@@ -164,16 +164,14 @@ onBeforeUnmount(() => {
 .score b { font-size: 26px; line-height: 1; }
 .score small { color: var(--muted); font-size: 10px; }
 @media (prefers-reduced-motion: no-preference) {
-  .attribute-card { animation: attribute-enter var(--motion-medium) ease-out both; transition: transform var(--motion-fast) ease, box-shadow var(--motion-fast) ease; }
-  .attribute-card:hover { transform: translateX(3px); box-shadow: var(--shadow); }
+  .attribute-card { animation: attribute-enter var(--motion-medium) var(--ease) both; transition: border-color var(--motion-fast) var(--ease); }
+  .attribute-card:hover { border-color: color-mix(in srgb, var(--attribute-color) 34%, var(--border)); }
   .attribute-card:nth-child(2) { animation-delay: 55ms; }
   .attribute-card:nth-child(3) { animation-delay: 110ms; }
   .attribute-card:nth-child(4) { animation-delay: 165ms; }
   .attribute-card:nth-child(5) { animation-delay: 220ms; }
-  .attribute-icon { animation: icon-float 3.2s ease-in-out infinite; }
 }
-@keyframes attribute-enter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes icon-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+@keyframes attribute-enter { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 @media (max-width: 850px) { .attribute-overview { grid-template-columns: 1fr; } .radar-copy { max-width: none; } .radar-chart { min-height: 330px; } }
 @media (max-width: 560px) { .attribute-overview { padding-top: 18px; } .radar-chart { min-height: 290px; } .attribute-card { grid-template-columns: 44px minmax(0, 1fr); } .score { grid-column: 1 / -1; grid-template-columns: auto auto; justify-content: end; align-items: baseline; } .attribute-heading > div { align-items: start; flex-direction: column; gap: 2px; } }
 .attributes-page { max-width: 1264px; }
@@ -181,7 +179,7 @@ onBeforeUnmount(() => {
 .radar-copy h2 { font-size: 28px; line-height: 1.5; max-width: 12em; text-wrap: balance; }
 .radar-copy dl div { border: 0; border-radius: var(--radius); padding: 16px; }
 .radar-copy dd { font-size: 25px; font-variant-numeric: tabular-nums; }
-.attribute-card { border-radius: var(--radius-panel); padding: 20px; box-shadow: none; }
+.attribute-card { border-radius: var(--radius-panel); padding: 20px; }
 .overall-level strong { color: var(--primary-strong); }
 .attribute-heading b, .score b { color: var(--ink); }
 @media (max-width: 900px) { .attribute-overview { grid-template-columns: minmax(0,1fr); padding: 22px; } .radar-copy { max-width: none; } .radar-copy h2 { max-width: none; } }

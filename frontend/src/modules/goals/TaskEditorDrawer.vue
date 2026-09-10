@@ -166,7 +166,7 @@ const emit = defineEmits<{
 .refresh-quota { color: var(--muted); font-size: 13px; white-space: nowrap; }
 .role-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; padding: 4px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-muted); }
 .role-tabs button { min-width: 0; border: 0; background: transparent; color: var(--muted); padding: 0 8px; }
-.role-tabs button.active { background: var(--surface); color: var(--primary); box-shadow: var(--shadow-soft); }
+.role-tabs button.active { background: var(--surface); color: var(--primary); }
 .refresh-button { flex: none; }
 .preset-list { display: grid; gap: 8px; }
 .preset-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 18px; min-height: 76px; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--ink); text-align: left; }
@@ -187,9 +187,9 @@ const emit = defineEmits<{
 .spinning { animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: no-preference) {
-  .preset-item { animation: item-enter var(--motion-medium) ease-out both; }
+  .preset-item { animation: item-enter var(--motion-medium) var(--ease) both; }
 }
-@keyframes item-enter { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes item-enter { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 .goal-drawer { position: fixed; inset: 16px 16px 16px auto; z-index: 51; width: min(760px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow-y: auto; margin: 0; align-content: start; }
 .drawer-close { justify-self: end; }
 @media (max-width: 980px) {

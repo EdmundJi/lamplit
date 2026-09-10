@@ -147,10 +147,10 @@ onBeforeUnmount(() => {
 .mode-switch { margin-bottom: 16px; }
 
 .shell { min-height: 100vh; padding-left: var(--sidebar); }
-.sidebar { position: fixed; inset: 0 auto 0 0; width: var(--sidebar); border-right: 1px solid var(--border); background: color-mix(in srgb, var(--surface) 96%, var(--canvas)); padding: 18px 14px; display: flex; flex-direction: column; z-index: 10; box-shadow: 7px 0 24px color-mix(in srgb, var(--ink) 5%, transparent); }
+.sidebar { position: fixed; inset: 0 auto 0 0; width: var(--sidebar); border-right: 1px solid var(--border); background: color-mix(in srgb, var(--surface) 96%, var(--canvas)); padding: 18px 14px; display: flex; flex-direction: column; z-index: 10; }
 .sidebar::before { content: ""; position: absolute; inset: 0 0 auto; height: 3px; background: var(--topline); }
 .brand { display: flex; align-items: center; gap: 10px; color: var(--ink); text-decoration: none; padding: 7px 8px 22px; }
-.brand-mark { position: relative; width: 36px; height: 36px; display: grid; place-items: center; border-radius: 8px; background: var(--primary); color: white; font-weight: 900; box-shadow: 0 10px 20px color-mix(in srgb, var(--primary) 22%, transparent); }
+.brand-mark { position: relative; width: 36px; height: 36px; display: grid; place-items: center; border-radius: var(--radius-card); background: var(--primary); color: white; font-weight: 900; }
 .brand-mark::after { content: ""; position: absolute; right: -3px; bottom: -3px; width: 10px; height: 10px; border: 2px solid var(--surface); border-radius: 50%; background: var(--accent); }
 nav { display: grid; gap: 5px; }
 nav a { position: relative; min-height: 44px; display: flex; align-items: center; gap: 12px; padding: 0 12px; border-radius: var(--radius); color: var(--muted); text-decoration: none; font-size: 14px; }
@@ -165,14 +165,14 @@ nav a.router-link-active { background: color-mix(in srgb, var(--primary-soft) 76
   .shell { padding-left: 0; }
   .sidebar { display:none; }
   .workspace { padding-bottom: calc(70px + env(safe-area-inset-bottom)); }
-  .mobile-nav { position: fixed; display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); inset:auto 0 0; z-index:20; background: color-mix(in srgb, var(--surface) 96%, transparent); backdrop-filter: blur(16px); border-top:1px solid var(--border); box-shadow:0 -10px 26px color-mix(in srgb, var(--ink) 8%, transparent); padding:6px 4px calc(6px + env(safe-area-inset-bottom)); }
+  .mobile-nav { position: fixed; display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); inset:auto 0 0; z-index:20; background: color-mix(in srgb, var(--surface) 96%, transparent); backdrop-filter: blur(16px); border-top:1px solid var(--border); box-shadow: var(--shadow); padding:6px 4px calc(6px + env(safe-area-inset-bottom)); }
   .mobile-nav a,
   .mobile-nav button { min-width:0; min-height:54px; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:3px; padding:2px; border:0; border-radius:var(--radius); background:transparent; color:var(--muted); font:inherit; font-size:10px; cursor:pointer; }
   .mobile-nav button[aria-expanded='true'],
   .mobile-nav button.is-active { background:color-mix(in srgb, var(--primary-soft) 76%, var(--surface)); color:var(--primary-strong); font-weight:800; box-shadow:inset 4px 0 0 var(--primary); }
   .mobile-more-layer { display:block; }
   .mobile-more-backdrop { position:fixed; inset:0 0 calc(66px + env(safe-area-inset-bottom)); z-index:18; width:100%; border:0; background:color-mix(in srgb, var(--ink) 24%, transparent); }
-  .mobile-more-sheet { position:fixed; inset:auto 10px calc(76px + env(safe-area-inset-bottom)); z-index:19; padding:18px; border:1px solid var(--border); border-radius:var(--radius); background:var(--surface); box-shadow:0 18px 48px color-mix(in srgb, var(--ink) 24%, transparent); }
+  .mobile-more-sheet { position:fixed; inset:auto 10px calc(76px + env(safe-area-inset-bottom)); z-index:19; padding:18px; border:1px solid var(--border); border-radius:var(--radius); background:var(--surface); box-shadow: var(--shadow); }
   .mobile-more-sheet header { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:14px; }
   .mobile-more-sheet h2 { margin:2px 0 0; font-size:20px; }
   .mobile-more-sheet .icon-button { min-width:42px; min-height:42px; }
@@ -180,21 +180,19 @@ nav a.router-link-active { background: color-mix(in srgb, var(--primary-soft) 76
   .mobile-more-links a { min-width:0; min-height:76px; justify-content:center; flex-direction:column; gap:7px; padding:8px 4px; border:1px solid var(--border); background:var(--surface-muted); font-size:12px; }
   .mobile-more-links a.router-link-active { box-shadow:inset 0 3px 0 var(--primary); }
   .mobile-more-enter-active,
-  .mobile-more-leave-active { transition:opacity var(--motion-fast) ease; }
+  .mobile-more-leave-active { transition: opacity var(--motion-medium) var(--ease); }
   .mobile-more-enter-active .mobile-more-sheet,
-  .mobile-more-leave-active .mobile-more-sheet { transition:transform var(--motion-medium) ease, opacity var(--motion-fast) ease; }
+  .mobile-more-leave-active .mobile-more-sheet { transition: transform var(--motion-medium) var(--ease), opacity var(--motion-medium) var(--ease); }
   .mobile-more-enter-from,
-  .mobile-more-leave-to { opacity:0; }
+  .mobile-more-leave-to { opacity: 0; }
   .mobile-more-enter-from .mobile-more-sheet,
-  .mobile-more-leave-to .mobile-more-sheet { transform:translateY(12px); opacity:0; }
+  .mobile-more-leave-to .mobile-more-sheet { transform: translateY(4px); opacity: 0; }
 }
-@media (prefers-reduced-motion: no-preference) { .brand-mark { transition: transform var(--motion-medium) ease; } .brand:hover .brand-mark { transform: rotate(-8deg) scale(1.04); } nav a.router-link-active svg { animation: nav-pop var(--motion-medium) ease-out; } }
-@keyframes nav-pop { 0% { transform: scale(.88); } 70% { transform: scale(1.08); } 100% { transform: scale(1); } }
 
 .sidebar { padding: 28px 16px 16px; background: var(--nav-bg); color: var(--nav-ink-strong); border: 0; box-shadow: none; overflow-y: auto; }
 .sidebar::before, .brand-mark::after { display: none; }
 .brand { color: var(--nav-ink-strong); padding: 0 6px 30px; gap: 11px; }
-.brand-mark { background: var(--nav-active-bg); color: var(--nav-active-ink); width: 36px; height: 40px; border-radius: 16px 16px 6px 6px; box-shadow: none; }
+.brand-mark { background: var(--nav-active-bg); color: var(--nav-active-ink); width: 36px; height: 40px; border-radius: var(--radius-panel) var(--radius-panel) var(--radius) var(--radius); }
 .brand strong { font-size: 15px; letter-spacing: .04em; }
 .brand small { display: block; font-size: 10px; color: var(--nav-faint); margin-top: 2px; letter-spacing: .08em; }
 .nav-group { margin-bottom: 16px; }

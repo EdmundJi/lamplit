@@ -171,7 +171,6 @@ function previous() {
   background: var(--surface-raised);
   color: var(--primary);
   transform: translate(-50%, -50%);
-  box-shadow: var(--shadow);
 }
 
 .visual-dot,
@@ -294,31 +293,11 @@ function previous() {
 
 @media (prefers-reduced-motion: no-preference) {
   .welcome-backdrop {
-    animation: welcome-backdrop var(--motion-medium) ease-out both;
+    animation: welcome-backdrop var(--motion-medium) var(--ease) both;
   }
 
   .welcome-dialog {
-    animation: welcome-dialog var(--motion-medium) cubic-bezier(.2,.8,.2,1) both;
-  }
-
-  .visual-mark {
-    animation: welcome-pulse 2.8s ease-in-out infinite;
-  }
-
-  .visual-dot {
-    animation: welcome-float 4.2s ease-in-out infinite;
-  }
-
-  .visual-dot:nth-of-type(2n) {
-    animation-delay: -1.3s;
-  }
-
-  .visual-dot:nth-of-type(3n) {
-    animation-delay: -2.4s;
-  }
-
-  .visual-bar {
-    animation: welcome-grow 1.8s ease-in-out infinite alternate;
+    animation: welcome-dialog var(--motion-medium) var(--ease) both;
   }
 }
 
@@ -328,23 +307,8 @@ function previous() {
 }
 
 @keyframes welcome-dialog {
-  from { opacity: 0; transform: translateY(14px) scale(.985); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
-}
-
-@keyframes welcome-pulse {
-  0%, 100% { box-shadow: var(--shadow); }
-  50% { box-shadow: 0 18px 46px color-mix(in srgb, var(--primary) 22%, transparent); }
-}
-
-@keyframes welcome-float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-10px); }
-}
-
-@keyframes welcome-grow {
-  from { transform: scaleX(.58); }
-  to { transform: scaleX(1); }
+  from { opacity: 0; transform: scale(.98); }
+  to { opacity: 1; transform: scale(1); }
 }
 
 @media (max-width: 720px) {

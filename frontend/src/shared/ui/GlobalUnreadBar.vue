@@ -75,8 +75,8 @@ onBeforeUnmount(() => {
 .unread-bar-close { width: 26px; height: 26px; display: grid; place-items: center; border-radius: 50%; color: var(--muted); }
 .unread-bar-close:hover { background: var(--surface-muted); color: var(--ink); }
 @media (prefers-reduced-motion: no-preference) {
-  .unread-bar-enter-active { transition: transform var(--motion-medium) ease, opacity var(--motion-medium) ease; }
-  .unread-bar-leave-active { transition: transform var(--motion-fast) ease, opacity var(--motion-fast) ease; }
-  .unread-bar-enter-from, .unread-bar-leave-to { opacity: 0; transform: translate(-50%, -12px); }
+  .unread-bar-enter-active { transition: transform var(--motion-medium) var(--ease), opacity var(--motion-medium) var(--ease); }
+  .unread-bar-leave-active { transition: transform var(--motion-fast) var(--ease), opacity var(--motion-fast) var(--ease); }
+  .unread-bar-enter-from, .unread-bar-leave-to { opacity: 0; transform: translate(-50%, -4px); }
 }
 </style>

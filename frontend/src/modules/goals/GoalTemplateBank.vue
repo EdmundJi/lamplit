@@ -42,7 +42,7 @@ const emit = defineEmits<{ apply: [template: GoalTemplate] }>()
 .template-head > span { color: var(--muted); font-size: 13px; white-space: nowrap; }
 .template-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
 .template-card { min-height: 190px; display: grid; grid-template-rows: auto auto 1fr; gap: 12px; align-items: start; padding: 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--ink); text-align: left; }
-.template-card:hover { border-color: color-mix(in srgb, var(--primary) 34%, var(--border)); box-shadow: var(--shadow-soft); }
+.template-card:hover { border-color: color-mix(in srgb, var(--primary) 34%, var(--border)); }
 .template-icon { width: 34px; height: 34px; display: grid; place-items: center; border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border)); border-radius: var(--radius); color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--surface)); }
 .template-copy { display: grid; gap: 7px; }
 .template-copy strong { line-height: 1.4; overflow-wrap: anywhere; }
@@ -50,9 +50,9 @@ const emit = defineEmits<{ apply: [template: GoalTemplate] }>()
 .template-tasks { align-self: end; display: grid; gap: 5px; color: var(--muted); font-size: 12px; }
 .template-tasks span { padding-left: 9px; border-left: 2px solid color-mix(in srgb, var(--amber) 42%, var(--border)); }
 @media (prefers-reduced-motion: no-preference) {
-  .template-card { animation: item-enter var(--motion-medium) ease-out both; }
+  .template-card { animation: item-enter var(--motion-medium) var(--ease) both; }
 }
-@keyframes item-enter { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes item-enter { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 @media (max-width: 980px) {
   .template-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

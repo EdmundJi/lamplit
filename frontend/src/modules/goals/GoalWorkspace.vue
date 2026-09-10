@@ -161,7 +161,7 @@ const emit = defineEmits<{
 .stack-arrows .icon-button { border: 1px solid var(--border); }
 .stack-count { min-width: 46px; text-align: center; color: var(--muted); font-size: 12px; font-weight: 700; }
 .goal-stack { margin-top: 12px; }
-.goal-card { display: none; min-height: 310px; padding: 18px; border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface); box-shadow: none; }
+.goal-card { display: none; min-height: 310px; padding: 18px; border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface); }
 .goal-card.current { display: block; }
 .goal-card h3 { margin: 18px 0 8px; font-size: 19px; line-height: 1.4; overflow-wrap: anywhere; }
 .goal-card > p { min-height: 76px; margin: 0; color: var(--muted); line-height: 1.65; overflow-wrap: anywhere; }
@@ -171,7 +171,7 @@ const emit = defineEmits<{
 .status[data-status='PAUSED'], .task-row.paused .status { color: var(--amber); }
 .status[data-status='COMPLETED'] { color: var(--accent); }
 .task-list { display: grid; gap: 10px; margin-top: 12px; }
-.task-row { padding: 14px 15px; border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: var(--radius); background: var(--surface); box-shadow: 0 5px 16px rgb(71 54 44 / 6%); }
+.task-row { padding: 14px 15px; border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: var(--radius); background: var(--surface); }
 .task-row.paused { border-left-color: var(--amber); opacity: .76; }
 .task-row-title { min-width: 0; }
 .task-row h3 { margin: 4px 0 0; font-size: 16px; line-height: 1.4; overflow-wrap: anywhere; }
@@ -182,9 +182,9 @@ const emit = defineEmits<{
 .task-empty h3, .goal-empty h3 { margin: 0; color: var(--ink); font-size: 16px; }
 .task-empty svg { color: var(--accent); }
 @media (prefers-reduced-motion: no-preference) {
-  .goal-card.current, .task-row { animation: item-enter var(--motion-medium) ease-out both; }
+  .goal-card.current, .task-row { animation: item-enter var(--motion-medium) var(--ease) both; }
 }
-@keyframes item-enter { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes item-enter { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 @media (max-width: 900px) {
   .workspace { grid-template-columns: 1fr; }
   .goal-card { min-height: 290px; }

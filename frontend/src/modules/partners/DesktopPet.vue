@@ -361,37 +361,36 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-.desktop-pet { --pet-scene: #fff7e8; position: fixed; z-index: 70; top: 0; left: 0; width: 286px; height: 276px; display: grid; grid-template-rows: 38px minmax(0, 1fr) 34px; border: 1px solid #dfb995; border-radius: 8px; background: #fffaf2; color: #49362d; box-shadow: 0 18px 50px rgb(74 45 29 / 22%); user-select: none; }
-.desktop-pet::before { content: ''; position: absolute; z-index: -1; inset: 0; border-radius: inherit; box-shadow: inset 0 3px 0 #df6b57; pointer-events: none; }
+.desktop-pet { --pet-scene: #fff7e8; position: fixed; z-index: 70; top: 0; left: 0; width: 286px; height: 276px; display: grid; grid-template-rows: 38px minmax(0, 1fr) 34px; border: 1px solid #dfb995; border-radius: var(--radius-card); background: #fffaf2; color: #49362d; user-select: none; }
+.desktop-pet::before { content: ''; position: absolute; z-index: -1; inset: 0; border-radius: inherit; pointer-events: none; }
 .desktop-pet-bar { min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 3px 6px 0 11px; border-bottom: 1px solid #ead5bd; cursor: grab; touch-action: none; }
 .desktop-pet-bar:active { cursor: grabbing; }
 .desktop-pet-bar span { min-width: 0; display: inline-flex; align-items: center; gap: 7px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 800; }
-.desktop-pet-bar i { width: 8px; height: 8px; flex: 0 0 auto; border-radius: 50%; background: #6eaa8c; box-shadow: 0 0 0 3px #e3f0e8; }
+.desktop-pet-bar i { width: 8px; height: 8px; flex: 0 0 auto; border-radius: 50%; background: #6eaa8c; }
 .desktop-pet-bar button, .desktop-dialogue button, .feed-tray header button { width: 30px; height: 30px; min-height: 30px; display: grid; place-items: center; padding: 0; border: 0; background: transparent; color: #78675f; }
 .desktop-pet-bar button:hover, .desktop-dialogue button:hover, .feed-tray header button:hover { background: #f4e8dc; }
 .desktop-window-actions { display: flex; align-items: center; gap: 1px; }
 .desktop-pet.standalone { position: relative; z-index: 1; top: auto; left: auto; transform: none; box-shadow: none; }
 .desktop-pet.standalone .desktop-pet-bar { -webkit-app-region: drag; }
 .desktop-pet.standalone button { -webkit-app-region: no-drag; }
-.desktop-pet.minimized { width: 68px; height: 68px; display: block; overflow: hidden; border-radius: 50%; background: #f2bd73; box-shadow: 0 12px 28px rgb(74 45 29 / 22%); }
-.desktop-pet.minimized::before { box-shadow: inset 0 0 0 3px #df6b57, inset 0 0 0 6px rgb(255 250 240 / 72%); }
+.desktop-pet.minimized { width: 68px; height: 68px; display: block; overflow: hidden; border-radius: 50%; background: #f2bd73; box-shadow: var(--shadow); }
 .wake-ball { width: 100%; height: 100%; min-height: 0; display: grid; place-content: center; justify-items: center; gap: 1px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: #964735; }
 .wake-ball:hover { background: rgb(255 250 240 / 30%); }
 .wake-ball span { font-size: 10px; font-weight: 900; line-height: 1; }
-.desktop-stage { position: relative; min-height: 0; overflow: hidden; margin: 7px 8px 0; border: 1px solid #ead5bd; border-radius: 74px 74px 6px 6px; background: var(--pet-scene); }
+.desktop-stage { position: relative; min-height: 0; overflow: hidden; margin: 7px 8px 0; border: 1px solid #ead5bd; border-radius: var(--radius-scene) var(--radius-scene) var(--radius) var(--radius); background: var(--pet-scene); }
 .desktop-status { height: 100%; display: grid; place-items: center; margin: 0; color: #78675f; font-size: 12px; }
-.desktop-dialogue { position: absolute; z-index: 4; top: 9px; left: 10px; width: calc(100% - 20px); display: grid; grid-template-columns: minmax(0, 1fr) 26px; gap: 3px 6px; padding: 9px 7px 9px 11px; border: 1px solid #d9ad88; border-radius: 7px; background: rgb(255 253 248 / 96%); box-shadow: 0 10px 25px rgb(82 48 29 / 17%); }
+.desktop-dialogue { position: absolute; z-index: 4; top: 9px; left: 10px; width: calc(100% - 20px); display: grid; grid-template-columns: minmax(0, 1fr) 26px; gap: 3px 6px; padding: 9px 7px 9px 11px; border: 1px solid #d9ad88; border-radius: var(--radius-card); background: rgb(255 253 248 / 96%); }
 .desktop-dialogue::after { content: ''; position: absolute; left: 34px; bottom: -6px; width: 10px; height: 10px; transform: rotate(45deg); border-right: 1px solid #d9ad88; border-bottom: 1px solid #d9ad88; background: #fffdf8; }
 .desktop-dialogue strong { min-width: 0; color: #49362d; font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
 .desktop-dialogue small { grid-column: 1; color: var(--dim-health); font-size: 10px; }
 .desktop-dialogue button { grid-column: 2; grid-row: 1 / span 2; width: 26px; height: 26px; min-height: 26px; }
 .desktop-pet-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 11px; color: #78675f; font-size: 10px; }
 .desktop-pet-footer span:last-child { display: inline-flex; align-items: center; gap: 4px; color: #9a6914; font-weight: 800; }
-.desktop-menu { position: absolute; z-index: 8; right: 8px; top: 34px; width: 170px; display: grid; padding: 5px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface); box-shadow: var(--shadow); }
+.desktop-menu { position: absolute; z-index: 8; right: 8px; top: 34px; width: 170px; display: grid; padding: 5px; border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface); box-shadow: var(--shadow); }
 .desktop-menu button { min-height: 36px; display: flex; align-items: center; justify-content: flex-start; gap: 9px; padding: 0 10px; border: 0; background: transparent; color: var(--ink); font-size: 12px; }
 .desktop-menu button:hover { background: var(--surface-muted); }
 .desktop-menu .remove-item { color: var(--danger); border-top: 1px solid var(--border); }
-.feed-tray { position: absolute; z-index: 8; right: 8px; bottom: 8px; width: 230px; max-height: 220px; overflow: auto; padding: 7px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface); color: var(--ink); box-shadow: var(--shadow); }
+.feed-tray { position: absolute; z-index: 8; right: 8px; bottom: 8px; width: 230px; max-height: 220px; overflow: auto; padding: 7px; border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface); color: var(--ink); box-shadow: var(--shadow); }
 .feed-tray header { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 2px 3px 6px 7px; }
 .feed-tray header strong { font-size: 12px; }
 .feed-list { display: grid; gap: 4px; }
@@ -399,13 +398,12 @@ onBeforeUnmount(() => {
 .feed-list span { font-size: 12px; font-weight: 750; }
 .feed-list small { display: inline-flex; align-items: center; gap: 3px; color: var(--muted); font-size: 10px; }
 .feed-tray > p { margin: 10px; color: var(--muted); font-size: 11px; }
-.pet-bubble-enter-active, .pet-bubble-leave-active { transition: opacity var(--motion-fast) ease, transform var(--motion-fast) ease; }
-.pet-bubble-enter-from, .pet-bubble-leave-to { opacity: 0; transform: translateY(5px); }
-@media (prefers-reduced-motion: no-preference) { .desktop-pet { animation: desktop-pet-arrive var(--motion-slow) ease-out both; } }
+.pet-bubble-enter-active, .pet-bubble-leave-active { transition: opacity var(--motion-fast) var(--ease), transform var(--motion-fast) var(--ease); }
+.pet-bubble-enter-from, .pet-bubble-leave-to { opacity: 0; transform: translateY(4px); }
+@media (prefers-reduced-motion: no-preference) { .desktop-pet { animation: desktop-pet-arrive var(--motion-slow) var(--ease) both; } }
 @media (max-width: 900px) { .desktop-pet:not(.standalone) { display: none; } }
 @keyframes desktop-pet-arrive { from { opacity: 0; } to { opacity: 1; } }
 .desktop-pet { z-index: 30; border-color: var(--border); border-radius: var(--radius-panel); background: var(--surface); color: var(--ink); box-shadow: var(--shadow); }
-.desktop-pet::before { box-shadow: inset 0 3px 0 var(--primary); }
 .desktop-pet .desktop-dialogue { background: var(--surface); color: var(--ink); border-color: var(--border); border-radius: var(--radius); }
 .desktop-pet .desktop-menu, .desktop-pet .feed-tray { border-radius: var(--radius); }
 </style>

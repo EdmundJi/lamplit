@@ -112,18 +112,18 @@ onBeforeUnmount(stopPoll)
 .back-link { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); text-decoration: none; font-size: 13px; font-weight: 700; }
 .back-link:hover { color: var(--primary); }
 .chat-identity { display: flex; align-items: center; gap: 14px; }
-.group-avatar { width: 58px; height: 58px; display: grid; place-items: center; border-radius: 19px 19px 19px 6px; background: linear-gradient(145deg, var(--accent), color-mix(in srgb, var(--accent) 72%, var(--amber))); color: white; box-shadow: 0 11px 24px color-mix(in srgb, var(--accent) 20%, transparent); }
+.group-avatar { width: 58px; height: 58px; display: grid; place-items: center; border-radius: var(--radius-panel) var(--radius-panel) var(--radius-panel) var(--radius); background: linear-gradient(145deg, var(--accent), color-mix(in srgb, var(--accent) 72%, var(--amber))); color: white; }
 .chat-identity h1 { margin: 4px 0 0; }
-.message-list { height: min(56vh, 520px); overflow-y: auto; display: grid; gap: 14px; align-content: start; padding: 18px 14px; border: 1px solid var(--border); border-radius: calc(var(--radius) + 4px); background: color-mix(in srgb, var(--surface) 88%, var(--canvas)); box-shadow: var(--shadow-soft); }
+.message-list { height: min(56vh, 520px); overflow-y: auto; display: grid; gap: 14px; align-content: start; padding: 18px 14px; border: 1px solid var(--border); border-radius: calc(var(--radius) + 4px); background: color-mix(in srgb, var(--surface) 88%, var(--canvas)); }
 .msg-row { width: 100%; display: flex; gap: 10px; align-items: flex-start; }
 .msg-row.mine { flex-direction: row-reverse; }
-.msg-avatar { flex: none; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 12px 12px 12px 4px; background: linear-gradient(145deg, var(--accent), color-mix(in srgb, var(--accent) 72%, var(--amber))); color: white; font-size: 17px; font-weight: 900; box-shadow: 0 7px 16px color-mix(in srgb, var(--accent) 18%, transparent); }
-.msg-avatar.mine { background: linear-gradient(145deg, var(--primary), color-mix(in srgb, var(--primary) 72%, var(--amber))); box-shadow: 0 7px 16px color-mix(in srgb, var(--primary) 18%, transparent); }
+.msg-avatar { flex: none; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 12px 12px 12px 4px; background: linear-gradient(145deg, var(--accent), color-mix(in srgb, var(--accent) 72%, var(--amber))); color: white; font-size: 17px; font-weight: 900; }
+.msg-avatar.mine { background: linear-gradient(145deg, var(--primary), color-mix(in srgb, var(--primary) 72%, var(--amber))); }
 .msg-main { flex: 1 1 0; min-width: 0; max-width: 100%; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
 .msg-row.mine .msg-main { align-items: flex-end; }
 .msg-name { color: var(--muted); font-size: 12px; font-weight: 700; padding: 0 2px; }
-.msg-bubble { min-width: 0; max-width: 70%; max-width: min(70%, 560px); padding: 9px 13px; border: 1px solid var(--border); border-radius: 4px 14px 14px 14px; background: var(--surface); color: var(--ink); box-shadow: var(--shadow-soft); overflow-wrap: break-word; }
-.msg-row.mine .msg-bubble { border-color: color-mix(in srgb, var(--primary) 36%, var(--border)); border-radius: 14px 4px 14px 14px; background: linear-gradient(145deg, var(--primary-soft), color-mix(in srgb, var(--primary-soft) 60%, var(--surface))); }
+.msg-bubble { min-width: 0; max-width: 70%; max-width: min(70%, 560px); padding: 9px 13px; border: 1px solid var(--border); border-radius: var(--radius) var(--radius-panel) var(--radius-panel) var(--radius-panel); background: var(--surface); color: var(--ink); overflow-wrap: break-word; }
+.msg-row.mine .msg-bubble { border-color: color-mix(in srgb, var(--primary) 36%, var(--border)); border-radius: var(--radius-panel) var(--radius) var(--radius-panel) var(--radius-panel); background: linear-gradient(145deg, var(--primary-soft), color-mix(in srgb, var(--primary-soft) 60%, var(--surface))); }
 .msg-time { color: var(--muted); font-size: 11px; padding: 0 2px; }
 .empty { border: 1px dashed var(--border); border-radius: var(--radius); padding: 30px 20px; display: grid; place-items: center; justify-items: center; gap: 7px; color: var(--muted); text-align: center; }
 .empty h3 { margin: 0; color: var(--ink); font-size: 16px; }
@@ -131,14 +131,14 @@ onBeforeUnmount(stopPoll)
 .empty svg { color: var(--primary); }
 .composer { position: sticky; bottom: 0; margin-top: 14px; display: grid; gap: 10px; }
 .picker-wrap { justify-self: start; }
-.composer-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 9px; align-items: end; padding: 10px; border: 1px solid var(--border); border-radius: calc(var(--radius) + 4px); background: var(--surface); box-shadow: var(--shadow-soft); }
+.composer-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 9px; align-items: end; padding: 10px; border: 1px solid var(--border); border-radius: calc(var(--radius) + 4px); background: var(--surface); }
 .composer-row textarea { min-height: 44px; max-height: 120px; resize: vertical; }
 .emoji-toggle.active { background: var(--primary-soft); color: var(--primary-strong); }
 .chat-page { max-width: 1060px; }
 .chat-head::before { display: none; }
 .chat-head > :first-child { flex: none; }
 .message-list { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-panel); padding: 24px; min-height: 45vh; }
-.msg-avatar, .chat-avatar { border-radius: 50%; box-shadow: none; }
+.msg-avatar, .chat-avatar { border-radius: 50%; }
 .composer { background: var(--canvas); padding-block: 10px; }
 @media (max-width:760px) { .composer { bottom: calc(72px + env(safe-area-inset-bottom)); } .message-list { padding: 14px; } }
 </style>

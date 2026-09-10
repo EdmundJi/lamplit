@@ -126,11 +126,11 @@ useDialogFocus(() => props.open, `#${dialogId}`, requestClose)
 
 @media (prefers-reduced-motion: no-preference) {
   .dialog-backdrop {
-    animation: ui-modal-fade var(--motion-fast) ease-out both;
+    animation: ui-modal-fade var(--motion-medium) var(--ease) both;
   }
 
   .ui-modal {
-    animation: ui-modal-fade var(--motion-medium) ease-out both;
+    animation: ui-modal-fade var(--motion-medium) var(--ease) both;
   }
 }
 

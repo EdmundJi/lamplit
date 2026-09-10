@@ -65,7 +65,7 @@ onBeforeUnmount(stopDataSync)
 .conversation-rail nav a { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 9px 10px; border-radius: var(--radius); color: var(--ink); text-decoration: none; }
 .conversation-rail nav a:hover { background: var(--surface-muted); }
 .conversation-rail nav a.current { background: var(--primary-soft); }
-.rail-avatar { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 12px; background: var(--surface-muted); color: var(--primary-strong); font-weight: 700; font-size: 14px; }
+.rail-avatar { width: 34px; height: 34px; display: grid; place-items: center; border-radius: var(--radius-card); background: var(--surface-muted); color: var(--primary-strong); font-weight: 700; font-size: 14px; }
 .rail-avatar.group { background: var(--primary-soft); }
 .rail-copy { display: grid; gap: 2px; min-width: 0; }
 .rail-copy strong { font-size: 14px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
