@@ -1,17 +1,20 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
-import { Activity, Building2, Target, CalendarCheck2, ChartNoAxesColumnIncreasing, ArrowUpRight, Sparkles, Settings, PawPrint, UserRound, Users, X, Bell, PanelLeftClose } from 'lucide-vue-next'
+import { Activity, Building2, Target, CalendarCheck2, ChartNoAxesColumnIncreasing, ArrowUpRight, Sparkles, Settings, PawPrint, UserRound, Users, X, Bell, CircleHelp, PanelLeftClose } from 'lucide-vue-next'
 import { useAuthStore } from '../modules/auth/auth.store'
 import DesktopPet from '../modules/partners/DesktopPet.vue'
 import WelcomeGuide from '../shared/ui/WelcomeGuide.vue'
 import GlobalUnreadBar from '../shared/ui/GlobalUnreadBar.vue'
-import OperationGuideBar from '../shared/ui/OperationGuideBar.vue'
+import OperationGuideBar, { resolveGuide } from '../shared/ui/OperationGuideBar.vue'
 import { useDialogFocus } from '../shared/ui/use-dialog-focus'
+import { usePeriod } from '../shared/ui/period'
 import { radialReveal } from '../shared/ui/interaction/radial-reveal'
 import { prefetchRoute } from './router'
 
 import { useWorkspaceModeStore } from '../shared/ui/workspace-mode.store'
+
+usePeriod()
 
 const mode = useWorkspaceModeStore()
 const router = useRouter()
@@ -51,6 +54,34 @@ const showWelcome = ref(false)
 const showMobileMore = ref(false)
 useDialogFocus(() => showMobileMore.value, '.mobile-more-sheet', () => { showMobileMore.value = false })
 useDialogFocus(() => showWelcome.value && !mode.minimal, '.welcome-dialog', () => dismissWelcome())
+
+// The "使用提示" popover is a quiet disclosure, not a dialog: it holds no
+// focusable content (StepperProgress is read-only here), so it never steals
+// focus from the trigger button. Esc and an outside click both close it.
+const showGuide = ref(false)
+const guideAnchor = ref<HTMLElement | null>(null)
+const currentGuide = computed(() => resolveGuide(route.path))
+
+function toggleGuide() {
+  showGuide.value = !showGuide.value
+}
+
+function closeGuide() {
+  showGuide.value = false
+}
+
+function onGuideDocumentClick(event: MouseEvent) {
+  if (!showGuide.value) return
+  if (guideAnchor.value?.contains(event.target as Node)) return
+  closeGuide()
+}
+
+function onGuideKeydown(event: KeyboardEvent) {
+  if (!showGuide.value) return
+  if (event.key === 'Escape') { event.preventDefault(); closeGuide() }
+}
+
+watch(() => route.fullPath, closeGuide)
 const quietWorkspace = computed(() => route.path === '/ai' || route.path.includes('/chat') || route.path.includes('/groups/') || route.path === '/town')
 const welcomeKey = computed(() => `better-self:welcome:${auth.user?.publicId ?? 'guest'}`)
 const mobileMoreActive = computed(() => mobileMoreNav.some(item => route.path === item.to || route.path.startsWith(`${item.to}/`)))
@@ -86,26 +117,42 @@ watch(() => route.fullPath, closeMobileMore)
 onMounted(() => {
   showWelcome.value = shouldShowWelcome()
   window.addEventListener('better-self:show-welcome', openWelcome)
+  document.addEventListener('click', onGuideDocumentClick)
+  document.addEventListener('keydown', onGuideKeydown)
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('better-self:show-welcome', openWelcome)
+  document.removeEventListener('click', onGuideDocumentClick)
+  document.removeEventListener('keydown', onGuideKeydown)
 })
 </script>
 <template>
   <div class="shell" :class="{ 'shell--minimal': mode.minimal }">
     <a class="skip-link" href="#main-content">跳到主要内容</a>
     <aside v-if="!mode.minimal" class="sidebar">
-      <RouterLink class="brand" to="/today"><span class="brand-mark" aria-hidden="true"><Building2 :size="23" /></span><span><strong>更好的自己</strong><small>一步一步，自成风景</small></span></RouterLink>
+      <RouterLink class="brand" to="/today"><span class="brand-mark" aria-hidden="true"><Building2 :size="23" /></span><strong>更好的自己</strong></RouterLink>
       <nav aria-label="主导航"><section v-for="group in groups" :key="group" class="nav-group"><p>{{ group }}</p><RouterLink v-for="item in nav.filter(item => item.group === group)" :key="item.to" :to="item.to" @mouseenter="prefetchRoute(item.to)" @focus="prefetchRoute(item.to)"><component :is="item.icon" :size="19"/><span>{{ item.label }}</span><span v-if="route.path === item.to" class="nav-dot" /></RouterLink></section></nav>
       <RouterLink class="sidebar-note" to="/town"><span class="note-orbit" aria-hidden="true">✦</span><strong>让每一步，<br>长成看得见的生活。</strong><span>去小镇走走 <ArrowUpRight :size="15" /></span></RouterLink>
       <button class="secondary mode-switch" @click="changeMode($event, true)">切换极简清单</button>
-      <div class="sidebar-account"><RouterLink to="/profile"><span class="account-avatar">{{ brandInitial }}</span><span><strong>{{ auth.user?.displayName || '我的成长档案' }}</strong><small>今天完成一点，也很好</small></span></RouterLink><RouterLink class="account-settings" to="/settings" aria-label="设置"><Settings :size="18" /></RouterLink></div>
+      <div class="sidebar-account"><RouterLink to="/profile"><span class="account-avatar">{{ brandInitial }}</span><strong>{{ auth.user?.displayName || '我的成长档案' }}</strong></RouterLink><RouterLink class="account-settings" to="/settings" aria-label="设置"><Settings :size="18" /></RouterLink></div>
     </aside>
     <main id="main-content" class="workspace" tabindex="-1">
       <header v-if="mode.minimal" class="minimal-topbar"><RouterLink to="/today" class="minimal-brand">我的清单</RouterLink><div><RouterLink to="/settings">设置</RouterLink><button type="button" @click="changeMode($event, false)">切换成长模式</button></div></header>
-      <header v-else class="workspace-topbar"><span class="workspace-context"><PanelLeftClose :size="17" /><span>{{ currentNav?.group || '成长' }}</span><span class="context-slash">/</span><strong>{{ currentNav?.label || '更好的自己' }}</strong></span><div><RouterLink class="topbar-ai" to="/ai"><Sparkles :size="15" />和 AI 理一理</RouterLink><RouterLink class="icon-button" to="/friends/chat" aria-label="消息中心"><Bell :size="18" /></RouterLink></div></header>
-      <OperationGuideBar v-if="!mode.minimal && route.path !== '/town'" />
+      <header v-else class="workspace-topbar">
+        <span class="workspace-context"><PanelLeftClose :size="17" /><span>{{ currentNav?.group || '成长' }}</span><span class="context-slash">/</span><strong>{{ currentNav?.label || '更好的自己' }}</strong></span>
+        <div>
+          <div ref="guideAnchor" class="guide-anchor">
+            <button v-if="currentGuide" type="button" class="icon-button guide-trigger" aria-label="使用提示" :aria-expanded="showGuide" @click="toggleGuide"><CircleHelp :size="18" /></button>
+            <Transition name="guide-pop">
+              <div v-if="showGuide && currentGuide" class="guide-popover" role="region" aria-label="使用提示">
+                <OperationGuideBar />
+              </div>
+            </Transition>
+          </div>
+          <RouterLink class="icon-button" to="/friends/chat" aria-label="消息中心"><Bell :size="18" /></RouterLink>
+        </div>
+      </header>
       <RouterView v-slot="{ Component, route }">
         <component :is="Component" :key="route.path" />
       </RouterView>
@@ -194,7 +241,6 @@ nav a.router-link-active { background: color-mix(in srgb, var(--primary-soft) 76
 .brand { color: var(--nav-ink-strong); padding: 0 6px 30px; gap: 11px; }
 .brand-mark { background: var(--nav-active-bg); color: var(--nav-active-ink); width: 36px; height: 40px; border-radius: var(--radius-panel) var(--radius-panel) var(--radius) var(--radius); }
 .brand strong { font-size: 15px; letter-spacing: .04em; }
-.brand small { display: block; font-size: 10px; color: var(--nav-faint); margin-top: 2px; letter-spacing: .08em; }
 .nav-group { margin-bottom: 16px; }
 .nav-group > p { padding-left: 14px; margin: 0 0 7px; color: var(--nav-muted); font-size: 10px; letter-spacing: .16em; }
 .sidebar nav a { color: var(--nav-ink); min-height: 44px; margin-bottom: 4px; font-size: 13px; }
@@ -207,19 +253,34 @@ nav a.router-link-active { background: color-mix(in srgb, var(--primary-soft) 76
 .note-orbit { display: block; font-size: 22px; color: var(--amber); margin-bottom: 10px; }
 .sidebar-account { display: flex; gap: 6px; align-items: center; border-top: 1px solid var(--nav-line); padding-top: 16px; }
 .sidebar-account > a:first-child { display: flex; align-items: center; gap: 9px; min-width: 0; color: var(--nav-card-ink); text-decoration: none; flex: 1; }
-.sidebar-account strong { display: block; font-size: 12px; }
-.sidebar-account small { display: block; font-size: 9px; color: var(--nav-muted); }
+.sidebar-account strong { display: block; font-size: 12px; font-weight: 650; }
 .account-avatar { display: grid; place-items: center; width: 32px; height: 32px; flex: none; border-radius: 50%; background: var(--nav-avatar); color: var(--nav-avatar-ink); font-size: 12px; }
 .account-settings { color: var(--nav-faint); padding: 8px; }
-.workspace-topbar { min-height: 64px; display: flex; justify-content: space-between; align-items: center; padding: 0 32px; border-bottom: 0; background: var(--canvas); }
+.workspace-topbar { min-height: 56px; display: flex; justify-content: space-between; align-items: center; padding: 0 32px; border-bottom: 1px solid var(--border); background: var(--canvas); }
 .workspace-context { display: flex; gap: 12px; align-items: center; color: var(--muted); font-size: 12px; }
 .workspace-context strong { color: var(--ink); font-weight: 500; }
 .context-slash { opacity: .4; }
-.workspace-topbar > div { display: flex; align-items: center; gap: 18px; }
-.topbar-ai { display: flex; align-items: center; gap: 7px; color: var(--primary-strong); text-decoration: none; font-size: 12px; }
+.workspace-topbar > div { display: flex; align-items: center; gap: 6px; }
+.guide-anchor { position: relative; }
+.guide-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 20;
+  width: min(300px, 86vw);
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+.guide-pop-enter-active,
+.guide-pop-leave-active { transition: opacity var(--motion-medium) var(--ease), transform var(--motion-medium) var(--ease); }
+.guide-pop-enter-from,
+.guide-pop-leave-to { opacity: 0; transform: translateY(4px); }
 .mobile-more-sheet { max-height: 75dvh; overflow-y: auto; }
 @media (max-width:760px) {
-  .workspace-topbar { min-height: 54px; padding: 0 18px; }
+  .workspace-topbar { min-height: 52px; padding: 0 18px; }
   .workspace-context > svg, .workspace-context > span:not(.context-slash) { display: none; }
   .context-slash { display: none; }
   .mobile-nav { grid-template-columns: repeat(4, minmax(0, 1fr)); }

@@ -5,14 +5,19 @@
  * simple messages — this is for the richer cases (icon + title + description + action)
  * so those don't get hand re-built per page.
  */
+import PixelSprite from './PixelSprite.vue'
+
 withDefaults(defineProps<{
   title?: string
   description?: string
+  /** Frame name from the town atlas (see PixelSprite) shown above the text. Omit for none. */
+  sprite?: string
 }>(), {})
 </script>
 
 <template>
   <div class="empty">
+    <PixelSprite v-if="sprite" class="empty-sprite" :name="sprite" :scale="1.5" />
     <div v-if="$slots.icon" class="empty-icon" aria-hidden="true"><slot name="icon" /></div>
     <h3 v-if="title">{{ title }}</h3>
     <p v-if="description">{{ description }}</p>
@@ -22,6 +27,10 @@ withDefaults(defineProps<{
 </template>
 
 <style scoped>
+.empty-sprite {
+  margin-bottom: 10px;
+}
+
 .empty-icon {
   display: grid;
   place-items: center;

@@ -46,6 +46,21 @@ describe('EmptyState', () => {
     expect(dark).toBe(light)
   })
 
+  it('renders no sprite by default and stays the plain .empty class', () => {
+    const wrapper = mount(EmptyState, { props: { title: '还没有内容' } })
+    expect(wrapper.classes()).toEqual(['empty'])
+    expect(wrapper.find('.empty-sprite').exists()).toBe(false)
+  })
+
+  it('renders a PixelSprite above the content when a sprite frame is given', () => {
+    const wrapper = mount(EmptyState, {
+      props: { title: '今天还没有任务', sprite: 'mailbox_1' },
+      global: { stubs: { PixelSprite: { template: '<div class="pixel-sprite-stub" />', props: ['name', 'scale'] } } },
+    })
+    expect(wrapper.classes()).toEqual(['empty'])
+    expect(wrapper.find('.empty-sprite').exists()).toBe(true)
+  })
+
   it('never hardcodes a color, radius or motion duration — everything comes from tokens.css', () => {
     const source = readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'EmptyState.vue'), 'utf-8')
     const style = source.slice(source.indexOf('<style'))
