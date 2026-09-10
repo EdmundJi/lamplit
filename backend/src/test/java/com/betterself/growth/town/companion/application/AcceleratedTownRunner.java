@@ -525,6 +525,22 @@ public final class AcceleratedTownRunner {
         TimelineExporter.writeJson(cfg.outDir().resolve("norms.json"), norms);
         Files.writeString(cfg.outDir().resolve("norms.md"), NormDetector.markdown(norms), StandardCharsets.UTF_8);
 
+        // The social blind test (docs/06-society.md 七): one question, 「这个镇上有什么规矩？」, put to a
+        // reader who has never seen this repository. Same quiz/key split as the personality blind test -
+        // the reader gets what happened, never the residents' own conclusions.
+        List<Map<String,Object>> snapshotMemories = new ArrayList<>();
+        if (finalWorld != null) for (CompanionWorld.Memory m : finalWorld.memories) {
+            Map<String,Object> row = new LinkedHashMap<>();
+            row.put("ownerId", m.ownerId()); row.put("text", m.text());
+            row.put("supersedesKey", m.supersedesKey()); row.put("superseded", m.superseded());
+            snapshotMemories.add(row);
+        }
+        TimelineExporter.NormBlindTest normQuiz =
+            TimelineExporter.buildNormBlindTest(sorted, snapshotMemories, cfg.timezone());
+        Files.createDirectories(cfg.outDir().resolve("blind-test/norms/key"));
+        Files.writeString(cfg.outDir().resolve("blind-test/norms/quiz.md"), normQuiz.quiz(), StandardCharsets.UTF_8);
+        Files.writeString(cfg.outDir().resolve("blind-test/norms/key/what-they-said.md"), normQuiz.key(), StandardCharsets.UTF_8);
+
         // World snapshot: lets a later run resume exactly where this one left off (RunConfig.withResumeFrom).
         if (finalWorld != null) TimelineExporter.writeJson(cfg.outDir().resolve("world-snapshot.json"), finalWorld);
     }

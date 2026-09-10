@@ -192,6 +192,84 @@ public final class TimelineExporter {
         return new BlindTest(quiz, answerKey, poolStats);
     }
 
+    /** The material for the other blind test - the social one. See {@link #buildNormBlindTest}. */
+    public record NormBlindTest(String quiz, String key) {}
+
+    /**
+     * docs/06-society.md 七 asks for a second blind test, and it is the half of the acceptance goal that
+     * no statistic can stand in for: <b>hand a reader who has never seen this repository a stretch of
+     * the town's life and ask one question - 「这个镇上有什么规矩？」</b> If they read out what we
+     * measured, the norm is really in the text and not only in our arithmetic. If they read out
+     * something we did <em>not</em> measure, better still - our instrument is too narrow. If they read
+     * out nothing, we have not done it, however green the metrics are.
+     *
+     * <p>Split quiz/key the same way {@link #buildBlindTest} is, and for the same reason (docs/05-notes
+     * 「手抄是个静默失败点」): the reader gets the events, never the residents' own conclusions. Those
+     * sit in the key, because they answer a different question - whether anybody in town can say the
+     * rule out loud - and showing them first would simply be telling the reader the answer.
+     *
+     * <p>Names are kept here, unlike the personality blind test. That test hides who is speaking because
+     * the guess IS who is speaking; this one is about what people do around each other, and stripping
+     * the names would destroy the very thing being looked for.
+     */
+    public static NormBlindTest buildNormBlindTest(List<Map<String, Object>> sortedEntries,
+                                                   List<Map<String, Object>> memories, String timezone) {
+        ZoneId zone = ZoneId.of(timezone);
+        StringBuilder quiz = new StringBuilder();
+        quiz.append("""
+            你没有读过这个项目的任何代码或文档，也请不要去读。
+
+            下面是一个小镇上几天里发生的事，按时间顺序排。镇上住着六个人。
+
+            只回答一个问题：**这个镇上有什么规矩？**
+
+            这里说的"规矩"是指：这些人之间反复出现的、大家似乎都照着做的做法——不是某一个人的个人
+            癖好，而是关于人跟人之间该怎么相处的。比如谁该先开口、东西归谁用、有人开了头别人怎么办。
+
+            请把你看出来的每一条都写出来，并各附上让你这么认为的具体行数。
+            如果你觉得看不出什么规矩，就说看不出——**"没有"是一个真实的答案**，不必凑。
+
+            ---
+
+            """.stripIndent());
+        int no = 1;
+        String currentDay = null;
+        for (Map<String, Object> e : sortedEntries) {
+            if (!isSocialTrace(e)) continue;
+            Instant at = Instant.parse((String) e.get("at"));
+            String day = at.atZone(zone).toLocalDate().toString();
+            if (!day.equals(currentDay)) { currentDay = day; quiz.append("\n## ").append(day).append("\n\n"); }
+            quiz.append(no++).append(". `").append(DAY_FORMAT.format(at.atZone(zone))).append("` ")
+                .append(renderLine(e)).append('\n');
+        }
+
+        StringBuilder key = new StringBuilder("# 答案页：居民自己说出来的话\n\n");
+        key.append("这一页**不给做盲测的人看**。它回答的是另一个问题：镇上有没有人能自己把那条规矩说出来。\n\n");
+        key.append("## 长期看法（带 supersedesKey 的信念）\n\n");
+        int beliefs = 0;
+        for (Map<String, Object> m : memories) {
+            Object supersedes = m.get("supersedesKey");
+            if (supersedes == null || String.valueOf(supersedes).isBlank()) continue;
+            beliefs++;
+            key.append("- **").append(m.get("ownerId")).append("** `").append(supersedes).append("`：")
+               .append(m.get("text")).append(Boolean.TRUE.equals(m.get("superseded")) ? "  _（后来被自己推翻了）_" : "")
+               .append('\n');
+        }
+        if (beliefs == 0) key.append("一条都没有。**这是一个真实的 0**——镇上没有任何人形成过长期看法。\n");
+        return new NormBlindTest(quiz.toString(), key.toString());
+    }
+
+    /** What a bystander would have been able to see happen. Inner monologue ({@code thought}) is left
+     * out: 863 of them in a three-day run would bury the events, and a norm has to be visible from the
+     * outside or it is not one. */
+    @SuppressWarnings("unchecked")
+    private static boolean isSocialTrace(Map<String, Object> e) {
+        if ("dialogue".equals(e.get("kind"))) return true;
+        if (!"event".equals(e.get("kind"))) return false;
+        Object type = ((Map<String, Object>) e.getOrDefault("extra", Map.of())).get("eventType");
+        return !"thought".equals(type);
+    }
+
     private static String maskNames(String text) {
         String masked = text;
         for (String name : List.of("阿禾", "小川", "知夏", "青叔")) {
