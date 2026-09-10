@@ -326,7 +326,16 @@ public final class ResidentSimulation {
             }
         } else if(Set.of("create","help").contains(p.action())) {
             Project project=project(w,p.targetId());
-            if(project!=null&&knows(w,r.id,project.id)&&actor(w,r.id).place().equals(project.place)&&!Set.of("ready","celebrating").contains(project.status)) {
+            if(project!=null&&knows(w,r.id,project.id)&&actor(w,r.id).place().equals(project.place)
+                &&!Set.of("ready","celebrating").contains(project.status)&&!canAdvance(project,r.id)) {
+                // He came back and put his hands on it again, and it did not move. Measured: 青叔 did
+                // this 163 times to one project in five simulated hours, once every two minutes, each
+                // one paying for a model call and writing an event, a memory and a witness pass that
+                // every metric built on contributions then swallowed whole (it inflated one pair's
+                // support to 197). The solo cap stopped the progress and stopped nothing else.
+                // The deed is the honest record: he tried, and it needs a second pair of hands.
+                recordDeed(w,r.id,"create",project.place,"又去动了动「"+project.title+"」，一个人推不动了。",at);
+            } else if(project!=null&&knows(w,r.id,project.id)&&actor(w,r.id).place().equals(project.place)&&!Set.of("ready","celebrating").contains(project.status)) {
                 boolean first=!project.contributors.contains(r.id);if(first)project.contributors.add(r.id);
                 // A conscientious resident follows through a little more thoroughly once committed;
                 // the least conscientious does a little less per attempt. Never lets personality wipe
@@ -1874,8 +1883,8 @@ public final class ResidentSimulation {
         ResidentState r=state(w,residentId);if(r==null)return List.of();
         LinkedHashSet<String> actions=new LinkedHashSet<>(List.of("observe","rest","study","work","read","make","sleep","away","change_work"));
         if(r.plan!=null&&!("cafe".equals(actor(w,residentId).place())&&!"open".equals(w.cafeStatus)))actions.add("continue");
-        if(w.projects.stream().anyMatch(p->knows(w,residentId,p.id)&&!Set.of("ready","celebrating").contains(p.status)))actions.add("create");
-        if(w.projects.stream().anyMatch(p->knows(w,residentId,p.id)&&p.members.contains(residentId)&&!Set.of("ready","celebrating").contains(p.status)))actions.add("help");
+        if(w.projects.stream().anyMatch(p->knows(w,residentId,p.id)&&canAdvance(p,residentId)))actions.add("create");
+        if(w.projects.stream().anyMatch(p->knows(w,residentId,p.id)&&p.members.contains(residentId)&&canAdvance(p,residentId)))actions.add("help");
         // Showing people the finished thing. It had a completion branch, a label, and a personality
         // drift driver, and it was in no menu, in no DECISION_ACTIONS, and scheduled by nothing
         // anywhere - so a project that actually got finished could never be shown to anybody, and
@@ -2197,6 +2206,17 @@ public final class ResidentSimulation {
      * only place it mattered - see ResidentDirector's projectStage, which now spends it on a sentence
      * rather than mapping 75 to a cheerful "进行中". */
     public static final int SOLO_PROGRESS_CAP = 75;
+    /** Whether this resident putting their hands on this thing right now would actually move it. Below
+     * the solo cap anyone can; at the cap only someone who brings the number of pairs of hands up to
+     * what the thing needs can. Deliberately per-resident and not "is this project stalled": the whole
+     * point of a stalled project is that it is still open to <em>somebody else</em>, and a check that
+     * closed it to everyone would remove the one thing that unblocks it. */
+    static boolean canAdvance(Project p,String residentId){
+        if(p==null||Set.of("ready","celebrating").contains(p.status))return false;
+        if(p.progress<SOLO_PROGRESS_CAP)return true;
+        int handsAfter=p.contributors.contains(residentId)?p.contributors.size():p.contributors.size()+1;
+        return handsAfter>=p.needed;
+    }
     /** Whether this project is, by its own nature, something more than one person has to be part of.
      * A property of the project as it was described when anyone first heard of it ("收集四个人眼里的
      * 小街"), not live state - so telling a resident this reveals nothing they were not already told. */
