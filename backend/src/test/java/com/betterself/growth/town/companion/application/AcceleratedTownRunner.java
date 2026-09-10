@@ -336,6 +336,12 @@ public final class AcceleratedTownRunner {
             Map<String,Object> input=new LinkedHashMap<>();input.put("perspective",request.perspective());input.put("partnerName",request.partnerName());input.put("transcript",ResidentMind.turnViews(request.transcript()));input.put("conversationMemories",request.conversationMemories());
             return capture("summary",input,()->delegate.summarizeConversationMetered(request));
         }
+        public PromiseThought promiseSettled(PromiseSettledRequest request){return promiseSettledMetered(request).value();}
+        public Result<PromiseThought> promiseSettledMetered(PromiseSettledRequest request){
+            Map<String,Object> input=new LinkedHashMap<>();input.put("residentId",request.perspective().residentId());
+            input.put("promise",request.promise());
+            return capture("promise",input,()->delegate.promiseSettledMetered(request));
+        }
         public ExplainDraft explain(ExplainRequest request){return explainMetered(request).value();}
         public Result<ExplainDraft> explainMetered(ExplainRequest request){
             // Forwarded for the same reason planDay's own comment above gives: a decorator that

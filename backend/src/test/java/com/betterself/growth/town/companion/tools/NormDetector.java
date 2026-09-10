@@ -63,9 +63,12 @@ public final class NormDetector {
                             List<String> evidence) {}
 
     /** {@code dropped} keeps every regularity that failed a gate together with which gate it failed.
-     * A dimension that produced nothing appears as an explicit zero - same rule as {@link MetricsExporter}. */
+     * A dimension that produced nothing appears as an explicit zero - same rule as {@link MetricsExporter}.
+     * {@code beliefs} is the other half's raw material: every resident belief found in the run, as
+     * {@code {ownerId, supersedesKey, text}}, verbatim and unjudged - see the class comment's
+     * "居民能自己说出来" bullet for why this class stops at handing it over rather than grading it. */
     public record Report(String label, List<Candidate> candidates, Map<String, Object> counts,
-                         List<Map<String, Object>> dropped) {}
+                         List<Map<String, Object>> dropped, List<Map<String, Object>> beliefs) {}
 
     // ---- the run, in the shape the dimensions want it ---------------------------------------
 
@@ -92,6 +95,27 @@ public final class NormDetector {
     }
 
     public static Report detect(String label, List<Map<String, Object>> entries, String timezone) {
+        return detect(label, entries, List.of(), timezone);
+    }
+
+    /**
+     * Same detection, plus the "能说出来" material. {@code memories} is a run's exported
+     * {@code world-snapshot.json} {@code memories} array (see {@link NormReportIT}); the beliefs in it -
+     * the ones with a non-blank {@code supersedesKey}, since a belief is exactly a memory that superseded
+     * an earlier one on the same key - are counted into {@link Report#counts()} and carried out verbatim
+     * as {@link Report#beliefs()} for a blind reader, never judged here (see the class comment).
+     *
+     * <p>Judging whether a belief is about someone else needs a resident id → name table, and this
+     * overload does not receive one from a file - it has only what {@code entries} itself carries. Every
+     * timeline entry already pairs an {@code actorId} with the resident's real {@code actorName} (that is
+     * how the exported timeline reads at all), so the table is built from that instead of being written
+     * down here: whichever id this run actually saw act, under whatever name it acted, is what "someone
+     * else" gets checked against. An id this run never saw named falls back to matching its bare id -
+     * exactly the "只在读不到时才回退到 id 匹配" this was asked to do, just discovered from the run's own
+     * data rather than a second file.
+     */
+    public static Report detect(String label, List<Map<String, Object>> entries,
+                                 List<Map<String, Object>> memories, String timezone) {
         Run run = read(entries, ZoneId.of(timezone));
         List<Candidate> raw = new ArrayList<>();
         Map<String, Object> counts = new TreeMap<>();
@@ -113,7 +137,94 @@ public final class NormDetector {
         counts.put("candidates", kept.size());
         counts.put("dropped", dropped.size());
         counts.put("contributionEvents", run.contributions().size());
-        return new Report(label, List.copyOf(kept), counts, List.copyOf(dropped));
+        List<Map<String, Object>> beliefs = beliefs(memories, residentNamesFrom(entries), counts);
+        return new Report(label, List.copyOf(kept), counts, List.copyOf(dropped), beliefs);
+    }
+
+    /** {@code actorId → actorName}, read off the run's own timeline instead of a hand-kept table - see
+     * the {@code detect(..., memories, ...)} overload's javadoc. A joint entry's composite id
+     * ({@code "owner,artist"}) is split alongside its composite name ({@code "阿禾、知夏"}); a name that
+     * never shows up singly still resolves once it appears in any joint entry.
+     *
+     * <p>{@code "self"} is skipped on purpose, not swept up by the same logic as every other id: it is
+     * the codebase's own long-standing sentinel for "the user's avatar, not a resident" (see the repeated
+     * {@code if (r.id.equals("self")) continue;} across the domain code, and {@link TimelineCollector}
+     * exporting it under {@code actorName "我"}). Left in, every belief that so much as says "我" reads as
+     * being about this phantom resident - which is how the first version of this method turned three
+     * beliefs that are each entirely about their own owner into two false "about someone else" hits. */
+    private static Map<String, String> residentNamesFrom(List<Map<String, Object>> entries) {
+        Map<String, String> names = new LinkedHashMap<>();
+        for (Map<String, Object> e : entries) {
+            Object idField = e.get("actorId");
+            Object nameField = e.get("actorName");
+            if (!(idField instanceof String ids) || !(nameField instanceof String actorNames)) continue;
+            String[] idParts = ids.split(",");
+            String[] nameParts = actorNames.split("、");
+            if (idParts.length != nameParts.length) continue;
+            for (int i = 0; i < idParts.length; i++) {
+                String id = idParts[i].trim(), nm = nameParts[i].trim();
+                if (id.isBlank() || nm.isBlank() || id.equals("self")) continue;
+                names.putIfAbsent(id, nm);
+            }
+        }
+        return names;
+    }
+
+    // ---- 信念：材料，不是判决 -----------------------------------------------------------------
+
+    /**
+     * A belief is a memory that superseded an earlier one on the same key - docs/06-society.md 七's own
+     * definition of a norm is the same belief, held independently by enough residents, so
+     * {@code sharedBeliefKeys} is that definition measured directly. This function only counts and
+     * carries the material; whether any of it actually names a statistic's candidate is for the blind
+     * reader (see the class comment's "居民能自己说出来" bullet).
+     */
+    private static List<Map<String, Object>> beliefs(List<Map<String, Object>> memories,
+                                                       Map<String, String> residentNames,
+                                                       Map<String, Object> counts) {
+        record Belief(String ownerId, String supersedesKey, String text) {}
+        List<Belief> beliefs = new ArrayList<>();
+        for (Map<String, Object> m : memories) {
+            if (!(m.get("supersedesKey") instanceof String sk) || sk.isBlank()) continue;
+            beliefs.add(new Belief((String) m.get("ownerId"), sk, (String) m.get("text")));
+        }
+        counts.put("beliefs", beliefs.size());
+
+        Set<String> knownIds = new LinkedHashSet<>(residentNames.keySet());
+        for (Belief b : beliefs) if (b.ownerId() != null) knownIds.add(b.ownerId());
+
+        int aboutOthers = 0;
+        Set<String> holders = new LinkedHashSet<>();
+        Map<String, Set<String>> ownersByKey = new LinkedHashMap<>();
+        List<Map<String, Object>> material = new ArrayList<>();
+        for (Belief b : beliefs) {
+            if (b.ownerId() != null) holders.add(b.ownerId());
+            ownersByKey.computeIfAbsent(b.supersedesKey(), k -> new LinkedHashSet<>()).add(b.ownerId());
+            if (mentionsSomeoneElse(b.ownerId(), b.supersedesKey(), b.text(), knownIds, residentNames)) aboutOthers++;
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("ownerId", b.ownerId());
+            item.put("supersedesKey", b.supersedesKey());
+            item.put("text", b.text());
+            material.add(item);
+        }
+        counts.put("beliefsAboutOthers", aboutOthers);
+        counts.put("beliefHolders", holders.size());
+        long shared = ownersByKey.values().stream().filter(owners -> owners.size() >= 2).count();
+        counts.put("sharedBeliefKeys", (int) shared);
+        return List.copyOf(material);
+    }
+
+    /** Someone-else-not-self, checked by name where a name is known and by bare id otherwise - the
+     * fallback the class comment on the {@code memories} overload describes. */
+    private static boolean mentionsSomeoneElse(String selfId, String supersedesKey, String text,
+                                                Set<String> knownIds, Map<String, String> residentNames) {
+        String haystack = (supersedesKey == null ? "" : supersedesKey) + " " + (text == null ? "" : text);
+        for (String id : knownIds) {
+            if (id.equals(selfId)) continue;
+            String otherName = residentNames.get(id);
+            if ((otherName != null && haystack.contains(otherName)) || haystack.contains(id)) return true;
+        }
+        return false;
     }
 
     private static String gate(Candidate c) {
@@ -428,6 +539,12 @@ public final class NormDetector {
         for (Map<String, Object> d : report.dropped())
             sb.append("- `").append(d.get("dimension")).append("` ").append(d.get("statement"))
               .append(" —— **").append(d.get("reason")).append("**\n");
+        sb.append("\n## 居民自己说出来的话\n\n");
+        sb.append("这一节不判断，只是把材料递给盲读的人 —— 上面的统计从不读这里。\n\n");
+        if (report.beliefs().isEmpty()) sb.append("没有。**这是一个真实的 0**，不是没找。\n");
+        for (Map<String, Object> b : report.beliefs())
+            sb.append("- `").append(b.get("ownerId")).append("`（键 `").append(b.get("supersedesKey"))
+              .append("`）：").append(b.get("text")).append("\n");
         return sb.toString();
     }
 

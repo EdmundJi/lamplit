@@ -85,8 +85,8 @@ class WitnessPeopleTest {
         // Away for a while, then back to the same plot doing the same thing.
         ResidentSimulation.replaceActor(w, "gardener", "cafe", "rest", "去坐坐", now.plusSeconds(3600));
         CompanionRules.advance(w, now.plusSeconds(1800));
-        ResidentSimulation.replaceActor(w, "gardener", "garden", "make", "手上的活", now.plusSeconds(9000));
-        CompanionRules.advance(w, now.plusSeconds(4000));
+        ResidentSimulation.replaceActor(w, "gardener", "garden", "make", "手上的活", now.plusSeconds(20000));
+        CompanionRules.advance(w, now.plusSeconds(ResidentSimulation.WITNESS_MIN_GAP_SECONDS + 600));
 
         assertThat(sightings(w, "owner", "gardener")).hasSize(2);
         assertThat(sightings(w, "owner", "gardener")).allSatisfy(m -> assertThat(m.text()).contains("苗圃"));
@@ -130,5 +130,42 @@ class WitnessPeopleTest {
         ResidentSimulation.replaceActor(w, "gardener", "garden", "walk", "路过", now.plusSeconds(7200));
         CompanionRules.advance(w, now.plusSeconds(60));
         assertThat(sightings(w, "owner", "gardener")).isEmpty();
+    }
+
+    @Test
+    @DisplayName("洪水过后日子接着过，他做过的事一件都挤不掉——这条底线是给别的记忆的，不是给目击的上限")
+    void ordinaryLifeKeepsItsFloorAfterAFloodOfSightings() {
+        CompanionWorld w = twoInTheGarden(80);
+        for (int i = 0; i < 400; i++)
+            ResidentSimulation.memory(w, "owner", "gardener", "observed", now.plusSeconds(1000 + i),
+                    ResidentSimulation.WITNESS_TOPIC, "我看见青叔又在苗圃。", List.of(), 3);
+        long floodedWith = w.memories.stream()
+                .filter(m -> ResidentSimulation.WITNESS_TOPIC.equals(m.topicId())).count();
+        assertThat(floodedWith).as("先把全镇的记忆淹掉").isGreaterThan(150);
+
+        // A town where nothing else is happening remembers only who stood where, and that is honest.
+        // The guarantee is about what happens when life resumes: every ordinary thing that happens from
+        // here on evicts a sighting rather than another ordinary thing.
+        for (int i = 0; i < 100; i++)
+            ResidentSimulation.memory(w, "owner", "owner", "observed", now.plusSeconds(9000 + i),
+                    "work", "我做了第 " + i + " 件事。", List.of(), 6);
+
+        assertThat(w.memories.stream().filter(m -> "work".equals(m.topicId())).count())
+                .as("他自己做过的一百件事，一件都没被目击挤掉").isEqualTo(100);
+        assertThat(w.memories.stream().filter(m -> ResidentSimulation.WITNESS_TOPIC.equals(m.topicId())).count())
+                .as("让位的是目击").isLessThan(floodedWith);
+    }
+
+    @Test
+    @DisplayName("目击的洪水冲不掉一个人的身世——那十一条是他在这条街开始之前是谁")
+    void theFloodDoesNotWashAwayWhoTheyWereBeforeThisStreet() {
+        CompanionWorld w = twoInTheGarden(80);
+        long seedsBefore = w.memories.stream().filter(m -> "seed".equals(m.sourceType())).count();
+        assertThat(seedsBefore).isGreaterThan(0);
+        for (int i = 0; i < 400; i++)
+            ResidentSimulation.memory(w, "owner", "gardener", "observed", now.plusSeconds(1000 + i),
+                    ResidentSimulation.WITNESS_TOPIC, "我看见青叔又在苗圃。", List.of(), 3);
+        assertThat(w.memories.stream().filter(m -> "seed".equals(m.sourceType())).count())
+                .isEqualTo(seedsBefore);
     }
 }

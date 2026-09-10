@@ -37,6 +37,27 @@ class NormDetectorTest {
         return Instant.parse("2026-01-0" + day + "T00:00:00Z").plusSeconds((hour - 8L) * 3600 + minute * 60L).toString();
     }
 
+    /** A world-snapshot.json {@code memories} entry - only the fields {@link NormDetector} looks at. */
+    private static Map<String, Object> memory(String ownerId, String supersedesKey, String text) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("ownerId", ownerId);
+        m.put("supersedesKey", supersedesKey);
+        m.put("text", text);
+        return m;
+    }
+
+    /** A memory-kind timeline entry - the only shape {@link NormDetector} needs to learn a real name for
+     * an actorId, since that pairing is how every exported timeline entry already reads. */
+    private static Map<String, Object> named(String actorId, String actorName) {
+        Map<String, Object> e = new LinkedHashMap<>();
+        e.put("at", at(1, 8, 0));
+        e.put("kind", "memory");
+        e.put("actorId", actorId);
+        e.put("actorName", actorName);
+        e.put("text", actorName + " 的一句话");
+        return e;
+    }
+
     @Test
     @DisplayName("两个人反复落在同一件事上，会被报成一条候选")
     void reportsAPairThatKeepsLandingOnTheSameThing() {
@@ -241,5 +262,121 @@ class NormDetectorTest {
         assertThat(r.candidates()).anyMatch(x -> x.dimension().equals("pairAffinity"));
         assertThat(NormDetector.notWrittenByUs(r, c))
                 .noneMatch(x -> x.dimension().equals("pairAffinity"));
+    }
+
+    // ---- 信念：材料，不是判决 ------------------------------------------------------------------
+
+    @Test
+    @DisplayName("一条信念都没有的时候，四个信念数都要是明确的 0，而不是干脆不出现")
+    void reportsExplicitZerosWhenThereAreNoBeliefs() {
+        NormDetector.Report report = NormDetector.detect("empty", List.of(), List.of(), TZ);
+        assertThat(report.counts()).containsEntry("beliefs", 0);
+        assertThat(report.counts()).containsEntry("beliefsAboutOthers", 0);
+        assertThat(report.counts()).containsEntry("beliefHolders", 0);
+        assertThat(report.counts()).containsEntry("sharedBeliefKeys", 0);
+        assertThat(report.beliefs()).isEmpty();
+        assertThat(NormDetector.markdown(report)).contains("没有。**这是一个真实的 0**，不是没找。");
+    }
+
+    @Test
+    @DisplayName("老的三参数重载不受影响——照样能跑，只是没有信念材料")
+    void theThreeArgOverloadStillWorksWithNoBeliefMaterial() {
+        NormDetector.Report report = NormDetector.detect("run", List.of(), TZ);
+        assertThat(report.counts()).containsEntry("beliefs", 0);
+        assertThat(report.beliefs()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("只有 supersedesKey 非空的记忆才算信念，普通记忆不算")
+    void onlyMemoriesWithASupersedesKeyCountAsBeliefs() {
+        List<Map<String, Object>> memories = new ArrayList<>();
+        memories.add(memory("student", null, "普通的一条记忆，没有信念"));
+        memories.add(memory("fixer", "", "supersedesKey 是空字符串，也不算"));
+        memories.add(memory("artist", "habit:artist:paint", "受托工作一结束就找地方坐下研读资料"));
+        NormDetector.Report report = NormDetector.detect("run", List.of(), memories, TZ);
+        assertThat(report.counts()).containsEntry("beliefs", 1);
+        assertThat(report.beliefs()).hasSize(1);
+        assertThat(report.beliefs().get(0)).containsEntry("ownerId", "artist");
+    }
+
+    @Test
+    @DisplayName("信念材料原样带出 ownerId、supersedesKey、text，供盲读的人直接看")
+    void carriesBeliefMaterialVerbatim() {
+        List<Map<String, Object>> memories = List.of(memory("gardener", "青叔-独自扛", "一个人慢慢弄，省得麻烦别人"));
+        NormDetector.Report report = NormDetector.detect("run", List.of(), memories, TZ);
+        assertThat(report.beliefs()).containsExactly(Map.of(
+                "ownerId", "gardener", "supersedesKey", "青叔-独自扛", "text", "一个人慢慢弄，省得麻烦别人"));
+        assertThat(NormDetector.markdown(report)).contains("青叔-独自扛").contains("一个人慢慢弄，省得麻烦别人");
+    }
+
+    @Test
+    @DisplayName("有几个不同的居民写过信念，beliefHolders 就数几个——同一个人写三条也只算一个")
+    void countsDistinctBeliefHolders() {
+        List<Map<String, Object>> memories = new ArrayList<>();
+        memories.add(memory("student", "habit:student:quiet", "第一条"));
+        memories.add(memory("student", "habit:student:quiet", "同一个人后来又写了一条"));
+        memories.add(memory("fixer", "habit:fixer:check", "另一个人写的"));
+        NormDetector.Report report = NormDetector.detect("run", List.of(), memories, TZ);
+        assertThat(report.counts()).containsEntry("beliefs", 3);
+        assertThat(report.counts()).containsEntry("beliefHolders", 2);
+    }
+
+    @Test
+    @DisplayName("同一个 key 只被一个人反复持有，不算 sharedBeliefKey——得是两个不同的人各自持有")
+    void doesNotCountARepeatedKeyFromTheSameOwnerAsShared() {
+        List<Map<String, Object>> memories = new ArrayList<>();
+        memories.add(memory("student", "habit:student:quiet", "第一次这么写"));
+        memories.add(memory("student", "habit:student:quiet", "后来又这么写了一次"));
+        NormDetector.Report report = NormDetector.detect("run", List.of(), memories, TZ);
+        assertThat(report.counts()).containsEntry("sharedBeliefKeys", 0);
+    }
+
+    @Test
+    @DisplayName("同一个 key 被两个不同的人各自独立持有，才算一个 sharedBeliefKey")
+    void countsAKeyHeldByTwoDifferentOwnersAsShared() {
+        List<Map<String, Object>> memories = new ArrayList<>();
+        memories.add(memory("student", "habit:quiet-when-interrupted", "被打断就回一句知道了"));
+        memories.add(memory("fixer", "habit:quiet-when-interrupted", "小川每次被打断都回一句知道了"));
+        memories.add(memory("artist", "habit:artist:paint", "自己的、没人共享的一条"));
+        NormDetector.Report report = NormDetector.detect("run", List.of(), memories, TZ);
+        assertThat(report.counts()).containsEntry("sharedBeliefKeys", 1);
+    }
+
+    @Test
+    @DisplayName("supersedesKey 或 text 里提到了别的居民的 id，在没有名字表时按 id 兜底算作关于别人")
+    void fallsBackToIdMatchingWhenNoNameTableIsAvailable() {
+        List<Map<String, Object>> memories = new ArrayList<>();
+        memories.add(memory("student", "小川-观察fixer", "fixer 每次修完东西都要在门口站一会儿"));
+        memories.add(memory("fixer", "habit:fixer:check", "自己的手闲不住的毛病"));
+        // No entries at all - there is no actorName table to read a real name from, so this can only
+        // land via the id fallback, which is the point of the test.
+        NormDetector.Report report = NormDetector.detect("run", List.of(), memories, TZ);
+        assertThat(report.counts()).containsEntry("beliefs", 2);
+        assertThat(report.counts()).containsEntry("beliefsAboutOthers", 1);
+    }
+
+    @Test
+    @DisplayName("有名字表时按真实姓名判定，比 id 兜底更准——中文文本里从来不会出现英文 id")
+    void usesTheRealNameFromTheTimelineWhenOneIsAvailable() {
+        List<Map<String, Object>> entries = new ArrayList<>();
+        entries.add(named("fixer", "周野"));
+        entries.add(named("student", "小川"));
+        List<Map<String, Object>> memories = new ArrayList<>();
+        memories.add(memory("fixer", "小川-应对冲突", "小川每次被我怼完都回句你翻你的就走了，这反应倒是挺固定"));
+        memories.add(memory("student", "habit:student:quiet", "每次被打断，我都只回一句知道了"));
+        NormDetector.Report report = NormDetector.detect("run", entries, memories, TZ);
+        assertThat(report.counts()).containsEntry("beliefs", 2);
+        assertThat(report.counts()).containsEntry("beliefsAboutOthers", 1);
+    }
+
+    @Test
+    @DisplayName("信念只提到自己（哪怕 supersedesKey 里写的是自己的中文名），beliefsAboutOthers 就该是 0")
+    void aBeliefAboutOnesOwnHabitIsNotAboutOthers() {
+        List<Map<String, Object>> entries = List.of(named("gardener", "青叔"));
+        List<Map<String, Object>> memories = List.of(
+                memory("gardener", "青叔-独自扛", "一个人慢慢弄，省得麻烦别人，连累了歇会儿都怕出错"));
+        NormDetector.Report report = NormDetector.detect("run", entries, memories, TZ);
+        assertThat(report.counts()).containsEntry("beliefs", 1);
+        assertThat(report.counts()).containsEntry("beliefsAboutOthers", 0);
     }
 }

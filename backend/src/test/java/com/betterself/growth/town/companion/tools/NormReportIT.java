@@ -36,7 +36,15 @@ class NormReportIT {
             Map<String, Object> m = JSON.readValue(Files.readString(manifest, StandardCharsets.UTF_8), Map.class);
             if (m.get("timezone") instanceof String tz) timezone = tz;
         }
-        return NormDetector.detect(dir.getFileName().toString(), entries, timezone);
+        // world-snapshot.json is optional - older runs never exported one, and a missing "居民能自己
+        //说出来" half is a real 0 (see NormDetector's class comment), not a reason to fail the read.
+        List<Map<String, Object>> memories = List.of();
+        Path snapshot = dir.resolve("world-snapshot.json");
+        if (Files.exists(snapshot)) {
+            Map<String, Object> world = JSON.readValue(Files.readString(snapshot, StandardCharsets.UTF_8), Map.class);
+            if (world.get("memories") instanceof List<?> ms) memories = (List<Map<String, Object>>) (List<?>) ms;
+        }
+        return NormDetector.detect(dir.getFileName().toString(), entries, memories, timezone);
     }
 
     @Test

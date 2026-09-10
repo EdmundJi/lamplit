@@ -245,6 +245,9 @@ public final class ResidentSimulation {
         // physical work but does not manufacture a reflection, social choice or new intention.
         expirePendingEncounters(w,at);
         expireDeclinedEncounters(w);
+        // Promises have their own clock too, the same way CafeService.tick above does: whether one
+        // is due does not depend on whose plan happens to be running right now.
+        settlePromises(w,at);
         comeRoundAgain(w,at);
         CafeService.finishClosingIfEmpty(w,at);
         syncLegacyObjects(w);
@@ -1511,6 +1514,158 @@ public final class ResidentSimulation {
             if(stale||expired)w.pendingEncounters.remove(pending);
         }
     }
+
+    // ---- promises (§ a future spoken out loud) ----------------------------------------------------
+    /** Every promise-related memory is filed under this fixed topic, the same way {@link #WITNESS_TOPIC}
+     * marks every sighting - never a model-authored string, so nothing here can collide with or be
+     * mistaken for a topic a model chose. */
+    static final String PROMISE_TOPIC = "promise";
+    /** How long past {@link CompanionWorld.Promise#dueAt} settlement waits before deciding the
+     * promiser never showed - a small grace so a person who is one tick late (the clock advances in
+     * six-second steps but a real check only happens a few times a minute) is not judged against the
+     * exact instant. Not a grace period for the promise itself; {@link #promise} already refuses a
+     * {@code dueAt} that is not comfortably in the future. */
+    private static final long PROMISE_SETTLE_GRACE_SECONDS = 10*60;
+    /** Capacity bound, same shape as every other bounded list on {@link CompanionWorld} (see
+     * {@code memory}/{@code event} above): once full, the oldest promise that has already been
+     * settled is dropped first. An unsettled promise is never evicted early - it still has a fact to
+     * record - so this can only ever fall behind, never lose something nobody has looked at yet. */
+    private static final int MAX_PROMISES = 150;
+
+    /** The one way a Promise ever comes into being. Every check below either lands the whole promise
+     * or lands nothing at all - a promise with, say, an unchecked place or a fabricated witness list
+     * would be worse than no promise, because {@link #settlePromises} and every reader after it would
+     * treat it as real. See {@link CompanionWorld.Promise}'s own doc comment for why the rules never
+     * go further than the two bare facts (made, then came-or-not) once this returns true. */
+    public static boolean promise(CompanionWorld w,String byId,String toId,String what,String place,Instant dueAt,Instant now){
+        if(byId==null||toId==null||byId.equals(toId))return false;
+        ResidentState by=state(w,byId),to=state(w,toId);
+        if(by==null||to==null)return false;
+        if(what==null||what.isBlank()||what.length()>40)return false;
+        if(!TownPlaces.contains(w,place))return false;
+        if(now==null||dueAt==null||!dueAt.isAfter(now)||Duration.between(now,dueAt).toHours()>24)return false;
+        Actor byActor=actor(w,byId),toActor=actor(w,toId);
+        // A promise is spoken face to face, not sent across the town - both people have to actually
+        // be standing together, awake and not mid-errand, at the moment it is made.
+        if(!byActor.place().equals(toActor.place()))return false;
+        String here=byActor.place();
+        if(Set.of("walk","travel","sleep","away").contains(byActor.activity()))return false;
+        if(Set.of("walk","travel","sleep","away").contains(toActor.activity()))return false;
+
+        CompanionWorld.Promise p=new CompanionWorld.Promise();
+        p.id="pr-"+(++w.eventSequence);
+        p.byId=byId;p.toId=toId;p.what=what;p.place=place;p.dueAt=dueAt;p.madeAt=now;
+        // Same "who else is actually in the room" test witnessPeople uses: present, awake, not
+        // travelling. A witness only ever comes from this list - nobody is added after the fact.
+        for(ResidentState o:w.residentStates){
+            if(o.id.equals(byId)||o.id.equals(toId))continue;
+            Actor a=actor(w,o.id);
+            if(!a.place().equals(here))continue;
+            if(Set.of("walk","travel","sleep","away").contains(a.activity()))continue;
+            p.witnessIds.add(o.id);
+        }
+        w.promises.add(p);
+        while(w.promises.size()>MAX_PROMISES){
+            CompanionWorld.Promise oldest=w.promises.stream().filter(x->x.settledAt!=null)
+                .min(Comparator.comparing(x->x.madeAt)).orElse(null);
+            if(oldest==null)break;
+            w.promises.remove(oldest);
+        }
+
+        String byName=byActor.name(),toName=toActor.name(),placeStr=placeName(place);
+        String timeStr=promiseTimeStr(w,dueAt);
+        // Each person's memory is written from their own vantage point on the exact same fact - the
+        // point this whole feature exists to make possible (see this file's javadoc on Promise).
+        memory(w,byId,byId,"observed",now,PROMISE_TOPIC,
+            "我答应"+toName+"，"+timeStr+"会在"+placeStr+what+"。",List.of(),6);
+        memory(w,toId,byId,"heard",now,PROMISE_TOPIC,
+            byName+"答应我，"+timeStr+"会在"+placeStr+what+"。",List.of(),6);
+        for(String witnessId:p.witnessIds)
+            memory(w,witnessId,byId,"heard",now,PROMISE_TOPIC,
+                "我听见"+byName+"答应"+toName+"，"+timeStr+"会在"+placeStr+what+"。",List.of(),5);
+        return true;
+    }
+
+    /** Local hour:minute for a promise's due time, the same manual formatting every other place in
+     * this file already uses (see e.g. reconcileDayPlan) rather than pulling in a formatter. */
+    private static String promiseTimeStr(CompanionWorld w,Instant at){
+        ZonedDateTime local=at.atZone(ZoneId.of(w.timezone));
+        return String.format("%02d:%02d",local.getHour(),local.getMinute());
+    }
+
+    /** The other half of a promise: once {@link CompanionWorld.Promise#dueAt} has actually passed
+     * (plus {@link #PROMISE_SETTLE_GRACE_SECONDS}), compare where the promiser actually is against
+     * where they said they would be, write the one fact that comparison produces, and never touch
+     * this promise again. Deliberately a flat sweep over every open promise each step, the same shape
+     * as {@link #expirePendingEncounters} - promises settle on their own clock, independent of which
+     * resident's turn the outer loop happens to be on.
+     * <p>The sentences below name only what happened, never what it means: {@code outcome} is one of
+     * exactly "came"/"did_not_come" (see the field's own doc comment), and neither the toId's memory,
+     * the witnesses', nor the promiser's own carries a verdict about it. */
+    private static void settlePromises(CompanionWorld w,Instant at){
+        for(CompanionWorld.Promise p:w.promises){
+            if(p.settledAt!=null)continue;
+            if(at.isBefore(p.dueAt.plusSeconds(PROMISE_SETTLE_GRACE_SECONDS)))continue;
+            ResidentState by=state(w,p.byId);
+            boolean came=by!=null&&actor(w,p.byId).place().equals(p.place);
+            p.outcome=came?"came":"did_not_come";
+            p.settledAt=at;
+            String byName=by==null?p.byId:actor(w,p.byId).name();
+            String placeStr=placeName(p.place);
+            String factAboutHim=came
+                ?byName+"在约好的时间到了"+placeStr+"。"
+                :byName+"到了约好的时间，没有出现在"+placeStr+"。";
+            String factForSelf=came
+                ?"到了我答应"+ (state(w,p.toId)==null?p.toId:actor(w,p.toId).name()) +"的时间，我在"+placeStr+"。"
+                :"到了我答应"+ (state(w,p.toId)==null?p.toId:actor(w,p.toId).name()) +"的时间，我没有出现在"+placeStr+"。";
+            memory(w,p.toId,p.byId,"observed",at,PROMISE_TOPIC,factAboutHim,List.of(),6);
+            for(String witnessId:p.witnessIds)
+                memory(w,witnessId,p.byId,"observed",at,PROMISE_TOPIC,factAboutHim,List.of(),5);
+            if(by!=null)memory(w,p.byId,p.byId,"observed",at,PROMISE_TOPIC,factForSelf,List.of(),6);
+        }
+    }
+
+    /** Every promise this resident has any part in - having made it, having been promised to, or
+     * having stood there when it was made - newest first. */
+    public static List<CompanionWorld.Promise> promises(CompanionWorld w,String residentId){
+        return w.promises.stream()
+            .filter(p->p.byId.equals(residentId)||p.toId.equals(residentId)||p.witnessIds.contains(residentId))
+            .sorted(Comparator.comparing((CompanionWorld.Promise p)->p.madeAt).reversed())
+            .toList();
+    }
+    /** Every promise due by {@code at} that has not yet been settled - what {@link #settlePromises}
+     * is about to act on, exposed read-only for callers outside this file. */
+    public static List<CompanionWorld.Promise> promisesDue(CompanionWorld w,Instant at){
+        return w.promises.stream().filter(p->p.settledAt==null&&!at.isBefore(p.dueAt)).toList();
+    }
+    /** How long after settlement it still makes sense to ask someone "what do you make of this" - the
+     * layer above this one (application/adapters, not owned here) asks the question, but the window
+     * that bounds it is a domain fact: asking about something that settled half a day ago is not a
+     * real question anymore, it is an interview about old news, so past this window a promise simply
+     * stops being offered up for that conversation at all - not asked-and-skipped, just no longer
+     * current enough to raise. */
+    private static final long PROMISE_THOUGHT_WINDOW_SECONDS = 6*3600L;
+    /** Settled promises this resident (the promiser, the one promised to, or a witness) has not yet
+     * been asked their thought on, and which settled recently enough that asking is still asking
+     * about something current (see {@link #PROMISE_THOUGHT_WINDOW_SECONDS}). An unsettled promise
+     * never appears here - there is nothing yet to have a thought about. */
+    public static List<CompanionWorld.Promise> promisesAwaitingThought(CompanionWorld w,String residentId,Instant at){
+        return w.promises.stream()
+            .filter(p->p.settledAt!=null)
+            .filter(p->!at.isBefore(p.settledAt)&&Duration.between(p.settledAt,at).getSeconds()<=PROMISE_THOUGHT_WINDOW_SECONDS)
+            .filter(p->p.byId.equals(residentId)||p.toId.equals(residentId)||p.witnessIds.contains(residentId))
+            .filter(p->!p.thoughtAskedIds.contains(residentId))
+            .toList();
+    }
+    /** Records that this resident has been asked - never what they answered, which stays entirely
+     * theirs (see {@link CompanionWorld.Promise#thoughtAskedIds}'s own doc comment). Idempotent: a
+     * repeated call for the same person is a no-op rather than a duplicate entry. */
+    public static void markPromiseThoughtAsked(CompanionWorld w,String promiseId,String residentId,Instant at){
+        CompanionWorld.Promise p=w.promises.stream().filter(x->x.id.equals(promiseId)).findFirst().orElse(null);
+        if(p==null||residentId==null)return;
+        if(!p.thoughtAskedIds.contains(residentId))p.thoughtAskedIds.add(residentId);
+    }
+
     /** The fallback when nothing can answer "do you say anything?" - a mind that does not implement
      * reactions at all, or a rule-only world. Greeting is chosen over silence on purpose: a missing
      * capability should degrade to the town this project is trying to be, not to the empty one it
@@ -1853,8 +2008,18 @@ public final class ResidentSimulation {
         witnessPeople(w,r,a,now);
     }
 
-    /** How long before the same person, in the same room, is worth writing down again. */
-    static final int WITNESS_MIN_GAP_SECONDS = 45 * 60;
+    /** How long before the same person, in the same room, is worth writing down again. Started at 45
+     * minutes and measured: a rule-only day then wrote 301 sightings against a world that can hold 200
+     * memories at all, and by day three <b>86% of everything the town still remembered was "who was
+     * here"</b> - the other raw material fell 160 to 27 and the residents' own backstory was evicted
+     * outright. Noticing people is supposed to add material for a belief, not bury the material a
+     * belief would be about. */
+    static final int WITNESS_MIN_GAP_SECONDS = 120 * 60;
+    /** At most this share of the world's memory may be sightings. The gap above bounds the rate; this
+     * bounds the standing footprint, which is the number that actually hurt - and it is a floor for
+     * everything else rather than a ceiling for this, which is the honest way round: whatever else a
+     * resident has lived through has somewhere to stay. */
+    static final double WITNESS_MEMORY_SHARE = 0.4;
     /** Topic every sighting of another person is filed under - see {@link #witnessPeople}. Named
      * because {@link #needsReflection} has to be able to tell this material apart from events. */
     static final String WITNESS_TOPIC = "who-was-here";
@@ -2031,8 +2196,24 @@ public final class ResidentSimulation {
             // belief is protected until nothing lower-tier is left to remove. Within a tier, the
             // oldest goes first - this is capacity trimming, not a judgement about which memory is
             // more "true".
+            // Sightings of other people are trimmed first once they are over their share (see
+            // WITNESS_MEMORY_SHARE). Without this they win the ordinary contest below on volume alone -
+            // they are tier 0 and there are hundreds of them - and a town remembers who stood where
+            // while forgetting everything anybody did or said.
+            long witnesses=w.memories.stream().filter(m->WITNESS_TOPIC.equals(m.topicId())).count();
+            boolean witnessesOverShare=witnesses>200*WITNESS_MEMORY_SHARE;
+            // Ranked cheapest to dearest. Sightings over their share go first; then ordinary raw
+            // experience; then the resident's own backstory alongside their one-off reflections - the
+            // eleven seeded memories are who each of them is before this town started, they cost almost
+            // nothing to keep, and the first thing the sighting flood did was evict all of them; a
+            // standing belief is still last, as it always was.
+            java.util.function.ToIntFunction<Memory> rank=m->
+                witnessesOverShare&&WITNESS_TOPIC.equals(m.topicId())?0
+                :"seed".equals(m.sourceType())?2
+                :CompanionRecall.tier(m.sourceType())+1;
+            Comparator<Memory> order=Comparator.comparingInt(rank).thenComparing(Memory::at);
             Memory removable=w.memories.stream().filter(m->!m.id().equals(id)&&!referenced.contains(m.id()))
-                .min(Comparator.<Memory>comparingInt(m->CompanionRecall.tier(m.sourceType())).thenComparing(Memory::at)).orElse(null);
+                .min(order).orElse(null);
             if(removable==null)break;
             w.memories.remove(removable);
         }return id;}
