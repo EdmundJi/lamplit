@@ -245,6 +245,7 @@ public final class ResidentSimulation {
         // physical work but does not manufacture a reflection, social choice or new intention.
         expirePendingEncounters(w,at);
         expireDeclinedEncounters(w);
+        comeRoundAgain(w,at);
         CafeService.finishClosingIfEmpty(w,at);
         syncLegacyObjects(w);
     }
@@ -1395,6 +1396,38 @@ public final class ResidentSimulation {
         r.thought=text;r.revision++;w.revision++;
         event(w,now,"account",place==null?actor(w,residentId).place():place,List.of(residentId),actor(w,residentId).name()+"回头想了想刚才：“"+text+"”",null);
         return true;
+    }
+
+    /** A gathering that has happened comes round again on a later day.
+     * <p>{@code Project.kind} is set for every seeded project ("gathering", "quiet", "art",
+     * "garden") and was, until now, read by absolutely nothing anywhere - the ninth field in this
+     * codebase to be written and never looked at. It matters here because it is the difference
+     * between two kinds of thing that the code was treating identically: 「窗边的安静角」 is a corner
+     * you set up once, and 「留一盏灯的读书小聚」 is an evening that happens - "想让晚归的人也有一个
+     * 能坐下来的地方" is a standing arrangement, not an object anybody finishes.
+     * <p>This is why the town runs dry. A measured day had every shared thing in town finished by
+     * evening and nothing at all to do together for the three days after, because four one-off
+     * artifacts is a stock, not a supply. Treating a recurring occasion as recurring is not a new
+     * mechanism, it is reading a distinction the seed has always made.
+     * <p>Not a timer: it comes round only after it has actually been held (celebrated, which needs
+     * somebody to call people over) and only once the day has turned over, and the next one has to
+     * be worked for from nothing exactly like the last one. */
+    private static void comeRoundAgain(CompanionWorld w,Instant at){
+        String today=at.atZone(ZoneId.of(w.timezone)).toLocalDate().toString();
+        for(Project p:w.projects){
+            if(!"gathering".equals(p.kind)||!"celebrating".equals(p.status))continue;
+            if(p.completedAt==null)continue;
+            if(today.equals(p.completedAt.atZone(ZoneId.of(w.timezone)).toLocalDate().toString()))continue;
+            p.status="idea";p.progress=0;p.contributors.clear();p.completedAt=null;
+            p.description="上一次的"+p.title+"已经散了，下一次还得有人张罗。";
+            w.objects.removeIf(o->Objects.equals(o.projectId(),p.id));
+            w.objects.add(new WorldObject("project-"+p.id,p.objectKind,p.place,p.title,"progress-0",p.id));
+            event(w,at,"comes_round",p.place,List.of(p.ownerId),"「"+p.title+"」到了再办一次的时候。",p.id);
+            for(ResidentState r:w.residentStates)
+                if(r.knownProjects.containsKey(p.id))
+                    r.knownProjects.put(p.id,new ProjectKnowledge(p.id,p.place,"idea",0,at,p.ownerId));
+            w.revision++;
+        }
     }
 
     /** How long a face-to-face fact stays worth answering. Past this the moment has gone: you do not

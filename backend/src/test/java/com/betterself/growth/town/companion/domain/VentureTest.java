@@ -93,6 +93,39 @@ class VentureTest {
         assertThat(ResidentSimulation.needsVenture(w, "weaver", DAY.plusSeconds(9 * 3600))).isTrue();
     }
 
+    /** Project.kind was set on every seeded project and read by nothing anywhere - the ninth field
+     * in this codebase written and never looked at. It is the difference between 「窗边的安静角」,
+     * a corner you set up once, and 「留一盏灯的读书小聚」, an evening that happens. Four one-off
+     * artifacts is a stock, not a supply, which is why every measured run had the whole town's
+     * shared life finished by the first evening and nothing at all for the days after. */
+    @Test void aGatheringComesRoundAgainOnALaterDayButACornerStaysBuilt() {
+        CompanionWorld w = world();
+        Project gathering = w.projects.stream().filter(p -> "gathering".equals(p.kind)).findFirst().orElseThrow();
+        Project oneOff = w.projects.stream().filter(p -> "quiet".equals(p.kind)).findFirst().orElseThrow();
+        for (Project p : List.of(gathering, oneOff)) {
+            p.status = "celebrating"; p.progress = 100; p.completedAt = DAY;
+            p.contributors.clear(); p.contributors.add(p.ownerId); p.contributors.add("fixer");
+        }
+        // Same day: it has only just been held, and nothing comes round yet.
+        CompanionRules.advance(w, DAY.plusSeconds(3600));
+        assertThat(gathering.status).as("it happened this evening").isEqualTo("celebrating");
+
+        CompanionRules.advance(w, DAY.plusSeconds(30 * 3600)); // the day has turned over
+        assertThat(gathering.status).as("an evening that happens, happens again").isEqualTo("idea");
+        assertThat(gathering.progress).isZero();
+        assertThat(gathering.contributors).as("and the next one has to be worked for from nothing").isEmpty();
+        assertThat(oneOff.status).as("a corner you set up once stays set up").isEqualTo("celebrating");
+    }
+
+    @Test void aGatheringThatWasNeverActuallyHeldDoesNotComeRound() {
+        // No timer: without somebody calling people over, there was no gathering to repeat.
+        CompanionWorld w = world();
+        Project gathering = w.projects.stream().filter(p -> "gathering".equals(p.kind)).findFirst().orElseThrow();
+        gathering.status = "ready"; gathering.progress = 100; gathering.completedAt = DAY;
+        CompanionRules.advance(w, DAY.plusSeconds(30 * 3600));
+        assertThat(gathering.status).isEqualTo("ready");
+    }
+
     @Test void aNewWishGoesOnTheBoardSoSomebodyElseCanActuallyJoinIt() {
         // A wish only its owner knows about is exactly as unjoinable as the seeded projects were
         // before the noticeboard existed - a private to-do item that happens to say it needs two.
