@@ -1042,9 +1042,32 @@ public final class ResidentSimulation {
      * habit is a normal plan the model can simply choose not to repeat next time, never a separate
      * mechanism the rest of the simulation has to know about. Returns whether it fired, so the caller
      * knows whether to fall back to the ordinary idle wait instead. */
+    /** Going to open your own shop at your own posted opening time. Deliberately NOT one of the
+     * habits below and deliberately not subject to their cadence: a habit is something you may or
+     * may not feel like today, and this is something you agreed to when you took the place on
+     * ({@code cafeOperating}, plus hours you set yourself). Left in the habit layer it inherited a
+     * five-hour cooldown and a one-in-five roll per minute, and it showed - measured, the operator
+     * woke at seven, sat at home with nothing decided from 08:29, and did not set off until 10:04,
+     * an hour past the time his own door was supposed to be unlocked.
+     * <p>Still not the rules deciding anything for him: whether to run a shop, what its hours are,
+     * and whether to shut it early all remain his (and the model's). This is only the difference
+     * between having agreed to something and rolling dice about it each morning. */
+    private static boolean openUpOwnShop(CompanionWorld w,ResidentState r,Instant at){
+        if(!r.id.equals(CafeService.operatorId(w)))return false;
+        String from=actor(w,r.id).place();
+        if("cafe".equals(from))return false; // already at the door; CafeService opens it
+        // Counting the walk, so the door is unlocked at opening time rather than a walk's length
+        // after it. He leaves home in time to be there, which is what running a shop looks like.
+        if(!CafeService.dueToOpen(w,at,travelSeconds(from,"cafe")))return false;
+        r.lastHabitAt.put("open_up",at);
+        moveOrSchedule(w,r,"observe","cafe",null,"到点了，去把店门打开",at,900);
+        recordDeed(w,r.id,"observe",from,"到点了，起身往店里去开门。",at);
+        return true;
+    }
     private static boolean maybePlaceHabit(CompanionWorld w,ResidentState r,Instant at){
         if(activeConversation(w,r.id)!=null)return false;
         if(Set.of("sleep","travel","walk","away","tend","wait").contains(actor(w,r.id).activity()))return false;
+        if(openUpOwnShop(w,r,at))return true;
         return switch(r.id){
             // Signature habit first, own unfinished thing second, and that order matters: the
             // student's own default is the cafe window, and putting anything ahead of it simply

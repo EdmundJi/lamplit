@@ -123,6 +123,42 @@ class ClosingCafeTrapTest {
         assertThat(w.cafeStatus).isEqualTo("open");
     }
 
+    /** Opening your own shop is not a habit you may or may not feel like today - it is what you
+     * agreed to when you took the place on. Left in the habit layer it inherited a five-hour cooldown
+     * and a one-in-five roll per minute, and it showed: measured, the operator woke at seven, sat at
+     * home with nothing decided from 08:29, and did not set off until 10:04 - an hour past the time
+     * his own door was meant to be unlocked. */
+    @Test void theOperatorSetsOffInTimeToUnlockHisOwnDoorAtOpeningTime() {
+        CompanionWorld w = world(BEFORE_OPENING);
+        w.cafeStatus = "closed"; w.cafeOperating = true; w.cafeStatusChangedAt = BEFORE_OPENING.minusSeconds(86_400);
+        ResidentState owner = ResidentSimulation.state(w, "owner");
+        owner.plan = null; owner.suspendedAction = null;
+        ResidentSimulation.replaceActor(w, "owner", TownPlaces.homeOf("owner"), "idle", "在家里", BEFORE_OPENING);
+
+        Instant t = BEFORE_OPENING; // 08:31, half an hour before opening
+        Instant openedAt = null;
+        for (int minute = 0; minute < 90 && openedAt == null; minute++) {
+            t = t.plusSeconds(60);
+            CompanionRules.advance(w, t);
+            if ("open".equals(w.cafeStatus)) openedAt = t;
+        }
+        assertThat(openedAt).as("the door gets unlocked at all").isNotNull();
+        // Within a couple of minutes of nine, not an hour and a half after it.
+        assertThat(openedAt).isBefore(Instant.parse("2026-01-01T01:05:00Z"));
+        assertThat(ResidentSimulation.actor(w, "owner").place()).isEqualTo("cafe");
+    }
+
+    @Test void nobodyElseIsSentToOpenAShopTheyDoNotRun() {
+        CompanionWorld w = world(BEFORE_OPENING);
+        w.cafeStatus = "closed"; w.cafeOperating = true; w.cafeStatusChangedAt = BEFORE_OPENING.minusSeconds(86_400);
+        for (ResidentState r : w.residentStates) { r.plan = null; r.suspendedAction = null; }
+        ResidentSimulation.replaceActor(w, "student", TownPlaces.homeOf("student"), "idle", "在家里", BEFORE_OPENING);
+        Instant t = BEFORE_OPENING;
+        for (int minute = 0; minute < 40; minute++) { t = t.plusSeconds(60); CompanionRules.advance(w, t); }
+        assertThat(ResidentSimulation.state(w, "student").lastHabitAt)
+            .as("it is the operator's own obligation, not everybody's").doesNotContainKey("open_up");
+    }
+
     @Test void aShopClosedForTheDayStaysClosedForTheDay() {
         CompanionWorld w = world(DURING_HOURS);
         w.cafeOperating = true;

@@ -48,8 +48,18 @@ final class CafeService {
      * "go and open up" a thing a shopkeeper's own default can act on, instead of the shop needing a
      * model decision before anybody may walk to it. */
     static boolean dueToOpen(CompanionWorld w,Instant at){
-        return w.cafeOperating&&"closed".equals(w.cafeStatus)&&scheduledOpen(w,at)
-            &&!at.atZone(ZoneId.of(w.timezone)).toLocalDate().toString().equals(w.cafeClosedForDayOn);
+        return dueToOpen(w,at,0);
+    }
+    /** {@code leadSeconds} lets the person with the key count the walk: the shop is "due to open" a
+     * little early for whoever still has to get there, so the door is unlocked AT opening time rather
+     * than however long the walk takes afterwards. The lead is the real travel time from wherever
+     * they are, not a guessed margin. */
+    static boolean dueToOpen(CompanionWorld w,Instant at,long leadSeconds){
+        if(!w.cafeOperating||!"closed".equals(w.cafeStatus))return false;
+        if(at.atZone(ZoneId.of(w.timezone)).toLocalDate().toString().equals(w.cafeClosedForDayOn))return false;
+        // Either it is already opening time, or it will be by the time they arrive. The second half
+        // only ever fires in the short stretch before opening, never near closing.
+        return scheduledOpen(w,at)||scheduledOpen(w,at.plusSeconds(leadSeconds));
     }
     static boolean scheduledOpen(CompanionWorld w,Instant at){
         int minute=at.atZone(ZoneId.of(w.timezone)).getHour()*60+at.atZone(ZoneId.of(w.timezone)).getMinute();
