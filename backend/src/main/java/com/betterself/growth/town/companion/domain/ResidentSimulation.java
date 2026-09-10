@@ -786,13 +786,25 @@ public final class ResidentSimulation {
         ResidentState r=state(w,residentId);if(r==null||"sleep".equals(actor(w,residentId).activity()))return List.of();
         List<String> cues=new ArrayList<>();
         ZonedDateTime local=at.atZone(ZoneId.of(w.timezone));int minute=local.getHour()*60+local.getMinute();
-        if(r.sleepScheduleSeeded){
-            boolean inWindow=r.usualSleepMinute<r.usualWakeMinute?minute>=r.usualSleepMinute&&minute<r.usualWakeMinute:minute>=r.usualSleepMinute||minute<r.usualWakeMinute;
-            if(inWindow)cues.add("到了我平常睡觉的时间");
-        }
+        if(withinUsualSleepWindow(w,r.id,at))cues.add("到了我平常睡觉的时间");
         cues.addAll(promiseCues(w,r,at));
         return List.copyOf(cues);
     }
+    /** Whether this is the stretch of the day this person usually sleeps through. One place knows how
+     * the window wraps past midnight, because two places knowing it is how the avatar ended up awake:
+     * {@link CompanionRules} had its own hardcoded 23-to-7 that produced the activity {@code "home"}
+     * rather than {@code "sleep"}, so the user's own figure sat in the living room every night, lost
+     * energy instead of recovering it, and counted as a person in the room to everyone else. */
+    public static boolean withinUsualSleepWindow(CompanionWorld w,String residentId,Instant at){
+        ResidentState r=state(w,residentId);
+        if(r==null||!r.sleepScheduleSeeded||at==null)return false;
+        ZonedDateTime local=at.atZone(ZoneId.of(w.timezone));
+        int minute=local.getHour()*60+local.getMinute();
+        return r.usualSleepMinute<r.usualWakeMinute
+            ?minute>=r.usualSleepMinute&&minute<r.usualWakeMinute
+            :minute>=r.usualSleepMinute||minute<r.usualWakeMinute;
+    }
+
     /** How far ahead a promise this resident made starts being something they are aware of. */
     static final int PROMISE_CUE_LEAD_SECONDS = 3 * 3600;
     /**
@@ -2421,9 +2433,18 @@ public final class ResidentSimulation {
      * every advance, including for saves from before the avatar had a state at all. */
     public static ResidentState ensureAvatarState(CompanionWorld w) {
         ResidentState existing=state(w,"self");
-        if(existing!=null)return existing;
+        // ResidentSeed skips "self" for everything it seeds - occupation, life direction, the authored
+        // narrative - and rightly so, none of that is ours to write for the user. The sleep schedule got
+        // skipped along with them, and nothing else ever gave the avatar one: it had no hours, so
+        // nothing could tell when its night was. Old saves heal here rather than staying awake forever.
+        if(existing!=null){seedAvatarSleepSchedule(existing);return existing;}
         ResidentState r=new ResidentState();r.id="self";r.energy=70;r.social=60;r.curiosity=60;r.mood="如常";r.revision=1;
+        seedAvatarSleepSchedule(r);
         w.residentStates.add(r);return r;
+    }
+    private static void seedAvatarSleepSchedule(ResidentState r){
+        if(r.sleepScheduleSeeded)return;
+        r.usualSleepMinute=23*60;r.usualWakeMinute=7*60;r.sleepScheduleSeeded=true;
     }
     /** Repairs an older save: gives it the location/position catalog and an avatar state if it is
      * missing either, and moves anyone still parked at the old single shared "home" into their own
