@@ -1658,12 +1658,12 @@ public final class ResidentSimulation {
         // Each person's memory is written from their own vantage point on the exact same fact - the
         // point this whole feature exists to make possible (see this file's javadoc on Promise).
         memory(w,byId,byId,"observed",now,PROMISE_TOPIC,
-            "我答应"+toName+"，"+timeStr+"会在"+placeStr+what+"。",List.of(),6);
+            "我答应"+toName+"，"+timeStr+"会在"+placeStr+"做这件事："+what,List.of(),6);
         memory(w,toId,byId,"heard",now,PROMISE_TOPIC,
-            byName+"答应我，"+timeStr+"会在"+placeStr+what+"。",List.of(),6);
+            byName+"答应我，"+timeStr+"会在"+placeStr+"做这件事："+what,List.of(),6);
         for(String witnessId:p.witnessIds)
             memory(w,witnessId,byId,"heard",now,PROMISE_TOPIC,
-                "我听见"+byName+"答应"+toName+"，"+timeStr+"会在"+placeStr+what+"。",List.of(),5);
+                "我听见"+byName+"答应"+toName+"，"+timeStr+"会在"+placeStr+"做这件事："+what,List.of(),5);
         return true;
     }
 

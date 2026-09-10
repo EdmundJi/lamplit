@@ -99,4 +99,24 @@ class PromptBalanceTest {
         assertThat(prompt).as("想不出来是真话").contains("想不出来也没关系");
         assertThat(prompt).as("但谦虚不是理由——这半句是修回来的那次加的").contains("也别因为觉得");
     }
+
+    @Test
+    @DisplayName("许诺那一问：两侧都在，而且说清楚了时间只由一个地方定")
+    void theQuestionAboutFixingATimeLeansNeitherWayAndKeepsOneClock() {
+        String prompt = promptFor(mind -> mind.promiseOffer(new ResidentMind.PromiseOfferRequest(
+                context(),
+                List.of(new ResidentMind.ActorView("fixer", "周野", "修东西的", "cafe", "make", null)),
+                List.of())),
+            "{\"toId\":null,\"what\":null,\"place\":null,\"inHours\":null,\"evidenceIds\":[]}");
+
+        assertThat(prompt).as("不说也很正常").contains("不想就不说，两种都很正常");
+        assertThat(prompt).as("而且明说了「没有」最常见").contains("最常见的答案");
+        assertThat(prompt).as("但「万一做不到」不能变成不说的理由").contains("万一做不到呢");
+        assertThat(prompt).as("那张需要人手的单子不是让他从里面挑一件来许诺")
+                .contains("不是让你从里面挑一件来许诺");
+        // 半天的模型跑里，周野说的是"明早9点"，而 inHours 把到点算成了当天 16:57，人在不在那儿
+        // 因此成了一笔糊涂账，三条承诺全部结清成 did_not_come。
+        assertThat(prompt).as("时间只能由一个地方定").contains("里面不要出现任何时间");
+        assertThat(prompt).as("写做的事，不写说的话").contains("不要写成你对他说的话");
+    }
 }
