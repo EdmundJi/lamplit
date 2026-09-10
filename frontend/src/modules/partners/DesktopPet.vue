@@ -1,22 +1,30 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Coins, HandHeart, House, Minus, MoreHorizontal, PawPrint, Utensils, X } from 'lucide-vue-next'
 import { api } from '../../shared/api/client'
 import { notifyDataChanged, onDataChanged } from '../../shared/data-sync'
-import RivePet from './RivePet.vue'
 import { useDesktopPetStore } from './desktop-pet.store'
 import { randomPetDialogue } from './pet-dialogues'
 import { petVariantStorageKey, variantIndexForKind } from './pet-variants'
 import type { InteractionResult, PartnerProfile, Pet, ShopItem } from './partner.types'
+import type RivePetComponent from './RivePet.vue'
 
 type Dialogue = { text: string; meta: string }
 type Point = { x: number; y: number }
+
+// The Rive runtime is a heavy chunk (canvas + wasm loader); it is not needed for
+// first paint, so it is code-split and only fetched once DesktopPet actually
+// resolves a pet to render, well after the idle-deferred profile load below.
+// Unwrap `.default` explicitly rather than relying on Vue's automatic ESM-module
+// interop detection (`__esModule` / `Symbol.toStringTag`), which real Vite dynamic
+// imports satisfy but a plain `vi.mock` factory object in tests does not.
+const RivePet = defineAsyncComponent(() => import('./RivePet.vue').then(module => module.default ?? module))
 
 const props = withDefaults(defineProps<{ standalone?: boolean }>(), { standalone: false })
 const store = useDesktopPetStore()
 const profile = ref<PartnerProfile | null>(null)
 const pet = ref<Pet | null>(null)
-const petRenderer = ref<InstanceType<typeof RivePet> | null>(null)
+const petRenderer = ref<InstanceType<typeof RivePetComponent> | null>(null)
 const loading = ref(false)
 const busy = ref(false)
 const error = ref('')
@@ -45,6 +53,28 @@ const positionKey = 'better-self:desktop-pet-position'
 let mediaQuery: MediaQueryList | null = null
 let dialogueTimer: number | undefined
 let dragStart: { pointerX: number; pointerY: number; frameX: number; frameY: number } | null = null
+let idleHandle: number | null = null
+let cancelIdle: ((handle: number) => void) | null = null
+// Guards the reactive watcher below: hydrate() sets store.petPublicId synchronously
+// on mount, which would otherwise fire an immediate profile fetch before the idle
+// deferral has had a chance to run. Flipped on once the first idle-deferred load starts.
+let autoLoadReady = false
+
+function clearIdle() {
+  if (idleHandle !== null && cancelIdle) cancelIdle(idleHandle)
+  idleHandle = null
+  cancelIdle = null
+}
+
+function scheduleIdle(run: () => void) {
+  if (typeof requestIdleCallback === 'function') {
+    idleHandle = requestIdleCallback(() => run())
+    cancelIdle = handle => cancelIdleCallback(handle)
+  } else {
+    idleHandle = window.setTimeout(run, 300)
+    cancelIdle = handle => window.clearTimeout(handle)
+  }
+}
 
 function clampPosition(point: Point): Point {
   return {
@@ -220,18 +250,24 @@ function handleResize() {
   if (isDesktop.value) position.value = clampPosition(position.value)
 }
 
-watch(() => store.petPublicId, () => loadProfile())
+watch(() => store.petPublicId, () => { if (autoLoadReady) loadProfile() })
 
 const stopDataSync = onDataChanged(['partners', 'tasks'], () => loadProfile())
 
 onMounted(() => {
+  // Cheap, synchronous setup runs immediately so the outer frame (header bar,
+  // drag handle, minimize control) can render right away. The API request that
+  // resolves a pet — and therefore the Rive chunk it triggers — waits for idle.
   store.hydrate()
   window.addEventListener('pointerdown', closeTransient)
   window.addEventListener('better-self:partners-updated', loadProfile)
   if (props.standalone) {
     isDesktop.value = true
-    loadProfile()
-    window.betterSelfDesktop?.showPet()
+    scheduleIdle(() => {
+      autoLoadReady = true
+      loadProfile()
+      window.betterSelfDesktop?.showPet()
+    })
     return
   }
   if (typeof window.matchMedia !== 'function') return
@@ -239,10 +275,14 @@ onMounted(() => {
   syncDesktop()
   mediaQuery.addEventListener('change', syncDesktop)
   window.addEventListener('resize', handleResize)
-  loadProfile()
+  scheduleIdle(() => {
+    autoLoadReady = true
+    loadProfile()
+  })
 })
 
 onBeforeUnmount(() => {
+  clearIdle()
   stopDataSync()
   window.clearTimeout(dialogueTimer)
   window.removeEventListener('pointermove', drag)

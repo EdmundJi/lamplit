@@ -1,6 +1,6 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia } from 'pinia'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import DesktopPet from './DesktopPet.vue'
 import { api } from '../../shared/api/client'
 
@@ -30,6 +30,10 @@ describe('DesktopPet', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    // DesktopPet defers its initial profile fetch to requestIdleCallback; run it
+    // synchronously here so tests don't need to wait on a real idle/timeout tick.
+    vi.stubGlobal('requestIdleCallback', (cb: IdleRequestCallback) => { cb({} as IdleDeadline); return 1 })
+    vi.stubGlobal('cancelIdleCallback', () => {})
     vi.mocked(api.get).mockResolvedValue(profile)
     Object.defineProperty(window, 'localStorage', {
       configurable: true,
@@ -39,6 +43,10 @@ describe('DesktopPet', () => {
       configurable: true,
       value: { isDesktopApp: true, setCompact, showPet: vi.fn(), showSetup: vi.fn(), close: vi.fn() },
     })
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
   })
 
   it('collapses to a ball and wakes again', async () => {

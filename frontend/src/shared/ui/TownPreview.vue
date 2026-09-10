@@ -4,14 +4,36 @@ import GrowthScene from './GrowthScene.vue'
 
 // A decorative street vignette using the same licensed atlas as the town.
 // This is deliberately a preview, not a representation of the user's live town.
+// The atlas (PNG + JSON) is heavy and not needed for first paint, so loading it
+// waits until this component is near the viewport *and* the main thread is idle.
+const root = ref<HTMLElement | null>(null)
 const canvas = ref<HTMLCanvasElement | null>(null)
 const ready = ref(false)
 const controller = new AbortController()
 let disposed = false
+let observer: IntersectionObserver | null = null
+let idleHandle: number | null = null
+let cancelIdle: ((handle: number) => void) | null = null
 
 type Frame = { x: number; y: number; w: number; h: number }
-onBeforeUnmount(() => { disposed = true; controller.abort() })
-onMounted(async () => {
+
+function clearIdle() {
+  if (idleHandle !== null && cancelIdle) cancelIdle(idleHandle)
+  idleHandle = null
+  cancelIdle = null
+}
+
+function scheduleIdle(run: () => void) {
+  if (typeof requestIdleCallback === 'function') {
+    idleHandle = requestIdleCallback(() => run())
+    cancelIdle = handle => cancelIdleCallback(handle)
+  } else {
+    idleHandle = window.setTimeout(run, 300)
+    cancelIdle = handle => window.clearTimeout(handle)
+  }
+}
+
+async function loadScene() {
   try {
     const response = await fetch('/assets/town/town-atlas.json', { signal: controller.signal })
     if (!response.ok) return
@@ -64,11 +86,39 @@ onMounted(async () => {
     context.fillStyle = shade; context.fillRect(0, 0, 720, 480)
     ready.value = true
   } catch { /* The existing vector scene remains available if optional town assets are absent. */ }
+}
+
+function startWhenIdle() {
+  if (disposed) return
+  scheduleIdle(() => { if (!disposed) loadScene() })
+}
+
+onBeforeUnmount(() => {
+  disposed = true
+  controller.abort()
+  observer?.disconnect()
+  observer = null
+  clearIdle()
+})
+
+onMounted(() => {
+  if (typeof IntersectionObserver === 'undefined') {
+    startWhenIdle()
+    return
+  }
+  observer = new IntersectionObserver((entries) => {
+    if (!entries.some(entry => entry.isIntersecting)) return
+    observer?.disconnect()
+    observer = null
+    startWhenIdle()
+  }, { rootMargin: '200px' })
+  if (root.value) observer.observe(root.value)
+  else startWhenIdle()
 })
 </script>
 
 <template>
-  <div class="town-preview" aria-hidden="true">
+  <div ref="root" class="town-preview" aria-hidden="true">
     <GrowthScene v-if="!ready" class="preview-fallback" />
     <canvas v-show="ready" ref="canvas" width="720" height="480" />
   </div>
