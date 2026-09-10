@@ -1149,9 +1149,15 @@ public final class ResidentSimulation {
     /** 阿禾: "想被需要" - idle at home while the counter he runs is open, he defaults back toward it
      * rather than staying put, even before anyone has actually asked for anything. */
     private static boolean placeHabitMindTheCafe(CompanionWorld w,ResidentState r,Instant at){
-        if(!"open".equals(w.cafeStatus)||!TownPlaces.homeOf("owner").equals(actor(w,r.id).place()))return false;
+        // Either the shop is open and he cannot leave it alone, or it is not open yet and should be -
+        // in which case going there IS the opening. Without the second half the two rules deadlocked:
+        // the door only unlocks once he is standing at it, and he only walked over once it was
+        // already unlocked, so a shop whose owner happened to be at home at nine stayed shut all day.
+        boolean dueToOpen=CafeService.dueToOpen(w,at)&&r.id.equals(CafeService.operatorId(w));
+        if(!"open".equals(w.cafeStatus)&&!dueToOpen)return false;
+        if(!TownPlaces.homeOf("owner").equals(actor(w,r.id).place()))return false;
         if(!habitEligible(w,r,"mind_cafe",PLACE_HABIT_MIN_GAP_SECONDS,at))return false;
-        firePlaceHabit(w,r,"mind_cafe","observe","cafe","闲不住，去店里看看",
+        firePlaceHabit(w,r,"mind_cafe","observe","cafe",dueToOpen?"到点了，去把店门打开":"闲不住，去店里看看",
             "没说什么，起身往店里走了。",at,900);
         return true;
     }

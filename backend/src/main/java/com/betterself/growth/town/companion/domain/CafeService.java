@@ -43,6 +43,14 @@ final class CafeService {
         // save that says both "not operating" and "open" is repaired straight to closed.
         if(!w.cafeOperating&&"open".equals(w.cafeStatus)){w.cafeStatus="closed";w.cafeStatusChangedAt=at;}
     }
+    /** Whether the shop is meant to be open at this moment and simply is not yet - the operator has a
+     * standing commitment, the hours say so, and they have not shut it for today. This is what makes
+     * "go and open up" a thing a shopkeeper's own default can act on, instead of the shop needing a
+     * model decision before anybody may walk to it. */
+    static boolean dueToOpen(CompanionWorld w,Instant at){
+        return w.cafeOperating&&"closed".equals(w.cafeStatus)&&scheduledOpen(w,at)
+            &&!at.atZone(ZoneId.of(w.timezone)).toLocalDate().toString().equals(w.cafeClosedForDayOn);
+    }
     static boolean scheduledOpen(CompanionWorld w,Instant at){
         int minute=at.atZone(ZoneId.of(w.timezone)).getHour()*60+at.atZone(ZoneId.of(w.timezone)).getMinute();
         return w.cafeOpenMinute<w.cafeCloseMinute
@@ -295,9 +303,15 @@ final class CafeService {
         if(at.atZone(ZoneId.of(w.timezone)).toLocalDate().toString().equals(w.cafeClosedForDayOn))return;
         ResidentState operator=ResidentSimulation.state(w,operatorId(w));
         if(operator==null)return;
+        // He has to actually be there, and awake. The first version of this checked the clock and
+        // the standing commitment and nothing else, so the shop unlocked itself at nine while its
+        // owner was asleep in bed at home - and then wrote a world event saying he had opened it,
+        // which was simply untrue. A door opens when the person with the key reaches it.
+        Actor door=ResidentSimulation.actor(w,operator.id);
+        if(!PLACE.equals(door.place())||"sleep".equals(door.activity()))return;
         w.cafeStatus="open";w.cafeStatusChangedAt=at;
         ResidentSimulation.event(w,at,"cafe_opened",PLACE,List.of(operator.id),
-            ResidentSimulation.actor(w,operator.id).name()+"照平常的钟点开了咖啡馆的门。",null);
+            door.name()+"照平常的钟点开了咖啡馆的门。",null);
     }
     static void tick(CompanionWorld w, Instant at) {
         openOnSchedule(w, at);

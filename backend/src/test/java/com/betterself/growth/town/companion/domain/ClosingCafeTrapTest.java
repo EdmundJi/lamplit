@@ -88,10 +88,39 @@ class ClosingCafeTrapTest {
         // from beginning to end, and one wrong call cost the same.
         CompanionWorld w = world(BEFORE_OPENING);
         w.cafeStatus = "closed"; w.cafeOperating = true; w.cafeStatusChangedAt = BEFORE_OPENING.minusSeconds(86_400);
+        // At his own counter, which is the part this test originally left out: it asserted that a shop
+        // opens itself with nobody in it, and that is exactly the bug that let the door unlock while
+        // its owner was asleep at home. What is removed by scheduled opening is the busywork of
+        // re-deciding to open every morning - not the need for the person with the key to be there.
+        ResidentSimulation.replaceActor(w, "owner", "cafe", "observe", "在店里", DURING_HOURS.plusSeconds(3_600));
         CompanionRules.advance(w, BEFORE_OPENING.plusSeconds(60));
         assertThat(w.cafeStatus).as("08:32, still before the usual 09:00").isEqualTo("closed");
         CompanionRules.advance(w, DURING_HOURS);
-        assertThat(w.cafeStatus).as("noon, and the operator still runs the place").isEqualTo("open");
+        assertThat(w.cafeStatus).as("noon, he is at the counter, and he still runs the place").isEqualTo("open");
+    }
+
+    /** The door opens when the person with the key reaches it. The first version of scheduled
+     * opening checked the clock and the standing commitment and nothing else, so the shop unlocked
+     * itself at nine while its owner was asleep in bed at home - and wrote a world event saying he
+     * had opened it, which was simply untrue. */
+    @Test void aShopDoesNotUnlockItselfWhileItsOwnerIsAsleepInBed() {
+        CompanionWorld w = world(BEFORE_OPENING);
+        w.cafeStatus = "closed"; w.cafeOperating = true; w.cafeStatusChangedAt = BEFORE_OPENING.minusSeconds(86_400);
+        ResidentState owner = ResidentSimulation.state(w, "owner");
+        owner.plan = new CompanionWorld.Plan("sleeping", "sleep", TownPlaces.homeOf("owner"), null, "还在睡", BEFORE_OPENING, BEFORE_OPENING.plusSeconds(7_200));
+        ResidentSimulation.replaceActor(w, "owner", TownPlaces.homeOf("owner"), "sleep", "睡着了", BEFORE_OPENING.plusSeconds(7_200));
+
+        CompanionRules.advance(w, Instant.parse("2026-01-01T01:05:00Z")); // 09:05, past opening
+        assertThat(w.cafeStatus).as("nobody is there to unlock it").isEqualTo("closed");
+        assertThat(w.events).as("and nothing claims he did").noneMatch(e -> "cafe_opened".equals(e.type()));
+    }
+
+    @Test void theOwnerStandingInHisOwnShopAtOpeningTimeOpensIt() {
+        CompanionWorld w = world(BEFORE_OPENING);
+        w.cafeStatus = "closed"; w.cafeOperating = true; w.cafeStatusChangedAt = BEFORE_OPENING.minusSeconds(86_400);
+        ResidentSimulation.replaceActor(w, "owner", "cafe", "observe", "在店里", BEFORE_OPENING.plusSeconds(7_200));
+        CompanionRules.advance(w, Instant.parse("2026-01-01T01:05:00Z"));
+        assertThat(w.cafeStatus).isEqualTo("open");
     }
 
     @Test void aShopClosedForTheDayStaysClosedForTheDay() {
