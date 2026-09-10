@@ -239,15 +239,15 @@ async function submitCheck() {
 /* Single column now that the street-corner preview is gone (docs: the always-on strip above this
    page already shows the real, live town - a second, static, not-our-street preview here was
    redundant). Text stays a readable measure rather than stretching to the full hero width. */
-.next-step { max-width: 720px; padding: 38px; min-width: 0; position: relative; z-index: 1; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; }
+.next-step { max-width: 720px; padding: 28px 32px; min-width: 0; position: relative; z-index: 1; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; }
 .live-dot { display: inline-block; width: 6px; height: 6px; margin-right: 7px; vertical-align: middle; border-radius: 50%; background: #e6c875; }
 @media (prefers-reduced-motion: no-preference) {
   .live-dot { animation: live-pulse 2s var(--ease) infinite; }
 }
 @keyframes live-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
-.next-step .next-step-kicker { margin: 32px 0 12px; font-size: 11px; color: #bac9bc; display: flex; align-items: center; }
-.next-step h2 { font-size: clamp(24px, 2.4vw, 30px); line-height: 1.45; letter-spacing: -.8px; font-weight: 550; text-wrap: balance; margin: 0; }
-.next-step p { color: #bac9bc; font-size: 13px; margin: 14px 0 28px; }
+.next-step .next-step-kicker { margin: 0 0 8px; font-size: 11px; color: #bac9bc; display: flex; align-items: center; }
+.next-step h2 { font-size: clamp(22px, 2vw, 28px); line-height: 1.45; letter-spacing: -.8px; font-weight: 550; text-wrap: balance; margin: 0; }
+.next-step p { color: #bac9bc; font-size: 13px; margin: 8px 0 20px; }
 .hero-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 16px; }
 .rhythm-toggle { display: inline-flex; align-items: center; gap: 6px; background: transparent; color: var(--muted); font-size: 12px; padding: 0; }
 .standalone-rhythm { align-self: flex-start; }
@@ -361,10 +361,8 @@ async function submitCheck() {
   .today-page { gap: 20px; }
   .today-page .page-head h1 { font-size: 26px; }
   .today-page .page-head .secondary { font-size: 11px; padding: 0 8px; }
-  .next-step { padding: 8px 24px 28px; }
-  .next-step h2 { font-size: 27px; }
-  .next-step .next-step-kicker { margin: 20px 0 8px; }
-  .next-step p { margin-bottom: 20px; }
+  .next-step { padding: 20px 24px; }
+  .next-step .next-step-kicker { margin: 0 0 8px; }
   .hero-actions { gap: 12px; }
   .task-row { padding-inline: 0; }
   .task-row .actions > button, .task-row .actions .task-more { min-width: 70px; }
