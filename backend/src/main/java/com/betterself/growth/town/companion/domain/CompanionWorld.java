@@ -249,6 +249,18 @@ public class CompanionWorld {
          * same habit cannot fire again before its own cooldown has passed. Old saves deserialize with
          * the empty map default, the same self-healing shape as {@code relationships} above. */
         public Map<String,Instant> lastHabitAt = new LinkedHashMap<>();
+        /** The last thing this resident actually wrote down about each other resident they shared a
+         * room with - place, what that person was doing, which seat - keyed by that person's id. It
+         * exists so the same sighting is not recorded twice while nothing about it has changed, and
+         * it is <b>cleared for anyone who is no longer here</b>: seeing 小川 at the window seat again
+         * tomorrow is the whole point, and it can only be a second sighting if the first was let go
+         * of when he left. Never read by any model - only ResidentSimulation.perceive writes memories
+         * from it. Old saves deserialize with the empty map default, same shape as the maps above. */
+        public Map<String,String> lastSeenOfOthers = new LinkedHashMap<>();
+        /** When this resident last wrote anything down about each other resident, kept across their
+         * comings and goings so the floor between two sightings of the same person holds even for
+         * someone who keeps stepping in and out. */
+        public Map<String,Instant> lastWitnessOfOthersAt = new LinkedHashMap<>();
     }
     /** A resident's own coarse, interruptible day plan - see {@link ResidentState#dayPlan}. A segment
      * is deliberately just a short label and a status: nothing here forces it to happen, and nothing

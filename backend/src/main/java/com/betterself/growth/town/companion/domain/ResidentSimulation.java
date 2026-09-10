@@ -1850,6 +1850,87 @@ public final class ResidentSimulation {
             if(changed&&detailSensitive&&!p.contributors.contains(r.id))
                 memory(w,r.id,p.ownerId,"observed",now,p.id,"路过时注意到「"+p.title+"」的样子变了，好像又往前推进了一点。",List.of(),4);
         }
+        witnessPeople(w,r,a,now);
+    }
+
+    /** How long before the same person, in the same room, is worth writing down again. */
+    static final int WITNESS_MIN_GAP_SECONDS = 45 * 60;
+    /** Topic every sighting of another person is filed under - see {@link #witnessPeople}. Named
+     * because {@link #needsReflection} has to be able to tell this material apart from events. */
+    static final String WITNESS_TOPIC = "who-was-here";
+
+    /**
+     * The other half of perceiving: <b>people</b>. Until this existed a resident looked around every
+     * tick and only ever saw <em>things</em> - the loop above notices a project's shape changing and
+     * nothing else. The only fact anyone ever recorded about another person was "X 又在忙「某个项目」"
+     * from {@link #witnessContribution}, 39 of them across three simulated days.
+     *
+     * <p>Which made a whole layer unreachable. The reflection prompt asks a resident to write down a
+     * standing view only if they can see something <em>recurring</em> in their own memories, and it
+     * offers "某个人总是坐在某个位置" as its example - while nothing in the world ever wrote down where
+     * anybody sat. Three days of a model run produced three beliefs and all three were about the
+     * resident themselves, because their own habits were the only repetition their memories contained.
+     * A norm is a fact about other people; you cannot form one from a diary.
+     *
+     * <p>What is written is a <b>fact and never a reading of it</b>: who, where, doing what, in which
+     * seat. Not why - the other person's {@code label} is their own reason for being there and stays
+     * theirs. Whether "小川 总是坐窗边" means anything is the resident's own conclusion to reach or not,
+     * later, in their own words.
+     *
+     * <p>The activity is mapped through a fixed phrase table rather than interpolated, so nothing a
+     * user typed can travel into another resident's memory and from there into a model context.
+     */
+    private static void witnessPeople(CompanionWorld w,ResidentState r,Actor self,Instant now){
+        Set<String> here=new HashSet<>();
+        for(ResidentState o:w.residentStates){
+            if(o.id.equals(r.id))continue;
+            Actor a=actor(w,o.id);
+            if(!a.place().equals(self.place()))continue;
+            if(Set.of("walk","travel","sleep","away").contains(a.activity()))continue;
+            here.add(o.id);
+        }
+        // Whoever is not in the room any more is forgotten, so that turning up again tomorrow counts
+        // as a fresh sighting. Done before the sensitivity gate: someone who notices nothing still
+        // stops keeping track of who was here.
+        r.lastSeenOfOthers.keySet().retainAll(here);
+        if(Personality.of(r).sensitivity()<35)return;
+        boolean detail=Personality.of(r).sensitivity()>=65;
+        for(String otherId:here){
+            Instant last=r.lastWitnessOfOthersAt.get(otherId);
+            if(last!=null&&Duration.between(last,now).getSeconds()<WITNESS_MIN_GAP_SECONDS)continue;
+            Actor a=actor(w,otherId);
+            ResidentState o=state(w,otherId);
+            String seat=o==null?null:o.positionId;
+            String signature=a.place()+"|"+a.activity()+"|"+seat;
+            if(signature.equals(r.lastSeenOfOthers.get(otherId)))continue;
+            r.lastSeenOfOthers.put(otherId,signature);
+            r.lastWitnessOfOthersAt.put(otherId,now);
+            String where=detail&&seat!=null?seatPhrase(w,seat):placeName(a.place());
+            memory(w,r.id,otherId,"observed",now,WITNESS_TOPIC,
+                detail?"我看见"+a.name()+"在"+where+doingPhrase(a.activity())+"。"
+                      :a.name()+"也在"+where+"，具体在做什么我没留意。",
+                List.of(),detail?3:2);
+        }
+    }
+    /** Fixed table on purpose - see witnessPeople on why an activity string is never interpolated. */
+    private static String doingPhrase(String activity){
+        return switch(activity){
+            case "read"->"看书";case "study"->"复习";case "make"->"做手上的活";
+            case "work"->"忙自己的活";case "rest"->"歇着";case "tend"->"照看吧台";
+            case "observe"->"四下看看";case "wait"->"等着什么";case "talk"->"和人说话";
+            case "focus"->"专心做一件事";case "ponder"->"发呆";case "flowers"->"侍弄花草";
+            case "idle"->"待着";case "study_home","read_home"->"看东西";
+            default->"忙着";
+        };
+    }
+    private static String seatPhrase(CompanionWorld w,String positionId){
+        Position p=TownPlaces.position(w,positionId);
+        if(p==null)return "某处";
+        String kind=switch(p.kind){
+            case "seat"->"窗边的位子";case "table"->"那张长桌";case "bench"->"长椅";
+            case "plot"->"苗圃";case "desk"->"书桌";case "bed"->"床";default->"那儿";
+        };
+        return placeName(p.place)+kind;
     }
     private static String knownStatus(ResidentState r,String id){ProjectKnowledge p=r.knownProjects.get(id);return p==null?"idea":p.status();}
     /** How far a project can get on one person's repeated work before it simply stops. A measured day
@@ -2007,6 +2088,13 @@ public final class ResidentSimulation {
             // Only raw experience counts as "something happened since I last thought this through" -
             // an earlier reflection or belief is the product of thinking, not new material for it.
             .filter(m->CompanionRecall.tier(m.sourceType())==0)
+            // Seeing who is in the room is the texture of an ordinary day, not an event: 青叔 sitting
+            // where 青叔 always sits is precisely the opposite of something having happened. These stay
+            // fully retrievable, because noticing that he ALWAYS sits there is the whole reason they
+            // are written down - they just do not, by themselves, send anyone off to think. Everything
+            // that genuinely happens (a contribution, a conversation, a request) is its own memory with
+            // its own weight and still triggers this normally.
+            .filter(m->!WITNESS_TOPIC.equals(m.topicId()))
             .mapToInt(Memory::importance).sum();
         boolean enoughHappened=freshImportance>=REFLECTION_IMPORTANCE_THRESHOLD;
         // The day-boundary trigger fires even on a quiet day that never crossed the importance bar -
