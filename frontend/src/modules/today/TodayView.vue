@@ -3,6 +3,8 @@ import { nextTick } from 'vue'
 import { BatteryMedium, Check, Clock3, Gauge, Minimize2, Play, RotateCcw, SkipForward, Sparkles, TimerReset, Undo2, X } from 'lucide-vue-next'
 import TownPreview from '../../shared/ui/TownPreview.vue'
 import SnapSlider from '../../shared/ui/interaction/SnapSlider.vue'
+import SegmentedControl from '../../shared/ui/interaction/SegmentedControl.vue'
+import { disclose as vDisclose } from '../../shared/ui/interaction/disclose'
 import { taskStatusLabel } from '../../shared/task-status'
 import { useDialogFocus } from '../../shared/ui/use-dialog-focus'
 import { useTodayLogic } from './today.logic'
@@ -17,6 +19,12 @@ const {
   prepare, canActOn, canComplete, applyCheck, applyRecovery, startFocus, toggleFocus, closeFocus,
   act, confirmAction, finishFocus, reverse,
 } = useTodayLogic()
+
+const moodOptions = [
+  { value: 'low', label: '偏低' },
+  { value: 'steady', label: '稳定' },
+  { value: 'open', label: '充足' },
+]
 
 useDialogFocus(() => Boolean(selected.value || focusTask.value), '.today-dialog', () => { selected.value = null; closeFocus() })
 
@@ -74,11 +82,13 @@ async function submitCheck() {
         <h2 id="daily-check-title">今天用哪种节奏开始？</h2>
       </div>
       <div class="check-controls">
-        <div class="mood-control" aria-label="今日精力">
-          <button type="button" :aria-pressed="checkMood === 'low'" @click="checkMood = 'low'">偏低</button>
-          <button type="button" :aria-pressed="checkMood === 'steady'" @click="checkMood = 'steady'">稳定</button>
-          <button type="button" :aria-pressed="checkMood === 'open'" @click="checkMood = 'open'">充足</button>
-        </div>
+        <SegmentedControl
+          class="mood-control"
+          :model-value="checkMood"
+          :options="moodOptions"
+          label="今日精力"
+          @update:model-value="value => checkMood = value as typeof checkMood"
+        />
         <label class="minutes-control" for="available-minutes">
           <span>{{ availableMinutes }} 分钟</span>
           <SnapSlider id="available-minutes" v-model="availableMinutes" :min="10" :max="90" :step="5" :value-text="`${availableMinutes} 分钟`" />
@@ -119,7 +129,7 @@ async function submitCheck() {
             <button class="primary" title="完成" aria-label="完成" :disabled="!canComplete(task)" @click="act(task, 'COMPLETED')">
               <Check :size="16" />完成
             </button>
-            <details class="task-more"><summary aria-label="更多任务操作">更多</summary><div>
+            <details class="task-more" v-disclose><summary aria-label="更多任务操作">更多</summary><div>
             <button class="secondary" title="专注执行" aria-label="专注执行" :disabled="!canActOn(task)" @click="startFocus(task)">
               <TimerReset :size="16" />专注执行
             </button>
@@ -269,10 +279,7 @@ async function submitCheck() {
 .daily-check { display: grid; grid-template-columns: minmax(260px, .52fr) minmax(0, 1fr); gap: 18px 26px; align-items: stretch; padding: 20px; border: 1px solid var(--border); border-radius: var(--radius-card); background: color-mix(in srgb, var(--surface) 88%, transparent); overflow: hidden; }
 .check-copy h2, .recovery h2 { margin: 0; font-size: 18px; }
 .check-controls { min-width: 0; display: grid; grid-template-columns: minmax(220px, 320px) minmax(0, 1fr); gap: 16px; align-items: center; }
-.mood-control { min-width: 0; display: grid; grid-template-columns: repeat(3, 1fr); overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius); }
-.mood-control button { border: 0; border-right: 1px solid var(--border); border-radius: 0; background: var(--surface); color: var(--muted); }
-.mood-control button:last-child { border-right: 0; }
-.mood-control button[aria-pressed='true'] { background: linear-gradient(135deg, var(--primary), color-mix(in srgb, var(--primary) 72%, var(--accent))); color: white; font-weight: 800; }
+.mood-control { min-width: 0; }
 .minutes-control { min-width: 0; width: 100%; display: grid; grid-template-columns: max-content minmax(140px, 1fr); gap: 14px; align-items: center; color: var(--muted); font-size: 13px; }
 .minutes-control input { width: 100%; min-width: 0; max-width: 100%; }
 .check-result { grid-column: 1 / -1; display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 14px; border: 1px solid color-mix(in srgb, var(--primary) 18%, var(--border)); border-radius: var(--radius); background: color-mix(in srgb, var(--primary-soft) 48%, var(--surface)); }

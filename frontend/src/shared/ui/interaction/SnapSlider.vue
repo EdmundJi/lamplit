@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { onBeforeUnmount, ref, watch } from 'vue'
-import { motionAllowed, motionDuration } from './motion'
-import { projectRelease, releaseVelocity, snapToStep, type DragSample } from './snap-slider'
+import { glide, projectRelease, releaseVelocity, snapToStep, type DragSample } from './snap-slider'
 
 /**
  * A native range input that drags continuously and lands on a tick. The
@@ -20,7 +19,7 @@ const emit = defineEmits<{ 'update:modelValue': [number] }>()
 const display = ref(props.modelValue)
 const dragging = ref(false)
 let settling = false
-let frame = 0
+let cancelGlide = () => {}
 let samples: DragSample[] = []
 
 watch(() => props.modelValue, value => { if (!dragging.value && !settling) display.value = value })
@@ -30,39 +29,31 @@ function clamp(value: number) {
 }
 
 function commit(value: number) {
-  cancelAnimationFrame(frame)
+  cancelGlide()
   settling = false
   display.value = clamp(value)
   emit('update:modelValue', display.value)
 }
 
 function glideTo(target: number) {
-  const start = display.value
-  if (start === target || !motionAllowed()) {
-    commit(target)
-    return
-  }
+  cancelGlide()
   settling = true
-  // Timed from the first frame, so the clock always matches the one the frames carry.
-  let began = 0
-  const duration = motionDuration('medium')
-  const tick = (now: number) => {
-    began ||= now
-    const progress = Math.min(1, (now - began) / duration)
-    const eased = 1 - (1 - progress) ** 3
-    const value = Math.round(start + (target - start) * eased)
-    if (value !== display.value) {
-      display.value = value
-      emit('update:modelValue', value)
-    }
-    if (progress < 1) frame = requestAnimationFrame(tick)
-    else commit(target)
-  }
-  frame = requestAnimationFrame(tick)
+  cancelGlide = glide(
+    display.value,
+    target,
+    value => {
+      const rounded = Math.round(value)
+      if (rounded !== display.value) {
+        display.value = rounded
+        emit('update:modelValue', rounded)
+      }
+    },
+    () => commit(target),
+  )
 }
 
 function onPointerdown() {
-  cancelAnimationFrame(frame)
+  cancelGlide()
   settling = false
   dragging.value = true
   samples = []
@@ -101,7 +92,7 @@ function onKeydown(event: KeyboardEvent) {
   commit(snapToStep(display.value, props.step, props.min, props.max) + direction * props.step)
 }
 
-onBeforeUnmount(() => cancelAnimationFrame(frame))
+onBeforeUnmount(() => cancelGlide())
 </script>
 
 <template>

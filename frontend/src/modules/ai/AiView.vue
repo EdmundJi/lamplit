@@ -3,6 +3,8 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ArrowRight, ClipboardCheck, FileJson2, History, Loader2, Plus, Send, ShieldCheck, SlidersHorizontal, Sparkles, Timer } from 'lucide-vue-next'
 import { disclose as vDisclose } from '../../shared/ui/interaction/disclose'
+import SegmentedControl from '../../shared/ui/interaction/SegmentedControl.vue'
+import SnapSlider from '../../shared/ui/interaction/SnapSlider.vue'
 import { api } from '../../shared/api/client'
 import { postSse } from '../../shared/api/sse'
 import MarkdownDocument from '../../shared/ui/MarkdownDocument.vue'
@@ -256,11 +258,7 @@ onBeforeUnmount(() => {
     <template v-else>
       <div class="ai-workspace">
         <div class="chat-column">
-          <div class="scene-tabs" aria-label="选择场景">
-            <button v-for="option in sceneOptions" :key="option.value" type="button" :aria-pressed="scene === option.value" @click="scene = option.value">
-              {{ option.label }}
-            </button>
-          </div>
+          <SegmentedControl v-model="scene" :options="sceneOptions" label="选择场景" class="scene-tabs" />
 
           <div class="chat" aria-live="polite">
             <div v-for="(m, i) in messages" :key="i" :class="['message', m.role.toLowerCase()]">
@@ -319,15 +317,15 @@ onBeforeUnmount(() => {
               <label class="field"><span>完成标准</span><textarea v-model="goalDraft.description" maxlength="1000" required></textarea></label>
               <div class="draft-split">
                 <label class="field"><span>成长属性</span><select v-model="goalDraft.dimensionCode"><option v-for="item in dimensionOptions" :key="item.code" :value="item.code">{{ item.name }}</option></select></label>
-                <label class="field"><span>持续天数</span><input v-model.number="goalDraft.durationDays" type="number" min="14" max="84" required /></label>
+                <label class="field"><span>持续天数 · {{ goalDraft.durationDays }}</span><SnapSlider v-model="goalDraft.durationDays" :min="14" :max="84" :step="7" :value-text="`${goalDraft.durationDays} 天`" /></label>
               </div>
               <label class="field"><span>每周重点</span><textarea v-model="goalDraft.weeklyFocus" maxlength="300" required></textarea></label>
               <div class="starter-tasks">
                 <strong>起步任务</strong>
                 <div v-for="(task, index) in goalDraft.starterTasks" :key="index" class="starter-task">
                   <input v-model="task.title" :aria-label="`起步任务 ${index + 1} 名称`" maxlength="160" required />
-                  <input v-model.number="task.estimatedMinutes" :aria-label="`起步任务 ${index + 1} 分钟`" type="number" min="5" max="60" required />
-                  <select v-model.number="task.difficulty" :aria-label="`起步任务 ${index + 1} 难度`"><option :value="1">难度 1</option><option :value="2">难度 2</option><option :value="3">难度 3</option></select>
+                  <SnapSlider v-model="task.estimatedMinutes" :aria-label="`起步任务 ${index + 1} 分钟`" :min="5" :max="60" :step="5" :value-text="`${task.estimatedMinutes} 分钟`" />
+                  <SnapSlider v-model="task.difficulty" :aria-label="`起步任务 ${index + 1} 难度`" :min="1" :max="3" :step="1" :value-text="`难度 ${task.difficulty}`" />
                 </div>
               </div>
               <details v-disclose class="json-preview"><summary>查看 JSON</summary><pre>{{ goalDraftJson }}</pre></details>
@@ -394,9 +392,7 @@ onBeforeUnmount(() => {
 .ai-page { max-width: 1120px; }
 .ai-workspace { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 24px; align-items: start; }
 .chat-column { min-width: 0; }
-.scene-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 14px; padding: 4px; background: var(--surface-muted); }
-.scene-tabs button { min-width: 0; border: 0; border-radius: calc(var(--radius) - 2px); background: transparent; color: var(--muted); padding: 0 8px; }
-.scene-tabs button[aria-pressed='true'] { background: var(--surface); color: var(--primary); font-weight: 800; }
+.scene-tabs { margin-bottom: 14px; }
 .chat { min-height: 420px; padding: 16px; border: 1px solid var(--border); border-radius: calc(var(--radius) + 4px); background: color-mix(in srgb, var(--surface) 88%, transparent); }
 .message { display: grid; grid-template-columns: 36px 1fr; gap: 10px; padding: 12px 0; }
 .message > span { width: 32px; height: 32px; display: grid; place-items: center; border-radius: var(--radius-card); background: var(--surface-muted); font-size: 11px; font-weight: 800; }
@@ -496,7 +492,6 @@ onBeforeUnmount(() => {
   .ai-side { grid-template-columns: 1fr; }
 }
 @media (max-width: 560px) {
-  .scene-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .history-item { min-height: 62px; }
   .starter-task { grid-template-columns: 1fr 62px; }
   .starter-task select { grid-column: 1 / -1; }
@@ -505,7 +500,7 @@ onBeforeUnmount(() => {
 .ai-workspace { gap: 24px; grid-template-columns: minmax(0, 1fr) 300px; }
 .chat-column { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-panel); padding: 20px; }
 .chat { border: 0; padding: 10px 0; min-height: 360px; background: transparent; }
-.scene-tabs { border: 0; background: var(--surface-muted); border-radius: var(--radius); }
+.scene-tabs { border: 0; }
 .ai-side > section { border-radius: var(--radius-panel); background: var(--surface); }
 .message > span { border-radius: 50%; }
 .composer { border-top: 1px solid var(--border); }

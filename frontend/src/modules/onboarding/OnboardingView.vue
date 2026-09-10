@@ -16,6 +16,7 @@ import {
 } from 'lucide-vue-next'
 import SnapSlider from '../../shared/ui/interaction/SnapSlider.vue'
 import StepperProgress from '../../shared/ui/interaction/StepperProgress.vue'
+import SegmentedControl from '../../shared/ui/interaction/SegmentedControl.vue'
 import { api, type ApiError } from '../../shared/api/client'
 import { notifyDataChanged } from '../../shared/data-sync'
 
@@ -52,6 +53,7 @@ const scenes = [
   { code: 'EMOTIONAL_SUPPORT' as Scene, name: '情绪支持', detail: '觉察、休息与温和恢复', icon: HeartHandshake },
 ]
 const difficultyNames = ['轻量', '适中', '进阶']
+const difficultyOptions = difficultyNames.map((name, index) => ({ value: String(index + 1), label: name }))
 const router = useRouter()
 const step = ref(1)
 const form = reactive({ scene: 'STUDY' as Scene, dailyMinutes: 30, weeklyFrequency: 3, preferredDifficulty: 2 })
@@ -170,15 +172,13 @@ async function finish() {
       </div>
       <fieldset class="difficulty-field">
         <legend>任务强度</legend>
-        <div class="segmented">
-          <button
-            v-for="(name, index) in difficultyNames"
-            :key="name"
-            type="button"
-            :aria-pressed="form.preferredDifficulty === index + 1"
-            @click="form.preferredDifficulty = index + 1"
-          >{{ name }}</button>
-        </div>
+        <SegmentedControl
+          class="segmented"
+          :model-value="String(form.preferredDifficulty)"
+          :options="difficultyOptions"
+          label="任务强度"
+          @update:model-value="value => form.preferredDifficulty = Number(value)"
+        />
       </fieldset>
       <div class="setup-actions"><button type="button" class="secondary" @click="goBack"><ArrowLeft :size="17" />返回</button><button type="button" class="primary" @click="openStarters">挑选任务<ArrowRight :size="17" /></button></div>
     </section>
@@ -244,9 +244,7 @@ async function finish() {
 .range-field input { width: 100%; accent-color: var(--primary); }
 .difficulty-field { min-width: 0; margin: 0; padding: 0; border: 0; }
 .difficulty-field legend { margin-bottom: 10px; font-weight: 700; }
-.segmented { width: min(100%, 480px); display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 3px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-muted); }
-.segmented button { border: 0; background: transparent; color: var(--muted); }
-.segmented button[aria-pressed='true'] { background: var(--surface); color: var(--primary); }
+.segmented { width: min(100%, 480px); }
 .starter-heading { width: 100%; max-width: none; display: flex; align-items: end; justify-content: space-between; gap: 16px; }
 .starter-heading > span { color: var(--primary); font-weight: 800; }
 .starter-list { display: grid; gap: 10px; }

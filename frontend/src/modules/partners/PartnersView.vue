@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Coins, Gamepad2, HandHeart, Heart, HeartHandshake, MessageCircle, MonitorOff, MonitorUp, PartyPopper, Pencil, Plus, ShoppingBag, Smartphone, Sparkles, X } from 'lucide-vue-next'
 import { onDataChanged } from '../../shared/data-sync'
+import SegmentedControl from '../../shared/ui/interaction/SegmentedControl.vue'
 import RivePet from './RivePet.vue'
 import { randomPetDialogue } from './pet-dialogues'
 import { findPetSpecies, petSpeciesOptions, type PetInteractionOption, type PetReaction } from './pet-options'
@@ -10,6 +11,12 @@ import type { Pet, ShopItem } from './partner.types'
 
 type DialogueMessage = { text: string; actionLabel: string; rewarded: boolean; affectionDelta: number }
 type ShopFilter = 'ALL' | ShopItem['itemType']
+
+const shopFilterOptions: { value: ShopFilter; label: string }[] = [
+  { value: 'ALL', label: '全部' },
+  { value: 'FOOD', label: '食物' },
+  { value: 'DECOR', label: '装饰' },
+]
 
 const shopItemImages: Record<string, string> = {
   'pet-food-salmon-bento': '/assets/shop/salmon-bento.svg',
@@ -301,11 +308,13 @@ onBeforeUnmount(() => {
           <div><p class="eyebrow">小屋商店</p><h2 id="shop-title">带一份小礼物回去</h2></div>
           <div class="shop-tools">
             <ShoppingBag :size="20" aria-hidden="true" />
-            <div class="shop-tabs" role="group" aria-label="筛选商品">
-              <button type="button" :aria-pressed="shopFilter === 'ALL'" @click="shopFilter = 'ALL'">全部</button>
-              <button type="button" :aria-pressed="shopFilter === 'FOOD'" @click="shopFilter = 'FOOD'">食物</button>
-              <button type="button" :aria-pressed="shopFilter === 'DECOR'" @click="shopFilter = 'DECOR'">装饰</button>
-            </div>
+            <SegmentedControl
+              class="shop-tabs"
+              :model-value="shopFilter"
+              :options="shopFilterOptions"
+              label="筛选商品"
+              @update:model-value="value => shopFilter = value as ShopFilter"
+            />
           </div>
         </div>
         <div class="shop-list">
@@ -447,9 +456,6 @@ onBeforeUnmount(() => {
 .shop { padding-top: 30px; }
 .shop-head { align-items: end; }
 .shop-tools { display: flex; align-items: center; gap: 10px; color: var(--pet-coral); }
-.shop-tabs { display: grid; grid-template-columns: repeat(3, minmax(58px, 1fr)); padding: 3px; border: 1px solid var(--pet-line); border-radius: var(--radius-card); background: #f7eadc; }
-.shop-tabs button { min-height: 34px; padding: 0 11px; border: 0; border-radius: var(--radius); background: transparent; color: var(--pet-muted); font-size: 12px; }
-.shop-tabs button[aria-pressed='true'] { background: var(--pet-paper); color: var(--pet-coral-strong); }
 .shop-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .shop-item { min-width: 0; min-height: 152px; display: grid; grid-template-columns: 104px minmax(0, 1fr); align-items: stretch; gap: 14px; padding: 12px; border: 1px solid var(--pet-line); border-radius: var(--radius-card); background: var(--pet-paper); color: var(--pet-ink); text-align: left; }
 .shop-art { width: 104px; min-height: 126px; display: grid; place-items: center; align-self: stretch; border-radius: var(--radius); background: #e7f2e9; }

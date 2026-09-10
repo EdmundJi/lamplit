@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { Activity, ClipboardList, FileClock, Lock, RefreshCw, ShieldAlert, ShieldCheck, UserPlus, Users } from 'lucide-vue-next'
+import SegmentedControl from '../../shared/ui/interaction/SegmentedControl.vue'
 import { api } from '../../shared/api/client'
 
 type Metrics = Record<string, number>
@@ -32,6 +33,12 @@ const riskLabel = (value: string) => riskLabels[value] ?? value
 const metricIcons = [Users, Activity, ShieldAlert, FileClock]
 
 const tab = ref<'overview' | 'users' | 'safety' | 'audit'>('overview')
+const adminTabOptions = [
+  { value: 'overview', label: '概览', icon: Activity },
+  { value: 'users', label: '账号', icon: Users },
+  { value: 'safety', label: '安全', icon: ShieldAlert },
+  { value: 'audit', label: '审计', icon: ClipboardList },
+]
 const metrics = ref<Metrics | null>(null)
 const events = ref<SafetyEvent[]>([])
 const audits = ref<AuditEntry[]>([])
@@ -140,12 +147,13 @@ onMounted(load)
     <p v-if="error" class="error" role="alert">{{ error }}</p>
     <p v-if="feedback" class="feedback-banner" role="status">{{ feedback }}</p>
 
-    <nav class="admin-tabs" aria-label="治理分区">
-      <button type="button" :aria-pressed="tab === 'overview'" @click="tab = 'overview'"><Activity :size="16" />概览</button>
-      <button type="button" :aria-pressed="tab === 'users'" @click="tab = 'users'"><Users :size="16" />账号</button>
-      <button type="button" :aria-pressed="tab === 'safety'" @click="tab = 'safety'"><ShieldAlert :size="16" />安全</button>
-      <button type="button" :aria-pressed="tab === 'audit'" @click="tab = 'audit'"><ClipboardList :size="16" />审计</button>
-    </nav>
+    <SegmentedControl
+      class="admin-tabs"
+      :model-value="tab"
+      :options="adminTabOptions"
+      label="治理分区"
+      @update:model-value="value => tab = value as typeof tab"
+    />
 
     <section v-if="tab === 'overview'" class="admin-stack">
       <div v-if="metrics" class="admin-metrics">
@@ -257,9 +265,7 @@ onMounted(load)
 <style scoped>
 .admin-page { max-width: 1240px; }
 .admin-stack { display: grid; gap: 18px; }
-.admin-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; margin-bottom: 20px; padding: 4px; background: var(--surface-muted); }
-.admin-tabs button { min-width: 0; border: 0; border-radius: calc(var(--radius) - 2px); background: transparent; color: var(--muted); }
-.admin-tabs button[aria-pressed='true'] { background: var(--surface); color: var(--primary); font-weight: 800; }
+.admin-tabs { margin-bottom: 20px; }
 .admin-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
 .admin-metrics article { min-height: 116px; display: grid; grid-template-rows: auto auto 1fr; gap: 8px; padding: 18px; border: 1px solid var(--border); border-radius: var(--radius); background: color-mix(in srgb, var(--surface) 88%, transparent); }
 .admin-metrics svg, .section-head svg { color: var(--primary); }
@@ -289,7 +295,6 @@ td select { min-height: 34px; border: 1px solid var(--border); border-radius: va
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (max-width: 860px) {
   .admin-metrics, .overview-grid, .admin-form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .admin-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 560px) {
   .admin-metrics, .overview-grid, .admin-form-grid { grid-template-columns: 1fr; }

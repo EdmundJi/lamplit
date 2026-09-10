@@ -3,7 +3,13 @@ import { nextTick, ref } from 'vue'
 import { Check, Plus, GripVertical, MoreHorizontal, ArrowUp, ArrowDown, Clock3, Trash2, Undo2 } from 'lucide-vue-next'
 import { useDragSort } from '../../shared/ui/interaction/use-drag-sort'
 import { disclose as vDisclose } from '../../shared/ui/interaction/disclose'
+import SegmentedControl from '../../shared/ui/interaction/SegmentedControl.vue'
 import { useChecklist, type ChecklistTask } from './checklist.logic'
+
+const listTabOptions = [
+  { value: 'today', label: '今天' },
+  { value: 'all', label: '全部' },
+]
 
 const { tab, title, loading, saving, pending, error, loadError, notice, last, undoing, today, active, completed, load, add, act, tomorrow, undo, rename, move } = useChecklist()
 const input = ref<HTMLInputElement | null>(null)
@@ -47,8 +53,12 @@ function shift(task: ChecklistTask, offset: number) {
     <header class="checklist-head">
       <div><p class="checklist-date">{{ today.replaceAll('-', ' / ') }}</p><h1 id="checklist-heading">{{ tab === 'today' ? '今天' : '全部任务' }}<span v-if="!loading && active.length">{{ active.length }}</span></h1></div>
       <nav class="list-tabs" aria-label="清单范围">
-        <button :aria-pressed="tab === 'today'" @click="tab = 'today'">今天</button>
-        <button :aria-pressed="tab === 'all'" @click="tab = 'all'">全部</button>
+        <SegmentedControl
+          :model-value="tab"
+          :options="listTabOptions"
+          label="清单范围"
+          @update:model-value="value => tab = value as typeof tab"
+        />
       </nav>
     </header>
 
@@ -109,9 +119,7 @@ h1 span { display: inline-block; margin-left: 12px; vertical-align: middle; font
 button, input { font: inherit; }
 button { cursor: pointer; }
 button:disabled { opacity: .45; cursor: default; }
-.list-tabs { display: flex; background: var(--surface-muted); padding: 4px; border-radius: var(--radius-card); }
-.list-tabs button { padding: 8px 16px; border: 0; border-radius: var(--radius-card); color: var(--muted); background: transparent; font-size: 13px; }
-.list-tabs button[aria-pressed=true] { background: var(--surface); color: var(--ink); }
+.list-tabs { display: flex; }
 .quick-add { display: flex; gap: 12px; align-items: center; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card); padding: 10px 12px 10px 18px; color: var(--muted); }
 .quick-add:focus-within { border-color: var(--primary); }
 .quick-add input { min-width: 0; flex: 1; border: 0; outline: none; box-shadow: none; padding: 10px 0; background: transparent; color: var(--ink); font-size: 15px; }
@@ -151,5 +159,5 @@ button:disabled { opacity: .45; cursor: default; }
 .completed-list ul { margin-top: 8px; }
 .completed-list li { display: flex; align-items: baseline; gap: 15px; padding: 12px 28px; }
 .completed-list li span { text-decoration: line-through; overflow-wrap: anywhere; }
-@media (max-width: 600px) { .checklist { padding: 32px 20px 72px; } .checklist-head { margin-bottom: 24px; } h1 { font-size: 28px; } .drag-handle { opacity: .6; } .checklist-row { gap: 14px; } .list-tabs button { padding: 9px 12px; } }
+@media (max-width: 600px) { .checklist { padding: 32px 20px 72px; } .checklist-head { margin-bottom: 24px; } h1 { font-size: 28px; } .drag-handle { opacity: .6; } .checklist-row { gap: 14px; } }
 </style>

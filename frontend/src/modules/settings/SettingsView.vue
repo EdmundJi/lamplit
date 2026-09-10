@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, type Component } from 'vue'
 import { AlertTriangle, Download, LogOut, Monitor, Moon, Paintbrush, PanelsTopLeft, RotateCcw, Sparkles, Sun, Trash2, Zap } from 'lucide-vue-next'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../auth/auth.store'
@@ -17,6 +17,7 @@ import {
   type ThemeMode,
 } from '../../shared/ui/appearance.store'
 import { radialReveal } from '../../shared/ui/interaction/radial-reveal'
+import SegmentedControl from '../../shared/ui/interaction/SegmentedControl.vue'
 import { channelHint, channelLabel, retentionOptions, useSettingsData } from './settings.logic'
 
 const { prefs, notifications, deletion, exportJob, error, load, setRetention, toggleNotification, createExport, requestDeletion, cancelDeletion } = useSettingsData()
@@ -30,7 +31,11 @@ const confirmingDeletion = ref(false)
 
 appearance.hydrate()
 
-const themeIcons: Record<ThemeMode, unknown> = { light: Sun, dark: Moon, system: Monitor }
+const themeIcons: Record<ThemeMode, Component> = { light: Sun, dark: Moon, system: Monitor }
+const themeSegmentOptions = themeOptions.map(option => ({ ...option, icon: themeIcons[option.value] }))
+const densitySegmentOptions = densityOptions.map(option => ({ ...option, icon: PanelsTopLeft }))
+const motionSegmentOptions = motionOptions.map(option => ({ ...option, icon: Zap }))
+const retentionSegmentOptions = retentionOptions.map(days => ({ value: String(days), label: `${days} 天` }))
 
 // Every appearance control repaints the page; the new look grows out of the
 // button that caused it, so the change reads as an answer to that press.
@@ -102,18 +107,12 @@ function replayWelcome() {
       <div class="appearance-grid">
         <fieldset class="option-group">
           <legend>主题</legend>
-          <div class="segmented">
-            <button
-              v-for="option in themeOptions"
-              :key="option.value"
-              type="button"
-              :aria-pressed="appearance.theme === option.value"
-              @click="restyle($event, () => appearance.setTheme(option.value as ThemeMode))"
-            >
-              <component :is="themeIcons[option.value]" :size="16" />
-              {{ option.label }}
-            </button>
-          </div>
+          <SegmentedControl
+            :model-value="appearance.theme"
+            :options="themeSegmentOptions"
+            label="主题"
+            @update:model-value="(value, event) => restyle(event!, () => appearance.setTheme(value as ThemeMode))"
+          />
         </fieldset>
 
         <fieldset class="option-group visual-group">
@@ -139,49 +138,32 @@ function replayWelcome() {
 
         <fieldset class="option-group">
           <legend>界面密度</legend>
-          <div class="segmented">
-            <button
-              v-for="option in densityOptions"
-              :key="option.value"
-              type="button"
-              :aria-pressed="appearance.density === option.value"
-              @click="restyle($event, () => appearance.setDensity(option.value as Density))"
-            >
-              <PanelsTopLeft :size="16" />
-              {{ option.label }}
-            </button>
-          </div>
+          <SegmentedControl
+            :model-value="appearance.density"
+            :options="densitySegmentOptions"
+            label="界面密度"
+            @update:model-value="(value, event) => restyle(event!, () => appearance.setDensity(value as Density))"
+          />
         </fieldset>
 
         <fieldset class="option-group">
           <legend>动画强度</legend>
-          <div class="segmented">
-            <button
-              v-for="option in motionOptions"
-              :key="option.value"
-              type="button"
-              :aria-pressed="appearance.motion === option.value"
-              @click="restyle($event, () => appearance.setMotion(option.value as MotionLevel))"
-            >
-              <Zap :size="16" />
-              {{ option.label }}
-            </button>
-          </div>
+          <SegmentedControl
+            :model-value="appearance.motion"
+            :options="motionSegmentOptions"
+            label="动画强度"
+            @update:model-value="(value, event) => restyle(event!, () => appearance.setMotion(value as MotionLevel))"
+          />
         </fieldset>
 
         <fieldset class="option-group">
           <legend>圆角风格</legend>
-          <div class="segmented">
-            <button
-              v-for="option in radiusOptions"
-              :key="option.value"
-              type="button"
-              :aria-pressed="appearance.radius === option.value"
-              @click="restyle($event, () => appearance.setRadius(option.value as RadiusStyle))"
-            >
-              {{ option.label }}
-            </button>
-          </div>
+          <SegmentedControl
+            :model-value="appearance.radius"
+            :options="radiusOptions"
+            label="圆角风格"
+            @update:model-value="(value, event) => restyle(event!, () => appearance.setRadius(value as RadiusStyle))"
+          />
         </fieldset>
 
         <div class="appearance-actions">
@@ -205,9 +187,12 @@ function replayWelcome() {
       <h2>AI 数据保留</h2>
       <p class="muted">对话到期后自动删除；安全事件按独立政策最小化保留。</p>
       <div class="actions">
-        <button v-for="d in retentionOptions" :key="d" class="secondary" :aria-pressed="prefs.aiRetentionDays === d" @click="retention(d)">
-          {{ d }} 天
-        </button>
+        <SegmentedControl
+          :model-value="String(prefs.aiRetentionDays)"
+          :options="retentionSegmentOptions"
+          label="AI 数据保留天数"
+          @update:model-value="value => retention(Number(value))"
+        />
       </div>
     </section>
 
@@ -307,32 +292,6 @@ h2 {
   margin-bottom: 8px;
   color: var(--muted);
   font-size: 13px;
-  font-weight: 700;
-}
-
-.segmented {
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(0, 1fr);
-  gap: 3px;
-  padding: 3px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface-muted);
-}
-
-.segmented button {
-  min-width: 0;
-  border: 0;
-  border-radius: calc(var(--radius) - 2px);
-  background: transparent;
-  color: var(--muted);
-  padding: 0 10px;
-}
-
-.segmented button[aria-pressed='true'] {
-  background: var(--surface);
-  color: var(--primary-strong);
   font-weight: 700;
 }
 

@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { Check, RefreshCw } from 'lucide-vue-next'
+import SegmentedControl from '../../shared/ui/interaction/SegmentedControl.vue'
+import SnapSlider from '../../shared/ui/interaction/SnapSlider.vue'
 import { roleNames, roles, rruleLabel, rruleOptions, type Goal, type Preset, type PresetDraw, type TaskForm } from './goals.logic'
 
 /**
@@ -26,6 +28,12 @@ const emit = defineEmits<{
   'refresh-presets': []
   'sync-task-period': []
 }>()
+
+const roleOptions = roles.map(role => ({ value: role.code, label: role.name }))
+function chooseRoleByCode(code: string) {
+  const role = roles.find(item => item.code === code)
+  if (role) emit('choose-role', role)
+}
 </script>
 
 <template>
@@ -39,16 +47,13 @@ const emit = defineEmits<{
       <span v-if="presetDraw" class="refresh-quota">今日还可换 {{ presetDraw.refreshesRemaining }} 次</span>
     </div>
 
-    <div class="role-tabs" aria-label="选择任务场景">
-      <button
-        v-for="role in roles"
-        :key="role.code"
-        type="button"
-        :class="{ active: selectedRole === role.code }"
-        :aria-pressed="selectedRole === role.code"
-        @click="emit('choose-role', role)"
-      >{{ role.name }}</button>
-    </div>
+    <SegmentedControl
+      class="role-tabs"
+      :model-value="selectedRole"
+      :options="roleOptions"
+      label="选择任务场景"
+      @update:model-value="value => chooseRoleByCode(value)"
+    />
     <div class="preset-toolbar">
       <strong>{{ roleNames[selectedRole] }}任务模板</strong>
       <button
@@ -119,8 +124,8 @@ const emit = defineEmits<{
           <input id="task-minutes" v-model.number="taskForm.estimatedMinutes" type="number" min="5" max="240" required>
         </div>
         <div class="field">
-          <label for="task-difficulty">难度（1-3）</label>
-          <input id="task-difficulty" v-model.number="taskForm.difficulty" type="number" min="1" max="3" required>
+          <label for="task-difficulty">难度（1-3）· {{ taskForm.difficulty }}</label>
+          <SnapSlider id="task-difficulty" v-model="taskForm.difficulty" :min="1" :max="3" :step="1" :value-text="`难度 ${taskForm.difficulty}`" />
         </div>
       </div>
       <div class="form-grid two-columns">
@@ -164,9 +169,6 @@ const emit = defineEmits<{
 .task-builder h2 { margin: 0; font-size: 18px; }
 .task-builder-head, .preset-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .refresh-quota { color: var(--muted); font-size: 13px; white-space: nowrap; }
-.role-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; padding: 4px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-muted); }
-.role-tabs button { min-width: 0; border: 0; background: transparent; color: var(--muted); padding: 0 8px; }
-.role-tabs button.active { background: var(--surface); color: var(--primary); }
 .refresh-button { flex: none; }
 .preset-list { display: grid; gap: 8px; }
 .preset-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 18px; min-height: 76px; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--ink); text-align: left; }
@@ -201,7 +203,6 @@ const emit = defineEmits<{
 }
 @media (max-width: 700px) {
   .two-columns, .task-identity-grid, .task-property-grid { grid-template-columns: 1fr; }
-  .role-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .preset-item { grid-template-columns: 1fr; }
   .preset-meta { justify-content: start; text-align: left; }
 }

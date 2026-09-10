@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { CalendarClock, ChevronLeft, ChevronRight, Clock3, ListPlus, Pause, Play, Plus, RefreshCw, CheckCircle2 } from 'lucide-vue-next'
+import { disclose as vDisclose } from '../../shared/ui/interaction/disclose'
 import { rruleLabel, roleNames, statusLabel, type Goal, type Task } from './goals.logic'
 
 /**
@@ -58,7 +59,7 @@ const emit = defineEmits<{
         >
           <div class="goal-top">
             <span class="status" :data-status="goal.status">{{ statusLabel(goal.status) }}</span>
-            <details v-if="goal.status === 'ACTIVE' || goal.status === 'PAUSED'" class="goal-more">
+            <details v-if="goal.status === 'ACTIVE' || goal.status === 'PAUSED'" v-disclose class="goal-more">
               <summary aria-label="更多目标操作">更多</summary>
               <div>
                 <button v-if="goal.status === 'ACTIVE'" class="secondary" type="button" @click="emit('set-goal-status', goal, 'pause')">

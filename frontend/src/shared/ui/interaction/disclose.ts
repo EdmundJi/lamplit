@@ -1,5 +1,5 @@
 import type { ObjectDirective } from 'vue'
-import { motionAllowed, motionDuration } from './motion'
+import { motionAllowed, motionDuration, motionEasing } from './motion'
 
 /**
  * `v-disclose` on a native <details>: the panel grows from the summary to its
@@ -14,7 +14,7 @@ function animateHeight(details: HTMLDetailsElement, from: number, to: number, do
   details.style.height = `${from}px`
   const animation = details.animate(
     { height: [`${from}px`, `${to}px`] },
-    { duration: motionDuration('medium'), easing: 'cubic-bezier(.2,.8,.2,1)' },
+    { duration: motionDuration('medium'), easing: motionEasing() },
   )
   const settle = () => {
     details.style.overflow = ''
