@@ -379,4 +379,95 @@ class NormDetectorTest {
         assertThat(report.counts()).containsEntry("beliefs", 1);
         assertThat(report.counts()).containsEntry("beliefsAboutOthers", 0);
     }
+
+    // ---- 占用权 ---------------------------------------------------------------------------------
+
+    private static Map<String, Object> spot(String id, String place, String owner) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("id", id); m.put("place", place); m.put("ownerId", owner);
+        return m;
+    }
+
+    private static Map<String, Object> took(String actor, String positionId, String place, String at) {
+        Map<String, Object> extra = new LinkedHashMap<>();
+        extra.put("eventType", "took_spot");
+        extra.put("place", place);
+        extra.put("positionId", positionId);
+        Map<String, Object> e = new LinkedHashMap<>();
+        e.put("at", at); e.put("kind", "event"); e.put("actorId", actor);
+        e.put("actorName", actor); e.put("text", actor + " 坐下了"); e.put("extra", extra);
+        return e;
+    }
+
+    /** One owned seat among four, the shape the town actually has in its cafe. */
+    private static final List<Map<String, Object>> CAFE = List.of(
+            spot("cafe-window-seat", "cafe", "student"),
+            spot("cafe-window-2", "cafe", null),
+            spot("cafe-window-3", "cafe", null),
+            spot("cafe-window-4", "cafe", null));
+
+    @Test
+    @DisplayName("别人的位子空着也没人去坐——这条规矩是从「没发生的事」里读出来的")
+    void readsThePossessionRuleOutOfWhatDidNotHappen() {
+        List<Map<String, Object>> entries = new ArrayList<>();
+        for (int day = 1; day <= 3; day++)
+            for (String who : List.of("owner", "artist", "fixer", "weaver"))
+                entries.add(took(who, "cafe-window-" + (2 + (who.length() % 3)), "cafe", at(day, 10 + who.length() % 6, 5)));
+
+        NormDetector.Report report = NormDetector.detect("run", entries, List.of(), CAFE, TZ);
+        assertThat(report.candidates()).anySatisfy(c -> {
+            assertThat(c.dimension()).isEqualTo("spotRespect");
+            assertThat(c.statement()).contains("绕着走");
+        });
+    }
+
+    @Test
+    @DisplayName("大家照坐不误的时候，这条规矩就不该报出来")
+    void staysSilentWhenNobodyActuallyAvoidsIt() {
+        List<Map<String, Object>> entries = new ArrayList<>();
+        for (int day = 1; day <= 3; day++)
+            for (String who : List.of("owner", "artist", "fixer", "weaver"))
+                entries.add(took(who, "cafe-window-seat", "cafe", at(day, 10 + who.length() % 6, 5)));
+
+        NormDetector.Report report = NormDetector.detect("run", entries, List.of(), CAFE, TZ);
+        assertThat(report.candidates()).noneMatch(c -> c.dimension().equals("spotRespect"));
+    }
+
+    @Test
+    @DisplayName("屋里没有任何人的位置时，这一次落座什么也说明不了")
+    void aRoomWithNobodysSpotInItProvesNothing() {
+        List<Map<String, Object>> free = List.of(
+                spot("street-bench", "street", null), spot("street-bench-2", "street", null));
+        List<Map<String, Object>> entries = new ArrayList<>();
+        for (int day = 1; day <= 3; day++)
+            entries.add(took("owner", "street-bench", "street", at(day, 10, 0)));
+
+        NormDetector.Report report = NormDetector.detect("run", entries, List.of(), free, TZ);
+        assertThat(report.counts()).containsEntry("spotTakesWhereSomeoneElsesWasFree", 0);
+        assertThat(report.candidates()).noneMatch(c -> c.dimension().equals("spotRespect"));
+    }
+
+    @Test
+    @DisplayName("总坐同一个位置，数得出来")
+    void countsWhoAlwaysSitsInTheSameSpot() {
+        List<Map<String, Object>> entries = new ArrayList<>();
+        for (int day = 1; day <= 3; day++) {
+            entries.add(took("student", "cafe-window-seat", "cafe", at(day, 9, 10)));
+            entries.add(took("student", "cafe-window-seat", "cafe", at(day, 15, 20)));
+        }
+        NormDetector.Report report = NormDetector.detect("run", entries, List.of(), CAFE, TZ);
+        assertThat(report.candidates()).anySatisfy(c -> {
+            assertThat(c.dimension()).isEqualTo("ownSpot");
+            assertThat(c.key()).isEqualTo("student");
+            assertThat(c.support()).isEqualTo(6);
+        });
+    }
+
+    @Test
+    @DisplayName("一条 took_spot 都没有的时候，报明确的 0")
+    void reportsAnExplicitZeroWhenNobodyEverSatAnywhere() {
+        NormDetector.Report report = NormDetector.detect("run", List.of(), List.of(), CAFE, TZ);
+        assertThat(report.counts()).containsEntry("spotTakes", 0);
+        assertThat(report.counts()).containsEntry("spotTakesWhereSomeoneElsesWasFree", 0);
+    }
 }

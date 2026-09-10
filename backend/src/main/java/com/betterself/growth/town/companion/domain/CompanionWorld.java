@@ -394,7 +394,22 @@ public class CompanionWorld {
         public Turn(String speakerId,String text,Instant at){this(speakerId,text,at,"rules",null);}
         public Turn(String speakerId,String text,Instant at,String source){this(speakerId,text,at,source,null);}
     }
-    public record WorldEvent(String id,Instant at,String type,String place,List<String> actorIds,String text,String projectId) {}
+    /**
+     * @param positionId which named position (see {@code TownPlaces.Position.id}) the event's
+     * actor actually took or left, for the "took_spot"/"left_spot" events TownPlaces records when
+     * occupancy of a claimable spot genuinely changes hands - null for every other event type.
+     * Deliberately its own field rather than reusing {@code projectId}: a position id and a project
+     * id are two unrelated kinds of reference that can each be non-null independently of the other,
+     * and folding one into the other's field would leave every downstream reader guessing which
+     * kind of id a given event's last slot actually holds.
+     */
+    public record WorldEvent(String id,Instant at,String type,String place,List<String> actorIds,String text,String projectId,String positionId) {
+        /** Back-compat for call sites written before {@code positionId} existed (kept out of this
+         * batch's edit scope) - defaults it to null, exactly what every such event already means. */
+        public WorldEvent(String id,Instant at,String type,String place,List<String> actorIds,String text,String projectId){
+            this(id,at,type,place,actorIds,text,projectId,null);
+        }
+    }
     public record WorldObject(String id,String kind,String place,String label,String state,String projectId) {}
     public record Actor(String id, String name, String role, String place, String activity, String label,
                         double x, double y, Instant until) {}

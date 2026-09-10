@@ -39,12 +39,16 @@ class NormReportIT {
         // world-snapshot.json is optional - older runs never exported one, and a missing "居民能自己
         //说出来" half is a real 0 (see NormDetector's class comment), not a reason to fail the read.
         List<Map<String, Object>> memories = List.of();
+        List<Map<String, Object>> positions = List.of();
         Path snapshot = dir.resolve("world-snapshot.json");
         if (Files.exists(snapshot)) {
             Map<String, Object> world = JSON.readValue(Files.readString(snapshot, StandardCharsets.UTF_8), Map.class);
             if (world.get("memories") instanceof List<?> ms) memories = (List<Map<String, Object>>) (List<?>) ms;
+            // Who owns which spot. Without it the possession dimension sees every seat as anonymous and
+            // reports a silent, honest-looking zero - which is how it read on its first run here.
+            if (world.get("positions") instanceof List<?> ps) positions = (List<Map<String, Object>>) (List<?>) ps;
         }
-        return NormDetector.detect(dir.getFileName().toString(), entries, memories, timezone);
+        return NormDetector.detect(dir.getFileName().toString(), entries, memories, positions, timezone);
     }
 
     @Test

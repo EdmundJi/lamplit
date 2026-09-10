@@ -452,7 +452,7 @@ public final class ResidentSimulation {
             int travel=travelSeconds(actor(w,r.id).place(),place);
             r.plan=new Plan("p-"+(++w.eventSequence),"travel",place,target,reason,at,at.plusSeconds(travel));
             r.revision++;r.thought=reason;
-            TownPlaces.release(w,r.id); // stepping away frees up the spot right away, not 12 seconds from now
+            TownPlaces.release(w,r.id,at); // stepping away frees up the spot right away, not 12 seconds from now
             replaceActor(w,r.id,"street","walk","准备去"+placeName(place)+"："+reason,r.plan.endsAt());
         } else schedule(w,r,action,place,target,reason,at,duration);
     }
@@ -469,7 +469,7 @@ public final class ResidentSimulation {
         // pathing already puts a standing actor. This is also why the garden's four named spots no
         // longer force four people into a pile - most of what happens there never claims one.
         String kind=preferredKind(action,place);
-        if(kind==null){TownPlaces.release(w,r.id);return;}
+        if(kind==null){TownPlaces.release(w,r.id,at);return;}
         TownPlaces.Outcome outcome=TownPlaces.claim(w,r.id,place,kind,at);
         if(outcome==TownPlaces.Outcome.WAITING) {
             // Only a bed, counter, study seat or home desk reaches here, so this is the genuinely-scarce case. Stand by a moment instead of
@@ -751,7 +751,7 @@ public final class ResidentSimulation {
             for(Conversation conversation:new ArrayList<>(w.conversations))if("active".equals(conversation.status)&&"cafe".equals(conversation.place))ConversationLifecycle.finish(w,conversation,now,"经营者暂停营业，这段谈话先停在这里");
             moveFocusedAvatarHome(w,now);
         }
-        r.occupation=occupation;r.goal=null;r.plan=null;r.suspendedAction=null;TownPlaces.release(w,residentId);r.careerIntent=lifeIntent(w,r,null,"试着过上"+occupation+"的日子","active",now);
+        r.occupation=occupation;r.goal=null;r.plan=null;r.suspendedAction=null;TownPlaces.release(w,residentId,now);r.careerIntent=lifeIntent(w,r,null,"试着过上"+occupation+"的日子","active",now);
         if(Objects.equals(CafeService.operatorId(w),residentId))replaceRole(w,residentId,"正在转向"+occupation);
         memory(w,residentId,residentId,"reflection",now,"work","我想把日子往“"+occupation+"”的方向试一试，先不把这当成已经成功。",List.of(),7);
         event(w,now,"occupation_change",actor(w,residentId).place(),List.of(residentId),actor(w,residentId).name()+"正在重新想自己想做什么。",null);return true;
@@ -1939,7 +1939,7 @@ public final class ResidentSimulation {
         if(w.avatar==null||!"cafe".equals(w.avatar.place()))return;
         Actor a=w.avatar;String home=TownPlaces.homeOf("self");
         w.avatar=new Actor(a.id(),a.name(),a.role(),home,a.activity(),a.label(),a.x(),a.y(),a.until());
-        TownPlaces.release(w,"self");TownPlaces.claim(w,"self",home,Set.of("focus","study").contains(a.activity())?"desk":null,at);
+        TownPlaces.release(w,"self",at);TownPlaces.claim(w,"self",home,Set.of("focus","study").contains(a.activity())?"desk":null,at);
     }
     private static int sleepDurationSeconds(CompanionWorld w,ResidentState r,Instant at){
         ZonedDateTime local=at.atZone(ZoneId.of(w.timezone));int wakeMinute=r.sleepScheduleSeeded?r.usualWakeMinute:7*60;
@@ -1976,7 +1976,7 @@ public final class ResidentSimulation {
         if("away".equals(action)){
             if(activeConversation(w,residentId)!=null)return false;
             if(r.plan!=null)suspend(r,now);
-            TownPlaces.release(w,residentId);
+            TownPlaces.release(w,residentId,now);
             int duration=Math.max(600,Math.min(2700,600+Math.floorMod(reason.hashCode()+(int)now.getEpochSecond(),2100)));
             r.plan=new Plan("p-"+(++w.eventSequence),"away","away",target,reason,now,now.plusSeconds(duration));
             r.revision++;r.thought=reason;
@@ -2190,12 +2190,15 @@ public final class ResidentSimulation {
             default->"忙着";
         };
     }
-    private static String seatPhrase(CompanionWorld w,String positionId){
+    /** Package-visible (not private) so TownPlaces can reuse the exact same phrasing when it records
+     * a "took_spot"/"left_spot" event - a resident's seat is described identically whether the
+     * sentence ends up in another resident's own memory or in the shared event stream. */
+    static String seatPhrase(CompanionWorld w,String positionId){
         Position p=TownPlaces.position(w,positionId);
         if(p==null)return "某处";
         String kind=switch(p.kind){
             case "seat"->"窗边的位子";case "table"->"那张长桌";case "bench"->"长椅";
-            case "plot"->"苗圃";case "desk"->"书桌";case "bed"->"床";default->"那儿";
+            case "plot"->"苗圃";case "desk"->"书桌";case "bed"->"床";case "equipment"->"吧台";default->"那儿";
         };
         return placeName(p.place)+kind;
     }
@@ -2443,7 +2446,12 @@ public final class ResidentSimulation {
         return true;
     }
     static List<String> ownEvidence(CompanionWorld w,String id,String topic){return w.memories.stream().filter(m->m.ownerId().equals(id)&&Objects.equals(m.topicId(),topic)).sorted(Comparator.comparing(Memory::at).reversed()).limit(2).map(Memory::id).toList();}
-    static void event(CompanionWorld w,Instant at,String type,String place,List<String> ids,String text,String project){w.events.add(new WorldEvent("e-"+(++w.eventSequence),at,type,place,ids,text,project));while(w.events.size()>80)w.events.removeFirst();if(w.avatar!=null&&w.avatar.place().equals(place)&&Set.of("ready","agreement","change_of_mind","celebration").contains(type)){w.diary.add(new Entry("d2-"+w.eventSequence,at,"路过时看见："+text));while(w.diary.size()>80)w.diary.removeFirst();}}
+    static void event(CompanionWorld w,Instant at,String type,String place,List<String> ids,String text,String project){event(w,at,type,place,ids,text,project,null);}
+    /** Same as the six-argument {@link #event} above, but also carries which named position (see
+     * {@link CompanionWorld.WorldEvent#positionId}) the event is about - used only by TownPlaces for
+     * "took_spot"/"left_spot", so occupancy of an owned or shared spot has an actual trace in the
+     * event stream instead of silently changing {@code Position.occupantIds} and nothing else. */
+    static void event(CompanionWorld w,Instant at,String type,String place,List<String> ids,String text,String project,String positionId){w.events.add(new WorldEvent("e-"+(++w.eventSequence),at,type,place,ids,text,project,positionId));while(w.events.size()>80)w.events.removeFirst();if(w.avatar!=null&&w.avatar.place().equals(place)&&Set.of("ready","agreement","change_of_mind","celebration").contains(type)){w.diary.add(new Entry("d2-"+w.eventSequence,at,"路过时看见："+text));while(w.diary.size()>80)w.diary.removeFirst();}}
     private static double clamp(double v){return Math.max(0,Math.min(100,v));}
     private static String placeName(String place){if(TownPlaces.isHome(place))return"住处";return switch(place){case "cafe"->"咖啡馆";case "garden"->"花园";default->"小街";};}
 

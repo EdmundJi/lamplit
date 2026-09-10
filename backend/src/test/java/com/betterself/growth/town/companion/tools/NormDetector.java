@@ -116,6 +116,28 @@ public final class NormDetector {
      */
     public static Report detect(String label, List<Map<String, Object>> entries,
                                  List<Map<String, Object>> memories, String timezone) {
+        return detect(label, entries, memories, List.of(), timezone);
+    }
+
+    /**
+     * Same again, plus the town's catalogue of places to sit and stand ({@code world-snapshot.json}'s
+     * {@code positions}). Two of these dimensions exist because of what a blind reader - someone who had
+     * seen nothing of this repository and only a stretch of the timeline - said the town's rules were,
+     * unprompted, on both of two runs:
+     *
+     * <blockquote>谁在用什么东西，别人默认不动，除非物主表态。饮料、座位、桌子这些东西，谁在用就是谁的。<br>
+     * 座位谁先占谁用，后来者道歉或让开。</blockquote>
+     *
+     * <p>Possession was the town's most legible rule and this instrument could not see one word of it.
+     * <b>Writing a dimension after a blind reader names the thing it measures is instrument-building, not
+     * fitting</b> - the dimension is a general rule, it still has to clear the same four gates, and it
+     * still has to survive subtraction of the rule-only control. But it has NOT been confirmed: these two
+     * were designed against runs already read, so their first honest test is a run that did not exist
+     * when they were written.
+     */
+    public static Report detect(String label, List<Map<String, Object>> entries,
+                                 List<Map<String, Object>> memories,
+                                 List<Map<String, Object>> positions, String timezone) {
         Run run = read(entries, ZoneId.of(timezone));
         List<Candidate> raw = new ArrayList<>();
         Map<String, Object> counts = new TreeMap<>();
@@ -123,6 +145,8 @@ public final class NormDetector {
         raw.addAll(whoJoinsWhom(run, counts));
         raw.addAll(occasions(run, counts));
         raw.addAll(reciprocity(run, counts));
+        raw.addAll(spotRespect(run, positions, counts));
+        raw.addAll(ownSpot(run, positions, counts));
 
         List<Candidate> kept = new ArrayList<>();
         List<Map<String, Object>> dropped = new ArrayList<>();
@@ -450,6 +474,127 @@ public final class NormDetector {
         return List.of(new Candidate("reciprocity", "town",
                 "帮过你的人，你后来会帮回去（" + returned + "/" + helps.size() + " 次搭手是还回去的）",
                 returned, days.size(), (returned + 0.5) / (expected + 0.5), 0, returned, false, evidence));
+    }
+
+    // ---- 占用权：有主的位置，别人绕着走 ------------------------------------------------------
+
+    private record Spot(String id, String place, String ownerId) {}
+
+    @SuppressWarnings("unchecked")
+    private static List<Spot> spots(List<Map<String, Object>> positions) {
+        List<Spot> out = new ArrayList<>();
+        for (Map<String, Object> p : positions) {
+            Object id = p.get("id"), place = p.get("place");
+            if (id == null || place == null) continue;
+            Object owner = p.get("ownerId");
+            out.add(new Spot((String) id, (String) place, owner == null ? null : String.valueOf(owner)));
+        }
+        return out;
+    }
+
+    /** Every time somebody actually sat down somewhere, in order. */
+    private record Take(String residentId, String spotId, Instant at) {}
+
+    @SuppressWarnings("unchecked")
+    private static List<Take> takes(Run run) {
+        List<Take> out = new ArrayList<>();
+        for (Map<String, Object> e : run.events()) {
+            Map<String, Object> extra = (Map<String, Object>) e.getOrDefault("extra", Map.of());
+            if (!"took_spot".equals(extra.get("eventType"))) continue;
+            Object spot = extra.get("positionId");
+            String actor = (String) e.get("actorId");
+            if (spot == null || actor == null || actor.isBlank() || actor.contains(",")) continue;
+            out.add(new Take(actor, String.valueOf(spot), Instant.parse((String) e.get("at"))));
+        }
+        return out;
+    }
+
+    /**
+     * <b>有主的位置，别人绕着走。</b> The town has three spots in shared rooms that belong to somebody -
+     * one window seat, one garden plot, one counter - standing among interchangeable unowned ones. Nobody
+     * wrote a rule preventing anyone from using them, so how often they get taken by other people is a
+     * choice the residents are making.
+     *
+     * <p>The null is availability: if a resident sat down indifferent to whose spot it was, they would
+     * land on somebody else's as often as those spots make up the room. Avoidance shows as the observed
+     * rate falling <em>below</em> that, so this candidate's strength is the expected-over-observed ratio -
+     * the only dimension here that reads a norm out of something not happening.
+     */
+    private static List<Candidate> spotRespect(Run run, List<Map<String, Object>> positions, Map<String, Object> counts) {
+        List<Spot> catalogue = spots(positions);
+        Map<String, Spot> byId = new LinkedHashMap<>();
+        for (Spot spot : catalogue) byId.put(spot.id(), spot);
+        Map<String, List<Spot>> byPlace = groupBy(catalogue, Spot::place);
+
+        int considered = 0, tookSomeoneElses = 0;
+        double expected = 0;
+        Set<String> days = new LinkedHashSet<>();
+        Set<String> whoRespected = new LinkedHashSet<>();
+        List<String> evidence = new ArrayList<>();
+        for (Take take : takes(run)) {
+            Spot landed = byId.get(take.spotId());
+            if (landed == null) continue;
+            List<Spot> here = byPlace.getOrDefault(landed.place(), List.of());
+            long ownedByOthers = here.stream()
+                .filter(spot -> spot.ownerId() != null && !spot.ownerId().equals(take.residentId())).count();
+            // A room with nobody's spot in it says nothing either way, and neither does one where every
+            // spot is somebody else's - there would be nowhere to go instead.
+            if (ownedByOthers == 0 || ownedByOthers == here.size()) continue;
+            considered++;
+            expected += (double) ownedByOthers / here.size();
+            days.add(take.at().atZone(run.zone()).toLocalDate().toString());
+            boolean theirs = landed.ownerId() != null && !landed.ownerId().equals(take.residentId());
+            if (theirs) tookSomeoneElses++;
+            else {
+                whoRespected.add(take.residentId());
+                if (evidence.size() < 3)
+                    evidence.add(take.at() + " " + take.residentId() + " 坐了 " + landed.id() + "（同屋里有别人的位置）");
+            }
+        }
+        counts.put("spotTakes", takes(run).size());
+        counts.put("spotTakesWhereSomeoneElsesWasFree", considered);
+        if (considered == 0) return List.of();
+        return List.of(new Candidate("spotRespect", "town",
+            "有主的位置，别人绕着走（" + considered + " 次落座里只有 " + tookSomeoneElses
+                + " 次坐了别人的位置，碰运气该有 " + Math.round(expected) + " 次）",
+            considered - tookSomeoneElses, days.size(),
+            (expected + 0.5) / (tookSomeoneElses + 0.5), 0, whoRespected.size(), false, evidence));
+    }
+
+    /**
+     * <b>谁总坐同一个地方。</b> The other half of the same rule, from the owner's side, and the example the
+     * reflection prompt itself offers a resident when it asks them to look for something recurring -
+     * 某个人总是坐在某个位置. Concentration against the number of places they could have sat instead.
+     */
+    private static List<Candidate> ownSpot(Run run, List<Map<String, Object>> positions, Map<String, Object> counts) {
+        List<Spot> catalogue = spots(positions);
+        Map<String, Spot> byId = new LinkedHashMap<>();
+        for (Spot spot : catalogue) byId.put(spot.id(), spot);
+        Map<String, List<Spot>> byPlace = groupBy(catalogue, Spot::place);
+
+        Map<String, List<Take>> byResident = groupBy(takes(run), Take::residentId);
+        List<Candidate> out = new ArrayList<>();
+        for (var e : byResident.entrySet()) {
+            Map<String, Integer> perSpot = new LinkedHashMap<>();
+            Set<String> days = new LinkedHashSet<>();
+            Set<String> reachable = new LinkedHashSet<>();
+            for (Take take : e.getValue()) {
+                Spot landed = byId.get(take.spotId());
+                if (landed == null) continue;
+                perSpot.merge(take.spotId(), 1, Integer::sum);
+                days.add(take.at().atZone(run.zone()).toLocalDate().toString());
+                for (Spot spot : byPlace.getOrDefault(landed.place(), List.of())) reachable.add(spot.id());
+            }
+            if (perSpot.isEmpty() || reachable.size() < 2) continue;
+            var favourite = perSpot.entrySet().stream().max(Map.Entry.comparingByValue()).orElseThrow();
+            int total = perSpot.values().stream().mapToInt(Integer::intValue).sum();
+            double share = (double) favourite.getValue() / total;
+            double even = 1.0 / reachable.size();
+            out.add(new Candidate("ownSpot", e.getKey(),
+                e.getKey() + " 总是坐在 " + favourite.getKey() + "（" + total + " 次里 " + favourite.getValue() + " 次）",
+                favourite.getValue(), days.size(), share / even, 0, perSpot.size(), false, List.of()));
+        }
+        return out;
     }
 
     // ---- 减掉规则自己就能产生的那些 -------------------------------------------------------------
