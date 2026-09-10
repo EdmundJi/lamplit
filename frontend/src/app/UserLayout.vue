@@ -9,6 +9,7 @@ import GlobalUnreadBar from '../shared/ui/GlobalUnreadBar.vue'
 import OperationGuideBar from '../shared/ui/OperationGuideBar.vue'
 import { useDialogFocus } from '../shared/ui/use-dialog-focus'
 import { radialReveal } from '../shared/ui/interaction/radial-reveal'
+import { prefetchRoute } from './router'
 
 import { useWorkspaceModeStore } from '../shared/ui/workspace-mode.store'
 
@@ -96,7 +97,7 @@ onBeforeUnmount(() => {
     <a class="skip-link" href="#main-content">跳到主要内容</a>
     <aside v-if="!mode.minimal" class="sidebar">
       <RouterLink class="brand" to="/today"><span class="brand-mark" aria-hidden="true"><Building2 :size="23" /></span><span><strong>更好的自己</strong><small>一步一步，自成风景</small></span></RouterLink>
-      <nav aria-label="主导航"><section v-for="group in groups" :key="group" class="nav-group"><p>{{ group }}</p><RouterLink v-for="item in nav.filter(item => item.group === group)" :key="item.to" :to="item.to"><component :is="item.icon" :size="19"/><span>{{ item.label }}</span><span v-if="route.path === item.to" class="nav-dot" /></RouterLink></section></nav>
+      <nav aria-label="主导航"><section v-for="group in groups" :key="group" class="nav-group"><p>{{ group }}</p><RouterLink v-for="item in nav.filter(item => item.group === group)" :key="item.to" :to="item.to" @mouseenter="prefetchRoute(item.to)" @focus="prefetchRoute(item.to)"><component :is="item.icon" :size="19"/><span>{{ item.label }}</span><span v-if="route.path === item.to" class="nav-dot" /></RouterLink></section></nav>
       <RouterLink class="sidebar-note" to="/town"><span class="note-orbit" aria-hidden="true">✦</span><strong>让每一步，<br>长成看得见的生活。</strong><span>去小镇走走 <ArrowUpRight :size="15" /></span></RouterLink>
       <button class="secondary mode-switch" @click="changeMode($event, true)">切换极简清单</button>
       <div class="sidebar-account"><RouterLink to="/profile"><span class="account-avatar">{{ brandInitial }}</span><span><strong>{{ auth.user?.displayName || '我的成长档案' }}</strong><small>今天完成一点，也很好</small></span></RouterLink><RouterLink class="account-settings" to="/settings" aria-label="设置"><Settings :size="18" /></RouterLink></div>
@@ -106,9 +107,7 @@ onBeforeUnmount(() => {
       <header v-else class="workspace-topbar"><span class="workspace-context"><PanelLeftClose :size="17" /><span>{{ currentNav?.group || '成长' }}</span><span class="context-slash">/</span><strong>{{ currentNav?.label || '更好的自己' }}</strong></span><div><RouterLink class="topbar-ai" to="/ai"><Sparkles :size="15" />和 AI 理一理</RouterLink><RouterLink class="icon-button" to="/friends/chat" aria-label="消息中心"><Bell :size="18" /></RouterLink></div></header>
       <OperationGuideBar v-if="!mode.minimal && route.path !== '/town'" />
       <RouterView v-slot="{ Component, route }">
-        <Transition name="route-view" mode="out-in">
-          <component :is="Component" :key="route.path" />
-        </Transition>
+        <component :is="Component" :key="route.path" />
       </RouterView>
     </main>
     <Transition name="mobile-more">
@@ -120,7 +119,7 @@ onBeforeUnmount(() => {
             <button class="icon-button" type="button" aria-label="关闭更多功能" @click="closeMobileMore"><X :size="20" /></button>
           </header>
           <nav class="mobile-more-links" aria-label="更多功能">
-            <RouterLink v-for="item in mobileMoreNav" :key="item.to" :to="item.to" @click="closeMobileMore">
+            <RouterLink v-for="item in mobileMoreNav" :key="item.to" :to="item.to" @click="closeMobileMore" @pointerdown="prefetchRoute(item.to)" @focus="prefetchRoute(item.to)">
               <component :is="item.icon" :size="21" />
               <span>{{ item.label }}</span>
             </RouterLink>
@@ -129,7 +128,7 @@ onBeforeUnmount(() => {
       </div>
     </Transition>
     <nav v-if="!mode.minimal" class="mobile-nav" aria-label="主导航">
-      <RouterLink v-for="item in mobileNav" :key="item.to" :to="item.to"><component :is="item.icon" :size="20"/><span>{{ item.label }}</span></RouterLink>
+      <RouterLink v-for="item in mobileNav" :key="item.to" :to="item.to" @pointerdown="prefetchRoute(item.to)" @focus="prefetchRoute(item.to)"><component :is="item.icon" :size="20"/><span>{{ item.label }}</span></RouterLink>
       <button type="button" :class="{ 'is-active': mobileMoreActive }" :aria-expanded="showMobileMore" aria-controls="mobile-more-menu" @click="showMobileMore = !showMobileMore"><UserRound :size="20"/><span>我的</span></button>
     </nav>
     <DesktopPet v-if="!mode.minimal && !isDesktopCompanion && !quietWorkspace" />
@@ -189,7 +188,7 @@ nav a.router-link-active { background: color-mix(in srgb, var(--primary-soft) 76
   .mobile-more-enter-from .mobile-more-sheet,
   .mobile-more-leave-to .mobile-more-sheet { transform:translateY(12px); opacity:0; }
 }
-@media (prefers-reduced-motion: no-preference) { .brand-mark { transition: transform var(--motion-medium) ease; } .brand:hover .brand-mark { transform: rotate(-8deg) scale(1.04); } nav a.router-link-active svg { animation: nav-pop var(--motion-medium) ease-out; } .route-view-enter-active, .route-view-leave-active { transition: opacity var(--motion-medium) ease, transform var(--motion-medium) ease; } .route-view-enter-from { opacity: 0; transform: translateY(8px); } .route-view-leave-to { opacity: 0; transform: translateY(-4px); } }
+@media (prefers-reduced-motion: no-preference) { .brand-mark { transition: transform var(--motion-medium) ease; } .brand:hover .brand-mark { transform: rotate(-8deg) scale(1.04); } nav a.router-link-active svg { animation: nav-pop var(--motion-medium) ease-out; } }
 @keyframes nav-pop { 0% { transform: scale(.88); } 70% { transform: scale(1.08); } 100% { transform: scale(1); } }
 
 .sidebar { padding: 28px 16px 16px; background: var(--nav-bg); color: var(--nav-ink-strong); border: 0; box-shadow: none; overflow-y: auto; }

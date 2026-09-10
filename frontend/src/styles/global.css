@@ -68,12 +68,11 @@ input[type='checkbox'], input[type='radio'], input[type='range'] { accent-color:
   button, a, input, select, textarea { transition: background-color var(--motion-fast) ease, color var(--motion-fast) ease, border-color var(--motion-fast) ease, box-shadow var(--motion-fast) ease, transform var(--motion-fast) ease; }
   button:hover, .button:hover { transform: translateY(-1px); }
   button:active, .button:active { transform: translateY(0); }
-  .page { animation: page-enter var(--motion-medium) ease-out both; }
   .feedback-banner { animation: feedback-enter var(--motion-medium) ease-out; }
   .progress > span { transition: width var(--motion-slow) cubic-bezier(.2,.8,.2,1), background-color var(--motion-fast) ease; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .page, .feedback-banner { animation: none; }
+  .feedback-banner { animation: none; }
 }
 :root[data-motion='off'] *, :root[data-motion='off'] *::before, :root[data-motion='off'] *::after {
   animation: none !important;
@@ -81,7 +80,6 @@ input[type='checkbox'], input[type='radio'], input[type='range'] { accent-color:
   transition: none !important;
 }
 @keyframes feedback-enter { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes page-enter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 
 h1, h2, h3, p, a, label { overflow-wrap: anywhere; }
 .page-description { color: var(--muted); margin: 10px 0 0; font-size: 13px; line-height: 1.7; }

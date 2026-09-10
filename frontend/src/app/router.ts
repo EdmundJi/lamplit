@@ -34,6 +34,21 @@ const routes = [
 ]
 
 export const router = createRouter({ history: createWebHistory(), routes })
+
+// Nav links call this on hover/focus so the route's async chunk is already in
+// the module cache by the time the click lands - the route transition then
+// has nothing left to wait on. Tracks attempted paths so repeated
+// mouseenter/focus events don't re-trigger the same dynamic import.
+const prefetchedPaths = new Set<string>()
+export function prefetchRoute(path: string) {
+  if (prefetchedPaths.has(path)) return
+  prefetchedPaths.add(path)
+  for (const record of router.resolve(path).matched) {
+    const loader = record.components?.default
+    if (typeof loader === 'function') void (loader as () => Promise<unknown>)()
+  }
+}
+
 router.beforeEach(async to => {
   if (to.meta.standaloneDemo) return
   const auth = useAuthStore()
