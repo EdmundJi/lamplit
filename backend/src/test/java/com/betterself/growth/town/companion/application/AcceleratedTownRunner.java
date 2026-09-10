@@ -8,11 +8,14 @@ import com.betterself.growth.town.companion.tools.InMemoryModelUsage;
 import com.betterself.growth.town.companion.tools.InMemoryWorldStore;
 import com.betterself.growth.town.companion.tools.MetricsExporter;
 import com.betterself.growth.town.companion.tools.MutableClock;
+import com.betterself.growth.town.companion.tools.NormDetector;
 import com.betterself.growth.town.companion.tools.TimelineCollector;
 import com.betterself.growth.town.companion.tools.TimelineExporter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
@@ -513,6 +516,14 @@ public final class AcceleratedTownRunner {
         Map<String, Object> metrics = MetricsExporter.compute(sorted, collector, finalWorld, simulatedDays);
         MetricsExporter.writeJson(cfg.outDir().resolve("metrics.json"), metrics);
         MetricsExporter.writeMarkdown(cfg.outDir().resolve("metrics.md"), metrics);
+
+        // Norm candidates: regularities nobody wrote down, with the gate each one passed or failed.
+        // Written every run, including rule-only ones - a rule-only run of the same world is the negative
+        // control the whole "我们从没写过的" half of docs/06-society.md 七 rests on, and it is only a
+        // control if it was actually exported. See NormDetector.
+        NormDetector.Report norms = NormDetector.detect(cfg.worldId(), sorted, cfg.timezone());
+        TimelineExporter.writeJson(cfg.outDir().resolve("norms.json"), norms);
+        Files.writeString(cfg.outDir().resolve("norms.md"), NormDetector.markdown(norms), StandardCharsets.UTF_8);
 
         // World snapshot: lets a later run resume exactly where this one left off (RunConfig.withResumeFrom).
         if (finalWorld != null) TimelineExporter.writeJson(cfg.outDir().resolve("world-snapshot.json"), finalWorld);
