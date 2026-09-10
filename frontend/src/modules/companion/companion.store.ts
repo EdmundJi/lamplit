@@ -3,7 +3,7 @@ import { defineStore, storeToRefs } from 'pinia'
 import { companionApi } from './companion.api'
 import { randomUUID } from '../../shared/uuid'
 import { onDataChanged } from '../../shared/data-sync'
-import type { IntentInput, IntentKind, Snapshot, World } from './companion.types'
+import type { IntentInput, IntentKind, Snapshot, World, WorldEvent } from './companion.types'
 
 /**
  * The town's one authoritative world, shared by every consumer instead of each fetching and
@@ -20,9 +20,30 @@ export const useTownWorld = defineStore('town-world', () => {
   let refreshing = false
   let pendingIntent: IntentInput | null = null
   let lastIntentId: string | null = null
+
+  // Causal feedback for the street strip: fire once per world event the instant it first appears,
+  // never replaying history on the initial load or after switching to a different world entirely.
+  const eventHandlers = new Set<(event: WorldEvent) => void>()
+  let seenEventIds: Set<string> | null = null
+  function emitNewEvents(nextWorld: World | null) {
+    const events = nextWorld?.events ?? []
+    const sameWorld = seenEventIds !== null && world.value?.id === nextWorld?.id
+    if (!sameWorld) { seenEventIds = new Set(events.map(event => event.id)); return }
+    const fresh = events.filter(event => !seenEventIds!.has(event.id))
+    seenEventIds = new Set(events.map(event => event.id))
+    for (const event of fresh) for (const handler of eventHandlers) handler(event)
+  }
+  function onWorldEvent(handler: (event: WorldEvent) => void) {
+    eventHandlers.add(handler)
+    return () => eventHandlers.delete(handler)
+  }
+
   function accept(snapshot: Snapshot) {
     // Concurrent reads must never replace a newer authoritative revision.
-    if (!world.value || (snapshot.world && (world.value.id !== snapshot.world.id || snapshot.world.revision >= world.value.revision))) world.value = snapshot.world
+    if (!world.value || (snapshot.world && (world.value.id !== snapshot.world.id || snapshot.world.revision >= world.value.revision))) {
+      emitNewEvents(snapshot.world)
+      world.value = snapshot.world
+    }
     if (lastIntentId) { const latest = world.value?.intents.find(intent => intent.id === lastIntentId); if (latest?.feedback) feedback.value = latest.feedback }
     loaded.value = true
   }
@@ -97,7 +118,7 @@ export const useTownWorld = defineStore('town-world', () => {
 
   return {
     world, loaded, loading, busy, error, feedback, activeIntents, load, join, intend, cancel,
-    start, stop, setInterval: setInterval_,
+    start, stop, setInterval: setInterval_, onWorldEvent,
     // The world is shared and outlives any single consumer; a caller unmounting no longer tears
     // down data the street strip (or another view) may still be showing.
     dispose: () => undefined,

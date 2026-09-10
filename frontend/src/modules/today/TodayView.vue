@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { nextTick } from 'vue'
 import { BatteryMedium, Check, Clock3, Gauge, Minimize2, Play, RotateCcw, SkipForward, Sparkles, TimerReset, Undo2, X } from 'lucide-vue-next'
-import TownPreview from '../../shared/ui/TownPreview.vue'
 import EmptyState from '../../shared/ui/EmptyState.vue'
 import SnapSlider from '../../shared/ui/interaction/SnapSlider.vue'
 import SegmentedControl from '../../shared/ui/interaction/SegmentedControl.vue'
@@ -73,7 +72,6 @@ async function submitCheck() {
         </template>
         <template v-else><p class="next-step-kicker"><span class="live-dot" aria-hidden="true" />每一步，都有它的意义</p><h2>{{ tasks.length ? '今天留下的努力，都在这里。' : '从一件做得到的小事开始。' }}</h2><p>{{ tasks.length ? '可以回望一下，也可以让自己休息片刻。' : '不用排满今天，先给一个想法留出位置。' }}</p><RouterLink class="button primary" :to="tasks.length ? '/insights' : '/goals'">{{ tasks.length ? '看看成长记录' : '安排一件小事' }}</RouterLink></template>
       </div>
-      <RouterLink class="today-scene" to="/town"><TownPreview /><span class="scene-caption"><span><strong>生活，在这里慢慢生长</strong><small>街角场景预览 · 去我的小镇</small></span><span class="scene-arrow">↗</span></span></RouterLink>
     </section>
     <button v-if="!recommendedTasks.length" class="rhythm-toggle standalone-rhythm" :aria-expanded="showCheck" aria-controls="daily-rhythm" @click="showCheck = !showCheck"><BatteryMedium :size="16" />调整今日节奏</button>
     <section v-show="showCheck" id="daily-rhythm" class="daily-check band" aria-labelledby="daily-check-title">
@@ -237,8 +235,11 @@ async function submitCheck() {
 <style scoped>
 .today-page { display: flex; flex-direction: column; gap: 20px; }
 .today-page > .page-head { margin-bottom: 4px; }
-.today-hero { display: grid; grid-template-columns: 55fr 45fr; border: 0; background: #182f29; border-radius: var(--radius-scene); min-height: 370px; color: #fff9e9; overflow: hidden; }
-.next-step { padding: 38px 0 38px 38px; min-width: 0; position: relative; z-index: 1; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; }
+.today-hero { border: 0; background: #182f29; border-radius: var(--radius-scene); color: #fff9e9; overflow: hidden; }
+/* Single column now that the street-corner preview is gone (docs: the always-on strip above this
+   page already shows the real, live town - a second, static, not-our-street preview here was
+   redundant). Text stays a readable measure rather than stretching to the full hero width. */
+.next-step { max-width: 720px; padding: 38px; min-width: 0; position: relative; z-index: 1; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; }
 .live-dot { display: inline-block; width: 6px; height: 6px; margin-right: 7px; vertical-align: middle; border-radius: 50%; background: #e6c875; }
 @media (prefers-reduced-motion: no-preference) {
   .live-dot { animation: live-pulse 2s var(--ease) infinite; }
@@ -250,13 +251,6 @@ async function submitCheck() {
 .hero-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 16px; }
 .rhythm-toggle { display: inline-flex; align-items: center; gap: 6px; background: transparent; color: var(--muted); font-size: 12px; padding: 0; }
 .standalone-rhythm { align-self: flex-start; }
-.today-scene { position: relative; display: block; overflow: hidden; min-height: 370px; color: var(--on-forest); text-decoration: none; background: var(--forest); }
-.today-scene :deep(.town-preview) { position: absolute; inset: 0; }
-.scene-caption { position: absolute; bottom: 0; left: 0; right: 0; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 44px 26px 25px; background: linear-gradient(transparent, #182f29e8); }
-.scene-caption strong, .scene-caption small { display: block; }
-.scene-caption strong { font-size: 15px; font-weight: 500; }
-.scene-caption small { font-size: 10px; opacity: .75; margin-top: 4px; }
-.scene-arrow { display: grid; place-items: center; border: 1px solid #a2b49370; border-radius: 50%; width: 34px; height: 34px; }
 .task-more { position: relative; }
 .task-more summary { display: grid; place-items: center; min-width: 66px; height: 44px; padding: 0 12px; border: 1px solid var(--border); border-radius: var(--radius); cursor: pointer; list-style: none; font-size: 14px; font-weight: 650; color: var(--muted); }
 .task-more summary::-webkit-details-marker { display: none; }
@@ -265,12 +259,7 @@ async function submitCheck() {
 .task-more > div button { justify-content: flex-start; border: 0; }
 .today-dialog { z-index: 51 !important; max-height: calc(100dvh - 40px); overflow-y: auto; }
 @media (max-width: 760px) {
-  .today-hero { grid-template-columns: 1fr; }
-  .today-scene { min-height: 170px; height: 170px; order: -1; }
-  .today-scene :deep(canvas) { object-position: center 48%; }
-  .scene-caption { top: 0; padding: 18px; align-items: flex-end; padding-top: 70px; background: linear-gradient(transparent 30%, #182f29); }
-  .scene-arrow { display: none; }
-  .next-step { padding: 22px; }
+  .next-step { padding: 22px; max-width: none; }
   .next-step .next-step-kicker { margin-top: 16px; }
   .today-page { gap: 16px; }
   .today-page .task-row .actions { display: flex; width: 100%; flex-wrap: wrap; justify-content: flex-end; }
@@ -365,21 +354,17 @@ async function submitCheck() {
 .goal-strip article { background: transparent; border: 0; border-left: 2px solid var(--primary-soft); border-radius: 0; padding: 4px 18px; min-height: 100px; }
 .goal-strip p { font-size: 13px; }
 @media (min-width: 761px) and (max-width: 1100px) {
-  .next-step { padding: 28px 0 28px 26px; }
+  .next-step { padding: 28px 26px; }
   .check-controls { grid-template-columns: 1fr; }
 }
 @media (max-width: 760px) {
   .today-page { gap: 20px; }
   .today-page .page-head h1 { font-size: 26px; }
   .today-page .page-head .secondary { font-size: 11px; padding: 0 8px; }
-  .today-hero { min-height: 0; }
   .next-step { padding: 8px 24px 28px; }
   .next-step h2 { font-size: 27px; }
   .next-step .next-step-kicker { margin: 20px 0 8px; }
   .next-step p { margin-bottom: 20px; }
-  .scene-caption strong { font-size: 13px; }
-  .scene-caption small { font-size: 9px; }
-  .scene-caption { padding: 18px 24px; }
   .hero-actions { gap: 12px; }
   .task-row { padding-inline: 0; }
   .task-row .actions > button, .task-row .actions .task-more { min-width: 70px; }

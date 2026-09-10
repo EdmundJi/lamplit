@@ -18,7 +18,10 @@ export interface SceneLabel { worldX?: number; worldY?: number; facing?: Directi
 // 'docked' is the always-on street strip: a short, wide window that pans/zooms to a fixed world
 // point per place instead of framing overview/selection/hover like the full /town page ('auto',
 // the pre-existing behaviour, unchanged below).
-export interface SceneSnapshot { residents: SceneResident[]; weather: 'clear' | 'rain'; minutes: number; selectedResidentId?: string; selectedPlace?: string; overview?: boolean; projects?: SceneProject[]; conversations?: SceneConversation[]; objects?: SceneObject[]; cafeOpen?: boolean; cameraMode?: 'auto' | 'docked'; cameraTarget?: { x: number; y: number }; dockedFrameHeight?: number }
+// chrome: false hides the DOM name-tag/offscreen-indicator layer (CompanionScene.vue's own
+// template) *and* the in-canvas signage text (buildCompanionStage's `signage`, toggled in sync()
+// below) - the docked street strip's own quiet, low-clutter mode. Defaults to true (unchanged).
+export interface SceneSnapshot { residents: SceneResident[]; weather: 'clear' | 'rain'; minutes: number; selectedResidentId?: string; selectedPlace?: string; overview?: boolean; projects?: SceneProject[]; conversations?: SceneConversation[]; objects?: SceneObject[]; cafeOpen?: boolean; chrome?: boolean; cameraMode?: 'auto' | 'docked'; cameraTarget?: { x: number; y: number }; dockedFrameHeight?: number }
 const W = COMPANION_WORLD_SIZE.width, H = COMPANION_WORLD_SIZE.height
 const PALETTE = [0x688b82, 0xbd8765, 0x8185a4, 0xceaa65, 0x889b69]
 type RainShelter = { x: number; y: number; width: number; height: number }
@@ -133,11 +136,27 @@ export function residentPosition(location: string, index: number, activity = '',
   if (place === 'home' && /focus|study|read|work|make|专注|学习|读书|工作|制作/i.test(activity + action)) return room.desk
   return freeStandPosition(place === 'home' ? location : place, residentId ?? `${location}#${index}`, occupied)
 }
+/**
+ * Where a resident is currently headed - travelling toward a destination's own door/entry, or
+ * settled at their resolved seat/bed/desk/free-stand spot. Mirrors sync()'s own per-resident
+ * target computation (the `travelling` branch and the `residentPosition()` call below it) so a
+ * caller outside the running scene - the docked strip's "follow the avatar" camera target - can
+ * point at exactly the same spot the actor is walking to/standing at, without needing the live
+ * Phaser actor map. Approximates `occupantIndex` (real slot-sharing resolution only exists inside
+ * the scene's actor loop) - fine for a camera target, which does not need seat-exact precision.
+ */
+export function residentTarget(actor: SceneResident, positionId?: string | null, occupantIndex = 0) {
+  const travelling = Boolean(actor.destination) && (actor.activity === 'walk' || actor.activity === 'travel')
+  const location = travelling ? actor.destination! : actor.location
+  if (travelling) return homeRoom(location)?.door ?? (scenePlace(location) === 'cafe' ? CAFE_SERVICE.entry : placeCenter(location))
+  return residentPosition(location, 0, actor.activity, actor.action, positionId, occupantIndex, actor.id, [])
+}
 type Actor = { mode: string; sleeping: boolean; conversationId?: string; seatIndex?: number; positionId?: string; slot?: number; facing: Direction4; hovered?: boolean; root: Phaser.GameObjects.Container; sprite?: Phaser.GameObjects.Sprite; heldProp: Phaser.GameObjects.Graphics; label: Phaser.GameObjects.Text; activity: Phaser.GameObjects.Text; location: string; action: string; sheet: string; target: { x: number; y: number }; path: { x: number; y: number }[] }
 
 /** Animation projects server state. It never chooses a resident's next activity or destination. */
 export class CompanionStreetScene extends Phaser.Scene {
   private actors = new Map<string, Actor>()
+  private stage?: { destroy: () => void; signage: Phaser.GameObjects.Text[] }
   private shade!: Phaser.GameObjects.Rectangle
   private rain!: Phaser.GameObjects.Graphics
   // Per-home window light, keyed by the same id as HOME_ROOMS/homeId() - lit after dark only for
@@ -246,7 +265,7 @@ export class CompanionStreetScene extends Phaser.Scene {
   }
   create() {
     this.cameras.main.setBackgroundColor('#78857a')
-    if (this.textures.exists('town') && this.textures.exists('interior')) buildCompanionStage(this)
+    if (this.textures.exists('town') && this.textures.exists('interior')) this.stage = buildCompanionStage(this)
     else {
       this.add.rectangle(W / 2, H / 2, W, H, 0xb8bda7)
       this.add.text(480, 190, '街景素材尚未生成 · 居民生活仍在继续', { fontSize: '16px', color: '#56604e' }).setOrigin(.5)
@@ -318,6 +337,7 @@ export class CompanionStreetScene extends Phaser.Scene {
   sync() {
     if (!this.ready) return
     const state = this.snapshot()
+    if (this.stage) { const show = state.chrome !== false; for (const text of this.stage.signage) text.setVisible(show) }
     const night = state.minutes < 360 || state.minutes >= 1140
     // Overview uses the camera's background for the side bars around a tall world. Match the
     // ground instead of exposing a dark canvas edge that has no place in the street.

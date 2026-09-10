@@ -69,6 +69,67 @@ export const PLACE_FRAMES = {
 } as const
 
 /**
+ * The single registry every "place" concept in the shell reads from: the docked street strip's
+ * camera targets, its place labels, and (later) the sidebar nav's place bindings. Adding a real
+ * building later means adding one entry here (and, once art exists, a `frame`) - nothing that
+ * reads STAGE_PLACES by id needs to change. `status: 'placeholder'` marks an id that has no real
+ * geometry yet; callers fall back to `street`'s camera target through resolveStagePlace() below
+ * but keep the placeholder's own label (with a "筹备中" suffix - see TownStage.vue) so the nav
+ * item still reads correctly ahead of the art.
+ */
+export type StagePlace = {
+  id: string
+  label: string
+  /** World-pixel camera target for the docked strip (see CompanionScene's cameraMode='docked'). */
+  target: { x: number; y: number }
+  frame?: { x: number; y: number; w: number; h: number }
+  scenePlace: 'home' | 'cafe' | 'garden' | 'street'
+  status: 'ready' | 'placeholder'
+}
+export const STAGE_PLACES: Record<string, StagePlace> = {
+  // Real places: camera targets point at the actual room/seat, not each frame's geometric centre,
+  // so the docked strip's short, wide window reads as a different corner of town per destination.
+  street: { id: 'street', label: '门前小街', target: { x: 440, y: 410 }, frame: PLACE_FRAMES.street, scenePlace: 'street', status: 'ready' },
+  home: { id: 'home', label: '归家小屋', target: { x: 560, y: 596 }, frame: PLACE_FRAMES.home, scenePlace: 'home', status: 'ready' },
+  cafe: { id: 'cafe', label: '慢慢咖啡', target: { x: 640, y: 190 }, frame: PLACE_FRAMES.cafe, scenePlace: 'cafe', status: 'ready' },
+  garden: { id: 'garden', label: '门前花园', target: { x: 1128, y: 329 }, frame: PLACE_FRAMES.garden, scenePlace: 'garden', status: 'ready' },
+  // No real building yet - mapped near the cafe's own doorway (CAFE_SERVICE.entry) until a board
+  // gets drawn. status stays 'placeholder' until then.
+  board: { id: 'board', label: '公告板', target: { x: 682, y: 340 }, scenePlace: 'cafe', status: 'placeholder' },
+  // Reserved: maps/academy-study.json and maps/public-gym.json already exist as interiors but are
+  // not wired into the street scene. Target camera falls back to street through resolveStagePlace.
+  academy: { id: 'academy', label: '学院', target: { x: 440, y: 410 }, scenePlace: 'street', status: 'placeholder' },
+  gym: { id: 'gym', label: '健身房', target: { x: 440, y: 410 }, scenePlace: 'street', status: 'placeholder' },
+  // A virtual place, not a building: "wherever the avatar currently is". /today binds here instead
+  // of a fixed 'street' target, because the street itself is usually empty (everyone is inside a
+  // home or the cafe) - TownStage.vue overrides both `target` and `label` every render from the
+  // live world (world.avatar's resolved position/place, via companion-scene.ts's residentTarget()
+  // and scenePlace()); the values below are only the static fallback used before a world loads.
+  avatar: { id: 'avatar', label: '门前小街', target: { x: 440, y: 410 }, scenePlace: 'street', status: 'ready' },
+}
+const warnedStagePlaceIds = new Set<string>()
+/**
+ * Resolve a nav/place id to a docked-camera target. Unknown ids and known placeholders both fall
+ * back to `street`'s own target (there is nowhere real yet to point the camera) while keeping the
+ * requested place's own label/status, so callers can still show "公告板 · 筹备中" instead of
+ * silently relabelling it "门前小街". Warns once per id in dev only - this is expected during
+ * incremental map growth, not a bug to spam production consoles with.
+ */
+export function resolveStagePlace(id: string | undefined): StagePlace {
+  const key = id ?? 'street'
+  const place = STAGE_PLACES[key]
+  if (!place || place.status === 'placeholder') {
+    if (import.meta.env.DEV && !warnedStagePlaceIds.has(key)) {
+      warnedStagePlaceIds.add(key)
+      console.warn(`[town] 地点 "${key}" 还没有真实落点，暂时用门前小街代替`)
+    }
+    const fallback = STAGE_PLACES.street!
+    return place ? { ...place, target: fallback.target, scenePlace: fallback.scenePlace } : fallback
+  }
+  return place
+}
+
+/**
  * The single pixel truth for the backend's two-layer place model (TownPlaces.java): one entry per
  * positionId, holding one seat per unit of that position's backend `capacity`, first-come order.
  * The backend owns structure/ownership/capacity; this table owns where feet land. Every array here

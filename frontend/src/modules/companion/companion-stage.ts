@@ -4,6 +4,10 @@ import { CAFE_TABLES, CAFE_WINDOW_SEATS, CAFE_WINDOW_TABLES, CAFE_ROOM, CAFE_WIN
 /** A small cutaway street, using the locally licensed LimeZu furniture at one human scale. */
 export function buildCompanionStage(scene: Phaser.Scene) {
   const objects: Phaser.GameObjects.GameObject[] = []
+  // Every small in-canvas place name ("点单"/"取餐"/"门前花园", numbered doorsteps, "慢慢咖啡") drawn
+  // by label() below, kept separately so CompanionStreetScene can hide them all together for the
+  // docked street strip (see SceneSnapshot.chrome) without touching the rest of the stage.
+  const signage: Phaser.GameObjects.Text[] = []
   const graphics = (depth: number) => { const g = scene.add.graphics().setDepth(depth); objects.push(g); return g }
   const ground = graphics(-200), structure = graphics(-50)
   const rect = (x: number, y: number, w: number, h: number, color: number, alpha = 1, g = ground) => g.fillStyle(color, alpha).fillRect(x, y, w, h)
@@ -21,7 +25,7 @@ export function buildCompanionStage(scene: Phaser.Scene) {
   }
   const label = (x: number, y: number, text: string, small = false) => {
     const t = scene.add.text(x, y, text, { fontFamily: 'system-ui', fontSize: small ? '8px' : '10px', resolution: 3, color: '#4f594b', backgroundColor: '#e8e3d0', padding: { x: 5, y: 2 } }).setOrigin(.5).setDepth(750)
-    objects.push(t)
+    objects.push(t); signage.push(t)
   }
   const plant = (x: number, y: number, frame: string, scale = 1) => image(x >= 736 ? x + GARDEN_OFFSET_X : x, y, frame, scale, 'town')?.setTint(0xb8c0a5)
   const path = (x: number, y: number, w: number, h: number) => {
@@ -212,5 +216,5 @@ export function buildCompanionStage(scene: Phaser.Scene) {
     objects.push(leaf)
     scene.tweens.add({ targets: leaf, x: x + 26, y: y + 34, angle: 40, duration: 9000 + Math.random() * 3000, delay: Math.random() * 5000, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' })
   }
-  return { destroy: () => objects.forEach(o => o.destroy()) }
+  return { destroy: () => objects.forEach(o => o.destroy()), signage }
 }

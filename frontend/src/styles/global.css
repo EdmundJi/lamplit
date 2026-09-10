@@ -101,6 +101,14 @@ input, textarea, select { min-width: 0; }
 ::view-transition-old(root), ::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
 ::view-transition-old(root) { z-index: 0; }
 ::view-transition-new(root) { z-index: 1; }
+/* The docked street strip <-> fullscreen /town morph (TownStage.vue's .town-stage-shell). The
+   group's own box (position/size) is what should visibly scale between the two - old/new content
+   underneath just needs to fill that box and hold still, not cross-fade. */
+::view-transition-group(town-stage) { animation-duration: 420ms; animation-timing-function: var(--ease); }
+::view-transition-old(town-stage), ::view-transition-new(town-stage) { animation: none; mix-blend-mode: normal; height: 100%; overflow: hidden; }
+/* The strip already carries its own top gap (UserLayout.vue's .town-strip margin); do not also
+   stack .page's own 36px padding-top under it. */
+.workspace:has(> .town-strip:not([hidden])) > .page { padding-top: 20px; }
 /* A list being reordered by pointer keeps the drag cursor and drops text selection. */
 .is-sorting { cursor: grabbing; user-select: none; }
 .is-sorting [data-sort-id] { will-change: transform; }

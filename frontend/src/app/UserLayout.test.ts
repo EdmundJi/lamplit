@@ -9,6 +9,9 @@ import { useAuthStore } from '../modules/auth/auth.store'
 vi.mock('../shared/ui/WelcomeGuide.vue', () => ({ default: { name: 'WelcomeGuide', template: '<div />' } }))
 vi.mock('../modules/partners/DesktopPet.vue', () => ({ default: { name: 'DesktopPet', template: '<div />' } }))
 vi.mock('../shared/ui/GlobalUnreadBar.vue', () => ({ default: { name: 'GlobalUnreadBar', template: '<div />' } }))
+// The always-on street strip mounts a real Phaser scene through TownStage; UserLayout's own tests
+// only need to know it is present (or absent) at the right times, not exercise the scene itself.
+vi.mock('../modules/companion/TownStage.vue', () => ({ default: { name: 'TownStage', template: '<div class="town-stage-stub" />' } }))
 vi.mock('../shared/ui/OperationGuideBar.vue', () => ({
   default: { name: 'OperationGuideBar', template: '<div />' },
   // Real resolveGuide is route-keyed too; the mock only needs to distinguish
@@ -81,7 +84,7 @@ describe('UserLayout', () => {
   it('keeps every desktop destination available from the mobile navigation', async () => {
     const wrapper = await mountLayout()
 
-    const desktopLabels = wrapper.findAll('.sidebar nav a').map(link => link.text())
+    const desktopLabels = wrapper.findAll('.sidebar nav a strong').map(link => link.text())
     expect(desktopLabels).toEqual(['今日', '目标', 'AI 助手', '属性', '洞察', '小镇', '伙伴', '好友'])
     expect(wrapper.findAll('.sidebar-account a')).toHaveLength(2)
     expect(wrapper.findAll('.mobile-nav a').map(link => link.text())).toEqual(['今日', '目标', '小镇'])
@@ -113,6 +116,53 @@ describe('UserLayout', () => {
     expect(wrapper.findComponent({ name: 'OperationGuideBar' }).exists()).toBe(false)
     expect(wrapper.findComponent({ name: 'DesktopPet' }).exists()).toBe(false)
     expect(wrapper.findComponent({ name: 'GlobalUnreadBar' }).exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('keeps the street strip slot and TownStage mounted outside /town, visible and unhidden', async () => {
+    Object.defineProperty(window, 'localStorage', {
+      value: { getItem: vi.fn(() => null), setItem: vi.fn(), removeItem: vi.fn() },
+      configurable: true,
+    })
+    const pinia = createPinia()
+    const auth = useAuthStore(pinia)
+    auth.user = { publicId: 'u5', email: 'ta@example.test', displayName: '阿禾', timezone: 'Asia/Shanghai', role: 'USER' }
+
+    const wrapper = await mountLayout(pinia, '/today')
+
+    expect(wrapper.find('#town-strip-slot').exists()).toBe(true)
+    expect(wrapper.find('#town-strip-slot').attributes('hidden')).toBeUndefined()
+    expect(wrapper.findComponent({ name: 'TownStage' }).exists()).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('keeps the strip slot in the DOM but hidden while /town itself is open', async () => {
+    Object.defineProperty(window, 'localStorage', {
+      value: { getItem: vi.fn(() => null), setItem: vi.fn(), removeItem: vi.fn() },
+      configurable: true,
+    })
+    const pinia = createPinia()
+    const auth = useAuthStore(pinia)
+    auth.user = { publicId: 'u6', email: 'ta@example.test', displayName: '阿禾', timezone: 'Asia/Shanghai', role: 'USER' }
+
+    const wrapper = await mountLayout(pinia, '/town')
+
+    expect(wrapper.find('#town-strip-slot').exists()).toBe(true)
+    expect(wrapper.find('#town-strip-slot').attributes('hidden')).toBe('')
+    expect(wrapper.findComponent({ name: 'TownStage' }).exists()).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('never mounts the street strip in minimal-checklist mode', async () => {
+    const pinia = createPinia()
+    const auth = useAuthStore(pinia)
+    auth.user = { publicId: 'u7', email: 'ta@example.test', displayName: '阿禾', timezone: 'Asia/Shanghai', role: 'USER' }
+    useWorkspaceModeStore(pinia).setMinimal(true)
+
+    const wrapper = await mountLayout(pinia, '/today')
+
+    expect(wrapper.find('#town-strip-slot').exists()).toBe(false)
+    expect(wrapper.findComponent({ name: 'TownStage' }).exists()).toBe(false)
     wrapper.unmount()
   })
 

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
-import { Activity, Building2, Target, CalendarCheck2, ChartNoAxesColumnIncreasing, ArrowUpRight, Sparkles, Settings, PawPrint, UserRound, Users, X, Bell, CircleHelp, PanelLeftClose } from 'lucide-vue-next'
+import { ArrowUpRight, Building2, Settings, UserRound, X, Bell, CircleHelp, PanelLeftClose } from 'lucide-vue-next'
 import { useAuthStore } from '../modules/auth/auth.store'
 import DesktopPet from '../modules/partners/DesktopPet.vue'
 import WelcomeGuide from '../shared/ui/WelcomeGuide.vue'
@@ -11,6 +11,9 @@ import { useDialogFocus } from '../shared/ui/use-dialog-focus'
 import { usePeriod } from '../shared/ui/period'
 import { radialReveal } from '../shared/ui/interaction/radial-reveal'
 import { prefetchRoute } from './router'
+import { NAV_ITEMS } from './nav'
+import TownStage from '../modules/companion/TownStage.vue'
+import { STAGE_PLACES } from '../modules/companion/companion-art'
 
 import { useWorkspaceModeStore } from '../shared/ui/workspace-mode.store'
 
@@ -30,19 +33,19 @@ function changeMode(event: Event, minimal: boolean) {
   })
 }
 
-const nav = [
-  { to: '/today', label: '今日', icon: CalendarCheck2, mobile: 'primary', group: '行动' },
-  { to: '/goals', label: '目标', icon: Target, mobile: 'primary', group: '行动' },
-  { to: '/ai', label: 'AI 助手', icon: Sparkles, mobile: 'more', group: '行动' },
-  { to: '/attributes', label: '属性', icon: Activity, mobile: 'more', group: '成长' },
-  { to: '/insights', label: '洞察', icon: ChartNoAxesColumnIncreasing, mobile: 'more', group: '成长' },
-  { to: '/town', label: '小镇', icon: Building2, mobile: 'primary', group: '陪伴' },
-  { to: '/partners', label: '伙伴', icon: PawPrint, mobile: 'more', group: '陪伴' },
-  { to: '/friends', label: '好友', icon: Users, mobile: 'more', group: '陪伴' },
-  { to: '/profile', label: '个人', icon: UserRound, mobile: 'more', group: '账户' },
-  { to: '/settings', label: '设置', icon: Settings, mobile: 'more', group: '账户' },
-]
+const nav = NAV_ITEMS
 const groups = ['行动', '成长', '陪伴']
+/** The quiet second line under each sidebar label - the docked strip's own place label registry,
+ * so both read the exact same name (and the same "筹备中" suffix once a place is a placeholder). */
+function navPlaceLabel(item: (typeof nav)[number]) {
+  if (!item.place) return '走进去'
+  // The one virtual place: the sidebar shows a fixed "跟着你" hint rather than today's actual
+  // location (that changes all day and lives in the docked strip's own label instead).
+  if (item.place === 'avatar') return '小人身边'
+  const place = STAGE_PLACES[item.place]
+  if (!place) return ''
+  return place.status === 'placeholder' ? `${place.label} · 筹备中` : place.label
+}
 const mobileNav = nav.filter(item => item.mobile === 'primary')
 const mobileMoreNav = nav.filter(item => item.mobile === 'more')
 
@@ -83,6 +86,10 @@ function onGuideKeydown(event: KeyboardEvent) {
 
 watch(() => route.fullPath, closeGuide)
 const quietWorkspace = computed(() => route.path === '/ai' || route.path.includes('/chat') || route.path.includes('/groups/') || route.path === '/town')
+// /auth, /onboarding and /desktop-pet are already separate top-level routes that never mount
+// UserLayout at all - this guard is defensive, in case that routing structure ever changes.
+const excludedStagePaths = ['/auth', '/onboarding', '/desktop-pet']
+const showTownStage = computed(() => !mode.minimal && auth.signedIn && !excludedStagePaths.some(path => route.path === path || route.path.startsWith(`${path}/`)))
 const welcomeKey = computed(() => `better-self:welcome:${auth.user?.publicId ?? 'guest'}`)
 const mobileMoreActive = computed(() => mobileMoreNav.some(item => route.path === item.to || route.path.startsWith(`${item.to}/`)))
 const brandInitial = computed(() => {
@@ -132,7 +139,7 @@ onBeforeUnmount(() => {
     <a class="skip-link" href="#main-content">跳到主要内容</a>
     <aside v-if="!mode.minimal" class="sidebar">
       <RouterLink class="brand" to="/today"><span class="brand-mark" aria-hidden="true"><Building2 :size="23" /></span><strong>更好的自己</strong></RouterLink>
-      <nav aria-label="主导航"><section v-for="group in groups" :key="group" class="nav-group"><p>{{ group }}</p><RouterLink v-for="item in nav.filter(item => item.group === group)" :key="item.to" :to="item.to" @mouseenter="prefetchRoute(item.to)" @focus="prefetchRoute(item.to)"><component :is="item.icon" :size="19"/><span>{{ item.label }}</span><span v-if="route.path === item.to" class="nav-dot" /></RouterLink></section></nav>
+      <nav aria-label="主导航"><section v-for="group in groups" :key="group" class="nav-group"><p>{{ group }}</p><RouterLink v-for="item in nav.filter(item => item.group === group)" :key="item.to" :to="item.to" @mouseenter="prefetchRoute(item.to)" @focus="prefetchRoute(item.to)"><component :is="item.icon" :size="19"/><span class="nav-text"><strong>{{ item.label }}</strong><small>{{ navPlaceLabel(item) }}</small></span><span v-if="route.path === item.to" class="nav-dot" /></RouterLink></section></nav>
       <RouterLink class="sidebar-note" to="/town"><span class="note-orbit" aria-hidden="true">✦</span><strong>让每一步，<br>长成看得见的生活。</strong><span>去小镇走走 <ArrowUpRight :size="15" /></span></RouterLink>
       <button class="secondary mode-switch" @click="changeMode($event, true)">切换极简清单</button>
       <div class="sidebar-account"><RouterLink to="/profile"><span class="account-avatar">{{ brandInitial }}</span><strong>{{ auth.user?.displayName || '我的成长档案' }}</strong></RouterLink><RouterLink class="account-settings" to="/settings" aria-label="设置"><Settings :size="18" /></RouterLink></div>
@@ -153,9 +160,11 @@ onBeforeUnmount(() => {
           <RouterLink class="icon-button" to="/friends/chat" aria-label="消息中心"><Bell :size="18" /></RouterLink>
         </div>
       </header>
+      <div v-if="showTownStage" id="town-strip-slot" class="town-strip" :hidden="route.path === '/town'" aria-label="门前小街" />
       <RouterView v-slot="{ Component, route }">
         <component :is="Component" :key="route.path" />
       </RouterView>
+      <TownStage v-if="showTownStage" />
     </main>
     <Transition name="mobile-more">
       <div v-if="showMobileMore" class="mobile-more-layer">
@@ -243,9 +252,13 @@ nav a.router-link-active { background: color-mix(in srgb, var(--primary-soft) 76
 .brand strong { font-size: 15px; letter-spacing: .04em; }
 .nav-group { margin-bottom: 16px; }
 .nav-group > p { padding-left: 14px; margin: 0 0 7px; color: var(--nav-muted); font-size: 10px; letter-spacing: .16em; }
-.sidebar nav a { color: var(--nav-ink); min-height: 44px; margin-bottom: 4px; font-size: 13px; }
+.sidebar nav a { color: var(--nav-ink); min-height: 48px; margin-bottom: 4px; font-size: 13px; }
 .sidebar nav a:hover { color: var(--nav-ink-strong); background: var(--nav-hover); }
 .sidebar nav a.router-link-active { background: var(--nav-active-bg); color: var(--nav-active-ink); box-shadow: none; font-weight: 750; }
+.nav-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.nav-text strong { font-weight: inherit; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nav-text small { font-size: 11px; line-height: 1.2; color: var(--nav-muted); font-weight: 400; }
+.sidebar nav a.router-link-active .nav-text small { color: inherit; opacity: .72; }
 .nav-dot { width: 5px; height: 5px; margin-left: auto; border-radius: 50%; background: currentColor; }
 .sidebar-note { display: block; margin: auto 0 20px; padding: 20px 12px; background: transparent; border: 0; border-top: 1px solid var(--nav-line); border-radius: 0; text-decoration: none; color: var(--nav-card-ink); }
 .sidebar-note strong { display: block; font-size: 14px; font-weight: 500; line-height: 1.9; }
@@ -257,6 +270,11 @@ nav a.router-link-active { background: color-mix(in srgb, var(--primary-soft) 76
 .account-avatar { display: grid; place-items: center; width: 32px; height: 32px; flex: none; border-radius: 50%; background: var(--nav-avatar); color: var(--nav-avatar-ink); font-size: 12px; }
 .account-settings { color: var(--nav-faint); padding: 8px; }
 .workspace-topbar { min-height: 56px; display: flex; justify-content: space-between; align-items: center; padding: 0 32px; border-bottom: 1px solid var(--border); background: var(--canvas); }
+/* 门前小街: always-on strip, same width/gutters as .page so it lines up with the page below it. */
+.town-strip { width: min(100%, 1144px); height: 140px; margin: 12px auto 8px; border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface-muted); box-shadow: none; }
+.town-strip[hidden] { display: none; }
+@media (max-width: 1100px) { .town-strip { height: 112px; } }
+@media (max-width: 760px) { .town-strip { height: 88px; margin: 10px auto 6px; } }
 .workspace-context { display: flex; gap: 12px; align-items: center; color: var(--muted); font-size: 12px; }
 .workspace-context strong { color: var(--ink); font-weight: 500; }
 .context-slash { opacity: .4; }

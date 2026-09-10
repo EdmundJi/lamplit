@@ -3,7 +3,12 @@ import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type Phaser from 'phaser'
 import type { SceneResident, SceneProject, SceneConversation, SceneObject, SceneLabel } from './companion-scene'
 import { TownSoundscape } from '../../shared/scene/soundscape'
-const props = withDefaults(defineProps<{ residents: SceneResident[]; weather?: 'clear' | 'rain'; minutes?: number; soundEnabled?: boolean; cafeOpen?: boolean; selectedResidentId?: string; selectedPlace?: string; projects?: SceneProject[]; conversations?: SceneConversation[]; objects?: SceneObject[]; overview?: boolean; textBubbles?: boolean; suppressHover?: boolean; cameraMode?: 'auto' | 'docked'; cameraTarget?: { x: number; y: number }; dockedFrameHeight?: number }>(), { weather: 'clear', minutes: 720, soundEnabled: false, cafeOpen: true, overview: false, textBubbles: false, suppressHover: false, cameraMode: 'auto', dockedFrameHeight: 176 })
+// `chrome` is the DOM/scene "signage" layer - resident name tags, offscreen edge indicators, the
+// plain-text roster fallback, and the small in-canvas place labels ("点单"/"取餐"/"门前花园", ...).
+// Default true (every existing consumer, and the full /town page, look exactly as before); the
+// docked street strip passes false so a 128px-tall camera isn't fighting a dozen tiny DOM pins and
+// canvas signs for the same few pixels - it keeps only its own (TownStage-drawn) place label.
+const props = withDefaults(defineProps<{ residents: SceneResident[]; weather?: 'clear' | 'rain'; minutes?: number; soundEnabled?: boolean; cafeOpen?: boolean; selectedResidentId?: string; selectedPlace?: string; projects?: SceneProject[]; conversations?: SceneConversation[]; objects?: SceneObject[]; overview?: boolean; textBubbles?: boolean; suppressHover?: boolean; chrome?: boolean; cameraMode?: 'auto' | 'docked'; cameraTarget?: { x: number; y: number }; dockedFrameHeight?: number }>(), { weather: 'clear', minutes: 720, soundEnabled: false, cafeOpen: true, overview: false, textBubbles: false, suppressHover: false, chrome: true, cameraMode: 'auto', dockedFrameHeight: 176 })
 const emit = defineEmits<{ 'select-resident': [id: string]; 'select-project': [id: string]; 'select-conversation': [id: string] }>()
 const host = ref<HTMLDivElement>()
 const failed = ref(false)
@@ -22,6 +27,21 @@ let resizeObserver: ResizeObserver | undefined
 let game: Phaser.Game | undefined
 let scene: import('./companion-scene').CompanionStreetScene | undefined
 let disposed = false
+function resize() {
+  if (!game || !host.value) return
+  const bounds = host.value.getBoundingClientRect()
+  const ratio = Math.min(window.devicePixelRatio || 1, 3)
+  game.scale.resize(Math.round(bounds.width * ratio), Math.round(bounds.height * ratio))
+  game.canvas.style.width = `${bounds.width}px`
+  game.canvas.style.height = `${bounds.height}px`
+  scene?.resizeViewport(bounds.width, bounds.height, ratio)
+}
+// Teleport moves the host element's real DOM node (docked strip <-> fullscreen /town) without
+// unmounting this component; a ResizeObserver keeps observing a node across a DOM move in every
+// evergreen browser, but exposing an explicit refit() gives callers (TownStage) a synchronous way
+// to force the canvas to match its new container immediately after a move, rather than trusting
+// the observer's own callback timing.
+defineExpose({ refit: resize })
 const sound = new TownSoundscape(() => ({ weather: props.weather, minutes: props.minutes }))
 function updateSound() {
   sound.setCafeOpen(props.cafeOpen)
@@ -40,26 +60,17 @@ function visibility() {
   else game?.loop.wake()
 }
 watch(() => props.soundEnabled, enabled => sound.setEnabled(enabled))
-watch(() => [props.residents, props.weather, props.minutes, props.cafeOpen, props.projects, props.objects, props.conversations, props.selectedResidentId, props.selectedPlace, props.overview, props.cameraMode, props.cameraTarget, props.dockedFrameHeight], () => { scene?.sync(); updateSound() }, { deep: true })
+watch(() => [props.residents, props.weather, props.minutes, props.cafeOpen, props.projects, props.objects, props.conversations, props.selectedResidentId, props.selectedPlace, props.overview, props.chrome, props.cameraMode, props.cameraTarget, props.dockedFrameHeight], () => { scene?.sync(); updateSound() }, { deep: true })
 onMounted(async () => {
   document.addEventListener('visibilitychange', visibility)
   visibility(); updateSound()
   try {
     const [{ default: PhaserRuntime }, { CompanionStreetScene }] = await Promise.all([import('phaser'), import('./companion-scene')])
     if (disposed || !host.value) return
-    scene = new CompanionStreetScene(() => ({ residents: props.residents, weather: props.weather, minutes: props.minutes, cafeOpen: props.cafeOpen, selectedResidentId: props.selectedResidentId, selectedPlace: props.selectedPlace, projects: props.projects, objects: props.objects, conversations: props.conversations, overview: props.overview, cameraMode: props.cameraMode, cameraTarget: props.cameraTarget, dockedFrameHeight: props.dockedFrameHeight }), id => openResident(id), id => emit('select-project', id), value => { labels.value = value })
+    scene = new CompanionStreetScene(() => ({ residents: props.residents, weather: props.weather, minutes: props.minutes, cafeOpen: props.cafeOpen, selectedResidentId: props.selectedResidentId, selectedPlace: props.selectedPlace, projects: props.projects, objects: props.objects, conversations: props.conversations, overview: props.overview, chrome: props.chrome, cameraMode: props.cameraMode, cameraTarget: props.cameraTarget, dockedFrameHeight: props.dockedFrameHeight }), id => openResident(id), id => emit('select-project', id), value => { labels.value = value })
     const density = Math.min(window.devicePixelRatio || 1, 3)
     const bounds = host.value.getBoundingClientRect()
     game = new PhaserRuntime.Game({ type: PhaserRuntime.AUTO, parent: host.value, width: Math.round(bounds.width * density), height: Math.round(bounds.height * density), backgroundColor: '#8da578', antialias: false, pixelArt: true, roundPixels: true, scene, scale: { mode: PhaserRuntime.Scale.NONE, autoCenter: PhaserRuntime.Scale.NO_CENTER }, audio: { noAudio: true }, banner: false })
-    const resize = () => {
-      if (!game || !host.value) return
-      const bounds = host.value.getBoundingClientRect()
-      const ratio = Math.min(window.devicePixelRatio || 1, 3)
-      game.scale.resize(Math.round(bounds.width * ratio), Math.round(bounds.height * ratio))
-      game.canvas.style.width = `${bounds.width}px`
-      game.canvas.style.height = `${bounds.height}px`
-      scene?.resizeViewport(bounds.width, bounds.height, ratio)
-    }
     resizeObserver = new ResizeObserver(resize)
     resizeObserver.observe(host.value)
     game.events.once('ready', resize)
@@ -71,7 +82,7 @@ onBeforeUnmount(() => { disposed = true; document.removeEventListener('visibilit
 <template>
   <div class="companion-scene" aria-label="陪伴小街：归家小屋、咖啡馆、门前小街和花园">
     <div ref="host" class="companion-scene__canvas" :aria-hidden="!failed" />
-    <div class="companion-scene__labels" aria-label="小街居民">
+    <div v-if="chrome" class="companion-scene__labels" aria-label="小街居民">
       <template v-for="label in labels" :key="label.id">
         <button type="button" class="resident-label resident-person" :data-resident-id="label.id" :data-world-x="label.worldX" :data-world-y="label.worldY" :data-facing="label.facing" :class="{ 'is-offscreen': label.offscreen, 'card-below': label.y < 115, 'edge-left': label.x < 120, 'edge-right': label.x > (host?.clientWidth ?? 960) - 120 }" :style="label.offscreen ? { left: `${label.x}px`, top: `${label.y}px`, height: '28px' } : { left: `${label.bodyX}px`, top: `${label.bodyY}px`, height: `${label.bodyHeight}px` }" :aria-label="`${label.name}，${label.role}，${label.action}${label.offscreen ? '，在画面外，点击查看' : '，点击查看故事'}`" @mouseenter="hoveredId = label.id" @mouseleave="hoveredId = null" @focus="focusedId = label.id" @blur="focusedId = null" @click="openResident(label.id)">
           <span v-if="label.offscreen" class="resident-edge-avatar" aria-hidden="true">{{ label.direction }} {{ label.name.slice(0, 1) }}</span>
@@ -85,7 +96,7 @@ onBeforeUnmount(() => { disposed = true; document.removeEventListener('visibilit
       </template>
     </div>
     <p v-if="failed" class="companion-scene__fallback">画面暂时没有加载成功，居民的生活仍会保存。刷新页面再看看。</p>
-    <div class="companion-scene__roster" aria-label="小街居民位置">
+    <div v-if="chrome" class="companion-scene__roster" aria-label="小街居民位置">
       <button v-for="resident in residents" :key="resident.id" type="button" @click="emit('select-resident', resident.id)">{{ resident.name }} · {{ resident.action }}</button>
     </div>
     <span class="companion-scene__credit">人物素材 · LimeZu</span>
