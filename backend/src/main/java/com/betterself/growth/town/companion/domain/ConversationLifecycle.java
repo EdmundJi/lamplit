@@ -32,12 +32,23 @@ public final class ConversationLifecycle {
                 fallback(w,c,now,"先按自己的习惯聊完这一段");
             else return true;
         }
-        if("fallback".equals(c.mode)&&Duration.between(c.updatedAt,now).getSeconds()>=8) {
-            String speaker=c.nextSpeakerId==null?c.participantIds.getLast():c.nextSpeakerId;
-            String line=c.turns.isEmpty()?switch(speaker){case "student"->"我先把这页看完。";case "owner"->"等一下，我先看着手上这杯。";case "artist"->"刚才那个颜色……算了，等会儿再说。";case "gardener"->"我先去看看那盆苗。";default->"我先忙手上这点。";}:"嗯，先这样吧。";
-            appendSpeech(w,c,speaker,line,"rules",List.of(),null,now);
-            finish(w,c,now,"这段谈话先告一段落");
-        }
+        // 没有模型答案的时候就不说话。这里原来有六句兜底台词（一句通用的"嗯，先这样吧。"，
+        // 外加按角色分的开场白，其中 default 分支落在周野和阿满身上），规则等 8 秒就替居民
+        // 说出来。它们不是无害的占位符：appendSpeech 会把那句话写成一条对白、一条"我对他说过"
+        // 的记忆、一条"他当面对我说过"的记忆和说话人此刻的可见状态，finish 再经 fallbackSummary
+        // 写一条引用它的反思。于是模型不是误以为他说过——在记忆里他确实说过，然后会顺着它
+        // 往下问，当事人再为我们的句子找补。
+        //
+        // 2026-09-11 两个互不知情、都没读过这个仓库的人各读了一跑的时间线，两人排在最前面的
+        // 两条"这镇上的规矩"，正是这里的两句字符串常量（"我先忙手上这点"被读成"跨角色共用的
+        // 固定开场白"，"嗯，先这样吧"被读成"四个角色共用的收尾语"）。那一跑 330 句对白里有
+        // 87 句一字不差是这六句。
+        //
+        // 所以这一段现在只是结束，不再开口。两个人站在一起、谁也没说话就各自走开，是一件
+        // 真实发生过的事；一句通用台词不是。规矩和 NormDetector 在回放不可信时拒答是同一条：
+        // 拒绝作答，不要编一个。
+        if("fallback".equals(c.mode)&&Duration.between(c.updatedAt,now).getSeconds()>=8)
+            finish(w,c,now,c.turns.isEmpty()?"谁也没先开口，就各自走开了":"话没接下去，这段就停在这里");
         return true;
     }
 

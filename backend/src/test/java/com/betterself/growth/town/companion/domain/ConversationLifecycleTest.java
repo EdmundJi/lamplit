@@ -42,7 +42,12 @@ class ConversationLifecycleTest {
         tick(w,c,now.plusSeconds(54));assertThat(c.mode).isEqualTo("fallback");
         tick(w,c,now.plusSeconds(63));assertThat(c.status).isEqualTo("ended");
         assertThat(c.turns.getFirst().text()).contains("花盆搬家");assertThat(c.turns.getFirst().source()).isEqualTo("model");
-        assertThat(c.turns.getLast().source()).isEqualTo("rules");
+        // Nothing is appended on the way out. This used to assert the opposite - that the last turn's
+        // source was "rules" - back when a timeout made the rules say one of six canned lines on the
+        // resident's behalf. Asserted as the property rather than as "no rules turn": what matters is
+        // that the only thing in this conversation is what somebody actually said.
+        assertThat(c.turns).hasSize(1);
+        assertThat(c.turns).allMatch(t->t.source().equals("model"));
         assertThat(applyTurn(w,second,say("迟到了也不能插回来",false,"none"),now.plusSeconds(64))).isFalse();
         assertThat(c.summarizedParticipants).containsExactlyInAnyOrder("owner","artist");
     }
@@ -134,11 +139,48 @@ class ConversationLifecycleTest {
     }
 
     @Test void fallbackRecollectionDoesNotAttributeYourOwnOnlyLineToTheOtherPerson(){
+        // One real turn, and then the model goes away before anyone answers. The setup used to be
+        // "reserve a turn, fail it, let the rules speak" - that produced a single line without the
+        // model ever being involved, which is no longer a thing that can happen (see
+        // ConversationLifecycle's fallback branch). The property under test is unchanged: when the
+        // only line in the conversation is your own, your recollection must say 我当时说, not
+        // attribute it to the person who never got to answer.
         var w=world();var c=active(w);var op=reserveTurn(w,c,now);
-        failTurn(w,op,now.plusSeconds(1));tick(w,c,now.plusSeconds(10));
+        assertThat(applyTurn(w,op,say("我记得那次雨停以后，你还在给花盆搬家。",false,"none"),now.plusSeconds(1))).isTrue();
+        var unanswered=reserveTurn(w,c,now.plusSeconds(8));
+        failTurn(w,unanswered,now.plusSeconds(9));tick(w,c,now.plusSeconds(20));
+        assertThat(c.turns).hasSize(1);
         var speaker=c.turns.getFirst().speakerId();
         assertThat(w.memories.stream().filter(m->m.ownerId().equals(speaker)&&m.sourceId().equals(c.id)))
             .isNotEmpty().allMatch(m->m.text().contains("我当时说")&&!m.text().contains("我记得对方说"));
     }
 
+
+    @Test void whenNobodyEverSpokeTheRulesDoNotSpeakForThem(){
+        // The guarantee this file exists to protect, and the one that was quietly missing until
+        // 2026-09-11: a conversation nobody managed to say anything in leaves *nothing* behind.
+        //
+        // It used to leave a great deal. The rules waited eight seconds and then said one of six
+        // canned lines on the resident's behalf, and appendSpeech turned that single string into a
+        // dialogue turn, a memory for the speaker ("我对X说：…"), a memory for the listener
+        // ("X当面说：…"), that resident's visible activity, and - through fallbackSummary - a
+        // reflection quoting it. So the model was not mistaking our sentence for something they
+        // said; in their memory they really had said it, and it would answer questions about it.
+        //
+        // Two people who had never seen this repository each read a stretch of the town's life and
+        // both ranked two of those six strings as the town's clearest rules.
+        var w=world();var c=active(w);var op=reserveTurn(w,c,now);
+        failTurn(w,op,now.plusSeconds(1));
+        assertThat(c.mode).isEqualTo("fallback");
+        tick(w,c,now.plusSeconds(10));
+
+        assertThat(c.status).as("两个人还是各自走开了，谈话要结束").isEqualTo("ended");
+        assertThat(c.turns).as("谁也没开口，就不该有任何一句话").isEmpty();
+        for(String id:c.participantIds){
+            assertThat(w.memories).as("%s 不该记得说过或听过任何话",id)
+                .noneMatch(m->m.ownerId().equals(id)&&m.sourceId().equals(c.id));
+            assertThat(ResidentSimulation.actor(w,id).activity()).as("%s 不该停在 talk 上",id).isNotEqualTo("talk");
+        }
+        assertThat(c.summarizedParticipants).as("没有话可回忆").isEmpty();
+    }
 }
