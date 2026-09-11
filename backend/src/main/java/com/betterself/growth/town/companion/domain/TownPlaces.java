@@ -118,6 +118,13 @@ public final class TownPlaces {
         Position p = new Position(); p.id = id; p.place = place; p.kind = kind; p.ownerId = owner; p.capacity = capacity; return p;
     }
 
+    /** A stable, per-resident ordering over spots - the same person keeps landing on the same one when
+     * nothing else distinguishes them, different people do not all land on the first one in the list,
+     * and a replay of the same world produces the same seats. Never Math.random (docs/04-decisions.md). */
+    private static int seatPick(String worldId, String residentId, String positionId) {
+        return Math.floorMod((worldId + '|' + residentId + '|' + positionId).hashCode(), 1000);
+    }
+
     public static Position position(CompanionWorld w, String id) { return w.positions.stream().filter(p -> p.id.equals(id)).findFirst().orElse(null); }
     public static List<Position> at(CompanionWorld w, String place) { return w.positions.stream().filter(p -> p.place.equals(place)).toList(); }
 
@@ -176,9 +183,25 @@ public final class TownPlaces {
             recordSeatTransition(w, residentId, previousPositionId, mine.id, now);
             return displaced ? Outcome.YIELDED : Outcome.SEATED;
         }
+        // No view about whose spot it is. This used to sort unowned spots strictly first, and the
+        // measurement that followed is the reason it does not any more: two readers who had never seen
+        // this repository each read a stretch of the town's life and both named possession as its
+        // clearest rule - 谁在用什么东西，别人默认不动 - and then the rule-only control showed 131 seatings
+        // with somebody else's spot free and not one taken. Nobody was being considerate; the allocator
+        // simply never offered them the choice. A rule that manufactures the appearance of a norm is the
+        // one thing this project cannot afford, because every reading afterwards takes it for a finding.
+        //
+        // What stays: reclaiming a spot that is your own (the branch above - that is a fact about you,
+        // not a courtesy toward anyone else), and the equipment filter below (falling back onto someone
+        // else's tools is not the same thing as falling back onto their chair).
+        //
+        // The tie-break is a deterministic hash rather than catalogue order, or every resident would
+        // pile onto whichever spot happens to be listed first - that would be swapping one written rule
+        // for another, quieter one.
         Comparator<Position> preference = Comparator
-            .<Position>comparingInt(p -> p.ownerId == null ? 0 : 1)
-            .thenComparingInt(p -> kind != null && kind.equals(p.kind) ? 0 : 1);
+            .<Position>comparingInt(p -> kind != null && kind.equals(p.kind) ? 0 : 1)
+            .thenComparingInt(p -> seatPick(w.id, residentId, p.id))
+            .thenComparing(p -> p.id);
         Position choice = here.stream().filter(p -> p.occupantIds.size() < p.capacity)
             // An owned seat can be borrowed when nothing shared is free; an owned piece of equipment
             // (the coffee machine, the counter) cannot - falling back onto someone else's tools is not
