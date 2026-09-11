@@ -1,0 +1,20 @@
+lamplit
+Copyright 2026 吉育德 <yudelaptop@outlook.com>
+
+This product includes software written by griffty73-debug <griffty73@gmail.com>,
+which makes up a substantial part of this work (about 43% of the surviving lines
+as of 2026-09-11, including the whole of the achievement and admin subsystems).
+
+That work was originally licensed under the Mulan Permissive Software License,
+Version 2 (MulanPSL-2.0). It was relicensed to the Apache License, Version 2.0
+with its author's written permission, given on 2026-09-11 at
+https://github.com/EdmundJi/lamplit/issues/1
+
+---
+
+本产品包含 griffty73-debug <griffty73@gmail.com> 编写的代码。按 2026-09-11 的
+存活行数统计，那部分约占全部代码的 43%，其中 achievement 与 admin 两个子系统
+至今一行未改。
+
+该部分原先适用木兰宽松许可证第 2 版（MulanPSL-2.0），经作者本人于 2026-09-11
+书面授权后重新许可为 Apache License 2.0，授权记录见上方链接。

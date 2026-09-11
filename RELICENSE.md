@@ -1,8 +1,10 @@
-# 重新许可：Mulan PSL v2 → Apache License 2.0
+# 重新许可：Mulan PSL v2 → Apache License 2.0（已完成，2026-09-11）
 
 ## 现状
 
-本仓库目前整体适用 **木兰宽松许可证第 2 版（Mulan PSL v2）**，见 [`LICENSE`](LICENSE)。
+本仓库整体适用 **Apache License 2.0**，见 [`LICENSE`](LICENSE) 与 [`NOTICE`](NOTICE)。
+
+在 2026-09-11 之前，本仓库适用 **木兰宽松许可证第 2 版（Mulan PSL v2）**。
 
 它是一份宽松协议（非 copyleft），自带专利授权。本次重新许可不是为了放宽或收紧条款，
 而是换成国际上更广泛认识的等价物——Apache License 2.0 是木兰 v2 当初对标设计的对象，
@@ -27,13 +29,23 @@
 
 ## 授权状态
 
-- [ ] **griffty73-debug**（提交邮箱 `griffty73@gmail.com`）—— 待书面确认，见 https://github.com/EdmundJi/lamplit/issues/1
+- [x] **griffty73-debug**（提交邮箱 `griffty73@gmail.com`）—— 已书面确认
 
-**在上面这一项被勾选之前，本仓库整体仍然适用 Mulan PSL v2。**
-`LICENSE` 不会提前更换。
+出处：https://github.com/EdmundJi/lamplit/issues/1
+时间：2026-09-11T09:07:39Z
+方式：由本人 GitHub 账号 `griffty73-debug` 在本仓库 issue 下评论
 
-## 完成后要做的
+原文：
 
-1. 把 `LICENSE` 换成 Apache License 2.0 原文
+> 我，griffty73（提交记录中的邮箱：griffty73@gmail.com），是 EdmundJi/lamplit（原 asher_ji/personal_study）的贡献者之一。
+> 我在此不可撤销地授权：我对该仓库的全部既往贡献，可以从木兰宽松许可证第 2 版（MulanPSL v2）重新许可为 Apache License 2.0。
+> 本授权无附加条件，适用于我在本仓库中的所有历史提交。
+> 日期：2026-09-11
+
+（原评论中有两处手误：邮箱写成 `griffty73@gmai.com`、仓库名写成 `1amplit`。两处都在自我描述里、不在授权表述里，且评论由本人账号发在本仓库 issue 下，identity 由账号本身确立。）
+
+## 已完成
+
+1. `LICENSE` 换成 Apache License 2.0 原文（取自 GitHub licenses API，未手抄）
 2. 新增 `NOTICE`，按 Apache-2.0 惯例保留对 griffty73-debug 的署名
-3. 在本文件记录同意的时间与出处链接
+3. 本文件记录同意的时间与出处
