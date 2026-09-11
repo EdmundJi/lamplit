@@ -146,8 +146,9 @@ is configured to expose the same address and to proxy `/api/v1`.
 
 ## Acknowledgements
 
-This project did not start from an empty directory. Every line below is a checkable fact
-rather than a courtesy.
+This project did not start from an empty directory, and the honest way to thank the work it
+stands on is to say precisely what was taken from it — including the places where we read
+closely enough to disagree.
 
 ### The base it grew from
 
@@ -155,51 +156,106 @@ This project began as **[moonlight-in-lonely-city/personal_study](https://gitee.
 
 By surviving line count as of 2026-09-11, code written by
 **[griffty73-debug](https://github.com/griffty73-debug) is about 43% of this repository
-(27,615 lines)**, including the whole of the `achievement/` and `admin/` subsystems, which
-have not had a line changed since. On 2026-09-11 he gave written permission to relicense all
-of his past contributions from the Mulan Permissive Software License v2 to Apache-2.0; the
+(27,615 lines)** — the whole of the `achievement/` and `admin/` subsystems have not had a
+line changed since he wrote them. On 2026-09-11 he gave written permission to relicense all
+of his past contributions from the Mulan Permissive Software License v2 to Apache-2.0. The
 record is in [`RELICENSE.md`](RELICENSE.md) and [issue #1](https://github.com/EdmundJi/lamplit/issues/1).
 
-### Research this is built on
+### Generative Agents — the spine
 
-Both papers are kept in [`references/`](references/README.md) with their arXiv versions and SHA-256 hashes:
+**Joon Sung Park, Joseph C. O'Brien, Carrie J. Cai, Meredith Ringel Morris, Percy Liang,
+Michael S. Bernstein.** *Generative Agents: Interactive Simulacra of Human Behavior.*
+UIST 2023. [arXiv:2304.03442](https://arxiv.org/abs/2304.03442v2)
 
-- **Generative Agents: Interactive Simulacra of Human Behavior** — Joon Sung Park, Joseph C.
-  O'Brien, Carrie J. Cai, Meredith Ringel Morris, Percy Liang, Michael S. Bernstein (UIST 2023,
-  [arXiv:2304.03442](https://arxiv.org/abs/2304.03442v2)). The perceive-then-decide-whether-to-react
-  loop, the memory/reflection/planning layering, and expressing an environment as places with
-  usable objects all come from here.
-- **Humanoid Agents: Platform for Simulating Human-like Generative Agents** — Zhilin Wang,
-  Yu Ying Chiu, Yu Cheung Chiu (EMNLP 2023 Demos,
-  [arXiv:2310.05418](https://arxiv.org/abs/2310.05418v1)). How basic needs and emotion feed
-  back into plans comes from here.
+Without this paper the town would not have an architecture — it would have four figures each
+performing one action on a timer, which is exactly what the first version was. What it gave us:
 
-**These are a research basis, not evidence of product results.** The papers demonstrate
-short-horizon social simulation; nothing here should be read as a claim that long-term
-memory, stable personality or running cost are solved.
+| From the paper | Where it lives here |
+|---|---|
+| Retrieval scored by recency + importance + relevance (§4.1, Fig. 6) | [`CompanionRecall.java`](backend/src/main/java/com/betterself/growth/town/companion/domain/CompanionRecall.java) |
+| Reflection triggered by accumulated importance rather than a clock (§4.2) | `ResidentSimulation.needsReflection` |
+| Memory as layers, where reflections outrank raw observation (§4.2, Fig. 7) | `CompanionRecall.tier` |
+| **"Should this resident react to what they just saw?" as its own question** (§4.3.1) | `ResidentMind.react` — the paper's sentence is quoted verbatim in the code |
+| Environment as places, sub-areas and usable objects (§3.2, Fig. 2) | `TownPlaces`, and the map section of [docs/01](docs/01-requirements.md) |
 
-### Open-source implementations referenced
+That fourth row turned out to be the single most valuable idea we borrowed, and we can put
+numbers on it: offered as one option among many, `invite` was taken 0 times out of 96. Asked
+as its own question, the same model said yes 168 times out of 357. We then generalised the
+insight past where the paper took it, to `celebrate`, `propose`, `venture` and promise-making
+— **that extension is ours, the insight is theirs.**
 
-- **[a16z-infra/ai-town](https://github.com/a16z-infra/ai-town)** — the per-operation identity
-  and explicit typing ownership in
-  [`ConversationLifecycle.java`](backend/src/main/java/com/betterself/growth/town/companion/domain/ConversationLifecycle.java)
-  are informed by it (referencing commit `8e05997f`). **That is an independent Java
-  implementation; no Convex code is embedded.** The "collision map plus pathfinding, so people
-  can stop anywhere standable" approach also comes from it.
-- **[joonspk-research/generative_agents](https://github.com/joonspk-research/generative_agents)** — the official Generative Agents implementation.
-- **[HumanoidAgents/HumanoidAgents](https://github.com/HumanoidAgents/HumanoidAgents)** — the official Humanoid Agents implementation.
+Where we went another way, and why: relevance multiplies the other factors here instead of
+being summed with them (adding lets a fresh, important, entirely irrelevant memory win);
+importance is assigned by rules rather than scored by the model; plans stay as three or four
+qualitative segments instead of recursing down to 5–15 minute slots.
+
+And one debt that is easy to miss: **§7.2, where the authors report their own agents drifting
+toward excessive politeness and cooperation.** We took that limitation seriously enough to
+build against it — the id/superego/ego layering and the "let it grow worse" rule both exist
+because of that paragraph. A paper you can argue with in specifics is worth more than one you
+can only cite.
+
+### a16z-infra/ai-town — the engineering
+
+**[a16z-infra/ai-town](https://github.com/a16z-infra/ai-town)**
+
+Two concrete pitfalls avoided, both of which would have cost weeks:
+
+**Concurrent writes to a conversation.** Several residents are driven by asynchronous model
+calls that can time out, arrive late, or arrive after the world has moved on. ai-town's
+per-operation identity is why
+[`ConversationLifecycle.java`](backend/src/main/java/com/betterself/growth/town/companion/domain/ConversationLifecycle.java)
+reserves a turn as a one-shot `Operation` and re-checks every field of it before letting a
+reply land — a late answer can never overwrite a conversation that already ended, and two
+requests can never both believe it is their turn. **That is an independent Java
+implementation; no Convex code is embedded.**
+
+**Movement.** "A collision map plus pathfinding, so people can stop anywhere standable"
+([docs/04](docs/04-decisions.md)) is taken straight from them, and it saved us from building
+an enumerated-slot system that would have had to be torn out the first time four people
+needed to stand in a four-slot garden. See `collision.ts` and `pathfinding.ts`.
+
+We deliberately did not follow them on three things, and said so at the time: their
+sharp-angled personality design, their vector memory plus reflection (this town runs on
+limited knowledge and hearsay instead), and their continuously-running world. **Being a
+project worth disagreeing with in writing is its own kind of influence.**
+
+### Humanoid Agents — the feedback loop
+
+**Zhilin Wang, Yu Ying Chiu, Yu Cheung Chiu.** *Humanoid Agents: Platform for Simulating
+Human-like Generative Agents.* EMNLP 2023 System Demonstrations.
+[arXiv:2310.05418](https://arxiv.org/abs/2310.05418v1)
+
+Generative Agents gave us perceive–plan–react but left a gap: once an action finishes, which
+internal changes should feed back into the next plan? This paper answers that, and the answer
+is the loop this town runs on.
+
+Two things taken almost directly: internal quantities that accumulate silently and only
+surface as a qualitative phrase once they cross a threshold (§3.2), and **closeness rendered
+as words rather than a number** — `ResidentDirector.closeness` says so in its own comment,
+citing their example.
+
+Then the divergence, which is the part we are most sure about. In the paper, emotion is a
+persistent category handed to the model every round. Here, **no internal value ever reaches a
+model prompt at all** — `energy`, `social`, `dutyPressure` and the rest are forbidden by tests
+that assert on field names, so changing the rule means changing the test. The reason is in
+[docs/04](docs/04-decisions.md): *a number in the context turns the model into something that
+reads a table.*
+
+This is not a correction of their work. They need state to be readable and initial values to
+be settable, because their experiments depend on ablating it. We want a town with no visible
+dials. Same loop, opposite requirement — **and we only know that because the paper is
+specific enough to disagree with.**
 
 ### Art and audio
 
-- **[LimeZu](https://limezu.itch.io/)** — all of the town's pixel art comes from four purchased
-  packs: Modern Exteriors, Modern Interiors, Modern Farm, Modern Office Revamped.
-  **Attribution is required by their licence**, and redistribution is not permitted, which is
-  why the generated output and the original archives are absent from this repository.
-- **[Twemoji](https://github.com/twitter/twemoji)** — the emoji graphics in the interface,
-  [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
-- **Cafe ambiance** — the café room tone, by Marble Toast,
-  [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/), from
-  [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Cafe_ambiance.ogg).
+- **[LimeZu](https://limezu.itch.io/)** — every pixel of this town comes from four purchased
+  packs: Modern Exteriors, Modern Interiors, Modern Farm, Modern Office Revamped. The art is
+  most of what makes the place feel worth sitting in. **Attribution is required by their
+  licence**, redistribution is not permitted, and that is why the generated atlases and the
+  original archives are absent here — to see the town you will need to buy the packs.
+- **[Twemoji](https://github.com/twitter/twemoji)** — the emoji graphics, [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+- **Cafe ambiance** — the café room tone, by Marble Toast, [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/), from [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Cafe_ambiance.ogg).
 
 ## Licence
 

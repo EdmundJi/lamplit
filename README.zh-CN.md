@@ -110,32 +110,61 @@ docker compose --env-file .env.local -f deploy/compose.yaml config
 
 ## 致谢
 
-这个项目不是从空白开始的。下面每一条都是可验证的事实，不是客套。
+这个项目不是从空白开始的。而**感谢一份工作最诚实的方式，是精确说出我们从它那里拿走了什么**——包括那些我们读得够细、以至于选择了不跟的地方。
 
 ### 基座
 
-本项目起源于 **[moonlight-in-lonely-city/personal_study](https://gitee.com/moonlight-in-lonely-city/personal_study)**（Gitee）。
+本项目起源于 Gitee 上的 **[moonlight-in-lonely-city/personal_study](https://gitee.com/moonlight-in-lonely-city/personal_study)**。
 
-按 2026-09-11 的存活行数统计，**[griffty73-debug](https://github.com/griffty73-debug) 写下的代码约占全部的 43%（27,615 行）**，其中 `achievement/` 与 `admin/` 两个子系统至今一行未改。他于 2026-09-11 书面授权，把自己的全部既往贡献从木兰宽松许可证第 2 版重新许可为 Apache-2.0，授权记录见 [`RELICENSE.md`](RELICENSE.md) 与 [issue #1](https://github.com/EdmundJi/lamplit/issues/1)。
+按 2026-09-11 的存活行数，**[griffty73-debug](https://github.com/griffty73-debug) 写下的代码约占全部的 43%（27,615 行）**——`achievement/` 与 `admin/` 两个子系统，从他写完那天起一行没改过。他于 2026-09-11 书面授权，把全部既往贡献从木兰宽松许可证第 2 版重新许可为 Apache-2.0，记录见 [`RELICENSE.md`](RELICENSE.md) 与 [issue #1](https://github.com/EdmundJi/lamplit/issues/1)。
 
-### 研究依据
+### Generative Agents —— 脊柱
 
-两篇论文的原文 PDF、arXiv 版本号与 SHA-256 都保存在 [`references/`](references/README.md)：
+**Joon Sung Park, Joseph C. O'Brien, Carrie J. Cai, Meredith Ringel Morris, Percy Liang, Michael S. Bernstein.** *Generative Agents: Interactive Simulacra of Human Behavior.* UIST 2023. [arXiv:2304.03442](https://arxiv.org/abs/2304.03442v2)
 
-- **Generative Agents: Interactive Simulacra of Human Behavior** —— Joon Sung Park, Joseph C. O'Brien, Carrie J. Cai, Meredith Ringel Morris, Percy Liang, Michael S. Bernstein（UIST 2023，[arXiv:2304.03442](https://arxiv.org/abs/2304.03442v2)）。感知—反应的判断、记忆/反思/规划的分层、以地点与可用物件表达环境，都来自这篇。
-- **Humanoid Agents: Platform for Simulating Human-like Generative Agents** —— Zhilin Wang, Yu Ying Chiu, Yu Cheung Chiu（EMNLP 2023 Demos，[arXiv:2310.05418](https://arxiv.org/abs/2310.05418v1)）。基本需求与情绪如何影响计划，来自这篇。
+没有这篇，这个小镇不会有架构——它会是四个小人各自按计时器演一个动作，而那**正是第一版的样子**。它给了我们：
 
-**这两篇是研究依据，不是产品效果证明。**原论文展示的是短期社会模拟，不能据此声称长期记忆、稳定人格或运行成本已经解决。
+| 论文里的 | 我们这边在哪 |
+|---|---|
+| 检索按 recency + importance + relevance 打分（§4.1、Fig. 6） | [`CompanionRecall.java`](backend/src/main/java/com/betterself/growth/town/companion/domain/CompanionRecall.java) |
+| 反思由累积的重要性触发，而不是定时（§4.2） | `ResidentSimulation.needsReflection` |
+| 记忆分层，反思的层级高于原始观察（§4.2、Fig. 7） | `CompanionRecall.tier` |
+| **「这个居民要不要对刚看到的事做出反应」单独成为一问**（§4.3.1） | `ResidentMind.react` —— 论文原句被逐字引在代码注释里 |
+| 环境表达成地点、子区域和可用物件（§3.2、Fig. 2） | `TownPlaces`，以及 [docs/01](docs/01-requirements.md) 的地图一节 |
 
-### 参考过的开源实现
+第四行是我们借到的最值钱的一个想法，而且有数字：作为一长串动作里的一项，`invite` 被提供 96 次、采纳 **0** 次；把同一件事**单独问出来**，同一个模型 357 次里答应了 168 次。后来我们把这个洞察推广到了论文没走到的地方——`celebrate`、`propose`、`venture`、承诺。**推广是我们的，洞察是他们的。**
 
-- **[a16z-infra/ai-town](https://github.com/a16z-infra/ai-town)** —— [`ConversationLifecycle.java`](backend/src/main/java/com/betterself/growth/town/companion/domain/ConversationLifecycle.java) 的"每次操作一个身份、发言权归属明确"这一设计受它启发（参考 commit `8e05997f`）。**那是独立的 Java 实现，没有嵌入任何 Convex 代码。**「碰撞图 + 寻路，人可以停在任意可站立点」的思路也来自它。
-- **[joonspk-research/generative_agents](https://github.com/joonspk-research/generative_agents)** —— Generative Agents 的官方实现。
-- **[HumanoidAgents/HumanoidAgents](https://github.com/HumanoidAgents/HumanoidAgents)** —— Humanoid Agents 的官方实现。
+走了别的路的地方：relevance 在我们这里是对其它因子做**乘法**而不是相加（相加会让"新鲜、重要、但完全跑题"的记忆排到前面）；重要性由规则给定而不是让模型打分；计划停在三四段定性描述，不递归到 5–15 分钟的时间槽。
+
+还有一笔容易被忽略的账：**§7.2 里作者自己报告，他们的智能体会滑向过度礼貌与合作。**我们把这条局限当真到了照着它设计的地步——本我/超我/自我三层，以及"允许往坏了长"那条规矩，都是因为那一段才存在的。**一篇能让你在具体处反对它的论文，比一篇你只能引用的论文值钱得多。**
+
+### a16z-infra/ai-town —— 工程
+
+**[a16z-infra/ai-town](https://github.com/a16z-infra/ai-town)**
+
+两个具体的坑，每一个都能耗掉好几周：
+
+**对话的并发写入。**好几个居民由异步模型调用驱动，而调用可能超时、可能迟到、可能在世界已经翻篇之后才返回。ai-town 的"每次操作一个身份"，正是 [`ConversationLifecycle.java`](backend/src/main/java/com/betterself/growth/town/companion/domain/ConversationLifecycle.java) 里"预定一次发言权成为一次性的 `Operation`、落地前逐项复核"的由来——迟到的回复永远覆盖不了一段已经结束的对话，两个请求也永远不会同时以为轮到自己。**那是独立的 Java 实现，没有嵌入任何 Convex 代码。**
+
+**移动。**「碰撞图加寻路，人可以停在任意可站立的点上」（[docs/04](docs/04-decisions.md)）是直接从它那儿来的，省掉了一次必然的返工——否则我们会先做成枚举槽位，直到四个人要站进只有四席的花园时才被迫推倒重来。实现见 `collision.ts` 与 `pathfinding.ts`。
+
+有三件事我们当时就明确写下"不跟"：它的锐角人格设计、它的向量记忆 + reflection（这个镇子跑的是限知与口耳相传），以及它持续运行的世界。**能让人白纸黑字写下"这里我们不跟你"，本身也是一种影响力。**
+
+### Humanoid Agents —— 反馈闭环
+
+**Zhilin Wang, Yu Ying Chiu, Yu Cheung Chiu.** *Humanoid Agents: Platform for Simulating Human-like Generative Agents.* EMNLP 2023 System Demonstrations. [arXiv:2310.05418](https://arxiv.org/abs/2310.05418v1)
+
+Generative Agents 给了感知—计划—反应，但留下一个空白：**一个动作做完之后，哪些内部变化该反过来影响下一步？**这篇回答了它，而那个回答就是这个小镇运转的那条闭环。
+
+两处几乎是照着做的：内部量静默积分、只有越过阈值才转成一句定性描述（§3.2）；以及**亲密度以词而不是以数字存在**——`ResidentDirector.closeness` 的注释里自己写明了这一条抄自他们的例子。
+
+然后是分歧，也是我们最有把握的一处。论文里，情绪是一个每轮都交给模型的持久分类；而在这里，**任何内部数值都不会进入模型上下文**——`energy`、`social`、`dutyPressure` 这些被按字段名断言的测试挡着，改规矩就得改测试。理由写在 [docs/04](docs/04-decisions.md)：**数值进了上下文，模型就会像读表格一样推理。**
+
+这不是在纠正他们。**他们需要状态可读、初值可设，因为他们的实验要靠消融它；我们要的是一个看不出刻度的小镇。同一条闭环，相反的要求**——而我们能知道这一点，只因为那篇论文具体到了可以被反对。
 
 ### 美术与音频
 
-- **[LimeZu](https://limezu.itch.io/)** —— 小镇全部像素美术出自已购买的 Modern Exteriors、Modern Interiors、Modern Farm、Modern Office Revamped 四个素材包。**署名是这些素材授权的要求。**素材**禁止再分发**，所以生成产物和原始 zip 都不在版本库里——想看到画面，需要自行购买素材包后按上面的步骤生成。
+- **[LimeZu](https://limezu.itch.io/)** —— 这个小镇的每一个像素都来自四个**已购买**的素材包：Modern Exteriors、Modern Interiors、Modern Farm、Modern Office Revamped。**它的美术是"这个地方值得坐下来待着"这件事的大半。**署名是这些素材授权的要求，而再分发是被禁止的——这也是为什么生成产物和原始压缩包都不在这个仓库里：想看到这个小镇，需要自己去买。
 - **[Twemoji](https://github.com/twitter/twemoji)** —— 界面里的 emoji 图形，[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)。
 - **Cafe ambiance** —— 咖啡馆环境音，作者 Marble Toast，[CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/)，来自 [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Cafe_ambiance.ogg)。
 
