@@ -18,6 +18,45 @@ import static com.betterself.growth.town.companion.domain.CompanionWorld.*;
  */
 public final class TownPlaces {
     private TownPlaces() {}
+
+    /** Every fact about one seat change, whole - who, from where, to where, when, and whether a
+     * bystander in the room would actually have noticed it. Delivered to whoever registered for this
+     * world (see {@link #setSeatTransitionListener}) for <b>every</b> transition, including the ones
+     * {@link #seatEventDue}'s cooldown keeps out of the narrative {@code w.events} stream entirely -
+     * this is the "state" half of docs/06-society.md's "座位事件拆成两股", the narrative
+     * {@code took_spot}/{@code left_spot} world events are the other. */
+    public record SeatTransitionNote(String residentId, String previousPositionId, String newPositionId,
+                                      Instant at, String noticeReason) {
+        /** Landed on a spot somebody else owns. */
+        public static final String TOOK_OTHERS_SPOT = "took_others_spot";
+        /** Landed on a spot that already had somebody else on it. */
+        public static final String JOINED_OTHERS = "joined_others";
+        /** Was asked to give up a borrowed spot because its owner just reclaimed it. */
+        public static final String DISPLACED_BY_OWNER = "displaced_by_owner";
+    }
+
+    @FunctionalInterface
+    public interface SeatTransitionListener {
+        void onSeatTransition(SeatTransitionNote note);
+    }
+
+    /** One listener per running world, keyed by {@link CompanionWorld#id} (stable for a run's whole
+     * life) rather than by {@code CompanionWorld} object identity - nothing here assumes the caller
+     * hands back the same instance from one tick to the next. Deliberately a static side table in
+     * this file rather than a new field on {@code CompanionWorld}: the world gains no new persisted
+     * state, the domain itself never reads this map, and a world nobody registered for pays exactly
+     * one map lookup - nothing else - on every seat change (see {@link #notifySeatTransition}). An
+     * export tool (see {@code TimelineCollector}) opts in for the life of one run; nothing here ever
+     * needs to be saved, loaded, or migrated. */
+    private static final Map<String, SeatTransitionListener> SEAT_TRANSITION_LISTENERS = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** Registers (or, with a null listener, unregisters) the one place interested in every seat
+     * change in this world - see {@link #SEAT_TRANSITION_LISTENERS}. */
+    public static void setSeatTransitionListener(String worldId, SeatTransitionListener listener) {
+        if (worldId == null) return;
+        if (listener == null) SEAT_TRANSITION_LISTENERS.remove(worldId);
+        else SEAT_TRANSITION_LISTENERS.put(worldId, listener);
+    }
     /** The five residents who each have a home: the four NPCs plus the user's own avatar, "self". */
     public static final List<String> RESIDENT_IDS = List.of("owner", "student", "artist", "gardener", "self");
     /** Flat-mates: an id in here does not get a Location of its own - {@code homeOf} resolves
@@ -145,6 +184,7 @@ public final class TownPlaces {
         ResidentState r = ResidentSimulation.state(w, residentId);
         String previous = r != null ? r.positionId : null;
         release(w, residentId);
+        notifySeatTransition(w, residentId, previous, null, at, null);
         if (previous != null && seatEventDue(w, residentId, previous, at)) writeSeatEvent(w, "left_spot", residentId, previous, at);
     }
 
@@ -177,7 +217,10 @@ public final class TownPlaces {
                 if (r != null) r.positionId = null;
                 // The owner reclaiming a spot they already occupied themselves is not a displacement
                 // of anyone - only an actual visitor being asked to give up a borrowed seat is.
-                if (!other.equals(residentId) && seatEventDue(w, other, mine.id, now)) writeSeatEvent(w, "left_spot", other, mine.id, now);
+                if (!other.equals(residentId)) {
+                    notifySeatTransition(w, other, mine.id, null, now, SeatTransitionNote.DISPLACED_BY_OWNER);
+                    if (seatEventDue(w, other, mine.id, now)) writeSeatEvent(w, "left_spot", other, mine.id, now);
+                }
             }
             seat(w, residentId, mine);
             recordSeatTransition(w, residentId, previousPositionId, mine.id, now);
@@ -221,9 +264,33 @@ public final class TownPlaces {
      * no-op when the position genuinely did not change (the common re-scheduling case). */
     private static void recordSeatTransition(CompanionWorld w, String residentId, String previousPositionId, String newPositionId, Instant now) {
         if (Objects.equals(previousPositionId, newPositionId)) return;
+        notifySeatTransition(w, residentId, previousPositionId, newPositionId, now, noticeReasonForLanding(w, residentId, newPositionId));
         if (!seatEventDue(w, residentId, previousPositionId, now) && !seatEventDue(w, residentId, newPositionId, now)) return;
         if (previousPositionId != null) writeSeatEvent(w, "left_spot", residentId, previousPositionId, now);
         if (newPositionId != null) writeSeatEvent(w, "took_spot", residentId, newPositionId, now);
+    }
+    /** Notifies this world's registered {@link SeatTransitionListener}, if any, of a real seat
+     * change - never throttled, never skipped for a no-op (same from/to). This is the only place the
+     * complete record is produced; everything downstream (see {@code TimelineCollector}) is export
+     * tooling that opted in, not new state this file carries. */
+    private static void notifySeatTransition(CompanionWorld w, String residentId, String previousPositionId, String newPositionId, Instant at, String noticeReason) {
+        if (Objects.equals(previousPositionId, newPositionId)) return;
+        SeatTransitionListener listener = SEAT_TRANSITION_LISTENERS.get(w.id);
+        if (listener != null) listener.onSeatTransition(new SeatTransitionNote(residentId, previousPositionId, newPositionId, at, noticeReason));
+    }
+    /** Whether a bystander in the room would actually remark on residentId landing on newPositionId:
+     * it belongs to somebody else, or somebody else is already sitting on it. Null - nothing
+     * noticeable - for the ordinary case, an empty unowned spot or a resident back at their own.
+     * Read straight off the position's live state at the exact moment of landing: {@code seat()} has
+     * already added residentId to {@code occupantIds} by the time {@link #recordSeatTransition} calls
+     * this, so {@code occupantIds.size() > 1} means somebody else is on it too. */
+    private static String noticeReasonForLanding(CompanionWorld w, String residentId, String newPositionId) {
+        if (newPositionId == null) return null;
+        Position landed = position(w, newPositionId);
+        if (landed == null) return null;
+        if (landed.ownerId != null && !landed.ownerId.equals(residentId)) return SeatTransitionNote.TOOK_OTHERS_SPOT;
+        if (landed.occupantIds.size() > 1) return SeatTransitionNote.JOINED_OTHERS;
+        return null;
     }
     /** Writes the one trace the town's seating norm ("谁在用什么东西，别人默认不动，除非物主表态") had
      * never left anywhere: a "took_spot"/"left_spot" world event naming who, which exact

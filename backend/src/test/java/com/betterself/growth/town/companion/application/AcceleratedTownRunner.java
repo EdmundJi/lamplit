@@ -237,6 +237,8 @@ public final class AcceleratedTownRunner {
             if (cfg.modelEnabled()) director.close(); // shuts down the daemon worker pool; harmless if one last call is mid-flight
         }
 
+        // The run is over; stop listening before anything else reuses this world id.
+        collector.detach();
         var sorted = TimelineExporter.sortedByTime(collector.entries());
         CompanionWorld finalWorld = store.read(cfg.userId());
         export(cfg, sorted, usage, finalWorld, runStart, t, collector, live, applicationOutcomes);

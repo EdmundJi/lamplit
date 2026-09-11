@@ -2,6 +2,7 @@ package com.betterself.growth.town.companion.tools;
 
 import com.betterself.growth.town.companion.domain.CompanionWorld;
 import com.betterself.growth.town.companion.domain.CompanionWorld.*;
+import com.betterself.growth.town.companion.domain.TownPlaces;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -69,6 +70,39 @@ public final class TimelineCollector {
     private final Map<String, Instant> openEpisodeLastSeen = new HashMap<>();
     private int jointEpisodeSequence;
 
+    /** Which world's seat-transition listener (see {@link TownPlaces#setSeatTransitionListener}) this
+     * collector currently holds - set once per world id so repeated {@link #capture} calls across many
+     * ticks do not keep re-registering the same lambda. */
+    private String seatListenerWorldId;
+    /**
+     * Hands the listener back. Registering without ever unregistering is how this kind of side table
+     * turns into a leak with teeth: the registry is keyed by world id and lives for the life of the
+     * JVM, so a finished collector goes on receiving seat changes from the <em>next</em> world that
+     * happens to reuse that id - quietly mixing another run's rows into a list this one already
+     * considers complete. Surefire runs many tests in one JVM and world ids in this codebase are
+     * short fixed strings, so that collision is ordinary, not exotic.
+     *
+     * <p>Idempotent, and safe to call on a collector that never attached.
+     */
+    public void detach() {
+        if (seatListenerWorldId == null) return;
+        TownPlaces.setSeatTransitionListener(seatListenerWorldId, null);
+        seatListenerWorldId = null;
+    }
+
+    /** A {@code took_spot}/{@code left_spot} world event carries no field for "was this the kind of
+     * seat change a bystander would actually remark on" - {@code TownPlaces.WorldEvent} is a fixed
+     * shape this file must not grow. The seat-transition listener (see {@link #onSeatTransition})
+     * knows that answer at the exact moment the change happens, from context that will already be
+     * gone by the time {@link #captureEvents} sees the narrative event for the same change a moment
+     * later - so it is stashed here, keyed the same way, and consumed (removed) the first time a
+     * matching narrative event is captured. */
+    private final Map<String, String> pendingSeatNotices = new HashMap<>();
+
+    private static String seatNoticeKey(String residentId, String type, String positionId, Instant at) {
+        return residentId + "|" + type + "|" + positionId + "|" + at;
+    }
+
     /** All entries captured so far, in capture order (not necessarily chronological - sort by "at" before export). */
     public List<Map<String, Object>> entries() {
         return entries;
@@ -90,6 +124,7 @@ public final class TimelineCollector {
         if (w == null) return;
         avatarName = w.name;
         for (Actor actor : w.residents) residentNames.put(actor.id(), actor.name());
+        attachSeatListener(w);
         captureDiary(w);
         captureEvents(w);
         captureMemories(w);
@@ -253,8 +288,54 @@ public final class TimelineCollector {
                 // through 6 belong to nobody, and they all read as "窗边的位子" in the sentence. Without
                 // the id, the one dimension that can see the town's most legible rule is blind.
                 if (e.positionId() != null) extra.put("positionId", e.positionId());
+                // Whether this particular seat change is the kind a bystander would remark on - see
+                // the note on pendingSeatNotices for why this has to be filled in from a side channel
+                // rather than a field on the event itself.
+                if (SEAT_EVENT_TYPES.contains(e.type()) && e.positionId() != null && e.actorIds().size() == 1) {
+                    String notice = pendingSeatNotices.remove(seatNoticeKey(e.actorIds().get(0), e.type(), e.positionId(), e.at()));
+                    if (notice != null) extra.put("noticeReason", notice);
+                }
                 add(e.at(), "event", String.join(",", e.actorIds()), String.join("、", names), e.text(), extra);
             }
+        }
+    }
+
+    private static final Set<String> SEAT_EVENT_TYPES = Set.of("took_spot", "left_spot");
+
+    /** Registers this collector as the given world's one seat-transition listener (see
+     * {@link TownPlaces#setSeatTransitionListener}), once per world id - repeated {@link #capture}
+     * calls across many ticks of the same run must not keep re-registering the same lambda. This is
+     * how the complete, gap-free seat record (see {@link #onSeatTransition}) gets produced at all:
+     * nothing else in this file drives it, and a caller that never calls {@link #capture} simply never
+     * gets one - which is exactly the legacy-export case {@code NormDetector} is built to decline on. */
+    private void attachSeatListener(CompanionWorld w) {
+        if (w.id != null && w.id.equals(seatListenerWorldId)) return;
+        TownPlaces.setSeatTransitionListener(w.id, this::onSeatTransition);
+        seatListenerWorldId = w.id;
+    }
+
+    /** The complete half of docs/06-society.md's "座位事件拆成两股": one row per seat change, whole,
+     * with no cooldown and no eviction - {@code kind: "seat_state"}, deliberately not {@code "event"},
+     * so it never competes with the narrative stream for a place in timeline.md/highlights.md or the
+     * norm quiz (see {@code TimelineExporter}'s handling of that kind) and is only ever read back by
+     * {@code NormDetector}, which needs an exact "from" for every landing to replay occupancy without
+     * the gaps the narrative stream's throttle leaves behind. */
+    private void onSeatTransition(TownPlaces.SeatTransitionNote note) {
+        boolean landed = note.newPositionId() != null;
+        Map<String, Object> extra = new LinkedHashMap<>();
+        extra.put("eventType", landed ? "took_spot" : "left_spot");
+        extra.put("positionId", note.newPositionId());
+        extra.put("from", note.previousPositionId());
+        if (note.noticeReason() != null) extra.put("noticeReason", note.noticeReason());
+        String text = nameOf(note.residentId()) + "：" + (note.previousPositionId() == null ? "（无处）" : note.previousPositionId())
+            + " → " + (note.newPositionId() == null ? "（等待）" : note.newPositionId());
+        add(note.at(), "seat_state", note.residentId(), nameOf(note.residentId()), text, extra);
+
+        if (note.noticeReason() != null) {
+            String key = landed
+                ? seatNoticeKey(note.residentId(), "took_spot", note.newPositionId(), note.at())
+                : seatNoticeKey(note.residentId(), "left_spot", note.previousPositionId(), note.at());
+            pendingSeatNotices.put(key, note.noticeReason());
         }
     }
 

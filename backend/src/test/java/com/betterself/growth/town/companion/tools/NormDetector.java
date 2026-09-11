@@ -8,6 +8,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.TreeMap;
 
@@ -94,13 +95,22 @@ public final class NormDetector {
 
     private record Act(String actorId, String projectId, String place, Instant at) {}
 
-    private record Run(List<Act> contributions, List<Map<String, Object>> events, ZoneId zone) {}
+    /** {@code seatStates} is the complete record {@code TownPlaces}' seat-transition listener produces
+     * (see {@code TimelineCollector}) - {@code kind: "seat_state"} entries, never throttled, each
+     * carrying an exact "from" for its "to". {@code events} stays the narrative {@code "event"} stream
+     * every other dimension already reads, took_spot/left_spot included - those are still throttled and
+     * still used only for what a bystander would actually remark on, never for occupancy replay any
+     * more (see {@link #seatStates}, {@link #takes}, {@link #seatRecordGaps}). */
+    private record Run(List<Act> contributions, List<Map<String, Object>> events,
+                        List<Map<String, Object>> seatStates, ZoneId zone) {}
 
     @SuppressWarnings("unchecked")
     private static Run read(List<Map<String, Object>> entries, ZoneId zone) {
         List<Act> acts = new ArrayList<>();
         List<Map<String, Object>> events = new ArrayList<>();
+        List<Map<String, Object>> seatStates = new ArrayList<>();
         for (Map<String, Object> e : entries) {
+            if ("seat_state".equals(e.get("kind"))) { seatStates.add(e); continue; }
             if (!"event".equals(e.get("kind"))) continue;
             Map<String, Object> extra = (Map<String, Object>) e.getOrDefault("extra", Map.of());
             events.add(e);
@@ -111,7 +121,7 @@ public final class NormDetector {
             acts.add(new Act(actor, project, (String) extra.get("place"), Instant.parse((String) e.get("at"))));
         }
         acts.sort(Comparator.comparing(Act::at));
-        return new Run(acts, events, zone);
+        return new Run(acts, events, seatStates, zone);
     }
 
     public static Report detect(String label, List<Map<String, Object>> entries, String timezone) {
@@ -512,52 +522,66 @@ public final class NormDetector {
         return out;
     }
 
+    /** One entry from the complete seat record (see {@code Run#seatStates}): who, where they came
+     * from, where they landed - {@code to == null} is a plain departure to nowhere, {@code from == null}
+     * is arriving from nowhere. Unlike the narrative {@code took_spot}/{@code left_spot} pair this
+     * replaces, a single row carries both halves of one hop, so there is nothing left to go missing
+     * between them. */
+    private record SeatState(String residentId, String from, String to, Instant at) {}
+
+    @SuppressWarnings("unchecked")
+    private static List<SeatState> seatStates(Run run) {
+        List<SeatState> out = new ArrayList<>();
+        for (Map<String, Object> e : run.seatStates()) {
+            Map<String, Object> extra = (Map<String, Object>) e.getOrDefault("extra", Map.of());
+            String actor = (String) e.get("actorId");
+            if (!isResident(actor)) continue;
+            Object from = extra.get("from"), to = extra.get("positionId");
+            out.add(new SeatState(actor, from == null ? null : String.valueOf(from),
+                to == null ? null : String.valueOf(to), Instant.parse((String) e.get("at"))));
+        }
+        out.sort(Comparator.comparing(SeatState::at));
+        return out;
+    }
+
+    /** Sentinel for {@link #seatRecordGaps}: this run carries no complete seat record at all - an
+     * export from before {@code TownPlaces}' seat-transition listener existed. That is not "zero gaps
+     * found", it is "nothing to check in the first place", and it must decline exactly the way an
+     * actual gap does rather than read as a clean replay. */
+    private static final int NO_COMPLETE_SEAT_RECORD = -1;
+
     /**
-     * How many times the seat record skips a step: a resident sits down somewhere while the export still
-     * shows them holding a different spot, with no {@code left_spot} in between. Each one is a spot this
-     * instrument would go on believing is occupied for the rest of the run.
-     *
-     * <p>These gaps are ours, not the town's. {@code TownPlaces} suppresses {@code took_spot}/
-     * {@code left_spot} for non-priority seats on a 30-minute cooldown - added to stop seat churn from
-     * flooding the timeline and evicting everything else, and it worked - but the same suppression means
-     * the exported timeline is a lossy record of who was sitting where. In the neutral control, 52 of 287
-     * seat changes skip their {@code left_spot}, and a naive replay of what is left concludes that the
-     * three owned spots are occupied for about 90% of the run.
+     * How many times the complete seat record skips a step: a resident's landing names a "from" that
+     * does not match wherever this replay last saw them. With the narrative {@code took_spot}/
+     * {@code left_spot} stream this used to be common - {@code TownPlaces} suppresses that stream on a
+     * 30-minute cooldown for non-priority seats (added to stop seat churn from flooding the timeline,
+     * and it worked), which left the exported timeline a lossy record of who was sitting where: in the
+     * neutral control, 52 of 287 seat changes skipped their {@code left_spot}. The complete record
+     * (see {@code TownPlaces.SeatTransitionNote}) is produced outside that throttle specifically so
+     * this should now read a real, gap-free 0 whenever it exists at all - see
+     * {@link #NO_COMPLETE_SEAT_RECORD} for the one case where there is nothing to replay from.
      */
     private static int seatRecordGaps(Run run) {
+        List<SeatState> states = seatStates(run);
+        if (states.isEmpty()) return NO_COMPLETE_SEAT_RECORD;
         Map<String, String> held = new LinkedHashMap<>();
         int gaps = 0;
-        for (Map<String, Object> e : run.events()) {
-            @SuppressWarnings("unchecked")
-            Map<String, Object> extra = (Map<String, Object>) e.getOrDefault("extra", Map.of());
-            String type = (String) extra.get("eventType");
-            String actor = (String) e.get("actorId");
-            Object spot = extra.get("positionId");
-            if (!isResident(actor) || spot == null) continue;
-            if ("took_spot".equals(type)) {
-                String previous = held.put(actor, String.valueOf(spot));
-                if (previous != null && !previous.equals(spot)) gaps++;
-            } else if ("left_spot".equals(type)) {
-                held.remove(actor);
-            }
+        for (SeatState s : states) {
+            String expected = held.get(s.residentId());
+            if (!Objects.equals(expected, s.from())) gaps++;
+            if (s.to() == null) held.remove(s.residentId()); else held.put(s.residentId(), s.to());
         }
         return gaps;
     }
 
-    /** Every time somebody actually sat down somewhere, in order. */
+    /** Every time somebody actually landed somewhere, in order - read off the complete seat record, not
+     * the narrative event stream, so a seat churned through faster than the narrative stream's own
+     * throttle still counts here. */
     private record Take(String residentId, String spotId, Instant at) {}
 
-    @SuppressWarnings("unchecked")
     private static List<Take> takes(Run run) {
         List<Take> out = new ArrayList<>();
-        for (Map<String, Object> e : run.events()) {
-            Map<String, Object> extra = (Map<String, Object>) e.getOrDefault("extra", Map.of());
-            if (!"took_spot".equals(extra.get("eventType"))) continue;
-            Object spot = extra.get("positionId");
-            String actor = (String) e.get("actorId");
-            if (spot == null || !isResident(actor)) continue;
-            out.add(new Take(actor, String.valueOf(spot), Instant.parse((String) e.get("at"))));
-        }
+        for (SeatState s : seatStates(run)) if (s.to() != null) out.add(new Take(s.residentId(), s.to(), s.at()));
         return out;
     }
 
@@ -579,9 +603,9 @@ public final class NormDetector {
      * like the clearest finding of the round. Most of those spots were occupied by their own owners at
      * the time. Nobody was walking around anything.
      *
-     * <p>Availability is reconstructed from the run's own {@code took_spot}/{@code left_spot} events, and
-     * when that record has gaps in it ({@link #seatRecordGaps}) this dimension <b>declines to answer</b>
-     * rather than answer from a replay it knows is wrong.
+     * <p>Availability is reconstructed from the run's complete seat record (see {@link #seatStates}),
+     * and when that record is missing or has gaps in it ({@link #seatRecordGaps}) this dimension
+     * <b>declines to answer</b> rather than answer from a replay it knows is wrong.
      */
     private static List<Candidate> spotRespect(Run run, List<Map<String, Object>> positions,
                                                Map<String, Object> counts, List<Map<String, Object>> dropped) {
@@ -594,17 +618,22 @@ public final class NormDetector {
         counts.put("spotTakes", takes.size());
         int gaps = seatRecordGaps(run);
         counts.put("seatRecordGaps", gaps);
-        if (gaps > 0) {
+        if (gaps != 0) {
             counts.put("spotTakesWhereSomeoneElsesWasFree", 0);
+            String reason = gaps == NO_COMPLETE_SEAT_RECORD
+                ? "这份导出没有完整的座位记录（早于按 from/to 记录的改动），说不出当时那个位置空不空"
+                : "座位记录有 " + gaps + " 处缺口，说不出当时那个位置空不空";
             dropped.add(new LinkedHashMap<>(Map.of(
                 "dimension", "spotRespect", "key", "town",
                 "statement", "有主的位置，别人绕着走",
-                "reason", "座位记录有 " + gaps + " 处缺口，说不出当时那个位置空不空",
+                "reason", reason,
                 "support", 0, "strength", 0.0)));
             return List.of();
         }
 
-        // Occupancy, replayed. Sound only because the record above has no gaps in it.
+        // Occupancy, replayed off the complete seat record. Sound because that record has no gaps in
+        // it (checked above) - each row already carries both halves of one hop (from and to), so there
+        // is nothing left to pair up the way the narrative took_spot/left_spot stream used to require.
         Map<String, Set<String>> occupants = new LinkedHashMap<>();
         Map<String, Integer> capacity = new LinkedHashMap<>();
         for (Map<String, Object> p : positions) {
@@ -619,19 +648,11 @@ public final class NormDetector {
         Set<String> days = new LinkedHashSet<>();
         Set<String> whoRespected = new LinkedHashSet<>();
         List<String> evidence = new ArrayList<>();
-        for (Map<String, Object> e : run.events()) {
-            @SuppressWarnings("unchecked")
-            Map<String, Object> extra = (Map<String, Object>) e.getOrDefault("extra", Map.of());
-            String type = (String) extra.get("eventType");
-            String actor = (String) e.get("actorId");
-            Object spotField = extra.get("positionId");
-            if (spotField == null || !isResident(actor)) continue;
-            String spotId = String.valueOf(spotField);
-            if ("left_spot".equals(type)) {
-                occupants.computeIfAbsent(spotId, k -> new LinkedHashSet<>()).remove(actor);
-                continue;
-            }
-            if (!"took_spot".equals(type)) continue;
+        for (SeatState s : seatStates(run)) {
+            String actor = s.residentId();
+            if (s.from() != null) occupants.computeIfAbsent(s.from(), k -> new LinkedHashSet<>()).remove(actor);
+            if (s.to() == null) continue;
+            String spotId = s.to();
             Spot landed = byId.get(spotId);
             if (landed != null) {
                 List<Spot> here = byPlace.getOrDefault(landed.place(), List.of());
@@ -652,11 +673,11 @@ public final class NormDetector {
                 if (!freeOwnedByOthers.isEmpty() && freeOwnedByOthers.size() < free.size()) {
                     considered++;
                     expected += (double) freeOwnedByOthers.size() / free.size();
-                    days.add(Instant.parse((String) e.get("at")).atZone(run.zone()).toLocalDate().toString());
+                    days.add(s.at().atZone(run.zone()).toLocalDate().toString());
                     if (landed.ownerId() != null && !landed.ownerId().equals(actor)) tookSomeoneElses++;
                     else {
                         whoRespected.add(actor);
-                        if (evidence.size() < 3) evidence.add(e.get("at") + " " + actor + " 坐了 " + landed.id()
+                        if (evidence.size() < 3) evidence.add(s.at() + " " + actor + " 坐了 " + landed.id()
                             + "（" + freeOwnedByOthers.get(0).id() + " 当时空着）");
                     }
                 }

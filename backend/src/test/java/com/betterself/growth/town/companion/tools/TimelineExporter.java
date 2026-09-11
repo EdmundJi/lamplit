@@ -49,6 +49,10 @@ public final class TimelineExporter {
         sb.append("# 加速跑时间线\n\n");
         String currentDay = null;
         for (Map<String, Object> e : sortedEntries) {
+            // The complete seat record ("seat_state") is for NormDetector's replay only - never for a
+            // human reader (docs/06-society.md "座位事件拆成两股"). It has no place in a timeline a
+            // person reads start to finish.
+            if ("seat_state".equals(e.get("kind"))) continue;
             Instant at = Instant.parse((String) e.get("at"));
             String localDay = at.atZone(zone).toLocalDate().toString();
             if (!localDay.equals(currentDay)) {
@@ -261,13 +265,28 @@ public final class TimelineExporter {
 
     /** What a bystander would have been able to see happen. Inner monologue ({@code thought}) is left
      * out: 863 of them in a three-day run would bury the events, and a norm has to be visible from the
-     * outside or it is not one. */
+     * outside or it is not one.
+     *
+     * <p>Routine seat changes are furniture, not narrative: docs/06-society.md found 67% of a run's
+     * quiz material was "占了/离开了" - a resident sitting back at their own desk, one more time. Only
+     * the handful {@code TownPlaces} itself flagged as the kind a bystander would actually remark on -
+     * took someone else's spot, sat down next to someone, got up because the spot's owner just
+     * reclaimed it (see {@code TownPlaces.SeatTransitionNote} and {@code TimelineCollector}'s
+     * {@code noticeReason}) - earn a line here. The judgment call ("would someone in the room notice
+     * this") is made once, at the moment the seat change happens and the full context for it still
+     * exists; this method only reads the answer back. {@code seat_state} (the complete record kept for
+     * {@code NormDetector}'s replay) never reaches here at all - {@link #sortedByTime} and the caller's
+     * own entries list mix it in, but this method's own {@code kind} check excludes it same as any
+     * other non-event, non-dialogue kind. */
     @SuppressWarnings("unchecked")
     private static boolean isSocialTrace(Map<String, Object> e) {
         if ("dialogue".equals(e.get("kind"))) return true;
         if (!"event".equals(e.get("kind"))) return false;
-        Object type = ((Map<String, Object>) e.getOrDefault("extra", Map.of())).get("eventType");
-        return !"thought".equals(type);
+        Map<String, Object> extra = (Map<String, Object>) e.getOrDefault("extra", Map.of());
+        Object type = extra.get("eventType");
+        if ("thought".equals(type)) return false;
+        if ("took_spot".equals(type) || "left_spot".equals(type)) return extra.get("noticeReason") != null;
+        return true;
     }
 
     private static String maskNames(String text) {
