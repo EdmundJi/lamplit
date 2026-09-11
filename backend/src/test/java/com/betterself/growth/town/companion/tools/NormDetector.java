@@ -51,6 +51,26 @@ public final class NormDetector {
      * line; below it we would be reporting the shape of the world, not a choice anyone made. */
     public static final double MIN_STRENGTH = 1.5;
 
+    /** The user's avatar. It has no {@link com.betterself.growth.town.companion.application.ResidentMind}
+     * behind it - {@link com.betterself.growth.town.companion.domain.CompanionRules} drives it and nothing
+     * else - so every one of its deeds is ours by construction, in a model run exactly as much as in the
+     * rule-only control. Reading a norm out of it is the same category error as reading one out of the
+     * seat allocator, and it is not a small one: in the neutral control the avatar alone was 146 of 287
+     * seatings, and <em>all</em> 56 "sat in somebody else's spot" events in that run were its own. Left
+     * in, it dragged {@code spotRespect}'s control candidate down to strength 1.21 - under
+     * {@link #MIN_STRENGTH}, so the control produced no candidate, so nothing was subtracted, so the same
+     * regularity would have come back out of a model run wearing the word "discovery". Excluded, the
+     * control reads 81 seatings, 0 of them somebody else's, chance 22.8.
+     *
+     * <p>Excluded as an <b>actor</b> only. Residents' behaviour <em>towards</em> 我 is still theirs. */
+    public static final String AVATAR = "self";
+
+    /** A single resident who is not the avatar. Composite ids ({@code "owner,artist"}) are one joint
+     * entry, not one person, and each caller splits them before asking. */
+    private static boolean isResident(String actorId) {
+        return actorId != null && !actorId.isBlank() && !actorId.equals(AVATAR) && !actorId.contains(",");
+    }
+
     /**
      * @param strength     observed over the dimension's own null baseline; 1.0 means indistinguishable from chance
      * @param minuteSpread standard deviation, in minutes, of the time of day this recurs at
@@ -87,7 +107,7 @@ public final class NormDetector {
             if (!"contribution".equals(extra.get("eventType"))) continue;
             String project = (String) extra.get("projectId");
             String actor = (String) e.get("actorId");
-            if (project == null || actor == null || actor.isBlank()) continue;
+            if (project == null || !isResident(actor)) continue;
             acts.add(new Act(actor, project, (String) extra.get("place"), Instant.parse((String) e.get("at"))));
         }
         acts.sort(Comparator.comparing(Act::at));
@@ -141,15 +161,15 @@ public final class NormDetector {
         Run run = read(entries, ZoneId.of(timezone));
         List<Candidate> raw = new ArrayList<>();
         Map<String, Object> counts = new TreeMap<>();
+        List<Map<String, Object>> dropped = new ArrayList<>();
         raw.addAll(pairAffinity(run, counts));
         raw.addAll(whoJoinsWhom(run, counts));
         raw.addAll(occasions(run, counts));
         raw.addAll(reciprocity(run, counts));
-        raw.addAll(spotRespect(run, positions, counts));
+        raw.addAll(spotRespect(run, positions, counts, dropped));
         raw.addAll(ownSpot(run, positions, counts));
 
         List<Candidate> kept = new ArrayList<>();
-        List<Map<String, Object>> dropped = new ArrayList<>();
         for (Candidate c : raw) {
             String why = gate(c);
             if (why == null) kept.add(c);
@@ -374,7 +394,7 @@ public final class NormDetector {
             String actorField = (String) e.get("actorId");
             if (place == null || actorField == null || actorField.isBlank()) continue;
             for (String actor : actorField.split(","))
-                if (!actor.isBlank()) moments.add(new Moment(place, Instant.parse((String) e.get("at")), actor.trim()));
+                if (isResident(actor.trim())) moments.add(new Moment(place, Instant.parse((String) e.get("at")), actor.trim()));
         }
         moments.sort(Comparator.comparing(Moment::at));
 
@@ -492,6 +512,38 @@ public final class NormDetector {
         return out;
     }
 
+    /**
+     * How many times the seat record skips a step: a resident sits down somewhere while the export still
+     * shows them holding a different spot, with no {@code left_spot} in between. Each one is a spot this
+     * instrument would go on believing is occupied for the rest of the run.
+     *
+     * <p>These gaps are ours, not the town's. {@code TownPlaces} suppresses {@code took_spot}/
+     * {@code left_spot} for non-priority seats on a 30-minute cooldown - added to stop seat churn from
+     * flooding the timeline and evicting everything else, and it worked - but the same suppression means
+     * the exported timeline is a lossy record of who was sitting where. In the neutral control, 52 of 287
+     * seat changes skip their {@code left_spot}, and a naive replay of what is left concludes that the
+     * three owned spots are occupied for about 90% of the run.
+     */
+    private static int seatRecordGaps(Run run) {
+        Map<String, String> held = new LinkedHashMap<>();
+        int gaps = 0;
+        for (Map<String, Object> e : run.events()) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> extra = (Map<String, Object>) e.getOrDefault("extra", Map.of());
+            String type = (String) extra.get("eventType");
+            String actor = (String) e.get("actorId");
+            Object spot = extra.get("positionId");
+            if (!isResident(actor) || spot == null) continue;
+            if ("took_spot".equals(type)) {
+                String previous = held.put(actor, String.valueOf(spot));
+                if (previous != null && !previous.equals(spot)) gaps++;
+            } else if ("left_spot".equals(type)) {
+                held.remove(actor);
+            }
+        }
+        return gaps;
+    }
+
     /** Every time somebody actually sat down somewhere, in order. */
     private record Take(String residentId, String spotId, Instant at) {}
 
@@ -503,7 +555,7 @@ public final class NormDetector {
             if (!"took_spot".equals(extra.get("eventType"))) continue;
             Object spot = extra.get("positionId");
             String actor = (String) e.get("actorId");
-            if (spot == null || actor == null || actor.isBlank() || actor.contains(",")) continue;
+            if (spot == null || !isResident(actor)) continue;
             out.add(new Take(actor, String.valueOf(spot), Instant.parse((String) e.get("at"))));
         }
         return out;
@@ -516,46 +568,105 @@ public final class NormDetector {
      * choice the residents are making.
      *
      * <p>The null is availability: if a resident sat down indifferent to whose spot it was, they would
-     * land on somebody else's as often as those spots make up the room. Avoidance shows as the observed
-     * rate falling <em>below</em> that, so this candidate's strength is the expected-over-observed ratio -
-     * the only dimension here that reads a norm out of something not happening.
+     * land on somebody else's as often as those spots make up <b>the part of the room that was actually
+     * free at that moment</b>. Avoidance shows as the observed rate falling <em>below</em> that, so this
+     * candidate's strength is the expected-over-observed ratio - the only dimension here that reads a
+     * norm out of something not happening.
+     *
+     * <p>"Actually free" is the whole dimension, and the first version of it did not have that half. It
+     * asked the catalogue whether the room <em>contains</em> a spot belonging to someone else and counted
+     * every seating in such a room as a chance declined - 131 of them, against a chance of 35, which read
+     * like the clearest finding of the round. Most of those spots were occupied by their own owners at
+     * the time. Nobody was walking around anything.
+     *
+     * <p>Availability is reconstructed from the run's own {@code took_spot}/{@code left_spot} events, and
+     * when that record has gaps in it ({@link #seatRecordGaps}) this dimension <b>declines to answer</b>
+     * rather than answer from a replay it knows is wrong.
      */
-    private static List<Candidate> spotRespect(Run run, List<Map<String, Object>> positions, Map<String, Object> counts) {
+    private static List<Candidate> spotRespect(Run run, List<Map<String, Object>> positions,
+                                               Map<String, Object> counts, List<Map<String, Object>> dropped) {
         List<Spot> catalogue = spots(positions);
         Map<String, Spot> byId = new LinkedHashMap<>();
         for (Spot spot : catalogue) byId.put(spot.id(), spot);
         Map<String, List<Spot>> byPlace = groupBy(catalogue, Spot::place);
+
+        List<Take> takes = takes(run);
+        counts.put("spotTakes", takes.size());
+        int gaps = seatRecordGaps(run);
+        counts.put("seatRecordGaps", gaps);
+        if (gaps > 0) {
+            counts.put("spotTakesWhereSomeoneElsesWasFree", 0);
+            dropped.add(new LinkedHashMap<>(Map.of(
+                "dimension", "spotRespect", "key", "town",
+                "statement", "有主的位置，别人绕着走",
+                "reason", "座位记录有 " + gaps + " 处缺口，说不出当时那个位置空不空",
+                "support", 0, "strength", 0.0)));
+            return List.of();
+        }
+
+        // Occupancy, replayed. Sound only because the record above has no gaps in it.
+        Map<String, Set<String>> occupants = new LinkedHashMap<>();
+        Map<String, Integer> capacity = new LinkedHashMap<>();
+        for (Map<String, Object> p : positions) {
+            Object id = p.get("id");
+            if (id == null) continue;
+            Object cap = p.get("capacity");
+            capacity.put(String.valueOf(id), cap instanceof Number n && n.intValue() > 0 ? n.intValue() : 1);
+        }
 
         int considered = 0, tookSomeoneElses = 0;
         double expected = 0;
         Set<String> days = new LinkedHashSet<>();
         Set<String> whoRespected = new LinkedHashSet<>();
         List<String> evidence = new ArrayList<>();
-        for (Take take : takes(run)) {
-            Spot landed = byId.get(take.spotId());
-            if (landed == null) continue;
-            List<Spot> here = byPlace.getOrDefault(landed.place(), List.of());
-            long ownedByOthers = here.stream()
-                .filter(spot -> spot.ownerId() != null && !spot.ownerId().equals(take.residentId())).count();
-            // A room with nobody's spot in it says nothing either way, and neither does one where every
-            // spot is somebody else's - there would be nowhere to go instead.
-            if (ownedByOthers == 0 || ownedByOthers == here.size()) continue;
-            considered++;
-            expected += (double) ownedByOthers / here.size();
-            days.add(take.at().atZone(run.zone()).toLocalDate().toString());
-            boolean theirs = landed.ownerId() != null && !landed.ownerId().equals(take.residentId());
-            if (theirs) tookSomeoneElses++;
-            else {
-                whoRespected.add(take.residentId());
-                if (evidence.size() < 3)
-                    evidence.add(take.at() + " " + take.residentId() + " 坐了 " + landed.id() + "（同屋里有别人的位置）");
+        for (Map<String, Object> e : run.events()) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> extra = (Map<String, Object>) e.getOrDefault("extra", Map.of());
+            String type = (String) extra.get("eventType");
+            String actor = (String) e.get("actorId");
+            Object spotField = extra.get("positionId");
+            if (spotField == null || !isResident(actor)) continue;
+            String spotId = String.valueOf(spotField);
+            if ("left_spot".equals(type)) {
+                occupants.computeIfAbsent(spotId, k -> new LinkedHashSet<>()).remove(actor);
+                continue;
             }
+            if (!"took_spot".equals(type)) continue;
+            Spot landed = byId.get(spotId);
+            if (landed != null) {
+                List<Spot> here = byPlace.getOrDefault(landed.place(), List.of());
+                // Free right before this resident sat down - the spot they are about to take included,
+                // since it was free until they took it.
+                List<Spot> free = new ArrayList<>();
+                for (Spot spot : here) {
+                    int taken = occupants.getOrDefault(spot.id(), Set.of()).size();
+                    if (spot.id().equals(spotId) || taken < capacity.getOrDefault(spot.id(), 1)) free.add(spot);
+                }
+                List<Spot> freeOwnedByOthers = free.stream()
+                    .filter(spot -> spot.ownerId() != null && !spot.ownerId().equals(actor)).toList();
+                // A choice exists only when somebody else's spot was standing there free AND there was
+                // somewhere else to go. Either half missing and the seating says nothing either way -
+                // which is the half the first version of this dimension left out: it asked the catalogue
+                // whether the room contains somebody else's spot, never whether that spot was available,
+                // and counted 81 seatings as 81 chances not taken.
+                if (!freeOwnedByOthers.isEmpty() && freeOwnedByOthers.size() < free.size()) {
+                    considered++;
+                    expected += (double) freeOwnedByOthers.size() / free.size();
+                    days.add(Instant.parse((String) e.get("at")).atZone(run.zone()).toLocalDate().toString());
+                    if (landed.ownerId() != null && !landed.ownerId().equals(actor)) tookSomeoneElses++;
+                    else {
+                        whoRespected.add(actor);
+                        if (evidence.size() < 3) evidence.add(e.get("at") + " " + actor + " 坐了 " + landed.id()
+                            + "（" + freeOwnedByOthers.get(0).id() + " 当时空着）");
+                    }
+                }
+            }
+            occupants.computeIfAbsent(spotId, k -> new LinkedHashSet<>()).add(actor);
         }
-        counts.put("spotTakes", takes(run).size());
         counts.put("spotTakesWhereSomeoneElsesWasFree", considered);
         if (considered == 0) return List.of();
         return List.of(new Candidate("spotRespect", "town",
-            "有主的位置，别人绕着走（" + considered + " 次落座里只有 " + tookSomeoneElses
+            "有主的位置，别人绕着走（" + considered + " 次有得选的落座里只有 " + tookSomeoneElses
                 + " 次坐了别人的位置，碰运气该有 " + Math.round(expected) + " 次）",
             considered - tookSomeoneElses, days.size(),
             (expected + 0.5) / (tookSomeoneElses + 0.5), 0, whoRespected.size(), false, evidence));

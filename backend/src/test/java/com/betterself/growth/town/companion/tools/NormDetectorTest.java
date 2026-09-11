@@ -399,6 +399,15 @@ class NormDetectorTest {
         return e;
     }
 
+    private static Map<String, Object> left(String actor, String positionId, String place, String at) {
+        Map<String, Object> e = took(actor, positionId, place, at);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> extra = (Map<String, Object>) e.get("extra");
+        extra.put("eventType", "left_spot");
+        e.put("text", actor + " 起身了");
+        return e;
+    }
+
     /** One owned seat among four, the shape the town actually has in its cafe. */
     private static final List<Map<String, Object>> CAFE = List.of(
             spot("cafe-window-seat", "cafe", "student"),
@@ -469,5 +478,81 @@ class NormDetectorTest {
         NormDetector.Report report = NormDetector.detect("run", List.of(), List.of(), CAFE, TZ);
         assertThat(report.counts()).containsEntry("spotTakes", 0);
         assertThat(report.counts()).containsEntry("spotTakesWhereSomeoneElsesWasFree", 0);
+    }
+
+    @Test
+    @DisplayName("玩家的小人怎么坐都不算规矩——它背后没有人，只有规则")
+    void theAvatarsOwnBehaviourIsNeverReadAsANorm() {
+        // 我 does exactly what the town's clearest-looking "norm" looks like: sits in the cafe over and
+        // over and never once in the seat that belongs to somebody else. There is no mind behind it, so
+        // there is nothing here to discover - CompanionRules did all of it.
+        List<Map<String, Object>> entries = new ArrayList<>();
+        for (int day = 1; day <= 3; day++)
+            for (int round = 0; round < 3; round++) {
+                entries.add(took("self", "cafe-window-2", "cafe", at(day, 9 + round, 0)));
+                entries.add(left("self", "cafe-window-2", "cafe", at(day, 9 + round, 30)));
+                entries.add(contribution("self", "garden-beds", "garden", at(day, 14 + round, 0)));
+            }
+
+        NormDetector.Report report = NormDetector.detect("run", entries, List.of(), CAFE, TZ);
+        assertThat(report.counts()).containsEntry("spotTakes", 0);
+        assertThat(report.candidates()).allSatisfy(c -> assertThat(c.key()).doesNotContain("self"));
+        assertThat(report.candidates()).noneMatch(c -> c.dimension().equals("spotRespect"));
+    }
+
+    @Test
+    @DisplayName("座位记录有缺口的时候，这条维度拒答，而不是照着错的回放算一个数出来")
+    void declinesThePossessionQuestionWhenTheSeatRecordHasGapsInIt() {
+        // 阿禾 moves from one seat to another and the export never says she got up. One gap is enough:
+        // from here on the replay believes she is in two places, and every later "that spot was taken"
+        // is this instrument's own bookkeeping rather than anything that happened in the town.
+        List<Map<String, Object>> entries = new ArrayList<>();
+        for (int day = 1; day <= 3; day++)
+            for (String who : List.of("owner", "artist", "fixer", "weaver"))
+                entries.add(took(who, "cafe-window-" + (2 + (who.length() % 3)), "cafe", at(day, 10, 5)));
+        entries.add(took("owner", "cafe-window-3", "cafe", at(3, 11, 0))); // no left_spot for window-4
+
+        NormDetector.Report report = NormDetector.detect("run", entries, List.of(), CAFE, TZ);
+        assertThat(report.counts()).containsEntry("seatRecordGaps", 1);
+        assertThat(report.candidates()).noneMatch(c -> c.dimension().equals("spotRespect"));
+        assertThat(report.dropped()).anySatisfy(d -> {
+            assertThat(d).containsEntry("dimension", "spotRespect");
+            assertThat(String.valueOf(d.get("reason"))).contains("说不出当时那个位置空不空");
+        });
+    }
+
+    @Test
+    @DisplayName("别人的位子当时有人坐着，绕开它就什么也没证明")
+    void aSeatingProvesNothingWhileTheOwnedSpotWasOccupiedAnyway() {
+        // This is the shape that produced the round's most convincing false finding: 131 seatings, not
+        // one of them in somebody else's spot, chance said 35. The owner was sitting in it the whole time.
+        List<Map<String, Object>> entries = new ArrayList<>();
+        entries.add(took("student", "cafe-window-seat", "cafe", at(1, 8, 0)));
+        for (int day = 1; day <= 3; day++)
+            for (String who : List.of("owner", "artist", "fixer", "weaver"))
+                entries.add(took(who, "cafe-window-" + (2 + (who.length() % 3)), "cafe", at(day, 10, 5)));
+
+        NormDetector.Report report = NormDetector.detect("run", entries, List.of(), CAFE, TZ);
+        assertThat(report.counts()).containsEntry("seatRecordGaps", 0);
+        assertThat(report.counts()).containsEntry("spotTakesWhereSomeoneElsesWasFree", 0);
+        assertThat(report.candidates()).noneMatch(c -> c.dimension().equals("spotRespect"));
+    }
+
+    @Test
+    @DisplayName("位子空出来以后再绕开它，才算数")
+    void onceTheOwnedSpotIsVacatedAvoidingItCountsAgain() {
+        List<Map<String, Object>> entries = new ArrayList<>();
+        entries.add(took("student", "cafe-window-seat", "cafe", at(1, 8, 0)));
+        entries.add(left("student", "cafe-window-seat", "cafe", at(1, 9, 0)));
+        for (int day = 1; day <= 3; day++)
+            for (String who : List.of("owner", "artist", "fixer", "weaver"))
+                entries.add(took(who, "cafe-window-" + (2 + (who.length() % 3)), "cafe", at(day, 10, 5)));
+
+        NormDetector.Report report = NormDetector.detect("run", entries, List.of(), CAFE, TZ);
+        assertThat((Integer) report.counts().get("spotTakesWhereSomeoneElsesWasFree")).isPositive();
+        assertThat(report.candidates()).anySatisfy(c -> {
+            assertThat(c.dimension()).isEqualTo("spotRespect");
+            assertThat(c.statement()).contains("有得选的落座");
+        });
     }
 }
