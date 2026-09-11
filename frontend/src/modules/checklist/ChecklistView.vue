@@ -3,7 +3,14 @@ import { nextTick, ref } from 'vue'
 import { Check, Plus, GripVertical, MoreHorizontal, ArrowUp, ArrowDown, Clock3, Trash2, Undo2 } from 'lucide-vue-next'
 import { useDragSort } from '../../shared/ui/interaction/use-drag-sort'
 import { disclose as vDisclose } from '../../shared/ui/interaction/disclose'
+import SegmentedControl from '../../shared/ui/interaction/SegmentedControl.vue'
+import EmptyState from '../../shared/ui/EmptyState.vue'
 import { useChecklist, type ChecklistTask } from './checklist.logic'
+
+const listTabOptions = [
+  { value: 'today', label: '今天' },
+  { value: 'all', label: '全部' },
+]
 
 const { tab, title, loading, saving, pending, error, loadError, notice, last, undoing, today, active, completed, load, add, act, tomorrow, undo, rename, move } = useChecklist()
 const input = ref<HTMLInputElement | null>(null)
@@ -47,8 +54,12 @@ function shift(task: ChecklistTask, offset: number) {
     <header class="checklist-head">
       <div><p class="checklist-date">{{ today.replaceAll('-', ' / ') }}</p><h1 id="checklist-heading">{{ tab === 'today' ? '今天' : '全部任务' }}<span v-if="!loading && active.length">{{ active.length }}</span></h1></div>
       <nav class="list-tabs" aria-label="清单范围">
-        <button :aria-pressed="tab === 'today'" @click="tab = 'today'">今天</button>
-        <button :aria-pressed="tab === 'all'" @click="tab = 'all'">全部</button>
+        <SegmentedControl
+          :model-value="tab"
+          :options="listTabOptions"
+          label="清单范围"
+          @update:model-value="value => tab = value as typeof tab"
+        />
       </nav>
     </header>
 
@@ -94,7 +105,13 @@ function shift(task: ChecklistTask, offset: number) {
           </div>
         </li>
       </ul>
-      <div v-if="!active.length && !loadError" class="list-empty"><Check v-if="completed.length" :size="27" /><p>{{ completed.length ? '都做好了。' : tab === 'today' ? '今天还没有待办。' : '清单是空的。' }}</p><span>{{ completed.length ? '有新的事情，随时记下来。' : '在上方写下第一件事。' }}</span></div>
+      <EmptyState
+        v-if="!active.length && !loadError"
+        class="list-empty"
+        :sprite="completed.length ? 'chicken_white_idle_1' : 'rabbit_brown_idle_1'"
+        :title="completed.length ? '都做好了。' : tab === 'today' ? '今天还没有待办。' : '清单是空的。'"
+        :description="completed.length ? '有新的事情，随时记下来。' : '在上方写下第一件事。'"
+      />
       <details v-if="completed.length" v-disclose class="completed-list"><summary>已完成 {{ completed.length }} 项</summary><ul><li v-for="task in completed" :key="task.publicId"><Check :size="15" /><span>{{ task.taskTitle }}</span></li></ul></details>
     </template>
   </section>
@@ -109,16 +126,14 @@ h1 span { display: inline-block; margin-left: 12px; vertical-align: middle; font
 button, input { font: inherit; }
 button { cursor: pointer; }
 button:disabled { opacity: .45; cursor: default; }
-.list-tabs { display: flex; background: var(--surface-muted); padding: 4px; border-radius: 10px; }
-.list-tabs button { padding: 8px 16px; border: 0; border-radius: 7px; color: var(--muted); background: transparent; font-size: 13px; }
-.list-tabs button[aria-pressed=true] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 3px #0000000a; }
-.quick-add { display: flex; gap: 12px; align-items: center; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px 10px 18px; color: var(--muted); }
+.list-tabs { display: flex; }
+.quick-add { display: flex; gap: 12px; align-items: center; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card); padding: 10px 12px 10px 18px; color: var(--muted); }
 .quick-add:focus-within { border-color: var(--primary); }
 .quick-add input { min-width: 0; flex: 1; border: 0; outline: none; box-shadow: none; padding: 10px 0; background: transparent; color: var(--ink); font-size: 15px; }
-.quick-add button { flex-shrink: 0; background: var(--primary); color: var(--on-primary, #fff); border: 0; border-radius: 7px; padding: 9px 14px; font-size: 13px; }
+.quick-add button { flex-shrink: 0; background: var(--primary); color: var(--on-primary, #fff); border: 0; border-radius: var(--radius-card); padding: 9px 14px; font-size: 13px; }
 .checklist-items, .completed-list ul { list-style: none; padding: 0; margin: 22px 0 0; }
 .checklist-row { position: relative; display: flex; align-items: center; gap: 12px; min-height: 64px; border-bottom: 1px solid var(--border); padding: 10px 0; }
-.drag-handle { color: var(--muted); opacity: .35; cursor: grab; display: grid; place-items: center; width: 22px; height: 44px; min-height: 0; padding: 0; border: 0; border-radius: 6px; background: transparent; flex-shrink: 0; touch-action: none; }
+.drag-handle { color: var(--muted); opacity: .35; cursor: grab; display: grid; place-items: center; width: 22px; height: 44px; min-height: 0; padding: 0; border: 0; border-radius: var(--radius); background: transparent; flex-shrink: 0; touch-action: none; }
 .checklist-row:hover .drag-handle, .drag-handle:focus-visible { opacity: 1; }
 /* The row being carried lifts above its neighbours while they slide aside underneath. */
 .is-dragging { z-index: 2; cursor: grabbing; border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow-soft); }
@@ -129,27 +144,27 @@ button:disabled { opacity: .45; cursor: default; }
 .task-text { flex: 1; min-width: 0; }
 .task-title { text-align: left; overflow-wrap: anywhere; width: 100%; border: 0; background: none; color: var(--ink); padding: 10px 0; line-height: 1.5; font-size: 15px; }
 .task-date { display: block; color: var(--muted); font-size: 11px; }
-.title-edit { width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 5px; background: var(--surface); color: var(--ink); }
+.title-edit { width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--ink); }
 .edit-actions { display: flex; flex-wrap: wrap; gap: 10px; font-size: 12px; margin-top: 8px; }
 .edit-actions button, .list-feedback button, .checklist-error button { background: none; border: 0; color: var(--primary); padding: 4px 0; }
 .edit-actions span { color: var(--muted); }
 .task-menu-wrap { position: relative; }
-.task-menu-toggle { border: 0; color: var(--muted); background: transparent; width: 44px; height: 44px; display: grid; place-items: center; border-radius: 8px; }
+.task-menu-toggle { border: 0; color: var(--muted); background: transparent; width: 44px; height: 44px; display: grid; place-items: center; border-radius: var(--radius-card); }
 .task-menu-toggle:hover { background: var(--surface-muted); }
-.task-menu { position: absolute; z-index: 5; right: 0; top: 40px; min-width: 152px; background: var(--surface); padding: 6px; border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 8px 24px #00000012; }
-.task-menu button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 12px; font-size: 13px; background: none; border: 0; border-radius: 6px; color: var(--ink); text-align: left; }
+.task-menu { position: absolute; z-index: 5; right: 0; top: 40px; min-width: 152px; background: var(--surface); padding: 6px; border: 1px solid var(--border); border-radius: var(--radius-card); box-shadow: var(--shadow); }
+.task-menu button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 12px; font-size: 13px; background: none; border: 0; border-radius: var(--radius); color: var(--ink); text-align: left; }
 .task-menu button:hover { background: var(--surface-muted); }
 .list-feedback { display: flex; gap: 18px; align-items: center; margin-top: 14px; font-size: 12px; color: var(--muted); }
 .list-feedback button { display: inline-flex; gap: 5px; align-items: center; }
 .checklist-error { font-size: 13px; color: var(--danger, #ad3636); }
-.list-empty { padding: 52px 0; text-align: center; color: var(--muted); }
-.list-empty svg { margin: auto; }
-.list-empty p { font-size: 15px; color: var(--ink); margin: 12px 0 8px; }
-.list-empty span { font-size: 13px; }
+.list-empty { padding: 52px 0; text-align: center; }
+.list-empty :deep(.empty-sprite) { margin: 0 auto 14px; }
+.list-empty :deep(h3) { font-size: 15px; margin: 0 0 8px; }
+.list-empty :deep(p) { font-size: 13px; }
 .completed-list { margin-top: 32px; color: var(--muted); font-size: 13px; }
 .completed-list summary { cursor: pointer; padding: 12px 0; }
 .completed-list ul { margin-top: 8px; }
 .completed-list li { display: flex; align-items: baseline; gap: 15px; padding: 12px 28px; }
 .completed-list li span { text-decoration: line-through; overflow-wrap: anywhere; }
-@media (max-width: 600px) { .checklist { padding: 32px 20px 72px; } .checklist-head { margin-bottom: 24px; } h1 { font-size: 28px; } .drag-handle { opacity: .6; } .checklist-row { gap: 14px; } .list-tabs button { padding: 9px 12px; } }
+@media (max-width: 600px) { .checklist { padding: 32px 20px 72px; } .checklist-head { margin-bottom: 24px; } h1 { font-size: 28px; } .drag-handle { opacity: .6; } .checklist-row { gap: 14px; } }
 </style>

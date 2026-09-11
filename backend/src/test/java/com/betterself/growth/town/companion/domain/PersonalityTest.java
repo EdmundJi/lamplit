@@ -99,6 +99,26 @@ class PersonalityTest {
     @Test void theSameEventStreamLeavesFourDifferentMemoryTrails() {
         Instant start=Instant.parse("2026-09-08T06:00:00Z");
         CompanionWorld world=CompanionRules.join("divergence-1","住客","Asia/Shanghai",start);
+        // CompanionRules.join's own warm-start leaves owner and artist mid-conversation about this
+        // exact project (ResidentSeed.initialize's own closing startConversation call) - step() skips
+        // a resident's plan entirely while they are in one (see ResidentSimulation.step's
+        // activeConversation guard), so the injected "create" plan below would otherwise never run.
+        world.conversations.clear();
+        // "create"/"help" - and so any project contribution, and so witnessContribution() itself - are
+        // decision actions only the model ever chooses (see ResidentSimulation.DECISION_ACTIONS and its
+        // one caller, applyDecision); nothing rule-only ever schedules them. PersonalityDriftTest's own
+        // "project_complete"/"noticed_detail"/"missed_detail" tests document the same fact directly - a
+        // full simulated day with no model measured zero such events - and pin their mount points the
+        // same way this authors one below: as the resident's own already-decided action, exactly what a
+        // real applied model decision would have produced, rather than waiting on a purely rule-driven
+        // loop to invent a contribution it structurally never will. Gardener is moved to the cafe so his
+        // low sensitivity is a real, witnessed-but-forgotten case below, not a vacuous one.
+        ResidentSimulation.replaceActor(world,"gardener","cafe","observe","过来看看邻居们在忙什么",start.plusSeconds(300));
+        ResidentState owner=ResidentSimulation.state(world,"owner");
+        CompanionWorld.Project project=world.projects.get(0); // "reading-night": owner's own project, place=cafe
+        owner.plan=new CompanionWorld.Plan("qa-create","create","cafe",project.id,"再添一点",start,start.plusSeconds(6));
+        ResidentSimulation.replaceActor(world,"owner","cafe","create","再添一点",start.plusSeconds(6));
+
         for(int second=6;second<=1800;second+=6)CompanionRules.advance(world,start.plusSeconds(second));
         List<String> ids=List.of("owner","student","artist","gardener");
         Map<String,Set<String>> byResident=new HashMap<>();

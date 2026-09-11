@@ -79,7 +79,6 @@ function backToLogin() {
         <span>更好的自己 · Better Self</span>
       </div>
       <div class="intro-copy">
-        <p class="eyebrow">一座由日常行动建成的小镇</p>
         <h1>更好的自己</h1>
         <p class="intro-lead">让每一步，<br>长成看得见的生活。</p>
         <p class="intro-detail">把长期目标放回今天，用一件可以完成的小事，慢慢建立属于你的节奏。</p>
@@ -186,9 +185,8 @@ function backToLogin() {
 .auth-intro::before { content: ""; position: absolute; z-index: -1; inset: 0 0 0 56%; background: #df7f60; clip-path: polygon(34% 0, 100% 0, 100% 100%, 0 100%); opacity: .72; }
 .auth-intro::after { content: ""; position: absolute; z-index: -1; left: 64px; right: 64px; bottom: 38px; height: 1px; background: rgb(91 55 34 / 20%); }
 .brand-line { display: inline-flex; align-items: center; gap: 12px; color: #694936; font-size: 13px; font-weight: 800; letter-spacing: 0; text-transform: uppercase; }
-.seal { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 8px; background: #b94f3b; color: white; font-size: 16px; font-weight: 900; line-height: 1; box-shadow: 0 12px 26px rgb(106 53 32 / 20%); }
+.seal { width: 42px; height: 42px; display: grid; place-items: center; border-radius: var(--radius-card); background: #b94f3b; color: white; font-size: 16px; font-weight: 900; line-height: 1; }
 .intro-copy { max-width: 610px; }
-.auth-intro .eyebrow { color: #8f4433; }
 .intro-copy h1 { margin: 12px 0 15px; max-width: 9em; font-family: ui-rounded, "SF Pro Rounded", "PingFang SC", sans-serif; font-size: 64px; line-height: 1.02; letter-spacing: 0; }
 .intro-lead { margin: 0 0 10px; color: #53382b; font-size: 23px; font-weight: 750; line-height: 1.45; }
 .intro-detail { max-width: 500px; margin: 0; color: #6e4d3a; line-height: 1.8; }
@@ -202,13 +200,13 @@ function backToLogin() {
 .journey span { position: relative; display: grid; justify-items: center; gap: 9px; color: #674736; font-size: 12px; font-weight: 800; }
 .journey span::before { content: ""; width: 13px; height: 13px; border: 2px solid #744c36; border-radius: 50%; background: #f6d79c; box-shadow: 0 0 0 6px rgb(255 245 220 / 28%); }
 .auth-panel { display: grid; place-items: center; overflow-y: auto; padding: 34px 40px; background: color-mix(in srgb, var(--surface) 44%, var(--canvas)); }
-.panel-card { position: relative; width: min(100%, 420px); padding: 25px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); box-shadow: var(--shadow); }
-.panel-card::before { content: ""; position: absolute; inset: 0 0 auto; height: 4px; border-radius: 8px 8px 0 0; background: var(--primary); }
+.panel-card { position: relative; width: min(100%, 420px); padding: 25px; border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface); }
+.panel-card::before { content: ""; position: absolute; inset: 0 0 auto; height: 4px; border-radius: var(--radius-card) var(--radius-card) 0 0; background: var(--primary); }
 .mode { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; padding: 4px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-muted); margin-bottom: 22px; }
 .mode button { min-width: 0; border: 0; background: transparent; color: var(--muted); }
-.mode button[aria-selected=true] { background: var(--surface); color: var(--primary-strong); font-weight: 800; box-shadow: var(--shadow-soft); }
+.mode button[aria-selected=true] { background: var(--surface); color: var(--primary-strong); font-weight: 800; }
 .panel-head { display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 11px; align-items: start; margin-bottom: 18px; }
-.panel-head > svg, .mfa-icon { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 8px; color: var(--primary); background: var(--primary-soft); }
+.panel-head > svg, .mfa-icon { width: 36px; height: 36px; display: grid; place-items: center; border-radius: var(--radius-card); color: var(--primary); background: var(--primary-soft); }
 .panel-head h2 { margin: 0; font-family: ui-rounded, "SF Pro Rounded", "PingFang SC", sans-serif; font-size: 22px; line-height: 1.28; letter-spacing: 0; }
 .mfa-head { margin-bottom: 22px; }
 .mfa-head h2 { margin: 8px 0 0; font-size: 24px; line-height: 1.2; }
@@ -220,17 +218,15 @@ fieldset label { font-size: 14px; }
 .link { justify-self: center; background: none; color: var(--primary-strong); }
 .success-note { display: inline-flex; align-items: center; gap: 7px; margin: 0; color: var(--accent-strong); background: color-mix(in srgb, var(--accent) 10%, var(--surface)); border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border)); border-radius: var(--radius); padding: 11px 12px; }
 @media (prefers-reduced-motion: no-preference) {
-  .seal { animation: seal-enter var(--motion-slow) ease-out both; }
-  .journey-track::after { animation: journey-fill 3.8s ease-in-out infinite; }
-  .journey span::before { animation: dot-pulse 3.8s ease-in-out infinite; animation-delay: calc(var(--i) * 240ms); }
-  .auth-panel { animation: auth-panel-enter var(--motion-medium) ease-out both; }
-  .mode button[aria-selected=true] { animation: tab-settle var(--motion-medium) ease-out; }
+  .seal { animation: seal-enter var(--motion-medium) var(--ease) both; }
+  .journey-track::after { animation: journey-fill 3.8s var(--ease) infinite; }
+  .journey span::before { animation: dot-pulse 3.8s var(--ease) infinite; animation-delay: calc(var(--i) * 240ms); }
+  .auth-panel { animation: auth-panel-enter var(--motion-medium) var(--ease) both; }
 }
-@keyframes seal-enter { from { opacity: 0; transform: translateY(8px) rotate(-8deg); } to { opacity: 1; transform: translateY(0) rotate(0); } }
-@keyframes auth-panel-enter { from { opacity: 0; transform: translateX(12px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes seal-enter { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes auth-panel-enter { from { opacity: 0; transform: translateX(4px); } to { opacity: 1; transform: translateX(0); } }
 @keyframes journey-fill { 0% { transform: translateX(-105%); } 55%, 100% { transform: translateX(270%); } }
 @keyframes dot-pulse { 0%, 80%, 100% { transform: scale(1); background: #f6d79c; } 18% { transform: scale(1.22); background: #5d8c70; } }
-@keyframes tab-settle { from { box-shadow: inset 0 -8px color-mix(in srgb, var(--primary) 12%, transparent); } to { box-shadow: var(--shadow-soft); } }
 @media (max-width: 920px) {
   .auth-page { grid-template-columns: 1fr; }
   .auth-intro { min-height: auto; padding: 30px 24px; }
@@ -253,9 +249,8 @@ fieldset label { font-size: 14px; }
 .auth-intro { padding: 44px 56px 30px; background: var(--forest); color: var(--on-forest); gap: 24px; justify-content: flex-start; }
 .auth-intro::before, .auth-intro::after, .panel-card::before { display: none; }
 .brand-line { color: #d3dfce; letter-spacing: .08em; font-weight: 500; font-size: 12px; }
-.seal { background: var(--sun); color: var(--forest); box-shadow: none; border-radius: 12px 12px 5px 5px; }
+.seal { background: var(--sun); color: var(--forest); border-radius: var(--radius-card) var(--radius-card) var(--radius) var(--radius); }
 .intro-copy { position: relative; z-index: 1; margin-top: 40px; }
-.auth-intro .eyebrow { color: #b1c3a7; font-size: 11px; }
 .intro-copy h1 { font-size: 17px; line-height: 1.5; font-weight: 500; margin: 10px 0 16px; }
 .intro-lead { font-size: clamp(34px, 3.6vw, 54px); font-weight: 650; line-height: 1.35; letter-spacing: -1px; color: var(--on-forest); margin-bottom: 20px; }
 .intro-detail { max-width: 360px; color: #b8cdbb; font-size: 13px; }
@@ -267,7 +262,7 @@ fieldset label { font-size: 14px; }
 .journey span { color: #c0d1bd; font-size: 10px; font-weight: 500; }
 .journey span::before { width: 8px; height: 8px; background: var(--sun); border-color: var(--sun); box-shadow: 0 0 0 4px #426047; animation: none; }
 .auth-panel { background: var(--canvas); padding: 48px; }
-.panel-card { border: 0; padding: 0; border-radius: 0; background: transparent; box-shadow: none; max-width: 360px; }
+.panel-card { border: 0; padding: 0; border-radius: 0; background: transparent; max-width: 360px; }
 .panel-head { margin-block: 32px 24px; }
 .panel-head h2 { font-size: 26px; line-height: 1.5; }
 .mode { background: transparent; border: 0; border-bottom: 1px solid var(--border); padding: 0; border-radius: 0; gap: 24px; }

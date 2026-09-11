@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
-import { Activity, ClipboardList, FileClock, Lock, RefreshCw, ShieldAlert, ShieldCheck, UserPlus, Users } from 'lucide-vue-next'
+import { Activity, ClipboardList, FileClock, Lock, RefreshCw, ShieldAlert, Users } from 'lucide-vue-next'
+import SegmentedControl from '../../shared/ui/interaction/SegmentedControl.vue'
 import { api } from '../../shared/api/client'
 
 type Metrics = Record<string, number>
@@ -32,6 +33,12 @@ const riskLabel = (value: string) => riskLabels[value] ?? value
 const metricIcons = [Users, Activity, ShieldAlert, FileClock]
 
 const tab = ref<'overview' | 'users' | 'safety' | 'audit'>('overview')
+const adminTabOptions = [
+  { value: 'overview', label: '概览', icon: Activity },
+  { value: 'users', label: '账号', icon: Users },
+  { value: 'safety', label: '安全', icon: ShieldAlert },
+  { value: 'audit', label: '审计', icon: ClipboardList },
+]
 const metrics = ref<Metrics | null>(null)
 const events = ref<SafetyEvent[]>([])
 const audits = ref<AuditEntry[]>([])
@@ -127,10 +134,7 @@ onMounted(load)
 <template>
   <main class="page admin-page">
     <header class="page-head">
-      <div>
-        <p class="eyebrow">权限、内容、安全与审计</p>
-        <h1>治理工作台</h1>
-      </div>
+      <h1>治理工作台</h1>
       <button class="secondary" type="button" :disabled="loading" @click="load">
         <RefreshCw :size="17" :class="{ spinning: loading }" />
         刷新
@@ -140,12 +144,13 @@ onMounted(load)
     <p v-if="error" class="error" role="alert">{{ error }}</p>
     <p v-if="feedback" class="feedback-banner" role="status">{{ feedback }}</p>
 
-    <nav class="admin-tabs" aria-label="治理分区">
-      <button type="button" :aria-pressed="tab === 'overview'" @click="tab = 'overview'"><Activity :size="16" />概览</button>
-      <button type="button" :aria-pressed="tab === 'users'" @click="tab = 'users'"><Users :size="16" />账号</button>
-      <button type="button" :aria-pressed="tab === 'safety'" @click="tab = 'safety'"><ShieldAlert :size="16" />安全</button>
-      <button type="button" :aria-pressed="tab === 'audit'" @click="tab = 'audit'"><ClipboardList :size="16" />审计</button>
-    </nav>
+    <SegmentedControl
+      class="admin-tabs"
+      :model-value="tab"
+      :options="adminTabOptions"
+      label="治理分区"
+      @update:model-value="value => tab = value as typeof tab"
+    />
 
     <section v-if="tab === 'overview'" class="admin-stack">
       <div v-if="metrics" class="admin-metrics">
@@ -176,13 +181,7 @@ onMounted(load)
 
     <section v-else-if="tab === 'users'" class="admin-stack">
       <form class="band create-admin" @submit.prevent="createAdmin">
-        <div class="section-head">
-          <div>
-            <p class="eyebrow">创建后台账号</p>
-            <h2>生成带 MFA 的账号</h2>
-          </div>
-          <UserPlus :size="20" />
-        </div>
+        <h2 class="section-title">创建后台账号</h2>
         <div class="admin-form-grid">
           <div class="field"><label for="admin-email">邮箱</label><input id="admin-email" v-model="createForm.email" type="email" required></div>
           <div class="field"><label for="admin-name">称呼</label><input id="admin-name" v-model="createForm.displayName" maxlength="80" placeholder="后台账号"></div>
@@ -198,13 +197,7 @@ onMounted(load)
       </form>
 
       <section class="band">
-        <div class="section-head">
-          <div>
-            <p class="eyebrow">账号权限</p>
-            <h2>用户与后台角色</h2>
-          </div>
-          <ShieldCheck :size="20" />
-        </div>
+        <h2 class="section-title">账号权限</h2>
         <div class="table-wrap">
           <table>
             <thead><tr><th>用户</th><th>角色</th><th>状态</th><th>时区</th><th>更新时间</th></tr></thead>
@@ -223,12 +216,7 @@ onMounted(load)
     </section>
 
     <section v-else-if="tab === 'safety'" class="band">
-      <div class="section-head">
-        <div>
-          <p class="eyebrow">AI 安全</p>
-          <h2>风险事件</h2>
-        </div>
-      </div>
+      <h2 class="section-title">风险事件</h2>
       <div class="table-wrap">
         <table>
           <thead><tr><th>风险</th><th>场景</th><th>方向</th><th>脱敏摘要</th><th>状态</th><th>时间</th></tr></thead>
@@ -238,12 +226,7 @@ onMounted(load)
     </section>
 
     <section v-else class="band">
-      <div class="section-head">
-        <div>
-          <p class="eyebrow">不可抵赖记录</p>
-          <h2>审计日志</h2>
-        </div>
-      </div>
+      <h2 class="section-title">审计日志</h2>
       <div class="table-wrap">
         <table>
           <thead><tr><th>动作</th><th>资源</th><th>结果</th><th>请求</th><th>时间</th></tr></thead>
@@ -257,22 +240,19 @@ onMounted(load)
 <style scoped>
 .admin-page { max-width: 1240px; }
 .admin-stack { display: grid; gap: 18px; }
-.admin-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; margin-bottom: 20px; padding: 4px; background: var(--surface-muted); }
-.admin-tabs button { min-width: 0; border: 0; border-radius: calc(var(--radius) - 2px); background: transparent; color: var(--muted); }
-.admin-tabs button[aria-pressed='true'] { background: var(--surface); color: var(--primary); font-weight: 800; box-shadow: var(--shadow-soft); }
+.admin-tabs { margin-bottom: 20px; }
 .admin-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
-.admin-metrics article { min-height: 116px; display: grid; grid-template-rows: auto auto 1fr; gap: 8px; padding: 18px; border: 1px solid var(--border); border-radius: var(--radius); background: color-mix(in srgb, var(--surface) 88%, transparent); box-shadow: var(--shadow-soft); }
-.admin-metrics svg, .section-head svg { color: var(--primary); }
+.admin-metrics article { min-height: 116px; display: grid; grid-template-rows: auto auto 1fr; gap: 8px; padding: 18px; border: 1px solid var(--border); border-radius: var(--radius); background: color-mix(in srgb, var(--surface) 88%, transparent); }
+.admin-metrics svg { color: var(--primary); }
 .admin-metrics span, table small, .overview-grid span { color: var(--muted); font-size: 12px; }
 .admin-metrics strong, .overview-grid strong { align-self: end; font-size: 30px; line-height: 1; color: var(--primary); }
 .overview-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
 .overview-grid article { display: grid; gap: 5px; padding: 14px; border: 1px solid var(--border); border-radius: var(--radius); background: color-mix(in srgb, var(--surface) 88%, transparent); }
-.section-head { display: flex; align-items: start; justify-content: space-between; gap: 14px; margin-bottom: 16px; }
-.section-head h2 { margin: 0; font-size: 18px; }
+.band > .section-title:first-child { margin-top: 0; }
 .admin-form-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
 .secret-box { display: flex; align-items: center; gap: 8px; margin: 14px 0 0; padding: 12px; border-left: 3px solid var(--amber); background: color-mix(in srgb, var(--amber) 8%, var(--surface)); color: var(--ink); }
 .secret-box code { overflow-wrap: anywhere; }
-.table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow-soft); }
+.table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
 table { width: 100%; border-collapse: collapse; font-size: 13px; }
 th, td { text-align: left; padding: 11px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
 th { color: var(--primary-strong); background: var(--surface-muted); font-weight: 800; }
@@ -281,15 +261,14 @@ td select { min-height: 34px; border: 1px solid var(--border); border-radius: va
 .risk { font-weight: 800; color: var(--danger); }
 .spinning { animation: spin .8s linear infinite; }
 @media (prefers-reduced-motion: no-preference) {
-  .admin-metrics article, .band { animation: admin-enter var(--motion-medium) ease-out both; }
-  tr { transition: background-color var(--motion-fast) ease; }
+  .admin-metrics article, .band { animation: admin-enter var(--motion-medium) var(--ease) both; }
+  tr { transition: background-color var(--motion-fast) var(--ease); }
   tbody tr:hover { background: color-mix(in srgb, var(--primary) 5%, transparent); }
 }
-@keyframes admin-enter { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes admin-enter { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (max-width: 860px) {
   .admin-metrics, .overview-grid, .admin-form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .admin-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 560px) {
   .admin-metrics, .overview-grid, .admin-form-grid { grid-template-columns: 1fr; }

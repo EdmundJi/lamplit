@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Coins, Gamepad2, HandHeart, Heart, HeartHandshake, MessageCircle, MonitorOff, MonitorUp, PartyPopper, Pencil, Plus, ShoppingBag, Smartphone, Sparkles, X } from 'lucide-vue-next'
 import { onDataChanged } from '../../shared/data-sync'
+import SegmentedControl from '../../shared/ui/interaction/SegmentedControl.vue'
 import RivePet from './RivePet.vue'
 import { randomPetDialogue } from './pet-dialogues'
 import { findPetSpecies, petSpeciesOptions, type PetInteractionOption, type PetReaction } from './pet-options'
@@ -10,6 +11,12 @@ import type { Pet, ShopItem } from './partner.types'
 
 type DialogueMessage = { text: string; actionLabel: string; rewarded: boolean; affectionDelta: number }
 type ShopFilter = 'ALL' | ShopItem['itemType']
+
+const shopFilterOptions: { value: ShopFilter; label: string }[] = [
+  { value: 'ALL', label: '全部' },
+  { value: 'FOOD', label: '食物' },
+  { value: 'DECOR', label: '装饰' },
+]
 
 const shopItemImages: Record<string, string> = {
   'pet-food-salmon-bento': '/assets/shop/salmon-bento.svg',
@@ -134,10 +141,7 @@ onBeforeUnmount(() => {
 <template>
   <section class="page page--scene partners-page">
     <header class="page-head partner-head">
-      <div>
-        <p class="eyebrow">伙伴小屋</p>
-        <h1>今天也来陪陪它</h1>
-      </div>
+      <h1>今天也来陪陪它</h1>
       <div class="wallet-pill" aria-label="金币余额">
         <span class="coin-mark" aria-hidden="true"><Coins :size="18" /></span>
         <span class="wallet-copy"><small>我的金币</small><strong>{{ wallet.coinBalance }}</strong></span>
@@ -191,16 +195,13 @@ onBeforeUnmount(() => {
             <span class="species-token" :data-species="selectedPet.speciesCode">{{ selectedPet.speciesName }}</span>
             <span>{{ selectedPet.breed }} · {{ selectedPet.furColor }}</span>
           </div>
-          <div class="name-row">
-            <h2 id="partner-title">{{ selectedPet.name }}</h2>
-            <strong class="level-badge">LV.{{ selectedPet.level }}</strong>
-          </div>
+          <h2 id="partner-title">{{ selectedPet.name }}</h2>
           <p class="companion-copy">正在你的小屋里放松，看到你来会很开心。</p>
+          <dl class="stats pet-stats">
+            <div><dt>等级</dt><dd>LV.{{ selectedPet.level }}</dd></div>
+            <div><dt><Heart :size="12" fill="currentColor" />好感度</dt><dd>{{ selectedPet.affection }} / {{ selectedPet.nextLevelAffection }}</dd></div>
+          </dl>
           <div class="affection-panel">
-            <div class="level-row">
-              <span><Heart :size="15" fill="currentColor" />好感度</span>
-              <strong>{{ selectedPet.affection }} / {{ selectedPet.nextLevelAffection }}</strong>
-            </div>
             <div class="progress" aria-label="好感度进度"><span :style="{ width: `${progressPercent}%` }" /></div>
             <small>每日首次互动可获得 2 点好感度</small>
           </div>
@@ -232,8 +233,7 @@ onBeforeUnmount(() => {
         <div class="desktop-pet-control">
           <span class="desktop-pet-icon" aria-hidden="true"><MonitorUp :size="22" /></span>
           <div>
-            <p class="eyebrow">PC 桌宠</p>
-            <h2 id="desktop-pet-title">让{{ selectedPet.name }}陪在桌面一角</h2>
+            <h2 id="desktop-pet-title">PC 桌宠</h2>
             <p>{{ isDesktopPet ? '当前正在使用这位伙伴。桌宠会跟随你浏览今日、目标和洞察页面。' : '一次只能设置一位桌宠，新的选择会自动替换当前伙伴。' }}</p>
           </div>
           <button type="button" :class="isDesktopPet ? 'secondary' : 'interact-button'" @click="toggleDesktopPet">
@@ -251,10 +251,7 @@ onBeforeUnmount(() => {
 
       <form v-if="panel" class="band stack pet-form" @submit.prevent="savePet">
         <div class="form-head">
-          <div>
-            <p class="eyebrow">{{ panel === 'edit' ? '自定义伙伴' : '选择伙伴' }}</p>
-            <h2>{{ panel === 'edit' ? '修改名字、种类和颜色' : '创建新的 2D 小动物' }}</h2>
-          </div>
+          <h2>{{ panel === 'edit' ? '自定义伙伴' : '选择伙伴' }}</h2>
           <button class="dialogue-close" type="button" aria-label="关闭伙伴资料" @click="panel = null"><X :size="18" /></button>
         </div>
         <div v-if="panel === 'create'" class="species-grid" aria-label="选择动物">
@@ -281,7 +278,7 @@ onBeforeUnmount(() => {
 
       <section class="companion-roster band" aria-labelledby="roster-title">
         <div class="section-head">
-          <div><p class="eyebrow">伙伴列表</p><h2 id="roster-title">今天想陪谁</h2></div>
+          <h2 id="roster-title">伙伴列表</h2>
           <span class="section-count">{{ profile.pets.length }} 位伙伴</span>
         </div>
         <div class="pet-list">
@@ -298,14 +295,16 @@ onBeforeUnmount(() => {
 
       <section class="shop band" aria-labelledby="shop-title">
         <div class="section-head shop-head">
-          <div><p class="eyebrow">小屋商店</p><h2 id="shop-title">带一份小礼物回去</h2></div>
+          <h2 id="shop-title">小屋商店</h2>
           <div class="shop-tools">
             <ShoppingBag :size="20" aria-hidden="true" />
-            <div class="shop-tabs" role="group" aria-label="筛选商品">
-              <button type="button" :aria-pressed="shopFilter === 'ALL'" @click="shopFilter = 'ALL'">全部</button>
-              <button type="button" :aria-pressed="shopFilter === 'FOOD'" @click="shopFilter = 'FOOD'">食物</button>
-              <button type="button" :aria-pressed="shopFilter === 'DECOR'" @click="shopFilter = 'DECOR'">装饰</button>
-            </div>
+            <SegmentedControl
+              class="shop-tabs"
+              :model-value="shopFilter"
+              :options="shopFilterOptions"
+              label="筛选商品"
+              @update:model-value="value => shopFilter = value as ShopFilter"
+            />
           </div>
         </div>
         <div class="shop-list">
@@ -341,16 +340,14 @@ onBeforeUnmount(() => {
   --pet-muted: var(--muted);
   --pet-line: var(--border);
   --pet-scene: #fff7e8;
-  --pet-shadow: 0 16px 34px rgb(104 66 43 / 13%);
   color: var(--pet-ink);
 }
 
-.partners-page .eyebrow { color: var(--pet-coral-strong); letter-spacing: 0; }
 .partner-head { align-items: center; }
 .partner-head h1 { max-width: 16ch; font-family: ui-rounded, "SF Pro Rounded", "PingFang SC", sans-serif; color: var(--pet-ink); }
 
-.wallet-pill { min-height: 54px; display: inline-flex; align-items: center; gap: 10px; padding: 6px 14px 6px 7px; border: 1px solid color-mix(in srgb, var(--pet-gold) 58%, var(--pet-line)); border-radius: 8px; background: #fff8df; color: #8c6113; box-shadow: 0 8px 20px rgb(139 96 25 / 10%); }
-.coin-mark { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 50%; background: #f4c85c; color: #754c08; box-shadow: inset 0 -3px 0 rgb(132 83 8 / 14%); }
+.wallet-pill { min-height: 54px; display: inline-flex; align-items: center; gap: 10px; padding: 6px 14px 6px 7px; border: 1px solid color-mix(in srgb, var(--pet-gold) 58%, var(--pet-line)); border-radius: var(--radius-card); background: #fff8df; color: #8c6113; }
+.coin-mark { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 50%; background: #f4c85c; color: #754c08; }
 .wallet-copy { display: grid; grid-template-columns: auto auto; align-items: baseline; gap: 0 8px; }
 .wallet-copy small { grid-column: 1 / -1; color: #927446; font-size: 11px; }
 .wallet-copy strong { font-size: 20px; line-height: 1; }
@@ -359,23 +356,24 @@ onBeforeUnmount(() => {
 .partner-feedback svg { color: var(--pet-coral); }
 
 .partner-stage { display: grid; grid-template-columns: minmax(420px, 1.18fr) minmax(290px, .82fr); gap: 26px; align-items: center; margin-bottom: 12px; padding: 28px 0; border-top: 1px solid var(--pet-line); border-bottom: 1px solid var(--pet-line); }
-.home-scene { position: relative; min-width: 0; padding: 9px; border: 1px solid #e4c5a5; border-radius: 104px 104px 8px 8px; background: #f4c77d; box-shadow: var(--pet-shadow); }
-.scene-label { position: absolute; z-index: 5; top: 19px; left: 22px; min-height: 30px; display: inline-flex; align-items: center; gap: 7px; padding: 0 10px; border: 1px solid rgb(134 75 46 / 18%); border-radius: 999px; background: rgb(255 250 240 / 92%); color: var(--pet-coral-strong); font-size: 12px; font-weight: 800; box-shadow: 0 6px 16px rgb(86 51 34 / 10%); }
-.pet-area { position: relative; min-height: 400px; overflow: hidden; border-radius: 94px 94px 5px 5px; background: var(--pet-scene); }
+.home-scene { position: relative; min-width: 0; padding: 9px; border: 1px solid #e4c5a5; border-radius: var(--radius-scene) var(--radius-scene) var(--radius-card) var(--radius-card); background: #f4c77d; }
+.scene-label { position: absolute; z-index: 5; top: 19px; left: 22px; min-height: 30px; display: inline-flex; align-items: center; gap: 7px; padding: 0 10px; border: 1px solid rgb(134 75 46 / 18%); border-radius: 999px; background: rgb(255 250 240 / 92%); color: var(--pet-coral-strong); font-size: 12px; font-weight: 800; }
+.pet-area { position: relative; min-height: 400px; overflow: hidden; border-radius: var(--radius-scene) var(--radius-scene) var(--radius) var(--radius); background: var(--pet-scene); }
 
 .pet-panel { min-width: 0; display: grid; gap: 16px; padding-right: 8px; }
 .identity-line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; color: var(--pet-muted); font-size: 13px; }
 .species-token { min-height: 28px; display: inline-flex; align-items: center; padding: 0 10px; border-radius: 999px; background: #e9f4ec; color: #3d795c; font-weight: 800; }
-.name-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .pet-panel h2, .section-head h2, .pet-form h2, .desktop-pet-control h2 { margin: 0; font-family: ui-rounded, "SF Pro Rounded", "PingFang SC", sans-serif; font-size: 22px; letter-spacing: 0; }
 .pet-panel h2 { min-width: 0; overflow-wrap: anywhere; font-size: 34px; line-height: 1.1; }
-.level-badge { flex: 0 0 auto; min-height: 34px; display: inline-flex; align-items: center; padding: 0 10px; border: 1px solid #9bb9dd; border-radius: 6px; background: #eef5ff; color: #436b9a; font-size: 13px; }
 .companion-copy { margin: -3px 0 0; color: var(--pet-muted); line-height: 1.65; }
-.affection-panel { display: grid; gap: 10px; padding: 14px; border: 1px solid var(--pet-line); border-radius: 8px; background: var(--pet-paper); box-shadow: 0 7px 18px rgb(104 66 43 / 7%); }
-.level-row { display: flex; justify-content: space-between; gap: 12px; color: var(--pet-muted); font-size: 14px; }
-.level-row span { display: inline-flex; align-items: center; gap: 6px; }
-.level-row svg { color: var(--pet-coral); }
-.level-row strong { color: var(--pet-coral-strong); }
+.pet-stats { display: flex; flex-wrap: wrap; gap: 0; margin: 4px 0 0; }
+.pet-stats > div { padding: 0 18px; border-right: 1px solid var(--pet-line); }
+.pet-stats > div:first-child { padding-left: 0; }
+.pet-stats > div:last-child { border-right: 0; }
+.pet-stats dt { display: inline-flex; align-items: center; gap: 5px; margin: 0; color: var(--pet-muted); font-size: 12px; }
+.pet-stats dt svg { color: var(--pet-coral); }
+.pet-stats dd { margin: 4px 0 0; color: var(--pet-coral-strong); font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.affection-panel { display: grid; gap: 10px; padding: 14px; border: 1px solid var(--pet-line); border-radius: var(--radius-card); background: var(--pet-paper); }
 .affection-panel small { color: var(--pet-muted); font-size: 11px; }
 .partners-page .progress { height: 10px; background: #f2e3d3; }
 .partners-page .progress > span { background: linear-gradient(90deg, var(--pet-coral), var(--pet-gold), var(--pet-mint)); }
@@ -386,45 +384,43 @@ onBeforeUnmount(() => {
 .interaction-option svg { flex: 0 0 auto; color: var(--pet-coral-strong); }
 .interaction-option span { min-width: 0; overflow-wrap: anywhere; }
 .interaction-option:hover, .interaction-option.active { border-color: var(--pet-coral); background: #fff0e6; color: var(--pet-coral-strong); }
-.interaction-option.active { box-shadow: inset 0 -3px 0 var(--pet-coral); }
 .stage-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
-.interact-button { min-height: var(--control); display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 0 16px; border-color: var(--pet-coral-strong); background: var(--pet-coral); color: white; box-shadow: 0 9px 18px rgb(178 74 58 / 18%); }
+.interact-button { min-height: var(--control); display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 0 16px; border-color: var(--pet-coral-strong); background: var(--pet-coral); color: white; }
 .interact-button:hover { background: var(--pet-coral-strong); }
 .partners-page .secondary { border-color: var(--pet-line); background: var(--pet-paper); color: var(--pet-ink); }
 
 .desktop-pet-setting { padding: 18px 0; }
 .desktop-pet-control { display: grid; grid-template-columns: 46px minmax(0, 1fr) auto; align-items: center; gap: 13px; }
-.desktop-pet-icon { width: 46px; height: 46px; display: grid; place-items: center; border: 1px solid #a9c6b6; border-radius: 8px; background: #e7f2eb; color: #42745a; }
-.desktop-pet-control .eyebrow { margin-bottom: 3px; }
+.desktop-pet-icon { width: 46px; height: 46px; display: grid; place-items: center; border: 1px solid #a9c6b6; border-radius: var(--radius-card); background: #e7f2eb; color: #42745a; }
 .desktop-pet-control h2 { font-size: 18px; }
 .desktop-pet-control p:last-child { margin: 5px 0 0; color: var(--pet-muted); font-size: 12px; line-height: 1.55; }
 .desktop-pet-control > button { min-width: 122px; }
-.desktop-pet-mobile { display: none; align-items: center; gap: 11px; padding: 13px; border: 1px solid var(--pet-line); border-radius: 8px; background: var(--pet-cream); color: var(--pet-muted); }
+.desktop-pet-mobile { display: none; align-items: center; gap: 11px; padding: 13px; border: 1px solid var(--pet-line); border-radius: var(--radius-card); background: var(--pet-cream); color: var(--pet-muted); }
 .desktop-pet-mobile > svg { flex: 0 0 auto; color: var(--pet-coral); }
 .desktop-pet-mobile div { min-width: 0; flex: 1; display: grid; gap: 3px; }
 .desktop-pet-mobile strong { color: var(--pet-ink); font-size: 13px; }
 .desktop-pet-mobile span { font-size: 11px; line-height: 1.5; }
 
-.dialogue-bar { position: absolute; z-index: 6; top: 58px; left: 22px; width: min(410px, calc(100% - 44px)); display: grid; grid-template-columns: minmax(0, 1fr) 30px; gap: 10px; align-items: start; padding: 13px 12px 15px 15px; border: 1px solid #d8ad8d; border-radius: 8px; background: #fffdf8; box-shadow: 0 13px 28px rgb(91 51 30 / 17%); color: var(--pet-ink); text-align: left; }
+.dialogue-bar { position: absolute; z-index: 6; top: 58px; left: 22px; width: min(410px, calc(100% - 44px)); display: grid; grid-template-columns: minmax(0, 1fr) 30px; gap: 10px; align-items: start; padding: 13px 12px 15px 15px; border: 1px solid #d8ad8d; border-radius: var(--radius-card); background: #fffdf8; color: var(--pet-ink); text-align: left; }
 .dialogue-bar::after { content: ''; position: absolute; left: 46px; bottom: -8px; width: 14px; height: 14px; transform: rotate(45deg); border-right: 1px solid #d8ad8d; border-bottom: 1px solid #d8ad8d; background: #fffdf8; }
-.dialogue-icon { flex: 0 0 auto; width: 24px; height: 24px; display: grid; place-items: center; border-radius: 6px; background: var(--pet-coral); color: white; }
+.dialogue-icon { flex: 0 0 auto; width: 24px; height: 24px; display: grid; place-items: center; border-radius: var(--radius); background: var(--pet-coral); color: white; }
 .dialogue-copy { min-width: 0; display: grid; gap: 7px; }
 .dialogue-copy p { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 5px 8px; min-height: 24px; }
 .dialogue-copy p strong { font-size: 14px; }
-.dialogue-action { padding: 3px 6px; border-radius: 4px; background: #f8e5d5; color: var(--pet-coral-strong); font-size: 10px; font-weight: 800; }
+.dialogue-action { padding: 3px 6px; border-radius: var(--radius); background: #f8e5d5; color: var(--pet-coral-strong); font-size: 10px; font-weight: 800; }
 .dialogue-reward { color: var(--pet-muted); font-size: 11px; font-weight: 700; }
 .dialogue-reward[data-rewarded='true'] { color: #3e805f; }
 .dialogue-copy blockquote { margin: 0; color: var(--pet-ink); font-size: 14px; line-height: 1.6; overflow-wrap: anywhere; }
 .dialogue-close { width: 30px; height: 30px; display: grid; place-items: center; padding: 0; border: 0; background: transparent; color: var(--pet-muted); }
 .dialogue-close:hover { background: #f5e8da; color: var(--pet-ink); }
-.dialogue-enter-active, .dialogue-leave-active { transition: opacity var(--motion-fast) ease, transform var(--motion-fast) ease; }
-.dialogue-enter-from, .dialogue-leave-to { opacity: 0; transform: translateY(7px) rotate(-1deg); }
+.dialogue-enter-active, .dialogue-leave-active { transition: opacity var(--motion-fast) var(--ease), transform var(--motion-fast) var(--ease); }
+.dialogue-enter-from, .dialogue-leave-to { opacity: 0; transform: translateY(4px); }
 
-.pet-form { margin: 20px 0 10px; padding: 20px; border: 1px solid var(--pet-line); border-radius: 8px; background: var(--pet-paper); box-shadow: var(--pet-shadow); }
+.pet-form { margin: 20px 0 10px; padding: 20px; border: 1px solid var(--pet-line); border-radius: var(--radius-card); background: var(--pet-paper); }
 .form-head { display: flex; align-items: start; justify-content: space-between; gap: 16px; }
 .species-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
 .species-grid button { min-width: 0; min-height: 66px; display: flex; align-items: center; justify-content: flex-start; gap: 9px; padding: 8px; border: 1px solid var(--pet-line); background: var(--pet-paper); color: var(--pet-muted); }
-.species-grid button.active { border-color: var(--pet-coral); background: #fff0e6; color: var(--pet-coral-strong); box-shadow: inset 0 -3px 0 var(--pet-coral); }
+.species-grid button.active { border-color: var(--pet-coral); background: #fff0e6; color: var(--pet-coral-strong); }
 .species-glyph { width: 34px; height: 34px; display: grid; place-items: center; flex: 0 0 auto; border-radius: 50%; background: #f6dfc6; color: var(--pet-ink); font-weight: 900; }
 .partners-page .field input, .partners-page .field select { border-color: var(--pet-line); background: #fffefb; color: var(--pet-ink); }
 
@@ -432,8 +428,8 @@ onBeforeUnmount(() => {
 .section-count { color: var(--pet-muted); font-size: 12px; font-weight: 700; }
 .companion-roster { padding-top: 28px; }
 .pet-list { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(220px, 1fr); gap: 10px; overflow-x: auto; padding: 2px 2px 10px; scroll-snap-type: x proximity; scrollbar-width: thin; scrollbar-color: var(--pet-line) transparent; }
-.pet-card { --species-color: #f3b36f; min-width: 0; min-height: 78px; display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 10px; border: 1px solid var(--pet-line); border-radius: 8px; background: var(--pet-paper); color: var(--pet-ink); text-align: left; scroll-snap-align: start; }
-.pet-card.selected { border-color: var(--pet-coral); background: #fff1e8; box-shadow: inset 0 -3px 0 var(--pet-coral), 0 8px 18px rgb(145 76 51 / 9%); }
+.pet-card { --species-color: #f3b36f; min-width: 0; min-height: 78px; display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 10px; border: 1px solid var(--pet-line); border-radius: var(--radius-card); background: var(--pet-paper); color: var(--pet-ink); text-align: left; scroll-snap-align: start; }
+.pet-card.selected { border-color: var(--pet-coral); background: #fff1e8; }
 .pet-avatar { width: 48px; height: 48px; display: grid; place-items: center; border-radius: 50%; background: color-mix(in srgb, var(--species-color) 72%, white); color: var(--pet-ink); font-family: ui-rounded, "SF Pro Rounded", "PingFang SC", sans-serif; font-weight: 900; }
 .pet-card-copy { min-width: 0; display: grid; gap: 4px; }
 .pet-card-copy strong, .pet-card-copy small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -449,12 +445,9 @@ onBeforeUnmount(() => {
 .shop { padding-top: 30px; }
 .shop-head { align-items: end; }
 .shop-tools { display: flex; align-items: center; gap: 10px; color: var(--pet-coral); }
-.shop-tabs { display: grid; grid-template-columns: repeat(3, minmax(58px, 1fr)); padding: 3px; border: 1px solid var(--pet-line); border-radius: 8px; background: #f7eadc; }
-.shop-tabs button { min-height: 34px; padding: 0 11px; border: 0; border-radius: 6px; background: transparent; color: var(--pet-muted); font-size: 12px; }
-.shop-tabs button[aria-pressed='true'] { background: var(--pet-paper); color: var(--pet-coral-strong); box-shadow: 0 3px 9px rgb(104 66 43 / 10%); }
 .shop-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-.shop-item { min-width: 0; min-height: 152px; display: grid; grid-template-columns: 104px minmax(0, 1fr); align-items: stretch; gap: 14px; padding: 12px; border: 1px solid var(--pet-line); border-radius: 8px; background: var(--pet-paper); color: var(--pet-ink); text-align: left; box-shadow: 0 8px 20px rgb(104 66 43 / 7%); }
-.shop-art { width: 104px; min-height: 126px; display: grid; place-items: center; align-self: stretch; border-radius: 6px; background: #e7f2e9; }
+.shop-item { min-width: 0; min-height: 152px; display: grid; grid-template-columns: 104px minmax(0, 1fr); align-items: stretch; gap: 14px; padding: 12px; border: 1px solid var(--pet-line); border-radius: var(--radius-card); background: var(--pet-paper); color: var(--pet-ink); text-align: left; }
+.shop-art { width: 104px; min-height: 126px; display: grid; place-items: center; align-self: stretch; border-radius: var(--radius); background: #e7f2e9; }
 .shop-item[data-kind='DECOR'] .shop-art { background: #e9eff8; }
 .shop-art img { width: 72px; height: 72px; object-fit: contain; }
 .shop-copy { min-width: 0; display: grid; align-content: center; gap: 6px; }
@@ -469,9 +462,8 @@ onBeforeUnmount(() => {
 .item-status { padding-top: 6px; border-top: 1px dashed var(--pet-line); color: var(--pet-muted); font-size: 11px; }
 
 @media (prefers-reduced-motion: no-preference) {
-  .pet-card, .shop-item, .interact-button, .interaction-option { transition: transform var(--motion-fast) ease, border-color var(--motion-fast) ease, box-shadow var(--motion-fast) ease, background-color var(--motion-fast) ease; }
-  .pet-card:hover, .shop-item:not(:disabled):hover { transform: translateY(-3px); border-color: var(--pet-coral); box-shadow: var(--pet-shadow); }
-  .coin-mark { animation: coin-arrive 420ms ease-out both; }
+  .pet-card, .shop-item, .interact-button, .interaction-option { transition: border-color var(--motion-fast) var(--ease), background-color var(--motion-fast) var(--ease); }
+  .pet-card:hover, .shop-item:not(:disabled):hover { border-color: var(--pet-coral); }
 }
 
 @media (max-width: 960px) {
@@ -488,8 +480,8 @@ onBeforeUnmount(() => {
   .partner-head { align-items: flex-start; flex-direction: column; }
   .partner-head h1 { font-size: 28px; }
   .partner-stage { gap: 20px; padding: 20px 0; }
-  .home-scene { border-radius: 74px 74px 8px 8px; }
-  .pet-area { min-height: 310px; border-radius: 66px 66px 5px 5px; }
+  .home-scene { border-radius: var(--radius-scene) var(--radius-scene) var(--radius-card) var(--radius-card); }
+  .pet-area { min-height: 310px; border-radius: var(--radius-scene) var(--radius-scene) var(--radius) var(--radius); }
   .pet-panel h2 { font-size: 30px; }
   .shop-head { align-items: flex-start; flex-direction: column; }
   .shop-tools { width: 100%; }
@@ -504,10 +496,9 @@ onBeforeUnmount(() => {
 @media (max-width: 440px) {
   .wallet-pill { width: 100%; }
   .wallet-copy { width: 100%; }
-  .home-scene { border-radius: 52px 52px 8px 8px; }
-  .pet-area { min-height: 280px; border-radius: 45px 45px 5px 5px; }
+  .home-scene { border-radius: var(--radius-scene) var(--radius-scene) var(--radius-card) var(--radius-card); }
+  .pet-area { min-height: 280px; border-radius: var(--radius-scene) var(--radius-scene) var(--radius) var(--radius); }
   .scene-label { top: 14px; left: 15px; }
-  .name-row { align-items: flex-start; }
   .pet-panel h2 { font-size: 28px; }
   .pet-list { grid-auto-columns: minmax(206px, 82vw); }
   .shop-item { grid-template-columns: 82px minmax(0, 1fr); gap: 10px; }
@@ -544,18 +535,16 @@ onBeforeUnmount(() => {
   }
 }
 
-@keyframes coin-arrive { from { opacity: 0; transform: rotate(-18deg) scale(.78); } to { opacity: 1; transform: rotate(0) scale(1); } }
-
 /* Scene artwork keeps its own palette; all interactive surfaces share the app theme. */
 .partners-page .partner-stage { padding: 0; border: 0; gap: 28px; margin-bottom: 32px; }
-.partners-page .home-scene { border: 8px solid var(--forest); background: var(--forest); border-radius: var(--radius-scene); padding: 0; box-shadow: none; }
+.partners-page .home-scene { border: 8px solid var(--forest); background: var(--forest); border-radius: var(--radius-scene); padding: 0; }
 .partners-page .pet-area { border-radius: calc(var(--radius-scene) - 8px); }
-.partners-page .affection-panel, .partners-page .pet-card, .partners-page .shop-item, .partners-page .pet-form, .partners-page .desktop-pet-control { border-radius: var(--radius-panel); box-shadow: none; }
-.partners-page .wallet-pill, .partners-page .partner-feedback { background: var(--surface-muted); color: var(--ink); border-color: var(--border); box-shadow: none; border-radius: var(--radius); }
+.partners-page .affection-panel, .partners-page .pet-card, .partners-page .shop-item, .partners-page .pet-form, .partners-page .desktop-pet-control { border-radius: var(--radius-panel); }
+.partners-page .wallet-pill, .partners-page .partner-feedback { background: var(--surface-muted); color: var(--ink); border-color: var(--border); border-radius: var(--radius); }
 .partners-page .wallet-copy small { color: var(--muted); }
 .partners-page .interaction-option, .partners-page .shop-tabs { background: var(--surface); color: var(--ink); border-color: var(--border); }
-.partners-page .interaction-option.active, .partners-page .interaction-option:hover, .partners-page .pet-card.selected, .partners-page .species-grid button.active { background: var(--primary-soft); color: var(--primary-strong); border-color: var(--primary); box-shadow: none; }
-.partners-page .field input, .partners-page .species-token, .partners-page .level-badge, .partners-page .desktop-pet-icon { background: var(--surface-muted); color: var(--primary-strong); border-color: var(--border); }
+.partners-page .interaction-option.active, .partners-page .interaction-option:hover, .partners-page .pet-card.selected, .partners-page .species-grid button.active { background: var(--primary-soft); color: var(--primary-strong); border-color: var(--primary); }
+.partners-page .field input, .partners-page .species-token, .partners-page .desktop-pet-icon { background: var(--surface-muted); color: var(--primary-strong); border-color: var(--border); }
 .partners-page .scene-label, .partners-page .dialogue-bar { background: var(--surface); color: var(--ink); border-color: var(--border); box-shadow: var(--shadow-soft); }
 .partners-page .dialogue-bar::after { background: var(--surface); border-color: var(--border); }
 .partners-page .dialogue-action { background: var(--primary-soft); color: var(--primary-strong); }

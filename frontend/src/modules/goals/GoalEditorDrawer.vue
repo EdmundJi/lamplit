@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Sparkles } from 'lucide-vue-next'
+import SnapSlider from '../../shared/ui/interaction/SnapSlider.vue'
 import type { GoalDraftTask } from '../ai/goal-draft'
 import type { Dimension, GoalForm } from './goals.logic'
 
@@ -24,7 +25,6 @@ const emit = defineEmits<{ submit: []; cancel: [] }>()
   <form class="band stack editor goal-drawer" role="dialog" aria-modal="true" aria-label="新建目标" tabindex="-1" @submit.prevent="emit('submit')">
     <button type="button" class="drawer-close secondary" :disabled="busy" @click="emit('cancel')" aria-label="关闭目标编辑">关闭</button>
     <div>
-      <p class="eyebrow">目标定义</p>
       <h2>新建目标</h2>
       <p class="support-line"><Sparkles :size="16" />{{ goalPrompt }}</p>
     </div>
@@ -61,15 +61,11 @@ const emit = defineEmits<{ submit: []; cancel: [] }>()
         </label>
         <label>
           <span class="sr-only">起步任务 {{ index + 1 }} 预计分钟</span>
-          <input v-model.number="task.estimatedMinutes" :disabled="busy" type="number" min="5" max="60" required>
+          <SnapSlider v-model="task.estimatedMinutes" :disabled="busy" :min="5" :max="60" :step="5" :value-text="`${task.estimatedMinutes} 分钟`" />
         </label>
         <label>
           <span class="sr-only">起步任务 {{ index + 1 }} 难度</span>
-          <select v-model.number="task.difficulty" :disabled="busy">
-            <option :value="1">难度 1</option>
-            <option :value="2">难度 2</option>
-            <option :value="3">难度 3</option>
-          </select>
+          <SnapSlider v-model="task.difficulty" :disabled="busy" :min="1" :max="3" :step="1" :value-text="`难度 ${task.difficulty}`" />
         </label>
       </div>
     </fieldset>

@@ -24,7 +24,7 @@ onBeforeUnmount(stopDataSync)
 <template>
   <aside class="conversation-rail" aria-label="会话列表">
     <header>
-      <p class="eyebrow">消息</p>
+      <h2 class="section-title">消息</h2>
       <RouterLink to="/friends/chat">全部会话</RouterLink>
     </header>
     <p v-if="loading" class="rail-hint">正在读取会话…</p>
@@ -57,7 +57,7 @@ onBeforeUnmount(stopDataSync)
   .conversation-rail { display: block; width: 268px; flex: none; align-self: start; position: sticky; top: 24px; padding: 14px; border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface); max-height: calc(100vh - 140px); overflow-y: auto; }
 }
 .conversation-rail header { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
-.conversation-rail header .eyebrow { margin: 0; }
+.conversation-rail header .section-title { flex: 1; margin: 0; padding: 0; border: 0; font-size: 13px; color: var(--muted); }
 .conversation-rail header a { color: var(--muted); font-size: 12px; text-decoration: none; }
 .conversation-rail header a:hover { color: var(--primary); }
 .rail-hint { margin: 0; color: var(--muted); font-size: 13px; }
@@ -65,7 +65,7 @@ onBeforeUnmount(stopDataSync)
 .conversation-rail nav a { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 9px 10px; border-radius: var(--radius); color: var(--ink); text-decoration: none; }
 .conversation-rail nav a:hover { background: var(--surface-muted); }
 .conversation-rail nav a.current { background: var(--primary-soft); }
-.rail-avatar { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 12px; background: var(--surface-muted); color: var(--primary-strong); font-weight: 700; font-size: 14px; }
+.rail-avatar { width: 34px; height: 34px; display: grid; place-items: center; border-radius: var(--radius-card); background: var(--surface-muted); color: var(--primary-strong); font-weight: 700; font-size: 14px; }
 .rail-avatar.group { background: var(--primary-soft); }
 .rail-copy { display: grid; gap: 2px; min-width: 0; }
 .rail-copy strong { font-size: 14px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

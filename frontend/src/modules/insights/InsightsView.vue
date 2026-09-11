@@ -1,17 +1,9 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import {
-  Award,
-  BadgeCheck,
-  BatteryMedium,
-  CalendarDays,
-  CheckCircle2,
-  PenLine,
-  Save,
-  TrendingUp,
-} from 'lucide-vue-next'
+import { CheckCircle2, Save } from 'lucide-vue-next'
 import { onDataChanged } from '../../shared/data-sync'
 import { growthIcon } from '../achievements/achievement.types'
+import EmptyState from '../../shared/ui/EmptyState.vue'
 import {
   advicePercent as advicePercentOf,
   confirmedAtLabel,
@@ -94,43 +86,29 @@ onBeforeUnmount(stopDataSync)
   <section class="page page--read insights-page">
     <header class="page-head">
       <div>
-        <p class="eyebrow">只和自己的历史比较</p>
         <h1>洞察</h1>
-        <p class="page-description">回望留下的足迹，找到下一周适合的节奏。</p>
       </div>
     </header>
 
     <p v-if="error" class="error" role="alert">{{ error }}</p>
     <div v-else-if="loading" class="loading-state" role="status">正在整理你的成长记录…</div>
     <template v-else-if="data">
-      <div class="metrics">
-        <div><strong>{{ data.effectiveActions }}</strong><span>本周有效行动</span></div>
-        <div><strong>{{ Math.round(data.fulfillmentRate * 100) }}%</strong><span>计划兑现率</span></div>
-        <div><strong>{{ data.recoveryCount }}</strong><span>恢复次数</span></div>
-        <div><strong>{{ data.totalExperience }}</strong><span>累计行动经验</span></div>
-      </div>
+      <dl class="stats">
+        <div><dt>本周有效行动</dt><dd>{{ data.effectiveActions }}</dd></div>
+        <div><dt>计划兑现率</dt><dd>{{ Math.round(data.fulfillmentRate * 100) }}%</dd></div>
+        <div><dt>恢复次数</dt><dd>{{ data.recoveryCount }}</dd></div>
+        <div><dt>累计行动经验</dt><dd>{{ data.totalExperience }}</dd></div>
+      </dl>
 
       <section class="band summary-band" aria-labelledby="summary-title">
-        <div class="section-title">
-          <div>
-            <p class="eyebrow">这段时间的变化</p>
-            <h2 id="summary-title">{{ changeSummary.headline }}</h2>
-          </div>
-          <TrendingUp :size="20" />
-        </div>
-        <p class="summary-detail">{{ changeSummary.detail }}</p>
+        <h2 id="summary-title" class="section-title">变化</h2>
+        <p class="summary-detail"><strong>{{ changeSummary.headline }}</strong> {{ changeSummary.detail }}</p>
       </section>
 
       <section v-if="data.statusCheckCount" class="band status-band" aria-labelledby="status-title">
-        <div class="section-title">
-          <div>
-            <p class="eyebrow">本周状态检查</p>
-            <h2 id="status-title">你如何安排今天</h2>
-          </div>
-          <BatteryMedium :size="20" />
-        </div>
+        <h2 id="status-title" class="section-title">状态</h2>
         <div class="status-overview">
-          <div class="status-days"><strong>{{ data.statusCheckCount }}</strong><span>填写天数</span></div>
+          <p class="status-caption">本周填写 {{ data.statusCheckCount }} 天</p>
           <div class="advice-bars">
             <div class="advice-row">
               <span>缩小任务</span>
@@ -152,31 +130,19 @@ onBeforeUnmount(stopDataSync)
       </section>
 
       <section class="band trend-section" aria-labelledby="trend-title">
-        <div class="section-title">
-          <div>
-            <p class="eyebrow">最近趋势</p>
-            <h2 id="trend-title">每天留下了多少</h2>
-          </div>
-          <TrendingUp :size="20" />
-        </div>
-        <div class="trend-table">
+        <h2 id="trend-title" class="section-title">趋势</h2>
+        <div v-if="trends.length" class="trend-table">
           <table>
             <caption class="sr-only">每日有效行动与经验</caption>
             <thead><tr><th>日期</th><th>有效行动</th><th>经验</th></tr></thead>
             <tbody><tr v-for="row in trends" :key="row.date"><td>{{ row.date }}</td><td>{{ row.effectiveActions }}</td><td>{{ row.experience }}</td></tr></tbody>
           </table>
         </div>
-        <p v-if="!trends.length" class="empty">完成行动后，这里会出现你的趋势。</p>
+        <EmptyState v-else sprite="pigeon_1" description="完成行动后，这里会出现你的趋势。" />
       </section>
 
       <section class="band calendar-section" aria-labelledby="calendar-title">
-        <div class="section-title">
-          <div>
-            <p class="eyebrow">月历视图</p>
-            <h2 id="calendar-title">行动留下的痕迹</h2>
-          </div>
-          <CalendarDays :size="20" />
-        </div>
+        <h2 id="calendar-title" class="section-title">日历</h2>
         <div class="calendar-shell">
           <div class="calendar-toolbar">
             <strong>{{ monthLabel }}</strong>
@@ -197,13 +163,7 @@ onBeforeUnmount(stopDataSync)
       </section>
 
       <section class="band role-section">
-        <div class="section-title">
-          <div>
-            <p class="eyebrow">四个职业独立成长</p>
-            <h2>职业等级</h2>
-          </div>
-          <Award :size="20" />
-        </div>
+        <h2 class="section-title">职业等级</h2>
         <div class="role-list">
           <article v-for="role in roles" :key="role.roleCode" class="role-row">
             <div class="role-level"><span>LV.{{ role.level }}</span><strong>{{ role.roleName }}</strong></div>
@@ -222,13 +182,7 @@ onBeforeUnmount(stopDataSync)
       </section>
 
       <section class="band review-section" aria-labelledby="review-title">
-        <div class="section-title">
-          <div>
-            <p class="eyebrow">本周复盘</p>
-            <h2 id="review-title">确认后再进入下一周</h2>
-          </div>
-          <PenLine :size="20" />
-        </div>
+        <h2 id="review-title" class="section-title">周复盘</h2>
         <div v-if="weeklyPlans.length > 1" class="review-toolbar">
           <label class="plan-picker" for="review-plan">
             <span>选择计划</span>
@@ -237,7 +191,7 @@ onBeforeUnmount(stopDataSync)
             </select>
           </label>
         </div>
-        <p v-if="!weeklyPlans.length" class="empty review-empty">本周还没有周计划，创建计划后就可以在这里复盘。</p>
+        <EmptyState v-if="!weeklyPlans.length" class="review-empty" sprite="crow_1" description="本周还没有周计划，创建计划后就可以在这里复盘。" />
         <div v-else-if="reviewLoading" class="review-loading" role="status">正在读取复盘草稿…</div>
         <p v-else-if="reviewError && !review" class="error" role="alert">{{ reviewError }}</p>
         <form v-else-if="review" class="review-form" @submit.prevent="saveReview()">
@@ -274,20 +228,16 @@ onBeforeUnmount(stopDataSync)
       </section>
 
       <section class="band badge-section" aria-labelledby="badge-title">
-        <div class="section-title">
-          <div>
-            <p class="eyebrow">个人徽章</p>
-            <h2 id="badge-title">只记录你的里程碑</h2>
-          </div>
+        <div class="section-title badge-head">
+          <h2 id="badge-title">成就</h2>
           <div class="badge-summary">
-            <BadgeCheck :size="20" />
             <span>{{ earnedAchievementCount }} / {{ achievements.length }}</span>
             <button type="button" class="secondary badge-toggle" :aria-expanded="showAllBadges" @click="showAllBadges = !showAllBadges">
               {{ showAllBadges ? '只看已获得' : `查看全部 ${achievements.length} 个` }}
             </button>
           </div>
         </div>
-        <div class="badge-grid">
+        <div v-if="visibleAchievements.length" class="badge-grid">
           <article v-for="achievement in visibleAchievements" :key="achievement.code" class="badge-card" :class="[achievement.tone, { earned: achievement.earned }]">
             <div class="badge-icon" aria-hidden="true">
               <component :is="growthIcon(achievement.iconKey)" :size="22" />
@@ -303,7 +253,7 @@ onBeforeUnmount(stopDataSync)
             </div>
           </article>
         </div>
-        <p v-if="!visibleAchievements.length" class="empty badge-empty">还没有获得徽章。完成行动后，里程碑会出现在这里。</p>
+        <EmptyState v-else class="badge-empty" sprite="duck_brown_idle_1" description="还没有获得徽章。完成行动后，里程碑会出现在这里。" />
       </section>
 
     </template>
@@ -311,12 +261,12 @@ onBeforeUnmount(stopDataSync)
 </template>
 
 <style scoped>
-.metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 24px; }
-.metrics div { min-height: 104px; display: grid; align-content: end; gap: 8px; padding: 16px; border: 1px solid var(--border); border-radius: var(--radius); background: color-mix(in srgb, var(--surface) 88%, transparent); box-shadow: var(--shadow-soft); }
-.metrics div:last-child { border: 0; }
-.metrics strong { display: block; font-size: 30px; line-height: 1; color: var(--primary); }
-.metrics span { font-size: 13px; color: var(--muted); }
-.summary-band .section-title h2 { font-size: 22px; line-height: 1.45; }
+.stats { display: flex; flex-wrap: wrap; gap: 0; margin: 0 0 8px; padding: 0; }
+.stats > div { display: flex; flex-direction: column; gap: 4px; padding: 0 20px; }
+.stats > div:first-child { padding-left: 0; }
+.stats > div + div { border-left: 1px solid var(--border); }
+.stats dt { margin: 0; font-size: 12px; color: var(--muted); }
+.stats dd { margin: 0; font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--ink); }
 .summary-detail { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.7; }
 .trend-table { overflow-x: auto; }
 .trend-table table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
@@ -324,13 +274,11 @@ onBeforeUnmount(stopDataSync)
 .trend-table th { color: var(--muted); font-size: 13px; font-weight: 650; }
 .badge-toggle { min-height: 34px; padding: 0 12px; font-size: 13px; }
 .badge-empty { padding: 28px 20px; }
-.section-title { display: flex; align-items: center; justify-content: space-between; color: var(--primary); margin-bottom: 14px; }
-.section-title h2 { margin: 0; font-size: 18px; }
+.badge-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.badge-head h2 { margin: 0; font: inherit; color: inherit; }
 .badge-summary { display: inline-flex; align-items: center; gap: 8px; color: var(--primary); font-weight: 700; }
-.status-overview { display: grid; grid-template-columns: minmax(110px, auto) minmax(0, 1fr); gap: 22px; align-items: center; }
-.status-days { display: grid; justify-items: center; gap: 5px; padding: 16px; border: 1px solid var(--border); border-radius: var(--radius); background: color-mix(in srgb, var(--surface) 90%, transparent); box-shadow: var(--shadow-soft); }
-.status-days strong { font-size: 30px; line-height: 1; color: var(--primary); }
-.status-days span { color: var(--muted); font-size: 12px; }
+.status-overview { display: grid; gap: 10px; }
+.status-caption { margin: 0; color: var(--muted); font-size: 13px; }
 .advice-bars { display: grid; gap: 10px; }
 .advice-row { display: grid; grid-template-columns: 88px minmax(0, 1fr) 44px; align-items: center; gap: 12px; color: var(--muted); font-size: 13px; }
 .advice-row b { color: var(--ink); font-size: 12px; text-align: right; }
@@ -339,12 +287,12 @@ onBeforeUnmount(stopDataSync)
 .advice-row:nth-child(3) .progress > span { background: var(--amber); }
 .badge-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .badge-card { min-width: 0; min-height: 172px; display: grid; grid-template-rows: auto 1fr; gap: 12px; padding: 15px; border: 1px solid var(--border); border-radius: var(--radius); background: color-mix(in srgb, var(--surface) 92%, transparent); color: var(--muted); opacity: .72; }
-.badge-card.earned { color: var(--ink); opacity: 1; border-color: color-mix(in srgb, var(--badge-color) 42%, var(--border)); background: linear-gradient(145deg, color-mix(in srgb, var(--badge-color) 10%, var(--surface)), var(--surface)); box-shadow: var(--shadow-soft); }
+.badge-card.earned { color: var(--ink); opacity: 1; border-color: color-mix(in srgb, var(--badge-color) 42%, var(--border)); background: linear-gradient(145deg, color-mix(in srgb, var(--badge-color) 10%, var(--surface)), var(--surface)); }
 .badge-card.green { --badge-color: var(--primary); }
 .badge-card.blue { --badge-color: var(--tone-blue); }
 .badge-card.amber { --badge-color: var(--amber); }
 .badge-card.violet { --badge-color: var(--tone-violet); }
-.badge-icon { width: 44px; height: 44px; display: grid; place-items: center; border: 1px solid color-mix(in srgb, var(--badge-color) 32%, var(--border)); border-radius: 14px; color: var(--badge-color); background: var(--surface); box-shadow: inset 0 -10px 18px color-mix(in srgb, var(--badge-color) 7%, transparent); }
+.badge-icon { width: 44px; height: 44px; display: grid; place-items: center; border: 1px solid color-mix(in srgb, var(--badge-color) 32%, var(--border)); border-radius: var(--radius-panel); color: var(--badge-color); background: var(--surface); }
 .badge-card:not(.earned) .badge-icon { color: var(--muted); border-color: var(--border); background: var(--surface-muted); }
 .badge-copy { display: grid; gap: 7px; align-content: start; min-width: 0; }
 .badge-title-line { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
@@ -354,7 +302,7 @@ onBeforeUnmount(stopDataSync)
 .badge-card p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
 .badge-card small { color: var(--muted); font-size: 11px; line-height: 1.45; }
 .badge-card small.earned-date { color: var(--primary); font-weight: 700; }
-.calendar-shell { border: 1px solid var(--border); border-radius: calc(var(--radius) + 4px); background: color-mix(in srgb, var(--surface) 90%, transparent); padding: 16px; overflow-x: auto; box-shadow: var(--shadow-soft); }
+.calendar-shell { border: 1px solid var(--border); border-radius: var(--radius-card); background: color-mix(in srgb, var(--surface) 90%, transparent); padding: 16px; overflow-x: auto; }
 .calendar-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 12px; }
 .calendar-toolbar strong { font-size: 15px; }
 .calendar-legend { display: flex; flex-wrap: wrap; gap: 10px; color: var(--muted); font-size: 12px; }
@@ -371,7 +319,7 @@ onBeforeUnmount(stopDataSync)
 .calendar-day.partial { border-color: color-mix(in srgb, var(--amber) 38%, var(--border)); background: color-mix(in srgb, var(--amber) 8%, var(--surface)); color: var(--amber); }
 .role-list { display: grid; gap: 9px; margin-top: 14px; }
 .role-row { display: grid; grid-template-columns: minmax(150px, .45fr) minmax(240px, 1fr); align-items: center; gap: 24px; min-height: 78px; border: 1px solid var(--border); border-radius: var(--radius); padding: 13px 15px; background: color-mix(in srgb, var(--surface) 88%, transparent); }
-.role-row:hover { background: var(--surface); border-color: color-mix(in srgb, var(--primary) 22%, var(--border)); box-shadow: var(--shadow-soft); }
+.role-row:hover { background: var(--surface); border-color: color-mix(in srgb, var(--primary) 22%, var(--border)); }
 .role-level { display: flex; align-items: baseline; gap: 12px; }
 .role-level span { font-weight: 800; font-size: 13px; color: var(--amber); }
 .role-level strong { font-size: 16px; }
@@ -407,20 +355,18 @@ th, td { text-align: left; padding: 11px; border-bottom: 1px solid var(--border)
 tbody tr:hover { background: var(--surface-muted); }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); }
 @media (prefers-reduced-motion: no-preference) {
-  .metrics div, .badge-grid article, .calendar-day, .role-row, tbody tr, .review-facts { animation: insight-enter var(--motion-medium) ease-out both; }
-  .metrics div:nth-child(2), .badge-grid article:nth-child(2), .role-row:nth-child(2), tbody tr:nth-child(2) { animation-delay: 45ms; }
-  .metrics div:nth-child(3), .badge-grid article:nth-child(3), .role-row:nth-child(3), tbody tr:nth-child(3) { animation-delay: 90ms; }
-  .metrics div:nth-child(4), .badge-grid article:nth-child(4), .role-row:nth-child(4), tbody tr:nth-child(4) { animation-delay: 135ms; }
-  .role-row, tbody tr, .calendar-day, .badge-grid article { transition: background-color var(--motion-fast) ease, transform var(--motion-fast) ease; }
-  .calendar-day:hover, .badge-grid article:hover { transform: translateY(-2px); }
+  .badge-grid article, .calendar-day, .role-row, tbody tr, .review-facts { animation: insight-enter var(--motion-medium) var(--ease) both; }
+  .badge-grid article:nth-child(2), .role-row:nth-child(2), tbody tr:nth-child(2) { animation-delay: 45ms; }
+  .badge-grid article:nth-child(3), .role-row:nth-child(3), tbody tr:nth-child(3) { animation-delay: 90ms; }
+  .badge-grid article:nth-child(4), .role-row:nth-child(4), tbody tr:nth-child(4) { animation-delay: 135ms; }
+  .role-row, tbody tr, .calendar-day, .badge-grid article { transition: background-color var(--motion-fast) var(--ease), border-color var(--motion-fast) var(--ease); }
 }
-@keyframes insight-enter { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes insight-enter { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 @media (max-width: 820px) {
   .badge-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .review-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 600px) {
-  .metrics { grid-template-columns: repeat(2, 1fr); }
   .role-row { grid-template-columns: 1fr; gap: 9px; padding: 16px 2px; }
   .role-progress-copy { gap: 8px; }
   .review-toolbar { justify-content: stretch; }
@@ -433,12 +379,8 @@ tbody tr:hover { background: var(--surface-muted); }
   .calendar-day { min-height: 34px; }
 }
 .insights-page { display: flex; flex-direction: column; }
-.metrics { gap: 0; padding: 12px; background: var(--forest); border-radius: var(--radius-scene); overflow: hidden; }
-.metrics > div { padding: 24px; border: 0; border-right: 1px solid #54745e; border-radius: 0; background: transparent; box-shadow: none; }
-.metrics > div:last-child { border-right: 0; }
-.metrics strong { color: var(--sun); font-size: 38px; font-weight: 600; font-variant-numeric: tabular-nums; }
-.metrics span { color: #c6d6c3; font-size: 12px; }
-.calendar-shell, .badge-card, .role-row { border-radius: var(--radius-panel); box-shadow: none; }
+.calendar-shell, .badge-card, .role-row { border-radius: var(--radius-panel); }
 .review-form { padding: 24px; border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface); }
-@media (max-width: 760px) { .metrics { grid-template-columns: repeat(2, minmax(0,1fr)); } .metrics > div { padding: 16px; border: 0; } .metrics strong { font-size: 30px; } .review-form { padding: 16px; } }
+@media (max-width: 760px) { .stats { gap: 10px 0; } .stats > div { padding: 0 16px; } .review-form { padding: 16px; } }
+@media (max-width: 460px) { .stats { flex-direction: column; gap: 14px; } .stats > div { padding: 0; border-left: 0 !important; } }
 </style>

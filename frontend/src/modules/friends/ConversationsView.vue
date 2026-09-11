@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ChevronRight, MessageCircle, MessagesSquare, Plus, Users, UsersRound, X } from 'lucide-vue-next'
+import { ChevronRight, MessagesSquare, Plus, UsersRound, X } from 'lucide-vue-next'
 import { onDataChanged } from '../../shared/data-sync'
+import EmptyState from '../../shared/ui/EmptyState.vue'
 import EmojiText from './EmojiText.vue'
 import { friendInitial as initial, chatTimeLabel as timeLabel, useConversations, useGroupComposer, type ConversationRow } from './friends.logic'
 
@@ -35,13 +36,10 @@ onBeforeUnmount(stopDataSync)
 <template>
   <section class="page conversations-page">
     <header class="page-head">
-      <div>
-        <p class="eyebrow">同行的回音</p>
-        <h1>消息</h1>
-      </div>
+      <h1>消息</h1>
       <div class="head-actions">
         <div v-if="conversations.length" class="conversation-count"><MessagesSquare :size="16" /><span>{{ conversations.length }} 个会话</span></div>
-        <button class="primary create-group-button" type="button" @click="openGroupCreate"><Plus :size="16" />发起群聊</button>
+        <button class="secondary create-group-button" type="button" @click="openGroupCreate"><Plus :size="16" />发起群聊</button>
       </div>
     </header>
 
@@ -49,8 +47,8 @@ onBeforeUnmount(stopDataSync)
     <div v-if="groupFeedback" class="feedback-banner" data-tone="support" role="status" aria-live="polite"><MessagesSquare :size="19" /><p>{{ groupFeedback }}</p></div>
 
     <form v-if="groupCreating" class="band group-create" @submit.prevent="createGroup">
-      <div class="section-title">
-        <div><p class="eyebrow">群聊</p><h2>选择好友发起群聊（最多 10 人）</h2></div>
+      <div class="section-head">
+        <h2 class="section-title">选择好友发起群聊（最多 10 人）</h2>
         <button type="button" class="icon-button" aria-label="关闭" @click="closeGroupCreate"><X :size="18" /></button>
       </div>
       <div class="field"><label for="group-name">群聊名称</label><input id="group-name" v-model="groupName" maxlength="80" placeholder="例如：周末学习小组" /></div>
@@ -93,11 +91,7 @@ onBeforeUnmount(stopDataSync)
           </div>
         </RouterLink>
       </section>
-      <div v-else class="empty">
-        <MessageCircle :size="26" />
-        <h3>还没有会话</h3>
-        <p>在好友列表里找到同行的人，发第一句问候，或发起一个群聊。</p>
-      </div>
+      <EmptyState v-else sprite="duck_brown_idle_1" title="还没有会话" description="在好友列表里找到同行的人，发第一句问候，或发起一个群聊。" />
     </template>
   </section>
 </template>
@@ -106,22 +100,22 @@ onBeforeUnmount(stopDataSync)
 .head-actions { display: flex; align-items: center; gap: 10px; }
 .conversation-count { display: inline-flex; align-items: center; gap: 8px; padding: 8px 13px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--primary); font-size: 13px; font-weight: 700; }
 .create-group-button { display: inline-flex; align-items: center; gap: 7px; }
-.section-title { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--primary); }
-.section-title h2 { margin: 0; font-size: 18px; color: var(--ink); }
+.section-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+.section-head .section-title { flex: 1; margin: 0; padding: 0; border: 0; }
 .group-create { display: grid; gap: 14px; }
 .member-pick { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
 .member-option { min-width: 0; display: grid; grid-template-columns: 20px 42px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 11px 13px; border: 1px solid var(--border); border-radius: var(--radius); background: color-mix(in srgb, var(--surface) 90%, transparent); cursor: pointer; }
 .member-option.checked { border-color: color-mix(in srgb, var(--primary) 42%, var(--border)); background: color-mix(in srgb, var(--primary-soft) 55%, var(--surface)); }
 .member-option input { accent-color: var(--primary); }
-.member-avatar { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 13px 13px 13px 5px; background: linear-gradient(145deg, var(--primary), color-mix(in srgb, var(--primary) 72%, var(--amber))); color: white; font-size: 17px; font-weight: 900; }
+.member-avatar { width: 40px; height: 40px; display: grid; place-items: center; border-radius: var(--radius-card) var(--radius-card) var(--radius-card) var(--radius); background: linear-gradient(145deg, var(--primary), color-mix(in srgb, var(--primary) 72%, var(--amber))); color: white; font-size: 17px; font-weight: 900; }
 .member-copy { min-width: 0; display: grid; gap: 3px; }
 .member-copy strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
 .member-copy small { color: var(--muted); font-size: 12px; }
 .member-check { padding: 2px 8px; border-radius: 999px; background: var(--primary); color: white; font-size: 11px; font-weight: 800; }
 .conversation-list { display: grid; gap: 10px; }
-.conversation-card { min-width: 0; display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; align-items: center; gap: 13px; padding: 14px 15px; border: 1px solid var(--border); border-radius: var(--radius); background: color-mix(in srgb, var(--surface) 90%, transparent); box-shadow: var(--shadow-soft); color: var(--ink); text-decoration: none; transition: transform var(--motion-fast) ease, border-color var(--motion-fast) ease, box-shadow var(--motion-fast) ease; }
-.conversation-card:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--primary) 28%, var(--border)); box-shadow: var(--shadow); }
-.conversation-avatar { width: 46px; height: 46px; display: grid; place-items: center; border-radius: 15px 15px 15px 5px; background: linear-gradient(145deg, var(--primary), color-mix(in srgb, var(--primary) 72%, var(--amber))); color: white; font-size: 19px; font-weight: 900; box-shadow: 0 9px 18px color-mix(in srgb, var(--primary) 18%, transparent); }
+.conversation-card { min-width: 0; display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; align-items: center; gap: 13px; padding: 14px 15px; border: 1px solid var(--border); border-radius: var(--radius); background: color-mix(in srgb, var(--surface) 90%, transparent); color: var(--ink); text-decoration: none; transition: border-color var(--motion-fast) var(--ease); }
+.conversation-card:hover { border-color: color-mix(in srgb, var(--primary) 28%, var(--border)); }
+.conversation-avatar { width: 46px; height: 46px; display: grid; place-items: center; border-radius: var(--radius-panel) var(--radius-panel) var(--radius-panel) var(--radius); background: linear-gradient(145deg, var(--primary), color-mix(in srgb, var(--primary) 72%, var(--amber))); color: white; font-size: 19px; font-weight: 900; }
 .conversation-avatar.group { background: linear-gradient(145deg, var(--accent), color-mix(in srgb, var(--accent) 72%, var(--amber))); }
 .conversation-copy { min-width: 0; display: grid; gap: 5px; }
 .conversation-line { min-width: 0; display: flex; align-items: baseline; gap: 8px; }
@@ -134,17 +128,13 @@ onBeforeUnmount(stopDataSync)
 .preview-muted { color: var(--muted); }
 .conversation-side { display: grid; gap: 8px; justify-items: end; color: var(--muted); }
 .unread-badge { min-width: 20px; height: 20px; display: grid; place-items: center; padding: 0 6px; border-radius: 999px; background: var(--primary); color: white; font-size: 11px; font-weight: 800; }
-.empty { border: 1px dashed var(--border); border-radius: var(--radius); padding: 34px 20px; display: grid; place-items: center; justify-items: center; gap: 7px; color: var(--muted); text-align: center; }
-.empty h3 { margin: 0; color: var(--ink); font-size: 16px; }
-.empty p { margin: 0; font-size: 13px; }
-.empty svg { color: var(--primary); }
 @media (prefers-reduced-motion: no-preference) {
-  .conversation-card, .member-option { animation: conversation-enter var(--motion-medium) ease-out both; }
+  .conversation-card, .member-option { animation: conversation-enter var(--motion-medium) var(--ease) both; }
   .conversation-card:nth-child(2), .member-option:nth-child(2) { animation-delay: 50ms; }
   .conversation-card:nth-child(3), .member-option:nth-child(3) { animation-delay: 100ms; }
   .conversation-card:nth-child(4), .member-option:nth-child(4) { animation-delay: 150ms; }
 }
-@keyframes conversation-enter { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes conversation-enter { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 @media (max-width: 720px) {
   .member-pick { grid-template-columns: 1fr; }
   .head-actions { width: 100%; justify-content: space-between; gap: 8px; }
@@ -154,7 +144,7 @@ onBeforeUnmount(stopDataSync)
   .conversation-count, .create-group-button { width: 100%; justify-content: center; }
 }
 .conversation-list { gap: 0; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-panel); overflow: hidden; }
-.conversation-card { border: 0; border-bottom: 1px solid var(--border); border-radius: 0; padding: 22px; background: transparent; box-shadow: none; }
+.conversation-card { border: 0; border-bottom: 1px solid var(--border); border-radius: 0; padding: 22px; background: transparent; }
 .conversation-card:last-child { border-bottom: 0; }
 .member-avatar { border-radius: 50%; background: var(--primary-soft); color: var(--primary-strong); }
 .group-create { padding: 24px; margin-bottom: 24px; border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface); }

@@ -160,6 +160,27 @@ public final class ResidentSeed {
         // so their mutual regard starts a little warmer than the flat "just met" 40 a newcomer gets
         // with everyone else - the brief did not specify a number, only that they are flat-mates.
         weaver.relationships.put("artist",55);state(w,"artist").relationships.put("weaver",55);
+        // Six people on one street, and every one of these is a thing somebody wants OTHER people
+        // for - they are pinned on the board by the front door, not kept in a drawer.
+        // Without this, "knows" (which reads a non-reflection memory carrying the topic) was true
+        // only of your own, so nobody could ever put a hand on anybody else's thing - not through a
+        // model decision, which validates against knownProjects, and not through a habit either. A
+        // measured rule-only run showed exactly what that produces: one resident adding to his own
+        // thing five times over two days, stopped at the solo cap for want of a second pair of hands
+        // that could not possibly have arrived, because nobody else in town had ever heard of it.
+        // Recorded as knowledge rather than as a remembered event each: knowing what the board says
+        // is not the same as remembering an afternoon, and handing everyone four extra memories at
+        // startup pushed the whole town past its own reflection-frequency guard for no good reason.
+        // What they get is exactly what the board says and nothing more - the thing exists, whose it
+        // is, where it happens, and that nobody has started it yet, which is true of all of them at
+        // this moment. How any of them is getting on later is something they will have to see or be
+        // told, through the ordinary paths.
+        for(ResidentState r:w.residentStates){
+            if("self".equals(r.id))continue;
+            for(Project p:w.projects)
+                if(!r.id.equals(p.ownerId)&&!r.knownProjects.containsKey(p.id))
+                    r.knownProjects.put(p.id,new ProjectKnowledge(p.id,p.place,p.status,p.progress,past,"noticeboard"));
+        }
         // The one memory nobody else has (docs/01-requirements.md's seeded anomaly for 小川): a
         // hand-placed FICTIONAL seed, not a real observed system event. It exists to be told,
         // believed, doubted or garbled by whoever he tells it to later - not as evidence that the

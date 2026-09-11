@@ -25,3 +25,16 @@ export function motionDuration(token: 'fast' | 'medium' | 'slow') {
   const parsed = parseFloat(raw)
   return Number.isFinite(parsed) ? parsed : FALLBACK_MS[token]
 }
+
+const FALLBACK_EASE = 'cubic-bezier(.4,0,.2,1)'
+
+/**
+ * Same idea as motionDuration: the handful of call sites that hand an easing
+ * string to Web Animations (rather than plain CSS `var(--ease)`) read the
+ * token here, so tokens.css stays the one place the curve is tuned.
+ */
+export function motionEasing() {
+  if (typeof document === 'undefined') return FALLBACK_EASE
+  const raw = getComputedStyle(document.documentElement).getPropertyValue('--ease').trim()
+  return raw || FALLBACK_EASE
+}

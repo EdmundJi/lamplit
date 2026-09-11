@@ -27,6 +27,57 @@ public interface ResidentMind {
     default Result<ReactDraft> reactMetered(ReactRequest request){return new Result<>(react(request),null);}
 
     /**
+     * Rules are the reflex; the model is the explanation. Most of what a person does, they do first
+     * and account for afterwards - and the account is frequently not the real cause (Gazzaniga's
+     * interpreter, Libet's readiness potential, Nisbett &amp; Wilson's <i>Telling More Than We Can
+     * Know</i>). {@code deeds} are the bystander-view facts {@link
+     * com.betterself.growth.town.companion.domain.ResidentSimulation#recordDeed} queued up - what an
+     * observer would have seen, never a motive, because the rules never know one. This call asks the
+     * resident to make sense of their own recent behaviour, in their own words, coloured by whatever
+     * they will and will not admit to themselves - never a neutral restatement of the facts above.
+     */
+    default ExplainDraft explain(ExplainRequest request){throw new UnsupportedOperationException("Explanation unavailable");}
+    default Result<ExplainDraft> explainMetered(ExplainRequest request){return new Result<>(explain(request),null);}
+
+    /**
+     * The rules never count occurrences and declare a pattern - that would be the opposite of what a
+     * mind actually does. This call hands the resident an open, unguided browse of their own memories
+     * ({@link com.betterself.growth.town.companion.domain.ResidentSimulation#reflectionSource}, no
+     * particular question in mind) and asks them to look back over it. Most of the time nothing in
+     * particular comes of it. Occasionally something repeats often enough across the material that the
+     * resident themselves notices the shape of it - that, and only that, is what may become a standing
+     * belief (see {@link ReflectDraft#supersedesKey}); the rules supply the material and store the
+     * conclusion, never the generalization itself.
+     */
+    default ReflectDraft reflect(ReflectRequest request){throw new UnsupportedOperationException("Reflection unavailable");}
+    default Result<ReflectDraft> reflectMetered(ReflectRequest request){return new Result<>(reflect(request),null);}
+
+    /**
+     * "There is nothing left in this town that you and anyone else could be doing together. Is there
+     * something you want that you could not do on your own?"
+     *
+     * <p>This exists because of one measurement, repeated across several runs and unmoved by rewriting
+     * ten separate lines of prompt: {@code propose} was offered to residents 472 times in a two-day run
+     * and chosen zero, as were {@code invite} (285), {@code join} (285), {@code help} (173) and
+     * {@code celebrate} (261) - about 1800 chances, two takers. Over the same two days the same model,
+     * asked whether to say something to a person standing in front of it, said yes 67 times out of 127.
+     *
+     * <p>The difference is not the wording, it is the shape of the question. An ordinary decision is a
+     * flat menu of some twenty actions, and at any given instant "carry on reading" is a locally
+     * sensible answer while "start something that needs other people" is a discretionary extra sitting
+     * twentieth on the list - so it loses every comparison it is ever in. Asked on its own, about a
+     * situation that is actually in front of the resident, it wins about half. Generative Agents makes
+     * the same split for the same reason: reactions are asked of an observation, not chosen off a list
+     * of everything a person could possibly do.
+     *
+     * <p>The rules decide only WHEN this is worth asking - when every shared thing this resident knows
+     * of has finished or stalled beyond their reach - and never what anybody wants. A resident is
+     * free to want nothing; most of the time that is the right answer and an empty draft says so.
+     */
+    default VentureDraft venture(VentureRequest request){throw new UnsupportedOperationException("Venture unavailable");}
+    default Result<VentureDraft> ventureMetered(VentureRequest request){return new Result<>(venture(request),null);}
+
+    /**
      * Token-metered variants of the three calls above. Additive on purpose: implementations that only
      * override the plain methods (every existing fake/mock ResidentMind, including test doubles) keep
      * compiling unchanged and simply report no usage, which callers must treat as "nothing to record" -
@@ -56,6 +107,40 @@ public interface ResidentMind {
     /** {@code reaction} is one of greet / join / none - walk up and say something, sit down near them
      * without speaking, or leave them be. Declining is a first-class answer, not a failure. */
     record ReactDraft(String reaction,String reason,List<String> evidenceIds) {}
+    /** A resident's own recent unaccounted-for behaviour, described the way a bystander would - see
+     * {@link com.betterself.growth.town.companion.domain.CompanionWorld.Deed}'s own doc comment. Never
+     * carries a motive; supplying one is the entire point of {@link #explain}. */
+    record DeedView(String id,String action,String place,String note,String at) {}
+    record ExplainRequest(Context perspective,List<DeedView> deeds) {}
+    /** {@code deedIds} names which of the offered deeds this account actually covers - not every deed
+     * need be mentioned, and the ones left out are simply not part of the account. {@code text} is
+     * this resident's own explanation for themselves, which may be wrong, self-serving, vague, or one
+     * they only half believe - see {@link #explain}'s own doc comment; it is never required to be a
+     * complete or accurate account of {@code deedIds}. */
+    record ExplainDraft(List<String> deedIds,String text,List<String> evidenceIds) {}
+    /** One of this resident's own default reflexes, and the exact key a belief must carry to stand
+     * over it (see ResidentSimulation's "habitTraits"). Offered, never required: most reflections are
+     * about other people or about one particular day, and only a resident who has actually noticed
+     * one of these in themselves should reach for it. */
+    record HabitTraitView(String key,String description) {}
+    record ReflectRequest(Context perspective,List<MemoryView> source,List<HabitTraitView> habits) {}
+    /** {@code sharedThingsLeft} is what this resident still knows of that anybody could put a hand on -
+     * empty is the whole reason this call is being made, and it is handed over rather than described
+     * so the resident can see for themselves that there is nothing rather than being told so. */
+    record VentureRequest(Context perspective,List<KnownProject> sharedThingsLeft) {}
+    /** A null or blank {@code title} means "nothing I want badly enough right now", which is a real
+     * and common answer and is not a failure. Otherwise the same four things a proposal has always
+     * needed, validated by exactly the same rules any other proposal goes through. */
+    record VentureDraft(String title,String place,String objectKind,String reason,List<String> evidenceIds) {}
+    /** {@code supersedesKey} non-null means this resident has genuinely noticed something recurring
+     * across {@code source} and is naming it as a standing belief about someone or something, replacing
+     * whatever they previously believed under the same key; null means an ordinary one-off reflection
+     * that stands in for nothing. The key is the resident's own short label, never assigned by a rule -
+     * with one exception, {@link HabitTraitView#key}, which is a fixed key the rules recognise so that
+     * a belief a resident forms about one of their own reflexes can actually reach that reflex. Even
+     * there the rules only supply the label; whether to use it at all, and what to conclude under it,
+     * is entirely the resident's. */
+    record ReflectDraft(String text,List<String> evidenceIds,String supersedesKey) {}
     /** 3-4 short qualitative segments for the day ahead (see {@link #planDay}), plus 0-3 of this
      * resident's own memory ids the plan is grounded in - the same evidence discipline every other
      * model output already follows. Never a time-slotted schedule: ResidentSimulation never checks
@@ -116,8 +201,13 @@ public interface ResidentMind {
     record ServiceRequestView(String id,String requesterId,String kind,String status,String place) {}
     record PausedActionView(String action,String place,String reason,long remainingSeconds) {}
     record PortableActionView(String action,String reason,long remainingSeconds) {}
-    record KnownProject(String id,String title,String place,String stage) {
-        public KnownProject(String id,String title,String place){this(id,title,place,"刚开始");}
+    /** {@code startedBy} is whose idea it was, by name - the one social fact about a project that was
+     * missing entirely. Without it every project reads like a private to-do item, and nobody puts
+     * their hands on somebody else's to-do item. {@code stage} says in words how far along it is AND,
+     * when it applies, that it has stopped for want of another pair of hands (see
+     * ResidentSimulation's SOLO_PROGRESS_CAP) - a fact the town had but never told anyone. */
+    record KnownProject(String id,String title,String place,String stage,String startedBy) {
+        public KnownProject(String id,String title,String place){this(id,title,place,"刚开始",null);}
     }
     record Decision(String action,String place,String targetId,String reason,String speech,List<String> evidenceIds,String projectTitle,String objectKind) {}
 
@@ -125,6 +215,8 @@ public interface ResidentMind {
     static List<ActorView> actorViews(List<Actor> actors){return actors==null?List.of():actors.stream().map(ResidentMind::actorView).toList();}
     static MemoryView memoryView(Memory memory){return memory==null?null:new MemoryView(memory.id(),memory.ownerId(),memory.sourceId(),memory.sourceType(),instant(memory.at()),memory.text(),memory.topicId(),List.copyOf(memory.evidenceIds()));}
     static List<MemoryView> memoryViews(List<Memory> memories){return memories==null?List.of():memories.stream().map(ResidentMind::memoryView).toList();}
+    static DeedView deedView(Deed deed){return deed==null?null:new DeedView(deed.id,deed.action,modelPlace(deed.place),deed.note,instant(deed.at));}
+    static List<DeedView> deedViews(List<Deed> deeds){return deeds==null?List.of():deeds.stream().map(ResidentMind::deedView).toList();}
     static TurnView turnView(Turn turn){return turn==null?null:new TurnView(turn.speakerId(),turn.text(),instant(turn.at()),turn.source(),turn.emoji());}
     static List<TurnView> turnViews(List<Turn> turns){return turns==null?List.of():turns.stream().map(ResidentMind::turnView).toList();}
     static WorldObjectView objectView(WorldObject object){return object==null?null:new WorldObjectView(object.id(),object.kind(),modelPlace(object.place()),object.label(),observedState(object.state()),object.projectId());}

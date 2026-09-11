@@ -70,9 +70,17 @@ public final class ConversationLifecycle {
             boolean newlyCommitted=!p.members.contains(speaker)||!Objects.equals(self.goal,p.id);
             if(!p.members.contains(speaker))p.members.add(speaker);self.goal=p.id;self.thought="我刚答应为「"+p.title+"」做一点自己的贡献。";
             self.relationships.compute(other(c,speaker),(key,value)->Math.min(100,(value==null?40:value)+4));
-            if(newlyCommitted)event(w,now,"agreement",c.place,List.of(speaker,other(c,speaker)),actor(w,speaker).name()+"在交谈中答应参与「"+p.title+"」。",p.id);
+            if(newlyCommitted){
+                event(w,now,"agreement",c.place,List.of(speaker,other(c,speaker)),actor(w,speaker).name()+"在交谈中答应参与「"+p.title+"」。",p.id);
+                // Saying yes to someone is one of the few things in this town that can actually change
+                // a person. This call was missing: the drift lived only in the rule-scripted
+                // conversation path, which no real conversation ever takes.
+                ResidentSimulation.driftOnConversationOutcome(w,speaker,other(c,speaker),true,now);
+            }
         } else if(reply.stance().equals("decline")) {
             event(w,now,"declined",c.place,List.of(speaker),actor(w,speaker).name()+"说出了自己的顾虑，这次先不答应。",c.topicId);
+            // Being turned down is a fact about whoever asked, not about whoever said no.
+            ResidentSimulation.driftOnConversationOutcome(w,speaker,other(c,speaker),false,now);
         } else if(reply.stance().equals("adjust")) {
             p.description=reply.adjustment();self.thought="听完邻居的话，我想调整一下做法："+reply.adjustment();
             event(w,now,"change_of_mind",c.place,List.of(speaker,other(c,speaker)),actor(w,speaker).name()+"调整了「"+p.title+"」的安排："+reply.adjustment(),p.id);
@@ -148,7 +156,13 @@ public final class ConversationLifecycle {
             ||!validEvidence(w,op.speakerId(),summary.evidenceIds())||summary.evidenceIds().isEmpty()
             ||!c.turnMemoryIds.getOrDefault(op.speakerId(),List.of()).containsAll(summary.evidenceIds()))return false;
         memory(w,op.speakerId(),c.id,"reflection",now,c.topicId,summary.text(),summary.evidenceIds(),8);
-        ResidentState r=state(w,op.speakerId());r.thought=summary.text();r.mood=summary.feeling();r.lastReflectionAt=now;
+        // "I remember that exchange" and "I looked back over a stretch of my life and concluded
+        // something" are different acts - see ResidentSimulation.needsReflection/applyReflection.
+        // This used to also set r.lastReflectionAt, which meant every ordinary conversation summary
+        // reset the same three-hour clock that gates a real reflection: a resident who simply talks
+        // often could push that clock forward indefinitely and never accumulate the gap needed to
+        // reach one. Only applyReflection may advance lastReflectionAt now.
+        ResidentState r=state(w,op.speakerId());r.thought=summary.text();r.mood=summary.feeling();
         c.summarizedParticipants.add(op.speakerId());c.recollectionSources.put(op.speakerId(),"model");c.summaryOperationId=null;c.summarySpeakerId=null;w.revision++;return true;
     }
     public static void failSummary(CompanionWorld w,Operation op,Instant now) {

@@ -56,7 +56,7 @@ function state(step: number) {
   background: var(--primary);
   transform: scaleX(0);
   transform-origin: left center;
-  transition: transform var(--motion-medium) cubic-bezier(.34, 1.56, .64, 1);
+  transition: transform var(--motion-medium) var(--ease);
 }
 .stepper-step[data-state='done'] .stepper-fill,
 .stepper-step[data-state='current'] .stepper-fill { transform: scaleX(1); }
@@ -72,14 +72,10 @@ function state(step: number) {
   flex: none;
   border-radius: 999px;
   cursor: pointer;
-  transition: width var(--motion-medium) cubic-bezier(.34, 1.56, .64, 1), background-color var(--motion-fast) ease;
+  transition: width var(--motion-medium) var(--ease), background-color var(--motion-fast) var(--ease);
 }
 .stepper--dots .stepper-step[data-state='current'] { width: 22px; }
 /* Dots read as three states: filled and quiet behind you, a pill for now, an empty track ahead. */
 .stepper--dots .stepper-step[data-state='done'] .stepper-fill { background: color-mix(in srgb, var(--primary) 46%, var(--surface-muted)); }
 .stepper--dots .stepper-step:focus-visible { outline: 3px solid color-mix(in srgb, var(--focus) 35%, transparent); outline-offset: 3px; }
-
-/* Quieter settings keep the three states but drop the overshoot. */
-:root[data-motion='reduced'] .stepper-fill,
-:root[data-motion='reduced'] .stepper--dots .stepper-step { transition-timing-function: ease-out; }
 </style>

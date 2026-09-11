@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { ArrowRight, ClipboardCheck, FileJson2, History, Loader2, Plus, Send, ShieldCheck, SlidersHorizontal, Sparkles, Timer } from 'lucide-vue-next'
+import { ArrowRight, ClipboardCheck, History, Loader2, Plus, Send, ShieldCheck, SlidersHorizontal, Sparkles, Timer } from 'lucide-vue-next'
 import { disclose as vDisclose } from '../../shared/ui/interaction/disclose'
+import SegmentedControl from '../../shared/ui/interaction/SegmentedControl.vue'
+import SnapSlider from '../../shared/ui/interaction/SnapSlider.vue'
 import { api } from '../../shared/api/client'
 import { postSse } from '../../shared/api/sse'
 import MarkdownDocument from '../../shared/ui/MarkdownDocument.vue'
+import EmptyState from '../../shared/ui/EmptyState.vue'
 import { pickThinkingMessage } from './ai-thinking'
 import { saveGoalDraft, type GoalDraft } from './goal-draft'
 
@@ -233,11 +236,7 @@ onBeforeUnmount(() => {
 <template>
   <section class="page page--talk ai-page">
     <header class="page-head">
-      <div>
-        <p class="eyebrow">内容由 AI 生成，请核对后使用</p>
-        <h1>AI 助手</h1>
-        <p class="page-description">把还没理清的想法，一起变成可行动的下一步。</p>
-      </div>
+      <h1>AI 助手</h1>
       <button class="secondary" @click="reset">
         <Plus :size="17" />
         新会话
@@ -256,11 +255,7 @@ onBeforeUnmount(() => {
     <template v-else>
       <div class="ai-workspace">
         <div class="chat-column">
-          <div class="scene-tabs" aria-label="选择场景">
-            <button v-for="option in sceneOptions" :key="option.value" type="button" :aria-pressed="scene === option.value" @click="scene = option.value">
-              {{ option.label }}
-            </button>
-          </div>
+          <SegmentedControl v-model="scene" :options="sceneOptions" label="选择场景" class="scene-tabs" />
 
           <div class="chat" aria-live="polite">
             <div v-for="(m, i) in messages" :key="i" :class="['message', m.role.toLowerCase()]">
@@ -282,10 +277,12 @@ onBeforeUnmount(() => {
                 </Transition>
               </div>
             </div>
-            <div v-if="!messages.length && !loadingSession && !thinking" class="empty">
-              <h2>从一个具体问题开始</h2>
-              <p>例如：把本周目标拆成两项 25 分钟以内的行动，并说明为什么这么安排。</p>
-            </div>
+            <EmptyState
+              v-if="!messages.length && !loadingSession && !thinking"
+              sprite="dog_labrador_brown_idle_1"
+              title="从一个具体问题开始"
+              description="例如：把本周目标拆成两项 25 分钟以内的行动，并说明为什么这么安排。"
+            />
             <div v-if="loadingSession" class="session-loading" role="status" aria-live="polite">
               <Loader2 :size="18" class="spinning" />
               正在打开历史对话
@@ -300,15 +297,13 @@ onBeforeUnmount(() => {
               <Send :size="18" />
             </button>
           </form>
+          <p class="ai-disclaimer">内容由 AI 生成，请核对后使用</p>
         </div>
 
         <aside class="ai-side">
           <section class="goal-draft-panel" aria-labelledby="goal-draft-title">
-            <div class="panel-title">
-              <div><p class="eyebrow">任务推荐</p><h2 id="goal-draft-title">目标草案</h2></div>
-              <FileJson2 :size="19" />
-            </div>
-            <button v-if="!goalDraft" class="primary generate-goal" type="button" :disabled="!session || !messages.length || generatingGoal" @click="generateGoalTemplate">
+            <h2 id="goal-draft-title" class="section-title">任务推荐</h2>
+            <button v-if="!goalDraft" class="secondary generate-goal" type="button" :disabled="!session || !messages.length || generatingGoal" @click="generateGoalTemplate">
               <Loader2 v-if="generatingGoal" :size="17" class="spinning" />
               <Sparkles v-else :size="17" />
               {{ generatingGoal ? '正在生成' : '根据对话生成' }}
@@ -319,29 +314,26 @@ onBeforeUnmount(() => {
               <label class="field"><span>完成标准</span><textarea v-model="goalDraft.description" maxlength="1000" required></textarea></label>
               <div class="draft-split">
                 <label class="field"><span>成长属性</span><select v-model="goalDraft.dimensionCode"><option v-for="item in dimensionOptions" :key="item.code" :value="item.code">{{ item.name }}</option></select></label>
-                <label class="field"><span>持续天数</span><input v-model.number="goalDraft.durationDays" type="number" min="14" max="84" required /></label>
+                <label class="field"><span>持续天数 · {{ goalDraft.durationDays }}</span><SnapSlider v-model="goalDraft.durationDays" :min="14" :max="84" :step="7" :value-text="`${goalDraft.durationDays} 天`" /></label>
               </div>
               <label class="field"><span>每周重点</span><textarea v-model="goalDraft.weeklyFocus" maxlength="300" required></textarea></label>
               <div class="starter-tasks">
                 <strong>起步任务</strong>
                 <div v-for="(task, index) in goalDraft.starterTasks" :key="index" class="starter-task">
                   <input v-model="task.title" :aria-label="`起步任务 ${index + 1} 名称`" maxlength="160" required />
-                  <input v-model.number="task.estimatedMinutes" :aria-label="`起步任务 ${index + 1} 分钟`" type="number" min="5" max="60" required />
-                  <select v-model.number="task.difficulty" :aria-label="`起步任务 ${index + 1} 难度`"><option :value="1">难度 1</option><option :value="2">难度 2</option><option :value="3">难度 3</option></select>
+                  <SnapSlider v-model="task.estimatedMinutes" :aria-label="`起步任务 ${index + 1} 分钟`" :min="5" :max="60" :step="5" :value-text="`${task.estimatedMinutes} 分钟`" />
+                  <SnapSlider v-model="task.difficulty" :aria-label="`起步任务 ${index + 1} 难度`" :min="1" :max="3" :step="1" :value-text="`难度 ${task.difficulty}`" />
                 </div>
               </div>
               <details v-disclose class="json-preview"><summary>查看 JSON</summary><pre>{{ goalDraftJson }}</pre></details>
-              <div class="draft-actions"><button class="secondary" type="button" :disabled="generatingGoal" @click="generateGoalTemplate">重新生成</button><button class="primary" type="submit">一键填入<ArrowRight :size="16" /></button></div>
+              <div class="draft-actions"><button class="secondary" type="button" :disabled="generatingGoal" @click="generateGoalTemplate">重新生成</button><button class="secondary" type="submit">一键填入<ArrowRight :size="16" /></button></div>
             </form>
             <p v-else-if="!messages.length" class="draft-empty">完成一段对话后即可生成。</p>
           </section>
 
           <section class="history-panel" aria-labelledby="history-title">
             <div class="panel-title">
-              <div>
-                <p class="eyebrow">历史对话</p>
-                <h2 id="history-title">选择后继续聊</h2>
-              </div>
+              <h2 id="history-title" class="section-title">历史对话</h2>
               <button class="icon-button" type="button" aria-label="刷新历史对话" @click="loadHistory">
                 <Loader2 v-if="loadingHistory" :size="17" class="spinning" />
                 <History v-else :size="17" />
@@ -368,8 +360,7 @@ onBeforeUnmount(() => {
           </section>
 
           <section class="suggestion-panel" aria-labelledby="suggestion-title">
-            <p class="eyebrow">建议解释</p>
-            <h2 id="suggestion-title">采纳前先看四件事</h2>
+            <h2 id="suggestion-title" class="section-title">建议解释</h2>
             <div class="check-list">
               <article v-for="item in suggestionChecks" :key="item.title">
                 <component :is="item.icon" :size="18" />
@@ -394,22 +385,22 @@ onBeforeUnmount(() => {
 .ai-page { max-width: 1120px; }
 .ai-workspace { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 24px; align-items: start; }
 .chat-column { min-width: 0; }
-.scene-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 14px; padding: 4px; background: var(--surface-muted); }
-.scene-tabs button { min-width: 0; border: 0; border-radius: calc(var(--radius) - 2px); background: transparent; color: var(--muted); padding: 0 8px; }
-.scene-tabs button[aria-pressed='true'] { background: var(--surface); color: var(--primary); font-weight: 800; box-shadow: var(--shadow-soft); }
-.chat { min-height: 420px; padding: 16px; border: 1px solid var(--border); border-radius: calc(var(--radius) + 4px); background: color-mix(in srgb, var(--surface) 88%, transparent); box-shadow: var(--shadow-soft); }
+.scene-tabs { margin-bottom: 14px; }
+.chat { min-height: 420px; padding: 16px; border: 1px solid var(--border); border-radius: calc(var(--radius) + 4px); background: color-mix(in srgb, var(--surface) 88%, transparent); }
 .message { display: grid; grid-template-columns: 36px 1fr; gap: 10px; padding: 12px 0; }
-.message > span { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 11px; background: var(--surface-muted); font-size: 11px; font-weight: 800; }
+.message > span { width: 32px; height: 32px; display: grid; place-items: center; border-radius: var(--radius-card); background: var(--surface-muted); font-size: 11px; font-weight: 800; }
 .message.assistant > span { background: linear-gradient(135deg, var(--primary), var(--accent)); color: white; }
 .message-body { margin: 5px 0 0; }
 .user-text { white-space: pre-wrap; line-height: 1.7; }
 .composer { display: grid; grid-template-columns: minmax(0, 1fr) var(--control); align-items: end; gap: 10px; padding-top: 16px; }
 .composer textarea { min-height: 84px; resize: vertical; border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; background: var(--surface); color: var(--ink); }
 .composer .icon-button { align-self: end; }
-.ai-side { display: grid; gap: 14px; }
-.history-panel, .suggestion-panel, .goal-draft-panel { display: grid; gap: 14px; padding: 16px; border: 1px solid var(--border); border-radius: calc(var(--radius) + 4px); background: color-mix(in srgb, var(--surface) 90%, transparent); box-shadow: var(--shadow-soft); }
-.panel-title { display: flex; align-items: start; justify-content: space-between; gap: 12px; }
-.panel-title h2 { margin: 0; font-size: 18px; }
+.ai-disclaimer { margin: 8px 0 0; color: var(--muted); font-size: 12px; }
+.ai-side { display: grid; }
+.history-panel, .suggestion-panel, .goal-draft-panel { display: grid; gap: 14px; }
+.ai-side > section:first-child .section-title, .ai-side > section:first-child .panel-title { margin-top: 0; }
+.panel-title { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 32px 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+.panel-title .section-title { flex: 1; margin: 0; padding: 0; border: 0; }
 .spinning { animation: spin .8s linear infinite; }
 .history-list { display: grid; gap: 8px; }
 .history-item { min-height: 72px; display: grid; gap: 7px; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--ink); text-align: left; }
@@ -419,7 +410,6 @@ onBeforeUnmount(() => {
 .history-meta small { color: var(--muted); font-size: 12px; }
 .history-preview { color: var(--muted); font-size: 13px; line-height: 1.45; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .history-empty { margin: 0; color: var(--muted); font-size: 13px; }
-.goal-draft-panel .panel-title > svg { color: var(--primary); }
 .generate-goal { width: 100%; }
 .draft-empty, .draft-error { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
 .draft-error { color: var(--danger); }
@@ -445,10 +435,9 @@ onBeforeUnmount(() => {
 .thinking-dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--primary); }
 .thinking-dots i:nth-child(2) { background: var(--amber); }
 .thinking-dots i:nth-child(3) { background: var(--accent); }
-.thinking-copy-enter-active, .thinking-copy-leave-active { transition: opacity var(--motion-fast) ease, transform var(--motion-fast) ease; }
+.thinking-copy-enter-active, .thinking-copy-leave-active { transition: opacity var(--motion-fast) var(--ease), transform var(--motion-fast) var(--ease); }
 .thinking-copy-enter-from { opacity: 0; transform: translateY(3px); }
 .thinking-copy-leave-to { opacity: 0; transform: translateY(-3px); }
-.suggestion-panel h2 { margin: 0; font-size: 18px; }
 .check-list { display: grid; gap: 12px; }
 .check-list article { display: grid; grid-template-columns: 22px 1fr; gap: 10px; padding-bottom: 12px; border-bottom: 1px solid var(--surface-muted); }
 .check-list article:last-child { border-bottom: 0; padding-bottom: 0; }
@@ -460,17 +449,12 @@ onBeforeUnmount(() => {
 .button { display: inline-flex; align-items: center; text-decoration: none; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; }
 @media (prefers-reduced-motion: no-preference) {
-  .message, .suggestion-panel, .goal-draft-panel, .scene-tabs { animation: message-enter var(--motion-medium) ease-out both; }
-  .history-panel { animation: message-enter var(--motion-medium) ease-out both; }
-  .message.assistant > span { animation: assistant-breathe 2.8s ease-in-out infinite; }
-  .thinking-dots i { animation: thinking-dot 1.15s ease-in-out infinite; }
+  .message { animation: message-enter var(--motion-medium) var(--ease) both; }
+  .thinking-dots i { animation: thinking-dot 1.15s var(--ease) infinite; }
   .thinking-dots i:nth-child(2) { animation-delay: 140ms; }
   .thinking-dots i:nth-child(3) { animation-delay: 280ms; }
-  .composer textarea:focus { box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary) 10%, transparent); }
-  .check-list article { transition: transform var(--motion-fast) ease; }
-  .check-list article:hover { transform: translateX(3px); }
-  .history-item { transition: transform var(--motion-fast) ease, background-color var(--motion-fast) ease, border-color var(--motion-fast) ease; }
-  .history-item:hover { transform: translateY(-1px); }
+  .composer textarea:focus { box-shadow: inset 0 0 0 2px var(--primary); }
+  .history-item { transition: background-color var(--motion-fast) var(--ease), border-color var(--motion-fast) var(--ease); }
 }
 .message.assistant {
   align-items: start;
@@ -483,7 +467,6 @@ onBeforeUnmount(() => {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
-  box-shadow: 0 1px 0 rgb(0 0 0 / 2%), var(--shadow-soft);
 }
 .message.user .message-body {
   padding: 2px 0 0;
@@ -494,8 +477,7 @@ onBeforeUnmount(() => {
   color: var(--muted);
   font-size: 11px;
 }
-@keyframes message-enter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes assistant-breathe { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--primary) 0%, transparent); } 50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--primary) 14%, transparent); } }
+@keyframes message-enter { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes thinking-dot { 0%, 60%, 100% { opacity: .42; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-3px); } }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (max-width: 900px) {
@@ -503,7 +485,6 @@ onBeforeUnmount(() => {
   .ai-side { grid-template-columns: 1fr; }
 }
 @media (max-width: 560px) {
-  .scene-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .history-item { min-height: 62px; }
   .starter-task { grid-template-columns: 1fr 62px; }
   .starter-task select { grid-column: 1 / -1; }
@@ -511,9 +492,8 @@ onBeforeUnmount(() => {
 .ai-page { max-width: 1264px; }
 .ai-workspace { gap: 24px; grid-template-columns: minmax(0, 1fr) 300px; }
 .chat-column { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-panel); padding: 20px; }
-.chat { border: 0; box-shadow: none; padding: 10px 0; min-height: 360px; background: transparent; }
-.scene-tabs { border: 0; background: var(--surface-muted); border-radius: var(--radius); }
-.ai-side > section { border-radius: var(--radius-panel); box-shadow: none; background: var(--surface); }
+.chat { border: 0; padding: 10px 0; min-height: 360px; background: transparent; }
+.scene-tabs { border: 0; }
 .message > span { border-radius: 50%; }
 .composer { border-top: 1px solid var(--border); }
 .composer textarea { background: var(--surface-muted); border-radius: var(--radius); }

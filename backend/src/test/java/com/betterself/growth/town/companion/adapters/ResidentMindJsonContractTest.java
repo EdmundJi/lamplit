@@ -75,12 +75,59 @@ class ResidentMindJsonContractTest {
             public Classification classify(ClassificationPrompt prompt){throw new UnsupportedOperationException();}
         };
         var now=Instant.parse("2026-09-08T06:00:00Z");var w=CompanionRules.join("decision-contract","我","Asia/Shanghai",now,true);var state=ResidentSimulation.state(w,"artist");
-        var context=new ResidentMind.Context(w.id,"artist",state.revision,0,now,"14:00","sunny",ResidentSimulation.actor(w,"artist"),state.goal,state.mood,state.thought,state.energy,state.social,state.relationships,List.of(),List.of(),List.of(),List.of(),List.of());
+        // The decision schema's action enum is now scoped to this call's own context.availableActions()
+        // (see QwenResidentMind.decideMetered's own comment: a schema that always advertised every
+        // action that is EVER legal somewhere used to silently contradict the "pick only from
+        // availableActions" instruction, and a model facing that contradiction followed the schema -
+        // see the "continue"/"continue_home" rejection cluster this was written to fix). A broad
+        // availableActions list here keeps this test's own assertions meaningful without pinning the
+        // schema back to a static global set.
+        var broadAvailableActions=List.of("observe","rest","study","work","read","make","sleep","change_work","propose",
+            "continue","resume","request_drink","open_cafe","close_cafe","continue_home","tend","invite","join","away","create","help");
+        var context=new ResidentMind.Context("artist","14:00","sunny",ResidentMind.actorView(ResidentSimulation.actor(w,"artist")),state.goal,
+            List.of(),List.of(),List.of(),List.of(),List.of(),List.of(),List.of(),List.of(),List.of(),
+            null,null,null,List.of(),
+            state.occupation,null,broadAvailableActions,null,List.of(),false,List.of(),
+            "open",null,null,null,null);
 
         new QwenResidentMind(provider,new ObjectMapper().findAndRegisterModules(),"qwen",true).decide(context);
 
         assertThat(captured.get().schemaJson()).doesNotContain("offer_assist","offer_delegate","offer_takeover","accept_work");
         assertThat(captured.get().schemaJson()).contains("continue","resume","sleep","request_drink","open_cafe","close_cafe","continue_home");
-        assertThat(captured.get().instruction()).contains("只能在两人当面的结构化对话回合里协商","必须从availableActions选择","不要猜测或要求任何隐藏数值");
+        assertThat(captured.get().instruction()).contains("只能在两人当面的结构化对话回合里协商","必须严格照抄availableActions这次实际给出的字符串","不要猜测或要求任何隐藏数值");
+    }
+
+    /** Direct regression test for the dominant real cause found behind the reject-rate exam: with a
+     * resident waiting in the cafe on an already-requested drink (a "rest" plan), the cafe starting to
+     * close withdraws "continue"/"continue_home" from availableActions with no substitute offered, and
+     * the model - seeing a schema whose action enum always listed every action that is EVER legal
+     * anywhere - kept answering "continue"/"continue_home" anyway, which ResidentDirector.applyDecision
+     * then silently rejected every time because {@code c.availableActions().contains(decision.action())}
+     * is the very first check it runs. Scoping the schema enum to this call's own availableActions (see
+     * QwenResidentMind.decideMetered) cannot make the model choose differently, but it does stop the
+     * schema itself from advertising an action this call can never actually apply. */
+    @Test void decisionSchemaOmitsAnActionThisCallsAvailableActionsDoesNotOffer() {
+        var captured=new AtomicReference<QwenProvider.StructuredPrompt>();
+        QwenProvider provider=new QwenProvider(){
+            public StructuredResult generateStructured(StructuredPrompt prompt){captured.set(prompt);return new StructuredResult("{\"action\":\"rest\",\"place\":\"cafe\",\"targetId\":null,\"reason\":\"继续等饮料\",\"speech\":\"\",\"evidenceIds\":[],\"projectTitle\":null,\"objectKind\":null}","fake","request",1,1,1);}
+            public StreamMetadata stream(ChatPrompt prompt,Consumer<String> consumer){throw new UnsupportedOperationException();}
+            public Classification classify(ClassificationPrompt prompt){throw new UnsupportedOperationException();}
+        };
+        var now=Instant.parse("2026-09-08T06:00:00Z");var w=CompanionRules.join("decision-menu-contract","我","Asia/Shanghai",now,true);var state=ResidentSimulation.state(w,"artist");
+        // Exactly the "cafe is closing while I'm waiting on a drink" shape: "continue"/"continue_home"
+        // are deliberately absent from availableActions this call, "rest" is the real substitute.
+        var narrowAvailableActions=List.of("observe","rest","study","sleep","away");
+        var context=new ResidentMind.Context("artist","14:00","sunny",ResidentMind.actorView(ResidentSimulation.actor(w,"artist")),state.goal,
+            List.of(),List.of(),List.of(),List.of(),List.of(),List.of(),List.of(),List.of(),List.of(),
+            null,null,null,List.of(),
+            state.occupation,null,narrowAvailableActions,null,List.of(),false,List.of(),
+            "closing",null,null,null,null);
+
+        new QwenResidentMind(provider,new ObjectMapper().findAndRegisterModules(),"qwen",true).decide(context);
+
+        String actionEnum=captured.get().schemaJson();
+        assertThat(actionEnum).doesNotContain("continue_home").doesNotContain("\"continue\"").doesNotContain("propose").doesNotContain("tend");
+        assertThat(actionEnum).contains("\"observe\"","\"rest\"","\"study\"","\"sleep\"","\"away\"");
+        assertThat(captured.get().instruction()).contains("这次没列出就是这次真的做不到","不要选continue或continue_home");
     }
 }

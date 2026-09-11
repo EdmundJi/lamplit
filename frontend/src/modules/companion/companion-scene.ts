@@ -4,6 +4,7 @@ import { resolveMove } from '../../shared/scene/collision'
 import { companionPath, freeStandPosition, COMPANION_COLLISION } from './companion-navigation'
 import { dominantDirection, stepTowardPoint, type Direction4 } from '../../shared/scene/walkers'
 import { conversationEmoji, residentStatus } from './companion-presentation'
+import { motionAllowed } from '../../shared/ui/interaction/motion'
 import { buildCompanionStage } from './companion-stage'
 import { ACTION_FRAME, RESIDENT_ART, RESIDENT_ACTIONS, isArtAction, CAFE_WORK_SEATS, POSITION_SLOTS, COMPANION_WORLD_SIZE, HOME_ROOMS, PLACE_FRAMES, CAFE_ROOM, CAFE_WINDOW_ROOM, CAFE_SERVICE, CAFE_SEATS, cafeSeatAt, GARDEN_OFFSET_X } from './companion-art'
 
@@ -14,7 +15,13 @@ export interface SceneObject { id: string; kind: string; place: string; label: s
 export interface SceneLabel { worldX?: number; worldY?: number; facing?: Direction4; id: string; name: string; x: number; y: number; selected: boolean; speechOffset: number; speech?: string; action: string; role: string; emoji: string; hovered?: boolean; bodyX: number; bodyY: number; bodyHeight: number; conversationId?: string; dialogue?: { name: string; text: string }[]; offscreen?: boolean; direction?: string }
 // cafeOpen mirrors CompanionScene.vue's own prop of the same name: authoritative world.cafeStatus,
 // never inferred from the client's clock - see the night window lighting in sync().
-export interface SceneSnapshot { residents: SceneResident[]; weather: 'clear' | 'rain'; minutes: number; selectedResidentId?: string; selectedPlace?: string; overview?: boolean; projects?: SceneProject[]; conversations?: SceneConversation[]; objects?: SceneObject[]; cafeOpen?: boolean }
+// 'docked' is the always-on street strip: a short, wide window that pans/zooms to a fixed world
+// point per place instead of framing overview/selection/hover like the full /town page ('auto',
+// the pre-existing behaviour, unchanged below).
+// chrome: false hides the DOM name-tag/offscreen-indicator layer (CompanionScene.vue's own
+// template) *and* the in-canvas signage text (buildCompanionStage's `signage`, toggled in sync()
+// below) - the docked street strip's own quiet, low-clutter mode. Defaults to true (unchanged).
+export interface SceneSnapshot { residents: SceneResident[]; weather: 'clear' | 'rain'; minutes: number; selectedResidentId?: string; selectedPlace?: string; overview?: boolean; projects?: SceneProject[]; conversations?: SceneConversation[]; objects?: SceneObject[]; cafeOpen?: boolean; chrome?: boolean; cameraMode?: 'auto' | 'docked'; cameraTarget?: { x: number; y: number }; dockedFrameHeight?: number }
 const W = COMPANION_WORLD_SIZE.width, H = COMPANION_WORLD_SIZE.height
 const PALETTE = [0x688b82, 0xbd8765, 0x8185a4, 0xceaa65, 0x889b69]
 type RainShelter = { x: number; y: number; width: number; height: number }
@@ -73,6 +80,22 @@ export function visibleActivity(activity = '', action = '', objectKind?: string)
   if (/focus|study|read|学|读|专注|备考/.test(text)) return 'read'
   return 'idle'
 }
+/**
+ * Whether a resident currently taking their turn in an active conversation should show their
+ * speech bubble right now. Gated only on this resident's own arrival at their target - never on
+ * whether some other actor has also stopped moving. The previous version additionally required
+ * every actor sharing (`this.actors.values()...filter(other => other.conversationId ===
+ * actor.conversationId)`) - including, when a speaker's own conversationId was momentarily unset,
+ * every OTHER actor in town that also lacked one - to have an empty path before showing anyone's
+ * bubble. Acquiring (or changing) a backend positionId gives a resident a new authoritative
+ * target, which differs from their previous place+index guess and starts a short walk to settle
+ * into it; that walk alone was enough to blank a conversation partner's speech bubble the whole
+ * town over, for as long as the positionId walk took. A resident is "speaking" purely on their
+ * own terms now.
+ */
+export function isSpeaking(residentId: string, turnSpeakerId: string | undefined, hasArrived: boolean) {
+  return turnSpeakerId === residentId && hasArrived
+}
 export function conversationPosition(place: string, index: number) {
   const center = scenePlace(place) === 'cafe' ? CAFE_SERVICE.conversation : placeCenter(place)
   return { x: center.x + (index % 2 ? 21 : -21), y: center.y + Math.floor(index / 2) * 32 }
@@ -113,11 +136,27 @@ export function residentPosition(location: string, index: number, activity = '',
   if (place === 'home' && /focus|study|read|work|make|专注|学习|读书|工作|制作/i.test(activity + action)) return room.desk
   return freeStandPosition(place === 'home' ? location : place, residentId ?? `${location}#${index}`, occupied)
 }
+/**
+ * Where a resident is currently headed - travelling toward a destination's own door/entry, or
+ * settled at their resolved seat/bed/desk/free-stand spot. Mirrors sync()'s own per-resident
+ * target computation (the `travelling` branch and the `residentPosition()` call below it) so a
+ * caller outside the running scene - the docked strip's "follow the avatar" camera target - can
+ * point at exactly the same spot the actor is walking to/standing at, without needing the live
+ * Phaser actor map. Approximates `occupantIndex` (real slot-sharing resolution only exists inside
+ * the scene's actor loop) - fine for a camera target, which does not need seat-exact precision.
+ */
+export function residentTarget(actor: SceneResident, positionId?: string | null, occupantIndex = 0) {
+  const travelling = Boolean(actor.destination) && (actor.activity === 'walk' || actor.activity === 'travel')
+  const location = travelling ? actor.destination! : actor.location
+  if (travelling) return homeRoom(location)?.door ?? (scenePlace(location) === 'cafe' ? CAFE_SERVICE.entry : placeCenter(location))
+  return residentPosition(location, 0, actor.activity, actor.action, positionId, occupantIndex, actor.id, [])
+}
 type Actor = { mode: string; sleeping: boolean; conversationId?: string; seatIndex?: number; positionId?: string; slot?: number; facing: Direction4; hovered?: boolean; root: Phaser.GameObjects.Container; sprite?: Phaser.GameObjects.Sprite; heldProp: Phaser.GameObjects.Graphics; label: Phaser.GameObjects.Text; activity: Phaser.GameObjects.Text; location: string; action: string; sheet: string; target: { x: number; y: number }; path: { x: number; y: number }[] }
 
 /** Animation projects server state. It never chooses a resident's next activity or destination. */
 export class CompanionStreetScene extends Phaser.Scene {
   private actors = new Map<string, Actor>()
+  private stage?: { destroy: () => void; signage: Phaser.GameObjects.Text[] }
   private shade!: Phaser.GameObjects.Rectangle
   private rain!: Phaser.GameObjects.Graphics
   // Per-home window light, keyed by the same id as HOME_ROOMS/homeId() - lit after dark only for
@@ -137,6 +176,11 @@ export class CompanionStreetScene extends Phaser.Scene {
   private viewport = { width: 960, height: 516, density: 1 }
   private cameraSignature = ''
   private cameraCenter = { x: 490, y: 286 }
+  // True once the camera has ever framed a real (non-zero) viewport. The host element can report
+  // 0x0 for a frame or two before layout settles (especially once it is a short docked strip
+  // rather than the full /town canvas); that first real measurement should land the camera
+  // directly, never pan in from wherever the zero-size placeholder happened to centre it.
+  private everFramed = false
   private nextLabelsAt = 0
   constructor(private snapshot: () => SceneSnapshot, private select: (id: string) => void, private selectProject: (id: string) => void = () => {}, private onLabels: (labels: SceneLabel[]) => void = () => {}) { super('companion-street') }
   resizeViewport(width: number, height: number, density: number) {
@@ -146,9 +190,45 @@ export class CompanionStreetScene extends Phaser.Scene {
   private frameCamera(force = false) {
     const state = this.snapshot(), { width, height, density } = this.viewport
     const compact = width < 600
-    const signature = `${width}:${height}:${density}:${state.overview}:${state.selectedResidentId ?? ''}:${state.selectedPlace ?? ''}`
+    const docked = state.cameraMode === 'docked'
+    const dockedTarget = state.cameraTarget
+    const dockedFrameHeight = state.dockedFrameHeight ?? 176
+    const signature = docked
+      ? `docked:${width}:${height}:${density}:${dockedTarget?.x ?? ''}:${dockedTarget?.y ?? ''}:${dockedFrameHeight}`
+      : `${width}:${height}:${density}:${state.overview}:${state.selectedResidentId ?? ''}:${state.selectedPlace ?? ''}`
     if (!force && this.cameraSignature === signature) return
     this.cameraSignature = signature
+    const camera = this.cameras.main
+    const viewportValid = width > 0 && height > 0
+    // Land instantly the first time there is a real viewport to frame, or whenever the viewer has
+    // asked for reduced/no motion; otherwise ease in - see motionAllowed().
+    const instant = !this.everFramed || !motionAllowed()
+    if (viewportValid) this.everFramed = true
+    if (docked && dockedTarget && viewportValid) {
+      const zoom = (height / dockedFrameHeight) * density
+      const halfWorldWidth = (width / height) * dockedFrameHeight / 2
+      const halfWorldHeight = dockedFrameHeight / 2
+      // A wide, short strip (or a narrow world) can ask to see more world width than the world
+      // actually has. The usual clamp - pull the centre in just far enough that neither edge
+      // shows past the world - degenerates the moment the visible span exceeds W or H: both
+      // Math.min bounds collapse below the Math.max floor, so Math.max always wins and pins the
+      // centre to one fixed edge-safe point while the *opposite* edge still runs past the world.
+      // Falling back to the world's own centre here is what actually keeps both edges in bounds
+      // when the requested frame simply cannot fit without cropping.
+      const center = {
+        x: halfWorldWidth * 2 >= W ? W / 2 : Math.max(halfWorldWidth, Math.min(W - halfWorldWidth, dockedTarget.x)),
+        y: halfWorldHeight * 2 >= H ? H / 2 : Math.max(halfWorldHeight, Math.min(H - halfWorldHeight, dockedTarget.y)),
+      }
+      camera.setViewport(0, 0, Math.round(width * density), Math.round(height * density))
+      camera.roundPixels = true
+      if (instant) { camera.setZoom(zoom); camera.centerOn(center.x, center.y) }
+      else {
+        if (camera.zoom !== zoom) camera.zoomTo(zoom, 320, 'Cubic.easeOut')
+        camera.pan(center.x, center.y, 320, 'Cubic.easeOut', true)
+      }
+      this.cameraCenter = center
+      return
+    }
     let frame = state.overview ? { x: 0, y: 0, w: W, h: H } : compact ? { x: 470, y: 0, w: 445, h: 370 } : { x: 48, y: 0, w: 1168, h: 480 }
     if (!state.overview && state.selectedPlace && !state.selectedResidentId) {
       const selected = placeFrame(state.selectedPlace)
@@ -167,7 +247,6 @@ export class CompanionStreetScene extends Phaser.Scene {
         }
       }
     }
-    const camera = this.cameras.main
     camera.setViewport(0, 0, Math.round(width * density), Math.round(height * density))
     camera.setZoom(Math.min(width / frame.w, height / frame.h) * density)
     camera.centerOn(center.x, center.y)
@@ -186,7 +265,7 @@ export class CompanionStreetScene extends Phaser.Scene {
   }
   create() {
     this.cameras.main.setBackgroundColor('#78857a')
-    if (this.textures.exists('town') && this.textures.exists('interior')) buildCompanionStage(this)
+    if (this.textures.exists('town') && this.textures.exists('interior')) this.stage = buildCompanionStage(this)
     else {
       this.add.rectangle(W / 2, H / 2, W, H, 0xb8bda7)
       this.add.text(480, 190, '街景素材尚未生成 · 居民生活仍在继续', { fontSize: '16px', color: '#56604e' }).setOrigin(.5)
@@ -258,6 +337,7 @@ export class CompanionStreetScene extends Phaser.Scene {
   sync() {
     if (!this.ready) return
     const state = this.snapshot()
+    if (this.stage) { const show = state.chrome !== false; for (const text of this.stage.signage) text.setVisible(show) }
     const night = state.minutes < 360 || state.minutes >= 1140
     // Overview uses the camera's background for the side bars around a tall world. Match the
     // ground instead of exposing a dark canvas edge that has no place in the street.
@@ -432,16 +512,20 @@ export class CompanionStreetScene extends Phaser.Scene {
     if (time >= this.nextLabelsAt) {
       this.nextLabelsAt = time + 80
       const zoom = this.cameras.main.zoom / this.viewport.density
+      // Read the camera's own current centre rather than the cached target: while a docked pan is
+      // still easing toward it (see frameCamera()), midPoint reflects where the camera actually is
+      // this frame, so DOM labels stay pinned to their sprites instead of jumping ahead of the pan.
+      const cameraCenter = this.cameras.main.midPoint ?? this.cameraCenter
       const labels: SceneLabel[] = []
       for (const [id, actor] of this.actors) {
-        const x = (actor.root.x - this.cameraCenter.x) * zoom + this.viewport.width / 2 + 17
+        const x = (actor.root.x - cameraCenter.x) * zoom + this.viewport.width / 2 + 17
         const bodyOffset = actor.sleeping ? -68 : 0
         const bodyHeight = actor.sleeping ? 31 : 60
-        const y = (actor.root.y + bodyOffset - this.cameraCenter.y) * zoom + this.viewport.height / 2 - bodyHeight * zoom - 20
+        const y = (actor.root.y + bodyOffset - cameraCenter.y) * zoom + this.viewport.height / 2 - bodyHeight * zoom - 20
         const offscreen = x < 18 || x > this.viewport.width - 18 || y < 38 || y > this.viewport.height - 27
         const direction = x < 18 ? '‹' : x > this.viewport.width - 18 ? '›' : y < 38 ? '⌃' : '⌄'
         const resident = state.residents.find(r => r.id === id)
-        const speech = turn?.speakerId === id && !actor.path.length && [...this.actors.values()].filter(other => other.conversationId === actor.conversationId).every(other => !other.path.length) ? turn.text.slice(0, 23) + (turn.text.length > 23 ? '…' : '') : undefined
+        const speech = isSpeaking(id, turn?.speakerId, !actor.path.length) ? turn!.text.slice(0, 23) + (turn!.text.length > 23 ? '…' : '') : undefined
         const status = residentStatus(resident?.activity ?? '', actor.action, Boolean(actor.path.length), Boolean(speech))
         const topic = speech ? conversationEmoji(turn?.emoji) : ''
         const dialogue = speech ? recentTurns.map(line => ({ name: state.residents.find(r => r.id === line.speakerId)?.name ?? '邻居', text: line.text })) : undefined

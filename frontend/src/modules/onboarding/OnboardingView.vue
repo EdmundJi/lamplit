@@ -16,6 +16,7 @@ import {
 } from 'lucide-vue-next'
 import SnapSlider from '../../shared/ui/interaction/SnapSlider.vue'
 import StepperProgress from '../../shared/ui/interaction/StepperProgress.vue'
+import SegmentedControl from '../../shared/ui/interaction/SegmentedControl.vue'
 import { api, type ApiError } from '../../shared/api/client'
 import { notifyDataChanged } from '../../shared/data-sync'
 
@@ -52,6 +53,7 @@ const scenes = [
   { code: 'EMOTIONAL_SUPPORT' as Scene, name: '情绪支持', detail: '觉察、休息与温和恢复', icon: HeartHandshake },
 ]
 const difficultyNames = ['轻量', '适中', '进阶']
+const difficultyOptions = difficultyNames.map((name, index) => ({ value: String(index + 1), label: name }))
 const router = useRouter()
 const step = ref(1)
 const form = reactive({ scene: 'STUDY' as Scene, dailyMinutes: 30, weeklyFrequency: 3, preferredDifficulty: 2 })
@@ -133,7 +135,6 @@ async function finish() {
 
     <section v-if="step === 1" class="setup-band" aria-labelledby="scene-title">
       <div class="setup-title">
-        <p class="eyebrow">先选一个方向</p>
         <h1 id="scene-title">最近想把精力放在哪里？</h1>
       </div>
       <div class="scene-grid">
@@ -170,22 +171,20 @@ async function finish() {
       </div>
       <fieldset class="difficulty-field">
         <legend>任务强度</legend>
-        <div class="segmented">
-          <button
-            v-for="(name, index) in difficultyNames"
-            :key="name"
-            type="button"
-            :aria-pressed="form.preferredDifficulty === index + 1"
-            @click="form.preferredDifficulty = index + 1"
-          >{{ name }}</button>
-        </div>
+        <SegmentedControl
+          class="segmented"
+          :model-value="String(form.preferredDifficulty)"
+          :options="difficultyOptions"
+          label="任务强度"
+          @update:model-value="value => form.preferredDifficulty = Number(value)"
+        />
       </fieldset>
       <div class="setup-actions"><button type="button" class="secondary" @click="goBack"><ArrowLeft :size="17" />返回</button><button type="button" class="primary" @click="openStarters">挑选任务<ArrowRight :size="17" /></button></div>
     </section>
 
     <section v-else-if="step === 3" class="setup-band" aria-labelledby="starters-title">
       <div class="setup-title starter-heading">
-        <div><p class="eyebrow">起步任务</p><h1 id="starters-title">先留下几件做得到的事</h1></div>
+        <h1 id="starters-title">先留下几件做得到的事</h1>
         <span>{{ selectedIds.length }} / 3</span>
       </div>
       <div v-if="loadingStarters" class="loading-state" role="status">正在准备起步任务…</div>
@@ -224,7 +223,7 @@ async function finish() {
 .onboarding-page { width: min(880px, calc(100% - 32px)); min-height: 100vh; margin: 0 auto; padding-top: 28px; }
 .onboarding-head { min-height: 48px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .brand-lockup { display: flex; align-items: center; gap: 10px; }
-.brand-mark { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 12px 12px 12px 4px; background: var(--primary); color: white; font-size: 15px; font-weight: 900; }
+.brand-mark { width: 38px; height: 38px; display: grid; place-items: center; border-radius: var(--radius-card) var(--radius-card) var(--radius-card) var(--radius); background: var(--primary); color: white; font-size: 15px; font-weight: 900; }
 .step-count { color: var(--muted); font-size: 13px; font-weight: 800; }
 .setup-progress { margin: 18px 0 42px; }
 .setup-band { display: grid; gap: 28px; padding-bottom: 56px; }
@@ -232,7 +231,7 @@ async function finish() {
 .setup-title h1, .completion-band h1 { margin: 5px 0 0; font-size: 32px; letter-spacing: 0; }
 .scene-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .scene-option { min-width: 0; min-height: 112px; display: grid; grid-template-columns: 46px minmax(0, 1fr) 22px; align-items: center; gap: 12px; padding: 16px; border: 1px solid var(--border); background: var(--surface); color: var(--ink); text-align: left; }
-.scene-option[aria-pressed='true'] { border-color: var(--primary); background: color-mix(in srgb, var(--primary-soft) 56%, var(--surface)); box-shadow: inset 3px 0 var(--primary); }
+.scene-option[aria-pressed='true'] { border-color: var(--primary); background: color-mix(in srgb, var(--primary-soft) 56%, var(--surface)); }
 .scene-icon { width: 44px; height: 44px; display: grid; place-items: center; border-radius: var(--radius); background: var(--surface-muted); color: var(--primary); }
 .scene-option > span:nth-child(2) { min-width: 0; display: grid; gap: 6px; }
 .scene-option small, .starter-copy small { color: var(--muted); line-height: 1.5; }
@@ -244,16 +243,14 @@ async function finish() {
 .range-field input { width: 100%; accent-color: var(--primary); }
 .difficulty-field { min-width: 0; margin: 0; padding: 0; border: 0; }
 .difficulty-field legend { margin-bottom: 10px; font-weight: 700; }
-.segmented { width: min(100%, 480px); display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 3px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-muted); }
-.segmented button { border: 0; background: transparent; color: var(--muted); }
-.segmented button[aria-pressed='true'] { background: var(--surface); color: var(--primary); box-shadow: var(--shadow-soft); }
+.segmented { width: min(100%, 480px); }
 .starter-heading { width: 100%; max-width: none; display: flex; align-items: end; justify-content: space-between; gap: 16px; }
 .starter-heading > span { color: var(--primary); font-weight: 800; }
 .starter-list { display: grid; gap: 10px; }
 .starter-item { min-width: 0; min-height: 92px; display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; align-items: center; gap: 13px; padding: 14px 16px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); cursor: pointer; }
 .starter-item.selected { border-color: color-mix(in srgb, var(--primary) 50%, var(--border)); background: color-mix(in srgb, var(--primary-soft) 42%, var(--surface)); }
 .starter-item > input { position: absolute; opacity: 0; pointer-events: none; }
-.task-check { width: 22px; height: 22px; display: grid; place-items: center; border: 1px solid var(--border); border-radius: 5px; color: transparent; background: var(--surface); }
+.task-check { width: 22px; height: 22px; display: grid; place-items: center; border: 1px solid var(--border); border-radius: var(--radius); color: transparent; background: var(--surface); }
 .starter-item.selected .task-check { border-color: var(--primary); background: var(--primary); color: white; }
 .starter-copy { min-width: 0; display: grid; gap: 5px; }
 .task-meta { display: grid; justify-items: end; gap: 6px; color: var(--muted); font-size: 12px; }
@@ -265,17 +262,17 @@ async function finish() {
 .setup-actions button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-width: 132px; }
 .completion-band { min-height: 560px; display: grid; place-items: center; align-content: center; gap: 12px; text-align: center; }
 .completion-band > p:not(.eyebrow) { max-width: 460px; margin: 0; color: var(--muted); line-height: 1.7; }
-.reward-mark { width: 78px; height: 78px; display: grid; place-items: center; margin-bottom: 10px; border: 1px solid color-mix(in srgb, var(--accent) 48%, var(--border)); border-radius: 24px 24px 24px 7px; background: color-mix(in srgb, var(--accent) 12%, var(--surface)); color: var(--accent); box-shadow: var(--shadow); }
+.reward-mark { width: 78px; height: 78px; display: grid; place-items: center; margin-bottom: 10px; border: 1px solid color-mix(in srgb, var(--accent) 48%, var(--border)); border-radius: var(--radius-scene) var(--radius-scene) var(--radius-scene) var(--radius-card); background: color-mix(in srgb, var(--accent) 12%, var(--surface)); color: var(--accent); }
 .completion-facts { display: flex; flex-wrap: wrap; justify-content: center; gap: 18px; margin: 10px 0 16px; color: var(--muted); font-size: 13px; }
 .completion-facts span { display: inline-flex; align-items: center; gap: 6px; }
 @media (prefers-reduced-motion: no-preference) {
-  .scene-option, .starter-item, .reward-mark { animation: setup-enter var(--motion-medium) ease-out both; }
-  .scene-option:hover, .starter-item:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--primary) 35%, var(--border)); }
+  .scene-option, .starter-item, .reward-mark { animation: setup-enter var(--motion-medium) var(--ease) both; }
+  .scene-option:hover, .starter-item:hover { border-color: color-mix(in srgb, var(--primary) 35%, var(--border)); }
   .scene-option:nth-child(2), .starter-item:nth-child(2) { animation-delay: 45ms; }
   .scene-option:nth-child(3), .starter-item:nth-child(3) { animation-delay: 90ms; }
   .scene-option:nth-child(4), .starter-item:nth-child(4) { animation-delay: 135ms; }
 }
-@keyframes setup-enter { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes setup-enter { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 @media (max-width: 680px) {
   .onboarding-page { width: min(100% - 24px, 880px); padding-top: 16px; }
   .setup-progress { margin-bottom: 30px; }
@@ -295,6 +292,6 @@ async function finish() {
 .setup-title h1 { font-size: 32px; line-height: 1.45; }
 .scene-option { border-radius: var(--radius-panel); padding: 20px; }
 .scene-option[aria-pressed='true'] { box-shadow: inset 0 0 0 1px var(--primary); }
-.brand-mark { border-radius: 12px 12px 5px 5px; background: var(--forest); color: var(--sun); }
+.brand-mark { border-radius: var(--radius-card) var(--radius-card) var(--radius) var(--radius); background: var(--forest); color: var(--sun); }
 @media (max-width:760px) { .setup-band { padding: 20px; } .setup-title h1 { font-size: 26px; } }
 </style>

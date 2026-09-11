@@ -233,7 +233,7 @@ export function useTodayLogic(options: UseTodayLogicOptions = {}) {
         }
       }
       if (eventType === 'COMPLETED') options.onCelebrate?.(task.publicId)
-      notifyDataChanged(['tasks', 'today', 'insights', 'attributes', 'achievements', 'profile', 'partners'])
+      notifyDataChanged(['tasks', 'today', 'insights', 'attributes', 'achievements', 'profile', 'partners', 'town'])
       actionKeys.delete(intent)
       selected.value = null
     } catch (caught) {
@@ -264,7 +264,7 @@ export function useTodayLogic(options: UseTodayLogicOptions = {}) {
     last.value = null
     feedback.value = null
     await load(false)
-    notifyDataChanged(['tasks', 'today', 'insights', 'attributes', 'achievements', 'profile', 'partners'])
+    notifyDataChanged(['tasks', 'today', 'insights', 'attributes', 'achievements', 'profile', 'partners', 'town'])
   }
 
   const stopDataSync = onDataChanged(['goals', 'tasks'], () => load(false))

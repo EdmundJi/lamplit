@@ -1,3 +1,5 @@
+import { motionAllowed, motionDuration } from './motion'
+
 /**
  * Release behaviour for sliders whose values are only meaningful on a tick:
  * available minutes, weekly frequency, completion ratio. The drag itself is
@@ -28,4 +30,45 @@ export function projectRelease(value: number, velocity: number, step: number, mi
 
 export function snapToStep(value: number, step: number, min: number, max: number) {
   return projectRelease(value, 0, step, min, max)
+}
+
+/**
+ * Shared glide: animates a plain number from `from` to `to` with the same
+ * cubic-out feel every draggable control lands with. `onFrame` fires with
+ * every intermediate value (already eased, not rounded — callers decide
+ * whether their domain wants integers); `onDone` fires exactly once, always
+ * with `to`, whether or not any frames played. When motion is off (or the
+ * two values already match) it resolves straight to `onDone` with no frames,
+ * so "no transition" and "already there" behave identically for callers.
+ * Returns a cancel function — call it to stop mid-flight (e.g. a new drag
+ * interrupting an in-progress release glide).
+ */
+export function glide(
+  from: number,
+  to: number,
+  onFrame: (value: number) => void,
+  onDone: (value: number) => void,
+  duration = motionDuration('medium'),
+): () => void {
+  if (from === to || !motionAllowed()) {
+    onDone(to)
+    return () => {}
+  }
+  let frame = 0
+  let began = 0
+  let cancelled = false
+  const tick = (now: number) => {
+    if (cancelled) return
+    began ||= now
+    const progress = Math.min(1, (now - began) / duration)
+    const eased = 1 - (1 - progress) ** 3
+    onFrame(from + (to - from) * eased)
+    if (progress < 1) frame = requestAnimationFrame(tick)
+    else onDone(to)
+  }
+  frame = requestAnimationFrame(tick)
+  return () => {
+    cancelled = true
+    cancelAnimationFrame(frame)
+  }
 }

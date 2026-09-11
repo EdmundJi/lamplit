@@ -111,4 +111,50 @@ class EncounterReactionTest {
         ResidentSimulation.state(w, "owner").lastSocialAt = null;
         assertThat(w.conversations).noneMatch(c -> "active".equals(c.status));
     }
+
+    /** Having decided to leave someone alone, you leave them alone - not for thirty minutes, but for
+     * as long as they carry on doing exactly what made you decide that. This replaces a wall-clock
+     * cooldown that was ours rather than the town's. */
+    private String declineTheFirstEncounter(CompanionWorld w, Instant at) {
+        CompanionRules.advance(w, at);
+        var pending = w.pendingEncounters.getFirst();
+        String other = pending.otherId;
+        ResidentSimulation.applyReaction(w, pending.id, ResidentSimulation.state(w, pending.residentId).revision,
+                "none", "手上这件事还没弄完，先不打扰", List.of(), at);
+        return other;
+    }
+
+    @Test void aDeclinedPairIsNotAskedAgainWhileTheSceneLooksTheSame() {
+        CompanionWorld w = twoPeopleInTheGarden();
+        declineTheFirstEncounter(w, now.plusSeconds(12));
+        for (int i = 1; i <= 40; i++) CompanionRules.advance(w, now.plusSeconds(12 + i * 30L));
+        // Twenty minutes of both of them doing exactly what they were doing. The old rule would have
+        // put the same question again at the thirty-minute mark whatever the room looked like.
+        assertThat(w.pendingEncounters).as("nothing changed, so nobody looked up again").isEmpty();
+    }
+
+    @Test void theSamePairIsAskedAgainAsSoonAsTheOtherPersonDoesSomethingElse() {
+        CompanionWorld w = twoPeopleInTheGarden();
+        String other = declineTheFirstEncounter(w, now.plusSeconds(12));
+        CompanionRules.advance(w, now.plusSeconds(60));
+        assertThat(w.pendingEncounters).isEmpty();
+        // He closes his book and stands up. That is the whole trigger - well inside the half hour
+        // the pair used to be locked out for.
+        ResidentSimulation.replaceActor(w, other, "garden", "handwork", "收拾工具", now.plusSeconds(900));
+        CompanionRules.advance(w, now.plusSeconds(72));
+        assertThat(w.pendingEncounters).as("the scene changed, so the question is worth asking again").isNotEmpty();
+    }
+
+    @Test void walkingOutAndComingBackIsAFreshSightEvenDoingTheSameThing() {
+        CompanionWorld w = twoPeopleInTheGarden();
+        String other = declineTheFirstEncounter(w, now.plusSeconds(12));
+        ResidentSimulation.replaceActor(w, other, "street", "walk", "出去一趟", now.plusSeconds(300));
+        CompanionRules.advance(w, now.plusSeconds(48));
+        assertThat(w.pendingEncounters).as("he is not in the room, there is nobody to notice").isEmpty();
+        // Back in the garden, doing the very same thing as before. The impression only ever lasted
+        // as long as he was standing there, so this is somebody walking in, not somebody unchanged.
+        ResidentSimulation.replaceActor(w, other, "garden", "observe", "看看花园", now.plusSeconds(900));
+        CompanionRules.advance(w, now.plusSeconds(84));
+        assertThat(w.pendingEncounters).as("walking back in is a new fact").isNotEmpty();
+    }
 }

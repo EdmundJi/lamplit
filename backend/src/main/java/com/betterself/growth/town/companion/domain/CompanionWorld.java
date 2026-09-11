@@ -45,7 +45,23 @@ public class CompanionWorld {
      * the same sorted "a:b" pair key already used for invitation cooldowns. Purely simulation-internal
      * bookkeeping - a timestamp, never sent to any model - self-healing on an old save via the empty
      * map default, exactly like {@link #serviceRequests} above. */
+    /** The local date on which the operator actually decided to shut for the day (close_cafe /
+     * closeForDay), so scheduled opening can tell that apart from every other reason the shop happens
+     * to be closed - not opening time yet, the world having only just been created, a handover. Using
+     * "the status changed today" instead was wrong in exactly the way that matters: a world is born
+     * with its shop closed, so day one read as "already closed for today" and the town never got a
+     * cafe on the day it was made. Self-healing on an old save via the null default. */
+    public String cafeClosedForDayOn;
     public Map<String,Instant> encounterCooldowns = new LinkedHashMap<>();
+    /** "上次看到他时的样子" - for a pair where one of them has already decided NOT to approach the
+     * other, what the scene looked like at the moment of that decision, keyed by the same sorted
+     * "a:b" pair key. While the scene still looks like this, the rules do not put the question again:
+     * having decided to leave someone alone, you do not reconsider every N minutes, you reconsider
+     * when something about them changes. Dropped the moment the two are no longer standing in the
+     * same place, so walking out and coming back is a fresh sight rather than the same one.
+     * Simulation-internal, never sent to any model, self-healing on an old save via the empty map
+     * default. See ResidentSimulation's "encounterFingerprint". */
+    public Map<String,String> declinedEncounters = new LinkedHashMap<>();
     /** Face-to-face facts waiting for the resident to decide what, if anything, to do about them.
      * The rules put two people in front of each other and stop there (docs/04's 相遇是外部事实); this
      * queue is that fact, not a decision. Generative Agents asks the same question of every
@@ -68,6 +84,17 @@ public class CompanionWorld {
      * thinking just a timer running out?" instead of guessing. */
     public List<DecisionTrigger> decisionTriggers = new ArrayList<>();
     public record DecisionTrigger(String id,String residentId,String trigger,Instant at) {}
+    /** Bounded diagnostic trail for every time a real, already-recorded experience nudged a
+     * resident's own personality a small, bounded step (see ResidentSimulation's "driftPersonality"
+     * family, item 2). {@code cause} is one of a fixed, rule-authored vocabulary ("agreement",
+     * "declined", "project_complete", "interrupted", "solitude", "celebration", "noticed_detail",
+     * "missed_detail") naming which real event moved the dimension - never a model-authored
+     * explanation, and never read by any model. This is what lets a drift always be traced back to
+     * the one thing that caused it without the rules ever writing a resident's own account of why
+     * they changed - that account, if any, stays the resident's own, through the ordinary
+     * reflection/belief machinery. */
+    public List<PersonalityDrift> personalityDrifts = new ArrayList<>();
+    public record PersonalityDrift(String id,String residentId,String dimension,double delta,String cause,Instant at) {}
     /** Off by default, and deliberately not wired into the ordinary join()/advance() path this batch:
      * turning it on lets the avatar ("self") become a genuine decision candidate in ResidentDirector,
      * on the same terms as the four NPCs, whenever it is not currently under the user's own explicit
@@ -156,6 +183,10 @@ public class CompanionWorld {
         public boolean personalitySeeded;
         public long revision;
         public Instant lastSocialAt, lastReflectionAt;
+        /** When this resident was last asked whether they want something they cannot do alone. Kept
+         * separate from every other cadence because the question is only worth asking when the town
+         * has actually run dry - see ResidentSimulation.needsVenture. */
+        public Instant lastVentureAt;
         public Plan plan;
         public Map<String,Integer> relationships = new LinkedHashMap<>();
         /** Whether THIS resident has ever let their own private fondness for another show in
@@ -179,11 +210,25 @@ public class CompanionWorld {
         public Instant lastDutyReflectionAt;
         public List<String> dutyComplaintEvidenceIds = new ArrayList<>();
         public List<String> dutyInterruptionEvidenceIds = new ArrayList<>();
+        /** Last simulated instant each of this resident's own four personality dimensions actually
+         * drifted (see ResidentSimulation's "driftPersonality"), keyed by dimension name. The
+         * frequency backstop behind item 2's "slow, not mood": the same dimension cannot move again
+         * before its own cooldown has passed, however many qualifying events happen in between. Old
+         * saves self-heal via the empty map default, same shape as {@code lastHabitAt} above. */
+        public Map<String,Instant> lastPersonalityDriftAt = new LinkedHashMap<>();
         /** Per-resident decision cooldown (see ResidentDirector), replacing the old world-global
          * {@link #modelRequestedAt} gate: each resident now thinks on their own clock instead of the
          * whole town taking turns round-robin on one shared timer. Null until this resident's first
          * decision is ever dispatched. */
         public Instant lastDecisionRequestedAt;
+        /** How many decisions in a row this resident has had refused, and until when to stop asking.
+         * A refused decision leaves them with nothing decided, which is itself the condition for
+         * asking again - so a decision that can never apply is an unbounded loop, and one really
+         * happened: an operator standing inside his own closing shop chose to sit down 476 times and
+         * was refused 408 of them, taking 67% of the whole town's thinking for a day. Both reset on
+         * any decision that lands. Self-healing on an old save via the 0/null defaults. */
+        public int consecutiveDecisionRejections;
+        public Instant decisionRetryAfter;
         /** The world's own day-part (morning/afternoon/evening/night, see CompanionRules.environment)
          * as of this resident's last applied decision - a broad, general "time anchor" (item 5),
          * distinct from the personal sleep-window routine cue. Compared, never sent to any model. */
@@ -198,6 +243,12 @@ public class CompanionWorld {
         /** This resident's own coarse plan for today (see ResidentSimulation.applyDayPlan): three or
          * four qualitative segments, not a schedule. Left null until their first morning decision. */
         public DayPlan dayPlan;
+        /** Last simulated instant each of this resident's own habitual reflexes (see
+         * ResidentSimulation's "maybeHabit" family) actually fired, keyed by that habit's own short
+         * id ("tidy", "quiet", ...). Purely a frequency backstop - never read by any model - so the
+         * same habit cannot fire again before its own cooldown has passed. Old saves deserialize with
+         * the empty map default, the same self-healing shape as {@code relationships} above. */
+        public Map<String,Instant> lastHabitAt = new LinkedHashMap<>();
     }
     /** A resident's own coarse, interruptible day plan - see {@link ResidentState#dayPlan}. A segment
      * is deliberately just a short label and a status: nothing here forces it to happen, and nothing

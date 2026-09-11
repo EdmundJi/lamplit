@@ -2,9 +2,9 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import CompanionView from './CompanionView.vue'
+import { useTownUi } from './town-ui.store'
 const api = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), delete: vi.fn() }))
 vi.mock('../../shared/api/client', () => ({ api }))
-vi.mock('./CompanionScene.vue', () => ({ default: { props: ['residents', 'textBubbles', 'conversations'], emits: ['select-resident'], template: '<div class="scene-stub" :data-bubbles="textBubbles" :data-participants="conversations?.[0]?.participantIds?.join()"><button v-for="actor in residents" :key="actor.id" :aria-label="`看看${actor.name}`" @click="$emit(\'select-resident\', actor.id)">生活图标</button></div>' } }))
 const actor = { id: 'self', name: '我', role: 'user', place: 'cafe', label: '安静读书', activity: 'study', x: 1, y: 1, until: '' }
 function snapshot() {
   return { joined: true, world: { id: 'world', name: '梧桐小街', timezone: 'Asia/Shanghai', revision: 1, joinedAt: '2026-09-08T00:00:00Z', updatedAt: '2026-09-08T00:00:00Z', weather: 'sunny', period: 'morning', avatar: actor,
@@ -22,6 +22,10 @@ beforeEach(() => {
 })
 afterEach(() => { wrapper?.unmount(); vi.useRealTimers() })
 async function render() { wrapper = mount(CompanionView, { global: { stubs: { RouterLink: { template: '<a><slot /></a>' } } } }); await flushPromises(); return wrapper }
+/** CompanionScene itself is mounted by TownStage now (docked strip and fullscreen /town share one
+ * instance) - selecting a resident from outside the scene now goes through the same shared store
+ * TownStage's own scene click handlers write to, instead of a button the scene used to render. */
+async function selectResident(id: string) { useTownUi().selectedResident = id; await flushPromises() }
 describe('companion page task boundary', () => {
   it('requires a user click to complete a real task after a focus deadline', async () => {
     const view = await render()
@@ -59,9 +63,10 @@ describe('companion page task boundary', () => {
 
   it('keeps text bubbles off by default and stores only the explicit UI preference', async () => {
     const view = await render()
-    expect(view.get('.scene-stub').attributes('data-bubbles')).toBe('false')
+    const ui = useTownUi()
+    expect(ui.textBubbles).toBe(false)
     await view.get('[aria-label="打开文字气泡"]').trigger('click')
-    expect(view.get('.scene-stub').attributes('data-bubbles')).toBe('true')
+    expect(ui.textBubbles).toBe(true)
     expect(localStorage.getItem('better-self:town-text-bubbles:guest')).toBe('on')
     expect(api.post.mock.calls.some(call => call[0].includes('/intents'))).toBe(false)
     expect(view.find('.neighbors').exists()).toBe(false)
@@ -77,7 +82,7 @@ describe('companion page task boundary', () => {
     await view.get('.scene-note').trigger('click')
     expect(view.find('.focus-card').exists()).toBe(false)
     expect(view.findAll('.conversation-panel .conversation-turn')).toHaveLength(3)
-    expect(view.get('.scene-stub').attributes('data-participants')).toBe('owner,artist')
+    expect(view.findAll('.conversation-participants button')).toHaveLength(2)
     await view.get('.conversation-participants button').trigger('click')
     expect(view.find('.conversation-panel').exists()).toBe(false)
     expect(view.get('.person-panel h2').text()).toBe('阿禾')
@@ -114,7 +119,7 @@ describe('companion page task boundary', () => {
     api.get.mockImplementation((path: string) => Promise.resolve(path === '/town/companion' ? saved : []))
     api.post.mockResolvedValue(saved)
     const view = await render()
-    await view.get('[aria-label="看看阿禾"]').trigger('click')
+    await selectResident('owner')
     expect(view.get('.personal-plan').text()).toContain('窗边的读书晚会')
     expect(view.get('.personal-plan').text()).not.toContain('wish-135')
     expect(view.findAll('.opinions article')).toHaveLength(1)
@@ -133,7 +138,7 @@ describe('companion page task boundary', () => {
     api.get.mockImplementation((path: string) => Promise.resolve(path === '/town/companion' ? saved : []))
     api.post.mockResolvedValue(saved)
     const view = await render()
-    await view.get('[aria-label="看看阿禾"]').trigger('click')
+    await selectResident('owner')
     expect(view.get('.personal-plan').text()).toContain('长期想走的方向')
     expect(view.get('.personal-plan').text()).toContain('试着把咖啡馆经营下去')
     expect(view.get('.personal-plan').text()).toContain('眼前在惦记')
@@ -156,7 +161,7 @@ describe('companion page task boundary', () => {
     api.get.mockImplementation((path: string) => Promise.resolve(path === '/town/companion' ? saved : []))
     api.post.mockResolvedValue(saved)
     const view = await render()
-    await view.get('[aria-label="看看阿禾"]').trigger('click')
+    await selectResident('owner')
     expect(view.get('.personal-plan').text()).toContain('长期想走的方向')
     expect(view.get('.personal-plan').text()).not.toContain('眼前在惦记')
     expect(view.find('.life-thread').exists()).toBe(false)
@@ -164,7 +169,7 @@ describe('companion page task boundary', () => {
 
   it('exposes memory provenance and allows quiet mode to hide the detail', async () => {
     const view = await render()
-    await view.get('[aria-label="看看阿禾"]').trigger('click')
+    await selectResident('owner')
     expect(view.get('.memory-list').text()).toContain('转述')
     expect(view.get('.memory-list').text()).toContain('听说海报快画好了')
     await view.findAll('button').find(button => button.text() === '安静模式')!.trigger('click')

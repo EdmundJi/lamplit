@@ -43,6 +43,24 @@ final class CafeService {
         // save that says both "not operating" and "open" is repaired straight to closed.
         if(!w.cafeOperating&&"open".equals(w.cafeStatus)){w.cafeStatus="closed";w.cafeStatusChangedAt=at;}
     }
+    /** Whether the shop is meant to be open at this moment and simply is not yet - the operator has a
+     * standing commitment, the hours say so, and they have not shut it for today. This is what makes
+     * "go and open up" a thing a shopkeeper's own default can act on, instead of the shop needing a
+     * model decision before anybody may walk to it. */
+    static boolean dueToOpen(CompanionWorld w,Instant at){
+        return dueToOpen(w,at,0);
+    }
+    /** {@code leadSeconds} lets the person with the key count the walk: the shop is "due to open" a
+     * little early for whoever still has to get there, so the door is unlocked AT opening time rather
+     * than however long the walk takes afterwards. The lead is the real travel time from wherever
+     * they are, not a guessed margin. */
+    static boolean dueToOpen(CompanionWorld w,Instant at,long leadSeconds){
+        if(!w.cafeOperating||!"closed".equals(w.cafeStatus))return false;
+        if(at.atZone(ZoneId.of(w.timezone)).toLocalDate().toString().equals(w.cafeClosedForDayOn))return false;
+        // Either it is already opening time, or it will be by the time they arrive. The second half
+        // only ever fires in the short stretch before opening, never near closing.
+        return scheduledOpen(w,at)||scheduledOpen(w,at.plusSeconds(leadSeconds));
+    }
     static boolean scheduledOpen(CompanionWorld w,Instant at){
         int minute=at.atZone(ZoneId.of(w.timezone)).getHour()*60+at.atZone(ZoneId.of(w.timezone)).getMinute();
         return w.cafeOpenMinute<w.cafeCloseMinute
@@ -50,6 +68,14 @@ final class CafeService {
             :minute>=w.cafeOpenMinute||minute<w.cafeCloseMinute;
     }
     static boolean acceptingOrders(CompanionWorld w){return w.cafeOperating&&"open".equals(w.cafeStatus);}
+    /** Of the two ways to be outside the usual hours, the early one: strictly between the previous
+     * closing and today's opening. Written against the same wrap-around shape scheduledOpen uses, so
+     * an overnight shop stays correct. */
+    static boolean beforeUsualOpening(CompanionWorld w,Instant at){
+        if(scheduledOpen(w,at))return false;
+        int minute=at.atZone(ZoneId.of(w.timezone)).getHour()*60+at.atZone(ZoneId.of(w.timezone)).getMinute();
+        return w.cafeOpenMinute<w.cafeCloseMinute?minute<w.cafeOpenMinute:minute>=w.cafeCloseMinute&&minute<w.cafeOpenMinute;
+    }
     static boolean mayManage(CompanionWorld w,String residentId){
         if(Objects.equals(operatorId(w),residentId))return true;
         return w.workArrangements.stream().anyMatch(a->"active".equals(a.status)&&residentId.equals(a.workerId)
@@ -85,6 +111,46 @@ final class CafeService {
         while (w.serviceRequests.size() > 60) w.serviceRequests.removeFirst();
     }
 
+    /** A candidate qualitative cue for {@code ResidentSimulation.salientPerceptions}, exactly like
+     * the ones it already builds from {@link #mayTend} and {@link #oldestWaitingRequestId} - this
+     * class proposes a sentence, it never decides anything on the resident's behalf. It exists
+     * because request_drink was offered dozens of times in a real run and never once chosen: nothing
+     * in a resident's own perceptions ever gave them a reason to want a drink in the first place, and
+     * a resident with no such reason has no basis to pick it over whatever they were already doing.
+     * The fix is not a new hidden "thirst" gauge (that would be exactly the kind of internal number
+     * docs/04-decisions.md rules out) - it is a targeted phrasing of the one qualitative body signal
+     * already sanctioned and exposed elsewhere in salientPerceptions (r.energy translated to "很累"),
+     * scoped to the one place and moment where acting on it is actually possible. Returns null far
+     * more often than not: only when the resident is standing at an open counter with request_drink
+     * genuinely available to them AND their own already-disclosed tiredness is real. See this
+     * method's caller-side requirement in the PR notes for the one line ResidentSimulation.java needs
+     * to add to actually surface this - CafeService cannot add it there itself. */
+    /** How long someone has to have been settled in the cafe before having nothing in front of them
+     * is a fact worth noticing. Twenty minutes is about when a person who sat down to read looks up. */
+    private static final long SETTLED_SECONDS = 20*60;
+    /** A candidate sentence for {@code ResidentSimulation.salientPerceptions}, phrased the same way
+     * "柜台前有人在等" and "这杯已经等了一阵" already are: an external fact about the resident's own
+     * situation, never a hidden gauge and never an instruction.
+     * <p>The measured problem this exists for: across a simulated day {@code request_drink} was
+     * offered 32 times and chosen zero times, and the cafe served nobody. Nothing in a resident's
+     * context ever gave them a reason to want one - by design, since a "thirst" value is forbidden.
+     * <p>Two situations, in the order a person would actually notice them. The first is the ordinary
+     * one and the reason most drinks get ordered anywhere: you have been sitting in a cafe for a
+     * while with nothing in front of you. The second is the tired band {@code ResidentSimulation}
+     * already renders as "很累" - reused, not a second threshold invented here. Returns null far more
+     * often than not, never fires for whoever is working the counter, and never fires for someone who
+     * already has an order open. */
+    static String drinkWantCue(CompanionWorld w, ResidentState r, String place, Instant now) {
+        if (r == null || !PLACE.equals(place) || !acceptingOrders(w) || r.id.equals(operatorId(w))) return null;
+        if (w.serviceRequests.stream().anyMatch(req -> r.id.equals(req.requesterId) && open(req.status))) return null;
+        boolean settledAWhile = r.plan != null && PLACE.equals(r.plan.place()) && now != null
+            && Duration.between(r.plan.startedAt(), now).getSeconds() >= SETTLED_SECONDS
+            && Set.of("study","read","work","make","rest","observe").contains(r.plan.action());
+        if (settledAWhile) return "在店里坐了有一阵了，手边还什么都没有";
+        if (r.energy <= 20) return "很累，柜台那边说不定能弄点热的";
+        return null;
+    }
+
     // ---- the owner's side: duty vs. everything else -------------------------------------------
 
     /** How much responsibility-pressure the owner is carrying right now: grows with how many people
@@ -109,7 +175,14 @@ final class CafeService {
 
     static String scheduleCue(CompanionWorld w,String residentId,Instant at){
         if(!mayManage(w,residentId))return null;
-        if("open".equals(w.cafeStatus)&&!scheduledOpen(w,at))return "已经过了咖啡馆平常打烊的时间";
+        // Before opening and after closing are both "not within the usual hours", and telling them
+        // apart matters more than it looks: the operator opened the shop half an hour early, was told
+        // on the very next tick that it was past closing time, and closed it again fifty seconds
+        // later. The town then had no cafe for the rest of the day - every habit that goes there is
+        // gated on it being open - and the operator sat inside it looping on a decision that could
+        // not be applied, 408 times.
+        if("open".equals(w.cafeStatus)&&!scheduledOpen(w,at))
+            return beforeUsualOpening(w,at)?"还没到咖啡馆平常开门的时间，门已经先开着了":"已经过了咖啡馆平常打烊的时间";
         if("closed".equals(w.cafeStatus)&&scheduledOpen(w,at))return w.cafeOperating?"已经到了咖啡馆平常开门的时间":"到了咖啡馆平常开门时间；目前经营暂停，门仍关着";
         if("closing".equals(w.cafeStatus))return cafeEmpty(w)?"客人已经走了，可以锁门回家":"刚才已经说过要打烊，店里还有人没走";
         return null;
@@ -128,6 +201,7 @@ final class CafeService {
         String spoken=announcement==null?"":announcement.trim();
         if(!present.isEmpty()&&spoken.isEmpty())return false;
         w.cafeStatus="closing";w.cafeStatusChangedAt=at;
+        w.cafeClosedForDayOn=at.atZone(ZoneId.of(w.timezone)).toLocalDate().toString();
         String own=null;
         if(!spoken.isEmpty())own=ResidentSimulation.memory(w,residentId,residentId,"observed",at,"cafe-hours","我刚才说：“"+spoken+"”",List.of(),5);
         for(String guest:present)ResidentSimulation.memory(w,guest,residentId,"heard",at,"cafe-hours",ResidentSimulation.actor(w,residentId).name()+"当面说：“"+spoken+"”",List.of(),6);
@@ -215,7 +289,42 @@ final class CafeService {
      * are reaped, delivered drinks get picked up or go cold. Called once per world tick, independent
      * of whose plan is running - a request keeps its own clock even while its requester has moved on
      * to something else while they wait. */
+    /** A shop with posted hours, whose operator has an active commitment to running it, opens at its
+     * own opening time. This is not the rules deciding something on a resident's behalf - the
+     * decisions are all still theirs and all still exist: whether to run a shop at all
+     * ({@code cafeOperating}, cleared by pauseOperation and by changing your occupation), what the
+     * hours are ({@code cafeOpenMinute}/{@code cafeCloseMinute}), and closing early on any given day
+     * (close_cafe, which sets "closing" and is untouched here, so a shop closed for the day stays
+     * closed for the day). What is removed is the busywork of re-deciding every morning to do the
+     * thing you have already committed to doing.
+     * <p>It is here because the alternative turned out to be a single point of failure for the whole
+     * town. Opening was a model decision and nothing else; one wrong call - the operator was told at
+     * 08:31 that it was past closing time and believed it - cost the town its only public indoor
+     * space for a full simulated day, and with it every habit that goes there. A day with no model at
+     * all had the same shape for the same reason: nobody ever opened the door, so five of six
+     * residents stayed home from beginning to end. A town whose whole social life hangs on one
+     * successful model call a day is not a town.
+     * <p>Deliberately only "closed" -> "open": never reopens something the operator closed today
+     * (that is "closing", and it stays), never overrides a pause, and never touches the hours. */
+    private static void openOnSchedule(CompanionWorld w,Instant at) {
+        if(!w.cafeOperating||!"closed".equals(w.cafeStatus)||!scheduledOpen(w,at))return;
+        // An early close is a decision about TODAY, and reopening the same day would silently undo
+        // it. Only that decision counts - not every other reason a shop is closed.
+        if(at.atZone(ZoneId.of(w.timezone)).toLocalDate().toString().equals(w.cafeClosedForDayOn))return;
+        ResidentState operator=ResidentSimulation.state(w,operatorId(w));
+        if(operator==null)return;
+        // He has to actually be there, and awake. The first version of this checked the clock and
+        // the standing commitment and nothing else, so the shop unlocked itself at nine while its
+        // owner was asleep in bed at home - and then wrote a world event saying he had opened it,
+        // which was simply untrue. A door opens when the person with the key reaches it.
+        Actor door=ResidentSimulation.actor(w,operator.id);
+        if(!PLACE.equals(door.place())||"sleep".equals(door.activity()))return;
+        w.cafeStatus="open";w.cafeStatusChangedAt=at;
+        ResidentSimulation.event(w,at,"cafe_opened",PLACE,List.of(operator.id),
+            door.name()+"照平常的钟点开了咖啡馆的门。",null);
+    }
     static void tick(CompanionWorld w, Instant at) {
+        openOnSchedule(w, at);
         for (ServiceRequest req : w.serviceRequests) {
             if ("waiting".equals(req.status)) reapWaiting(w, req, at);
             else if ("delivered".equals(req.status)) resolveDelivered(w, req, at);

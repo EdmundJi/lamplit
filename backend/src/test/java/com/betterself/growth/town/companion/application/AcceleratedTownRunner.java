@@ -158,7 +158,31 @@ public final class AcceleratedTownRunner {
         var collector = new TimelineCollector();
         collector.capture(seed);
         collector.capturePersonalitySnapshot(seed); // a true t=0 baseline for THIS run, resumed or fresh
-        List<Map<String,Object>> applicationOutcomes=new ArrayList<>();String lastModelStatus=seed.modelStatus;
+        // Exact, per-call outcome accounting (see ResidentDirector.OutcomeListener's own doc comment):
+        // fired synchronously, right where ResidentDirector itself decides applied/rejected/failed/
+        // unsupported, for the exact same call RecordingMind.capture() just appended to live.calls() -
+        // single-flight (one world, one in-flight model call at a time) guarantees that row is still
+        // the last one in the list when this fires, so the outcome lands directly on its own call
+        // record instead of being reconstructed later from a diff of CompanionWorld#modelStatus text
+        // (the old mechanism this replaces: several call kinds - summary/dayplan/explain/reflect -
+        // never touch modelStatus on success at all, so a purely tick-sampled text diff silently
+        // under-counted their applied outcomes and could not report which call type or action a
+        // rejection even belonged to - exactly the gap this task was asked to close).
+        List<Map<String,Object>> applicationOutcomes=Collections.synchronizedList(new ArrayList<>());
+        if (live != null) {
+            List<Map<String,Object>> calls = live.calls();
+            director.setOutcomeListener((callType, action, outcome) -> {
+                synchronized (calls) {
+                    if (!calls.isEmpty()) calls.get(calls.size() - 1).put("outcome", outcome);
+                }
+                Map<String,Object> row = new LinkedHashMap<>();
+                row.put("at", clock.instant().toString());
+                row.put("callType", callType);
+                row.put("action", action);
+                row.put("outcome", outcome);
+                applicationOutcomes.add(row);
+            });
+        }
 
         List<ScriptedIntent> scripted = cfg.scriptedAvatarIntents() ? scriptedIntents() : List.of();
 
@@ -181,13 +205,6 @@ public final class AcceleratedTownRunner {
                 fireDueScripted(service, cfg.userId(), scripted, elapsedSeconds);
                 CompanionService.View view = service.advance(cfg.userId());
                 collector.capture(view.world());
-                if(view.world()!=null&&!java.util.Objects.equals(lastModelStatus,view.world().modelStatus)){
-                    lastModelStatus=view.world().modelStatus;
-                    if(lastModelStatus!=null&&!lastModelStatus.contains("正在想")){
-                        Map<String,Object> outcome=new LinkedHashMap<>();outcome.put("at",t.toString());outcome.put("status",lastModelStatus);
-                        outcome.put("outcome",lastModelStatus.contains("过时")?"rejected":lastModelStatus.contains("暂时")?"failed":"applied");applicationOutcomes.add(outcome);
-                    }
-                }
                 if (i % ticksPerDay == 0) collector.capturePersonalitySnapshot(view.world());
 
                 if (cfg.modelEnabled() && cfg.realPaceMillisPerTick() > 0) {
@@ -316,6 +333,23 @@ public final class AcceleratedTownRunner {
             Map<String,Object> input=new LinkedHashMap<>();input.put("perspective",request.perspective());input.put("partnerName",request.partnerName());input.put("transcript",ResidentMind.turnViews(request.transcript()));input.put("conversationMemories",request.conversationMemories());
             return capture("summary",input,()->delegate.summarizeConversationMetered(request));
         }
+        public ExplainDraft explain(ExplainRequest request){return explainMetered(request).value();}
+        public Result<ExplainDraft> explainMetered(ExplainRequest request){
+            // Forwarded for the same reason planDay's own comment above gives: a decorator that
+            // forgets one method still compiles and silently disables that capability for good.
+            Map<String,Object> input=new LinkedHashMap<>();input.put("residentId",request.perspective().residentId());input.put("deeds",request.deeds());
+            return capture("explain",input,()->delegate.explainMetered(request));
+        }
+        public ReflectDraft reflect(ReflectRequest request){return reflectMetered(request).value();}
+        public Result<ReflectDraft> reflectMetered(ReflectRequest request){
+            Map<String,Object> input=new LinkedHashMap<>();input.put("residentId",request.perspective().residentId());input.put("source",request.source());
+            return capture("reflect",input,()->delegate.reflectMetered(request));
+        }
+        public VentureDraft venture(VentureRequest request){return ventureMetered(request).value();}
+        public Result<VentureDraft> ventureMetered(VentureRequest request){
+            Map<String,Object> input=new LinkedHashMap<>();input.put("residentId",request.perspective().residentId());input.put("sharedThingsLeft",request.sharedThingsLeft());
+            return capture("venture",input,()->delegate.ventureMetered(request));
+        }
         private <T>Result<T> capture(String type,Object input,java.util.function.Supplier<Result<T>> call){
             Map<String,Object> row=new LinkedHashMap<>();row.put("callType",type);row.put("input",input);
             try{Result<T> result=call.get();row.put("status","generated");row.put("output",result.value());row.put("usage",result.usage());calls.add(row);return result;}
@@ -366,6 +400,52 @@ public final class AcceleratedTownRunner {
         return WORLD_JSON.readValue(file.toFile(), CompanionWorld.class);
     }
 
+    /** One row per (callType, action) combination actually seen, plus a callType-level total row named
+     * "*". {@code offered} only has a real meaning for "decision" (every action listed in that call's
+     * own {@code context.availableActions()}, whether or not it was picked) and "react" (always
+     * greet/join/none, a fixed three-way menu); other call kinds have no menu to offer from, so their
+     * only row is the callType-level total. {@code selected} is how many calls actually chose that
+     * action; {@code applied}/{@code rejected}/{@code failed}/{@code unsupported} come straight from
+     * {@link ResidentDirector.OutcomeListener}, not a guess reconstructed from status text. A properly
+     * high offered-count with a near-zero selected-count (invite/request_drink's own measured history)
+     * or a high selected-count with a near-total rejected-count (propose's own measured history) is
+     * exactly what this table exists to make visible without reading a full day's transcript. */
+    // Package-private (not private) so AcceleratedTownRunnerActionAuditTest can exercise this pure
+    // aggregation directly with hand-built rows, without a live model provider/network credentials.
+    static List<Map<String,Object>> buildActionAudit(List<Map<String,Object>> calls) {
+        // Each int[6] is [offered, selected, applied, rejected, failed, unsupported], mutated in place.
+        Map<String,Map<String,int[]>> byCallType=new java.util.TreeMap<>();
+        for(Map<String,Object> call:calls){
+            String kind=(String)call.get("callType");
+            String outcome=(String)call.getOrDefault("outcome","unknown");
+            Map<String,int[]> actions=byCallType.computeIfAbsent(kind,k->new java.util.TreeMap<>());
+            bumpOutcome(actions,"*",outcome);
+            Object input=call.get("input");
+            Object output=call.get("output");
+            if("decision".equals(kind)&&input instanceof ResidentMind.Context context){
+                for(String offeredAction:context.availableActions())bumpOffered(actions,offeredAction);
+                if(output instanceof ResidentMind.Decision decision&&decision.action()!=null)bumpOutcome(actions,decision.action(),outcome);
+            } else if("react".equals(kind)){
+                for(String offeredReaction:List.of("greet","join","none"))bumpOffered(actions,offeredReaction);
+                if(output instanceof ResidentMind.ReactDraft draft&&draft.reaction()!=null)bumpOutcome(actions,draft.reaction(),outcome);
+            }
+        }
+        List<Map<String,Object>> rows=new ArrayList<>();
+        for(var callTypeEntry:byCallType.entrySet())for(var actionEntry:callTypeEntry.getValue().entrySet()){
+            int[] c=actionEntry.getValue();
+            Map<String,Object> row=new LinkedHashMap<>();
+            row.put("callType",callTypeEntry.getKey());row.put("action",actionEntry.getKey());
+            row.put("offered",c[0]);row.put("selected",c[1]);row.put("applied",c[2]);row.put("rejected",c[3]);row.put("failed",c[4]);row.put("unsupported",c[5]);
+            rows.add(row);
+        }
+        return rows;
+    }
+    private static int[] slot(Map<String,int[]> actions,String action){return actions.computeIfAbsent(action,k->new int[6]);}
+    private static void bumpOffered(Map<String,int[]> actions,String action){slot(actions,action)[0]++;}
+    private static void bumpOutcome(Map<String,int[]> actions,String action,String outcome){
+        int[] c=slot(actions,action);c[1]++;
+        switch(outcome){case "applied"->c[2]++;case "rejected"->c[3]++;case "failed"->c[4]++;case "unsupported"->c[5]++;default->{}}
+    }
     private static void export(RunConfig cfg, List<Map<String, Object>> sorted, InMemoryModelUsage usage,
                                 CompanionWorld finalWorld, Instant runStart, Instant finalInstant, TimelineCollector collector,
                                 LiveMind live,List<Map<String,Object>> applicationOutcomes) throws IOException {
@@ -403,6 +483,15 @@ public final class AcceleratedTownRunner {
         TimelineExporter.writeJson(cfg.outDir().resolve("usage.json"), usageReport);
         TimelineExporter.writeJson(cfg.outDir().resolve("model-calls.json"),live==null?List.of():List.copyOf(live.calls()));
         TimelineExporter.writeJson(cfg.outDir().resolve("model-application-outcomes.json"),applicationOutcomes);
+        // Per-action offered/selected/applied/rejected/failed/unsupported accounting (see this class's
+        // own outcomeListener wiring above). This is the diagnostic the four repeats of the same bug
+        // (observe's 60s default loop, invite's 96-offered/0-picked menu placement, request_drink's
+        // 32-offered/0-picked absence of any reason to want one, propose's 592-picked/near-all-rejected
+        // place/objectKind mismatch) would each have shown on day one, instead of surfacing only after
+        // a manual read of a whole day's transcript. Built straight from live.calls() rather than the
+        // JSON round-trip in model-calls.json, so it sees the real Context/Decision/ReactDraft objects
+        // (availableActions, the chosen action) rather than reparsing serialized text.
+        TimelineExporter.writeJson(cfg.outDir().resolve("action-outcomes.json"),buildActionAudit(live==null?List.of():live.calls()));
 
         // Blind test: questions and answers live in two separate directories on purpose (see
         // docs/05-notes.md "手抄是个静默失败点" / docs/04-decisions.md "验收") - whoever actually
@@ -415,7 +504,13 @@ public final class AcceleratedTownRunner {
 
         // Emergence metrics: the run's actual "did it work" evidence, not an impression from reading
         // timeline.md - see docs/01-requirements.md "让他们自己产生秩序" and MetricsExporter's javadoc.
-        Map<String, Object> metrics = MetricsExporter.compute(sorted, collector, finalWorld);
+        // Every local date the run actually covered, so a day on which nothing happened reports a
+        // zero instead of vanishing from the denominator.
+        List<String> simulatedDays = new ArrayList<>();
+        java.time.ZoneId zone = java.time.ZoneId.of(cfg.timezone());
+        for (java.time.LocalDate d = runStart.atZone(zone).toLocalDate(), last = finalInstant.atZone(zone).toLocalDate();
+             !d.isAfter(last); d = d.plusDays(1)) simulatedDays.add(d.toString());
+        Map<String, Object> metrics = MetricsExporter.compute(sorted, collector, finalWorld, simulatedDays);
         MetricsExporter.writeJson(cfg.outDir().resolve("metrics.json"), metrics);
         MetricsExporter.writeMarkdown(cfg.outDir().resolve("metrics.md"), metrics);
 

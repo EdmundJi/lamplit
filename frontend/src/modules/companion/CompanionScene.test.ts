@@ -1,7 +1,7 @@
 import { mount, flushPromises } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('phaser', () => ({ default: { AUTO: 0, Scale: { NONE: 0, NO_CENTER: 0 }, Game: class {
-  canvas = document.createElement('canvas'); scale = { resize: vi.fn() }; events = { once: vi.fn() }; destroy() {}
+  canvas = document.createElement('canvas'); scale = { resize: vi.fn() }; events = { once: vi.fn() }; loop = { sleep: vi.fn(), wake: vi.fn() }; destroy() {}
 } } }))
 vi.mock('./companion-scene', () => ({ CompanionStreetScene: class {
   constructor(_snapshot: unknown, _select: unknown, _project: unknown, labels: (value: unknown[]) => void) {

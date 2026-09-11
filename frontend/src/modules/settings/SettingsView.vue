@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { AlertTriangle, Download, LogOut, Monitor, Moon, Paintbrush, PanelsTopLeft, RotateCcw, Sparkles, Sun, Trash2, Zap } from 'lucide-vue-next'
+import { computed, onMounted, ref, type Component } from 'vue'
+import { AlertTriangle, Download, LogOut, Monitor, Moon, PanelsTopLeft, RotateCcw, Sparkles, Sun, Trash2, Zap } from 'lucide-vue-next'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../auth/auth.store'
 import {
@@ -17,6 +17,7 @@ import {
   type ThemeMode,
 } from '../../shared/ui/appearance.store'
 import { radialReveal } from '../../shared/ui/interaction/radial-reveal'
+import SegmentedControl from '../../shared/ui/interaction/SegmentedControl.vue'
 import { channelHint, channelLabel, retentionOptions, useSettingsData } from './settings.logic'
 
 const { prefs, notifications, deletion, exportJob, error, load, setRetention, toggleNotification, createExport, requestDeletion, cancelDeletion } = useSettingsData()
@@ -30,7 +31,11 @@ const confirmingDeletion = ref(false)
 
 appearance.hydrate()
 
-const themeIcons: Record<ThemeMode, unknown> = { light: Sun, dark: Moon, system: Monitor }
+const themeIcons: Record<ThemeMode, Component> = { light: Sun, dark: Moon, system: Monitor }
+const themeSegmentOptions = themeOptions.map(option => ({ ...option, icon: themeIcons[option.value] }))
+const densitySegmentOptions = densityOptions.map(option => ({ ...option, icon: PanelsTopLeft }))
+const motionSegmentOptions = motionOptions.map(option => ({ ...option, icon: Zap }))
+const retentionSegmentOptions = retentionOptions.map(days => ({ value: String(days), label: `${days} 天` }))
 
 // Every appearance control repaints the page; the new look grows out of the
 // button that caused it, so the change reads as an answer to that press.
@@ -73,7 +78,6 @@ function replayWelcome() {
   <section class="page settings-page">
     <header class="page-head">
       <div>
-        <p class="eyebrow">照顾你的使用感受</p>
         <h1>设置</h1>
       </div>
       <button class="secondary" @click="logout">
@@ -85,35 +89,23 @@ function replayWelcome() {
     <p v-if="error" class="error" role="alert">{{ error }}</p>
 
     <section class="band">
-      <h2>使用模式</h2>
+      <h2 class="section-title">使用模式</h2>
       <p>极简模式只保留执行清单。切换模式不会改变已有任务，偏好保存在当前设备。</p>
       <button class="secondary" :aria-pressed="mode.minimal" @click="switchWorkspaceMode($event)">{{ mode.minimal ? '切换成长模式' : '切换极简清单' }}</button>
     </section>
 
     <section class="band appearance-section">
-      <div class="section-title">
-        <Paintbrush :size="19" />
-        <div>
-          <h2>外观风格</h2>
-          <p class="muted">选择一种让你愿意每天回来看看自己的氛围。</p>
-        </div>
-      </div>
+      <h2 class="section-title">外观风格</h2>
 
       <div class="appearance-grid">
         <fieldset class="option-group">
           <legend>主题</legend>
-          <div class="segmented">
-            <button
-              v-for="option in themeOptions"
-              :key="option.value"
-              type="button"
-              :aria-pressed="appearance.theme === option.value"
-              @click="restyle($event, () => appearance.setTheme(option.value as ThemeMode))"
-            >
-              <component :is="themeIcons[option.value]" :size="16" />
-              {{ option.label }}
-            </button>
-          </div>
+          <SegmentedControl
+            :model-value="appearance.theme"
+            :options="themeSegmentOptions"
+            label="主题"
+            @update:model-value="(value, event) => restyle(event!, () => appearance.setTheme(value as ThemeMode))"
+          />
         </fieldset>
 
         <fieldset class="option-group visual-group">
@@ -139,49 +131,32 @@ function replayWelcome() {
 
         <fieldset class="option-group">
           <legend>界面密度</legend>
-          <div class="segmented">
-            <button
-              v-for="option in densityOptions"
-              :key="option.value"
-              type="button"
-              :aria-pressed="appearance.density === option.value"
-              @click="restyle($event, () => appearance.setDensity(option.value as Density))"
-            >
-              <PanelsTopLeft :size="16" />
-              {{ option.label }}
-            </button>
-          </div>
+          <SegmentedControl
+            :model-value="appearance.density"
+            :options="densitySegmentOptions"
+            label="界面密度"
+            @update:model-value="(value, event) => restyle(event!, () => appearance.setDensity(value as Density))"
+          />
         </fieldset>
 
         <fieldset class="option-group">
           <legend>动画强度</legend>
-          <div class="segmented">
-            <button
-              v-for="option in motionOptions"
-              :key="option.value"
-              type="button"
-              :aria-pressed="appearance.motion === option.value"
-              @click="restyle($event, () => appearance.setMotion(option.value as MotionLevel))"
-            >
-              <Zap :size="16" />
-              {{ option.label }}
-            </button>
-          </div>
+          <SegmentedControl
+            :model-value="appearance.motion"
+            :options="motionSegmentOptions"
+            label="动画强度"
+            @update:model-value="(value, event) => restyle(event!, () => appearance.setMotion(value as MotionLevel))"
+          />
         </fieldset>
 
         <fieldset class="option-group">
           <legend>圆角风格</legend>
-          <div class="segmented">
-            <button
-              v-for="option in radiusOptions"
-              :key="option.value"
-              type="button"
-              :aria-pressed="appearance.radius === option.value"
-              @click="restyle($event, () => appearance.setRadius(option.value as RadiusStyle))"
-            >
-              {{ option.label }}
-            </button>
-          </div>
+          <SegmentedControl
+            :model-value="appearance.radius"
+            :options="radiusOptions"
+            label="圆角风格"
+            @update:model-value="(value, event) => restyle(event!, () => appearance.setRadius(value as RadiusStyle))"
+          />
         </fieldset>
 
         <div class="appearance-actions">
@@ -202,17 +177,20 @@ function replayWelcome() {
     </section>
 
     <section v-if="prefs" class="band">
-      <h2>AI 数据保留</h2>
+      <h2 class="section-title">AI 数据保留</h2>
       <p class="muted">对话到期后自动删除；安全事件按独立政策最小化保留。</p>
       <div class="actions">
-        <button v-for="d in retentionOptions" :key="d" class="secondary" :aria-pressed="prefs.aiRetentionDays === d" @click="retention(d)">
-          {{ d }} 天
-        </button>
+        <SegmentedControl
+          :model-value="String(prefs.aiRetentionDays)"
+          :options="retentionSegmentOptions"
+          label="AI 数据保留天数"
+          @update:model-value="value => retention(Number(value))"
+        />
       </div>
     </section>
 
     <section class="band">
-      <h2>通知</h2>
+      <h2 class="section-title">通知</h2>
       <p class="muted">选择在哪里收到提醒。每个渠道每天都有条数上限，不会连续打扰。</p>
       <div v-for="n in notifications" :key="n.channel" class="setting-row">
         <div>
@@ -224,7 +202,7 @@ function replayWelcome() {
     </section>
 
     <section class="band">
-      <h2>数据导出</h2>
+      <h2 class="section-title">数据导出</h2>
       <p class="muted">导出文件保留 24 小时，下载链接有效 15 分钟。</p>
       <div class="actions">
         <button class="secondary" @click="createExport">
@@ -236,7 +214,7 @@ function replayWelcome() {
     </section>
 
     <section class="band danger-zone">
-      <h2>注销账户</h2>
+      <h2 class="section-title">注销账户</h2>
       <template v-if="deletion?.status === 'COOLING_OFF'">
         <p>账户处于 7 天冷静期。计划处理时间：{{ new Date(deletion.processAfter!).toLocaleString() }}</p>
         <button class="secondary" @click="cancelDeletion">撤销注销</button>
@@ -263,23 +241,6 @@ function replayWelcome() {
 </template>
 
 <style scoped>
-h2 {
-  margin: 0 0 10px;
-  font-size: 18px;
-}
-
-.section-title {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  margin-bottom: 18px;
-}
-
-.section-title > svg {
-  margin-top: 3px;
-  color: var(--primary);
-}
-
 .appearance-section {
   padding-top: 24px;
   padding-bottom: 26px;
@@ -310,33 +271,6 @@ h2 {
   font-weight: 700;
 }
 
-.segmented {
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(0, 1fr);
-  gap: 3px;
-  padding: 3px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface-muted);
-}
-
-.segmented button {
-  min-width: 0;
-  border: 0;
-  border-radius: calc(var(--radius) - 2px);
-  background: transparent;
-  color: var(--muted);
-  padding: 0 10px;
-}
-
-.segmented button[aria-pressed='true'] {
-  background: var(--surface);
-  color: var(--primary-strong);
-  font-weight: 700;
-  box-shadow: var(--shadow-soft);
-}
-
 .swatches {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(154px, 1fr));
@@ -363,13 +297,13 @@ h2 {
   grid-template-columns: 26px minmax(0, 1fr);
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--preview-primary) 22%, var(--border));
-  border-radius: 6px;
+  border-radius: var(--radius);
   background: var(--preview-surface);
 }
 
 .preview-sidebar { background: var(--preview-primary); }
 .preview-content { display: grid; align-content: center; gap: 7px; padding: 10px; }
-.preview-content i { display: block; height: 8px; border-radius: 3px; background: color-mix(in srgb, var(--preview-primary) 24%, white); }
+.preview-content i { display: block; height: 8px; border-radius: var(--radius); background: color-mix(in srgb, var(--preview-primary) 24%, white); }
 .preview-content i:first-child { width: 64%; height: 11px; background: var(--preview-primary); }
 .preview-content i:last-child { width: 46%; background: var(--preview-accent); }
 .swatch-copy { min-width: 0; display: grid; gap: 3px; }
@@ -384,7 +318,7 @@ h2 {
 .swatches button[aria-pressed='true'] {
   border-color: var(--primary);
   background: color-mix(in srgb, var(--primary-soft) 48%, var(--surface));
-  box-shadow: inset 0 -3px 0 var(--primary), var(--shadow-soft);
+  box-shadow: inset 0 -3px 0 var(--primary);
 }
 
 .swatches button[aria-pressed='true'] .swatch-copy strong {
@@ -407,7 +341,7 @@ h2 {
   gap: 9px;
   color: var(--ink);
 }
-.current-style > span { width: 30px; height: 30px; flex: 0 0 auto; border: 3px solid var(--surface); border-radius: 50%; box-shadow: 0 0 0 1px var(--border); }
+.current-style > span { width: 30px; height: 30px; flex: 0 0 auto; border: 3px solid var(--surface); border-radius: 50%; }
 .current-style div { display: grid; gap: 1px; }
 .current-style small { color: var(--muted); font-size: 10px; }
 .current-style strong { font-size: 13px; }
@@ -447,12 +381,12 @@ h2 {
 
 @media (prefers-reduced-motion: no-preference) {
   .appearance-section {
-    animation: settings-rise var(--motion-medium) ease-out both;
+    animation: settings-rise var(--motion-medium) var(--ease) both;
   }
 }
 
 @keyframes settings-rise {
-  from { opacity: 0; transform: translateY(6px); }
+  from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
@@ -482,10 +416,7 @@ h2 {
   .theme-preview { height: 72px; }
   .current-style { grid-column: 1 / -1; }
 }
-.settings-page { max-width: 1060px; }
-.settings-page > .band { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-panel); padding: 24px; margin-bottom: 18px; }
-.swatches button { border-radius: var(--radius-panel); box-shadow: none; }
-.theme-preview { border-radius: 10px; }
+.swatches button { border-radius: var(--radius-panel); }
+.theme-preview { border-radius: var(--radius-card); }
 .settings-page .danger-zone { border-color: color-mix(in srgb, var(--danger) 35%, var(--border)); }
-@media (max-width: 760px) { .settings-page > .band { padding: 18px; } }
 </style>

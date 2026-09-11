@@ -27,9 +27,7 @@ useDialogFocus(() => panel.value !== null, '.goal-drawer', () => { if (!busy.val
   <section class="page goals-page">
     <header class="page-head">
       <div>
-        <p class="eyebrow">成长路径</p>
         <h1>目标与任务</h1>
-        <p class="page-description">把想去的远方，拆成今天走得到的一步。</p>
       </div>
       <div class="actions">
         <button class="secondary" type="button" @click="openTask()">

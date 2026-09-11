@@ -12,8 +12,8 @@
   --surface-muted: #ecefe7;
   --surface-raised: #ffffff;
   --ink: #263d34;
-  --muted: #687064;
-  --border: #e0e3d9;
+  --muted: #716a6d;
+  --border: #e3ddd8;
   --primary: #255643;
   --primary-strong: #173d32;
   --primary-soft: #e2ebde;
@@ -22,11 +22,12 @@
   --amber: #916716;
   --danger: #b84248;
   --focus: #397758;
-  --radius: 10px;
-  --radius-card: 14px;
-  --radius-panel: 18px;
-  --radius-scene: 24px;
-  --control: 44px;
+  --ease: cubic-bezier(.4, 0, .2, 1);
+  --radius: 8px;
+  --radius-card: 12px;
+  --radius-panel: 16px;
+  --radius-scene: 20px;
+  --control: 40px;
   --sidebar: 208px;
   --forest: #173d32;
   --forest-deep: #102c25;
@@ -36,17 +37,19 @@
   --nav-bg: #efeee7;
   --nav-ink: #686f63;
   --nav-ink-strong: #243c31;
-  --nav-muted: #6b7266;
+  --nav-muted: #716a6d;
   --nav-faint: #687060;
   --nav-hover: #e5e7dc;
   --nav-active-bg: #263f32;
   --nav-active-ink: #fff9e9;
-  --nav-line: #d8dccf;
+  --nav-line: #dbd6ce;
   --nav-card: #e7e8dc;
   --nav-card-border: #d8ddcb;
   --nav-card-ink: #364d39;
   --nav-avatar: #d8decb;
   --nav-avatar-ink: #385039;
+  /* Town day period tint follows morning/afternoon/evening/night, synced with the backend town clock. */
+  --period-tint: #f3e4d0;
   /* Five growth dimensions keep fixed chart colours so a hue always means the same thing. */
   --dim-knowledge: #c85f47;
   --dim-health: #4f856a;
@@ -59,7 +62,7 @@
   --tone-gold: #bd8b26;
   --tone-rose: #b45c73;
   --tone-celebrate-ink: #6f470c;
-  --shadow: 0 24px 70px rgb(22 49 36 / 16%);
+  --shadow: 0 16px 40px rgb(22 49 36 / 14%);
   --shadow-soft: 0 4px 18px rgb(22 49 36 / 4%);
   --topline: linear-gradient(90deg, var(--primary) 0 34%, var(--amber) 34% 66%, var(--accent) 66% 100%);
   --motion-fast: 140ms;
@@ -67,11 +70,17 @@
   --motion-slow: 520ms;
 }
 
+/* Town day period: swaps the /today hero tint with the backend's morning/afternoon/evening/night clock. */
+
+:root[data-period='afternoon'] { --period-tint: #f6efdf; }
+:root[data-period='evening'] { --period-tint: #efd9b8; }
+:root[data-period='night'] { --period-tint: #e6e3dc; }
+
 /* Dark keeps the same roles on a green-black canvas; the values live in the dark block below. */
 :root[data-theme='dark'] {
   color-scheme: dark;
   --tone-celebrate-ink: #e0b66c;
-  --shadow: 0 18px 44px rgb(0 0 0 / 34%);
+  --shadow: 0 12px 28px rgb(0 0 0 / 32%);
   --shadow-soft: 0 12px 30px rgb(0 0 0 / 25%);
 }
 
@@ -79,7 +88,7 @@
   :root[data-theme='system'] {
     color-scheme: dark;
     --tone-celebrate-ink: #e0b66c;
-    --shadow: 0 18px 44px rgb(0 0 0 / 34%);
+    --shadow: 0 12px 28px rgb(0 0 0 / 32%);
     --shadow-soft: 0 12px 30px rgb(0 0 0 / 25%);
   }
 }
@@ -88,7 +97,7 @@
   --canvas: #f5f5ef;
   --surface: #fffefa;
   --surface-muted: #e8eee9;
-  --border: #d7dfd8;
+  --border: #dadfd8;
   --primary: #39776d;
   --primary-strong: #285a52;
   --primary-soft: #dceee8;
@@ -102,7 +111,7 @@
   --canvas: #fbf4f2;
   --surface: #fffafa;
   --surface-muted: #f3e4e3;
-  --border: #e7d3d4;
+  --border: #e6d6d5;
   --primary: #a95468;
   --primary-strong: #7f3a4c;
   --primary-soft: #f7dfe4;
@@ -116,7 +125,7 @@
   --canvas: #faf5eb;
   --surface: #fffdf7;
   --surface-muted: #f1e6d3;
-  --border: #e2d2ba;
+  --border: #e2d5c2;
   --primary: #9b663d;
   --primary-strong: #754824;
   --primary-soft: #f2e1cf;
@@ -130,7 +139,7 @@
   --canvas: #f5f3f0;
   --surface: #fdfcf9;
   --surface-muted: #eae6e1;
-  --border: #d8d1ca;
+  --border: #dbd4ce;
   --primary: #5d5550;
   --primary-strong: #3d3733;
   --primary-soft: #e7e1dc;
@@ -156,7 +165,7 @@
 }
 
 :root[data-density='compact'] {
-  --control: 36px;
+  --control: 34px;
   --sidebar: 220px;
 }
 
@@ -164,7 +173,7 @@
   --radius: 4px;
   --radius-card: 6px;
   --radius-panel: 8px;
-  --radius-scene: 12px;
+  --radius-scene: 10px;
 }
 
 :root[data-motion='reduced'] {
@@ -180,11 +189,12 @@
   --surface-raised: #2a4034;
   --ink: #f0f3e9;
   --muted: #b1bfb2;
-  --border: #3d5143;
+  --border: #3f4a44;
   --primary-strong: #8cc2a0;
   --primary-soft: #263f30;
   --accent-strong: #b1c5a1;
   --amber: #e4bd66;
+  --period-tint: #2a3a30;
 }
 :root[data-theme='dark'][data-accent] {
   --canvas: #111e19;
@@ -193,7 +203,7 @@
   --surface-raised: #2a4034;
   --ink: #f0f3e9;
   --muted: #b1bfb2;
-  --border: #3d5143;
+  --border: #3f4a44;
 }
 @media (prefers-color-scheme: dark) {
   :root[data-theme='system'], :root[data-theme='system'][data-accent] {
@@ -203,12 +213,22 @@
     --surface-raised: #2a4034;
     --ink: #f0f3e9;
     --muted: #b1bfb2;
-    --border: #3d5143;
+    --border: #3f4a44;
     --primary-strong: #8cc2a0;
     --primary-soft: #263f30;
     --accent-strong: #b1c5a1;
     --amber: #e4bd66;
+    --period-tint: #2a3a30;
   }
+}
+/* Dark period overrides for afternoon/evening/night; morning uses the block above's default. */
+:root[data-theme='dark'][data-period='afternoon'] { --period-tint: #26352c; }
+:root[data-theme='dark'][data-period='evening'] { --period-tint: #33392a; }
+:root[data-theme='dark'][data-period='night'] { --period-tint: #16241e; }
+@media (prefers-color-scheme: dark) {
+  :root[data-theme='system'][data-period='afternoon'] { --period-tint: #26352c; }
+  :root[data-theme='system'][data-period='evening'] { --period-tint: #33392a; }
+  :root[data-theme='system'][data-period='night'] { --period-tint: #16241e; }
 }
 
 :root[data-theme='dark'] {

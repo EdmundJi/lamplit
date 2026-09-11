@@ -329,6 +329,56 @@ class ResidentDirectorTest {
         CompanionRules.advance(world,now.plusSeconds(6));
         assertThat(self.plan).isNull();
     }
+    /** Direct test of the outcome-listener observability hook: applied/rejected/failed are reported
+     * exactly at the point ResidentDirector itself decides them - never reconstructed later from
+     * {@code modelStatus} text (see AcceleratedTownRunner's own audit of why that reconstruction is
+     * unreliable for several call kinds). This is the fix for "model-application-outcomes.json 只记了
+     * at/status/outcome，没有记调用类型和动作" - the listener hands both directly. */
+    @Test void outcomeListenerReportsCallTypeAndActionForAnAppliedDecision()throws Exception {
+        var world=CompanionRules.join("outcome-applied","我","Asia/Shanghai",now,true);world.conversations.clear();world.serviceRequests.clear();
+        var owner=ResidentSimulation.state(world,"owner");owner.plan=null;
+        for(var r:world.residentStates)if(!Set.of("owner","self").contains(r.id))r.plan=new CompanionWorld.Plan("park-"+r.id,"sleep","home-"+r.id,null,"睡着",now,now.plusSeconds(600));
+        var store=new FakeStore(world);
+        ResidentMind mind=new ResidentMind(){
+            public boolean enabled(){return true;}
+            public Decision decide(Context c){return new Decision("rest","home",null,"先回去坐一会儿","",List.of(),null,null);}
+        };
+        var director=new ResidentDirector(store,mind,Clock.fixed(now,ZoneOffset.UTC));
+        List<String> outcomes=Collections.synchronizedList(new ArrayList<>());
+        director.setOutcomeListener((callType,action,outcome)->outcomes.add(callType+":"+action+":"+outcome));
+        try{director.consider(81,world);assertThat(store.finished.await(2,TimeUnit.SECONDS)).isTrue();}
+        finally{director.close();}
+        assertThat(outcomes).containsExactly("decision:rest:applied");
+    }
+    @Test void outcomeListenerReportsRejectedWhenTheModelPicksAnActionThatWasNeverOffered()throws Exception {
+        // Exactly the shape found behind the reject-rate regression: the model answers with an action
+        // string that {@code c.availableActions()} never listed for this call, so
+        // ResidentDirector.applyDecision's very first check rejects it - and now the listener says so
+        // directly instead of leaving it to a modelStatus-text guess.
+        var world=CompanionRules.join("outcome-rejected","我","Asia/Shanghai",now,true);world.conversations.clear();world.serviceRequests.clear();
+        var owner=ResidentSimulation.state(world,"owner");owner.plan=null;
+        for(var r:world.residentStates)if(!Set.of("owner","self").contains(r.id))r.plan=new CompanionWorld.Plan("park-"+r.id,"sleep","home-"+r.id,null,"睡着",now,now.plusSeconds(600));
+        var store=new FakeStore(world);
+        ResidentMind mind=new ResidentMind(){
+            public boolean enabled(){return true;}
+            public Decision decide(Context c){assertThat(c.availableActions()).doesNotContain("fly");return new Decision("fly","home",null,"想飞一会儿","",List.of(),null,null);}
+        };
+        var director=new ResidentDirector(store,mind,Clock.fixed(now,ZoneOffset.UTC));
+        List<String> outcomes=Collections.synchronizedList(new ArrayList<>());
+        director.setOutcomeListener((callType,action,outcome)->outcomes.add(callType+":"+action+":"+outcome));
+        try{director.consider(82,world);assertThat(store.finished.await(2,TimeUnit.SECONDS)).isTrue();}
+        finally{director.close();}
+        assertThat(outcomes).containsExactly("decision:fly:rejected");
+    }
+    @Test void outcomeListenerReportsFailedOnARealModelException()throws Exception {
+        var store=new FakeStore(CompanionRules.join("outcome-failed","我","Asia/Shanghai",now));
+        var director=new ResidentDirector(store,new ResidentMind(){public boolean enabled(){return true;}public Decision decide(Context c){throw new IllegalStateException("network unavailable");}},Clock.fixed(now,ZoneOffset.UTC));
+        List<String> outcomes=Collections.synchronizedList(new ArrayList<>());
+        director.setOutcomeListener((callType,action,outcome)->outcomes.add(callType+":"+action+":"+outcome));
+        try{director.consider(83,store.world);assertThat(store.finished.await(2,TimeUnit.SECONDS)).isTrue();}
+        finally{director.close();}
+        assertThat(outcomes).containsExactly("decision:null:failed");
+    }
     static class FakeStore implements WorldStore {
         CompanionWorld world;
         ThreadLocal<Boolean> transaction=ThreadLocal.withInitial(()->false);
