@@ -27,7 +27,7 @@
 
 ## 授权状态
 
-- [ ] **griffty73-debug**（提交邮箱 `griffty73@gmail.com`）—— 待书面确认，见 issue（链接待补）
+- [ ] **griffty73-debug**（提交邮箱 `griffty73@gmail.com`）—— 待书面确认，见 https://github.com/EdmundJi/lamplit/issues/1
 
 **在上面这一项被勾选之前，本仓库整体仍然适用 Mulan PSL v2。**
 `LICENSE` 不会提前更换。
