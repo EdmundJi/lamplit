@@ -6,7 +6,10 @@ import static com.betterself.growth.town.companion.domain.CompanionWorld.*;
 
 public final class CompanionRules {
     private CompanionRules() {}
-    public static final Set<String> KINDS = Set.of("focus", "rest", "walk", "home", "flowers", "water", "thought");
+    /** "sleep" is here because the user could not previously say it: seven expressible intents and not
+     * one of them was going to bed, so the only way the avatar's night could ever be spent was however
+     * the autopilot below decided to spend it. */
+    public static final Set<String> KINDS = Set.of("focus", "rest", "walk", "home", "flowers", "water", "thought", "sleep");
     private static final String[] IDS={"owner","student","artist","gardener"};
     private static final String[] NAMES={"阿禾","小川","知夏","青叔"};
     private static final String[] ROLES={"咖啡馆店主","备考邻居","插画师","园艺爱好者"};
@@ -70,8 +73,8 @@ public final class CompanionRules {
     private static void start(CompanionWorld w, Intent i, Instant now) {
         String action=i.resolvedKind==null?i.kind:i.resolvedKind;
         i.status="active"; i.feedback="focus".equals(action)?"去咖啡馆坐好，陪你专注。":"好，就去做这件事。";
-        String place=switch(action){case "home","rest"->TownPlaces.homeOf("self");case "flowers"->"garden";case "walk","ponder"->"street";default->"open".equals(w.cafeStatus)?"cafe":TownPlaces.homeOf("self");};
-        String label=switch(action){case "focus"->"在公共书桌安静专注";case "visit"->"去咖啡馆看看邻居在做什么";case "study"->"找个位置，安静读几页书";case "ponder"->"在街边想一想，还没决定怎么实现这个念头";case "home"->"回到住处，整理今天";case "rest"->"靠一会儿，让脑子放空";case "flowers"->"看看刚开的花";case "water"->"喝一杯温水";default->"沿着小街慢慢散步";};
+        String place=switch(action){case "home","rest","sleep"->TownPlaces.homeOf("self");case "flowers"->"garden";case "walk","ponder"->"street";default->"open".equals(w.cafeStatus)?"cafe":TownPlaces.homeOf("self");};
+        String label=switch(action){case "sleep"->"回到住处，躺下睡了";case "focus"->"在公共书桌安静专注";case "visit"->"去咖啡馆看看邻居在做什么";case "study"->"找个位置，安静读几页书";case "ponder"->"在街边想一想，还没决定怎么实现这个念头";case "home"->"回到住处，整理今天";case "rest"->"靠一会儿，让脑子放空";case "flowers"->"看看刚开的花";case "water"->"喝一杯温水";default->"沿着小街慢慢散步";};
         Instant until=now.plusSeconds(action.equals("focus")?i.durationMinutes*60L:120);
         if(action.equals("focus")) w.focus=new Focus(i.taskId,now,until);
         w.avatar=actor("self",w.name,"小街住民",place,action,label,until);
@@ -84,18 +87,25 @@ public final class CompanionRules {
      * it the same way they would with each other. */
     private static void placeAvatar(CompanionWorld w, Instant now) {
         ResidentSimulation.ensureAvatarState(w);
-        String kind=switch(w.avatar.activity()){case "focus","study"->TownPlaces.isHome(w.avatar.place())?"desk":"seat";case "home","rest"->"bed";case "flowers"->"plot";case "walk","ponder"->"bench";default->null;};
+        String kind=switch(w.avatar.activity()){case "focus","study"->TownPlaces.isHome(w.avatar.place())?"desk":"seat";case "sleep","home","rest"->"bed";case "flowers"->"plot";case "walk","ponder"->"bench";default->null;};
         TownPlaces.claim(w,"self",w.avatar.place(),kind,now);
     }
     private static void finishActive(CompanionWorld w,String feedback,String status) {
         for(Intent i:w.intents) if(i.status.equals("active")){i.status=status;i.feedback=feedback;}
     }
     private static Actor autonomous(CompanionWorld w,Instant now) {
-        int hour=now.atZone(ZoneId.of(w.timezone)).getHour();
         int phase=(int)((now.getEpochSecond()/120)%8);
-        String action=(hour<7||hour>=23)?"home":switch(phase){case 0->"water";case 1->"rest";case 2->"walk";case 3->"flowers";default->"study";};
-        String place=switch(action){case "home","rest"->TownPlaces.homeOf("self");case "flowers"->"garden";case "walk","ponder"->"street";default->"open".equals(w.cafeStatus)?"cafe":TownPlaces.homeOf("self");};
-        String label=switch(action){case "home"->"回家休息，灯光轻轻暗下来";case "rest"->"歇一小会儿";case "water"->"记得给自己倒杯水";case "walk"->"出门透透气";case "flowers"->"在花园看看新叶";default->"翻开书，安静读上几页";};
+        // Asleep, not "at home". The old line read (hour<7||hour>=23) ? "home" : ... with the label
+        // "回家休息，灯光轻轻暗下来", which sounds like going to bed and is not: the activity stayed
+        // "home", so the figure sat in the living room all night (the scene sends home+rest to the sofa
+        // and only home+sleep to the bed), drained energy at the waking rate the whole time, and stayed
+        // a person who could be spoken to and counted as present at three in the morning. Hours come
+        // from the avatar's own schedule now, so a user who changes them is actually obeyed.
+        ResidentSimulation.ensureAvatarState(w);
+        boolean night=ResidentSimulation.withinUsualSleepWindow(w,"self",now);
+        String action=night?"sleep":switch(phase){case 0->"water";case 1->"rest";case 2->"walk";case 3->"flowers";default->"study";};
+        String place=switch(action){case "home","rest","sleep"->TownPlaces.homeOf("self");case "flowers"->"garden";case "walk","ponder"->"street";default->"open".equals(w.cafeStatus)?"cafe":TownPlaces.homeOf("self");};
+        String label=switch(action){case "sleep"->"躺下睡了，灯光轻轻暗下来";case "home"->"回屋待着，整理今天";case "rest"->"歇一小会儿";case "water"->"记得给自己倒杯水";case "walk"->"出门透透气";case "flowers"->"在花园看看新叶";default->"翻开书，安静读上几页";};
         if(!w.avatar.activity().equals(action)) diary(w,now,label+"。");
         Actor a=actor("self",w.name,"小街住民",place,action,label,now.plusSeconds(120));
         w.avatar=a; placeAvatar(w,now); return a;

@@ -8,11 +8,14 @@ import com.betterself.growth.town.companion.tools.InMemoryModelUsage;
 import com.betterself.growth.town.companion.tools.InMemoryWorldStore;
 import com.betterself.growth.town.companion.tools.MetricsExporter;
 import com.betterself.growth.town.companion.tools.MutableClock;
+import com.betterself.growth.town.companion.tools.NormDetector;
 import com.betterself.growth.town.companion.tools.TimelineCollector;
 import com.betterself.growth.town.companion.tools.TimelineExporter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
@@ -333,6 +336,18 @@ public final class AcceleratedTownRunner {
             Map<String,Object> input=new LinkedHashMap<>();input.put("perspective",request.perspective());input.put("partnerName",request.partnerName());input.put("transcript",ResidentMind.turnViews(request.transcript()));input.put("conversationMemories",request.conversationMemories());
             return capture("summary",input,()->delegate.summarizeConversationMetered(request));
         }
+        public PromiseOfferDraft promiseOffer(PromiseOfferRequest request){return promiseOfferMetered(request).value();}
+        public Result<PromiseOfferDraft> promiseOfferMetered(PromiseOfferRequest request){
+            Map<String,Object> input=new LinkedHashMap<>();input.put("residentId",request.perspective().residentId());
+            input.put("peopleHere",request.peopleHere());
+            return capture("promise_offer",input,()->delegate.promiseOfferMetered(request));
+        }
+        public PromiseThought promiseSettled(PromiseSettledRequest request){return promiseSettledMetered(request).value();}
+        public Result<PromiseThought> promiseSettledMetered(PromiseSettledRequest request){
+            Map<String,Object> input=new LinkedHashMap<>();input.put("residentId",request.perspective().residentId());
+            input.put("promise",request.promise());
+            return capture("promise",input,()->delegate.promiseSettledMetered(request));
+        }
         public ExplainDraft explain(ExplainRequest request){return explainMetered(request).value();}
         public Result<ExplainDraft> explainMetered(ExplainRequest request){
             // Forwarded for the same reason planDay's own comment above gives: a decorator that
@@ -513,6 +528,30 @@ public final class AcceleratedTownRunner {
         Map<String, Object> metrics = MetricsExporter.compute(sorted, collector, finalWorld, simulatedDays);
         MetricsExporter.writeJson(cfg.outDir().resolve("metrics.json"), metrics);
         MetricsExporter.writeMarkdown(cfg.outDir().resolve("metrics.md"), metrics);
+
+        // Norm candidates: regularities nobody wrote down, with the gate each one passed or failed.
+        // Written every run, including rule-only ones - a rule-only run of the same world is the negative
+        // control the whole "我们从没写过的" half of docs/06-society.md 七 rests on, and it is only a
+        // control if it was actually exported. See NormDetector.
+        NormDetector.Report norms = NormDetector.detect(cfg.worldId(), sorted, cfg.timezone());
+        TimelineExporter.writeJson(cfg.outDir().resolve("norms.json"), norms);
+        Files.writeString(cfg.outDir().resolve("norms.md"), NormDetector.markdown(norms), StandardCharsets.UTF_8);
+
+        // The social blind test (docs/06-society.md 七): one question, 「这个镇上有什么规矩？」, put to a
+        // reader who has never seen this repository. Same quiz/key split as the personality blind test -
+        // the reader gets what happened, never the residents' own conclusions.
+        List<Map<String,Object>> snapshotMemories = new ArrayList<>();
+        if (finalWorld != null) for (CompanionWorld.Memory m : finalWorld.memories) {
+            Map<String,Object> row = new LinkedHashMap<>();
+            row.put("ownerId", m.ownerId()); row.put("text", m.text());
+            row.put("supersedesKey", m.supersedesKey()); row.put("superseded", m.superseded());
+            snapshotMemories.add(row);
+        }
+        TimelineExporter.NormBlindTest normQuiz =
+            TimelineExporter.buildNormBlindTest(sorted, snapshotMemories, cfg.timezone());
+        Files.createDirectories(cfg.outDir().resolve("blind-test/norms/key"));
+        Files.writeString(cfg.outDir().resolve("blind-test/norms/quiz.md"), normQuiz.quiz(), StandardCharsets.UTF_8);
+        Files.writeString(cfg.outDir().resolve("blind-test/norms/key/what-they-said.md"), normQuiz.key(), StandardCharsets.UTF_8);
 
         // World snapshot: lets a later run resume exactly where this one left off (RunConfig.withResumeFrom).
         if (finalWorld != null) TimelineExporter.writeJson(cfg.outDir().resolve("world-snapshot.json"), finalWorld);

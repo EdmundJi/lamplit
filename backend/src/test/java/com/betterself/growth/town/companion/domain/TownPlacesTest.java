@@ -2,6 +2,8 @@ package com.betterself.growth.town.companion.domain;
 
 import org.junit.jupiter.api.Test;
 import java.time.Instant;
+import java.util.List;
+import java.util.Set;
 import static org.assertj.core.api.Assertions.*;
 
 class TownPlacesTest {
@@ -56,25 +58,53 @@ class TownPlacesTest {
         assertThat(TownPlaces.position(w, "garden-bench").occupantIds).containsExactly("owner");
     }
 
-    @Test void whenTheOwnedSpotIsUnavailableAVisitorSwitchesToAnUnownedOneInstead() {
-        var w = world();
-        // The original window seat belongs to the student; anyone else takes a public quiet desk.
-        assertThat(TownPlaces.claim(w, "artist", "cafe", "seat", now)).isEqualTo(TownPlaces.Outcome.SEATED);
-        assertThat(ResidentSimulation.state(w, "artist").positionId).isEqualTo("cafe-window-2");
+    @Test void theAllocatorHasNoViewAboutWhoseSeatItIs() {
+        // It used to: unowned spots sorted strictly first, so 小川's window seat was never offered to
+        // anybody else while a public one was free. Two readers who had never seen this repository then
+        // read a stretch of the town's life and both named possession as its clearest rule - and the
+        // rule-only control showed 131 seatings with somebody else's spot free and not one taken.
+        // Nobody was being considerate. They were never offered the choice, and a rule that manufactures
+        // the appearance of a norm gets read afterwards as a finding.
+        //
+        // Asserted as a property rather than a seat id: whose chair anybody ends up in is now supposed
+        // to be undetermined by us, so pinning one would put the rule straight back.
+        Set<String> landings = new java.util.LinkedHashSet<>();
+        for (String who : TownPlaces.RESIDENT_IDS) {
+            var w = world();
+            assertThat(TownPlaces.claim(w, who, "cafe", "seat", now)).isEqualTo(TownPlaces.Outcome.SEATED);
+            landings.add(ResidentSimulation.state(w, who).positionId);
+        }
+        assertThat(landings).as("每个人都还是坐得下").doesNotContainNull();
+        assertThat(landings).as("小川那个位子不再被系统性地绕开").contains("cafe-window-seat");
+    }
+
+    @Test void thesameResidentKeepsLandingOnTheSameSeatWhenNothingElseDistinguishesThem() {
+        // The tie-break is a hash of (world, resident, spot), not catalogue order - otherwise everybody
+        // would pile onto whichever spot happens to be listed first, which is just a quieter written rule.
+        String first = null;
+        for (int attempt = 0; attempt < 3; attempt++) {
+            var w = world();
+            TownPlaces.claim(w, "artist", "cafe", "seat", now);
+            String landed = ResidentSimulation.state(w, "artist").positionId;
+            if (first == null) first = landed; else assertThat(landed).isEqualTo(first);
+        }
     }
 
     @Test void anOwnedSeatCanBeBorrowedButAnOwnedPieceOfEquipmentCannot() {
         var w = world();
-        // Asking specifically for equipment still lands on the unowned, unfull table instead - the
-        // counter is simply never a candidate for anyone but its owner.
+        // Asking specifically for equipment still lands somewhere else entirely - the counter is simply
+        // never a candidate for anyone but its owner. Which of the other spots she ends up in is not our
+        // business any more (see theAllocatorHasNoViewAboutWhoseSeatItIs); that it is not the counter is.
         assertThat(TownPlaces.claim(w, "artist", "cafe", "equipment", now)).isEqualTo(TownPlaces.Outcome.SEATED);
-        assertThat(ResidentSimulation.state(w, "artist").positionId).isEqualTo("cafe-worktable");
+        assertThat(ResidentSimulation.state(w, "artist").positionId).isNotEqualTo("cafe-counter");
         // Now fill every *borrowable* cafe spot (compare
         // aFullSharedSpotMeansWaitingRatherThanBeingSeatedOnTopOfSomeone above, same technique): with
         // the table full and the window seat taken, a latecomer still cannot fall back onto the
         // owner's equipment the way they could fall back onto someone else's chair - they wait instead.
-        TownPlaces.position(w, "cafe-worktable").capacity = 1; // artist above already fills it
-        TownPlaces.claim(w, "student", "cafe", "seat", now); // fills their own window seat too
+        // Where the artist landed is no longer ours to know, so close the room by capacity rather than
+        // by assuming which spot she took.
+        TownPlaces.position(w, "cafe-worktable").capacity = 0;
+        TownPlaces.position(w, "cafe-window-seat").capacity = 0;
         for(int index=2;index<=6;index++)TownPlaces.position(w,"cafe-window-"+index).capacity=0;
         assertThat(TownPlaces.claim(w, "gardener", "cafe", null, now)).isEqualTo(TownPlaces.Outcome.WAITING);
         assertThat(TownPlaces.position(w, "cafe-counter").occupantIds).isEmpty();

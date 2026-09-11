@@ -249,6 +249,10 @@ public final class TimelineCollector {
                 extra.put("eventType", e.type());
                 extra.put("place", e.place());
                 if (e.projectId() != null) extra.put("projectId", e.projectId());
+                // Which spot, not just which room: cafe-window-seat belongs to 小川 and cafe-window-2
+                // through 6 belong to nobody, and they all read as "窗边的位子" in the sentence. Without
+                // the id, the one dimension that can see the town's most legible rule is blind.
+                if (e.positionId() != null) extra.put("positionId", e.positionId());
                 add(e.at(), "event", String.join(",", e.actorIds()), String.join("、", names), e.text(), extra);
             }
         }

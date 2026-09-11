@@ -53,6 +53,58 @@ public class CompanionWorld {
      * cafe on the day it was made. Self-healing on an old save via the null default. */
     public String cafeClosedForDayOn;
     public Map<String,Instant> encounterCooldowns = new LinkedHashMap<>();
+    /** A future spoken out loud (see ResidentSimulation.promise/settlePromises): the one thing every
+     * other mechanism here was missing, since committing together and delegating to the counter both
+     * happen in the moment and leave nothing later to compare reality against. The rules only ever
+     * record two facts about a promise - that it was made, and later whether the person who made it
+     * was where they said they would be - and deliberately go no further than that: whether missing
+     * it counts as letting someone down is for whoever remembers it to decide, in their own memory,
+     * and different people are allowed to decide that differently. That is why nothing on this class
+     * is named "broken"/"betrayed"/"trust" - those are readings of the fact, not the fact itself. */
+    public List<Promise> promises = new ArrayList<>();
+    /** See {@link #promises} above. */
+    public static class Promise {
+        public String id;
+        /** Who spoke the promise - the person {@link #place}/{@link #dueAt} will later be checked
+         * against, never anyone else. */
+        public String byId;
+        /** Who it was promised to. Not the only one who may remember it being made - see
+         * {@link #witnessIds} - but the one the promise was actually addressed to. */
+        public String toId;
+        /** What was promised, in the promiser's own single spoken line. Bounded short on purpose: a
+         * promise is one sentence someone said out loud, not a plan a model could pad with anything
+         * else it wanted remembered. */
+        public String what;
+        /** Where {@link #byId} is expected to be found at {@link #dueAt}. Must already be a place the
+         * town recognises (see TownPlaces) - "did they come" only means something against a real
+         * location, never an arbitrary string a model invented. */
+        public String place;
+        /** When the promise falls due. Always after {@link #madeAt} and never far enough out that
+         * nobody could reasonably be expected to still remember making it - see
+         * ResidentSimulation.promise for the actual bound. */
+        public Instant dueAt;
+        /** Who else was standing right there, face to face, when the promise was made. They are not
+         * party to it - only {@link #byId} owes anything to {@link #toId} - but they heard it happen
+         * and get to carry their own memory of that, independent of what either principal later
+         * remembers or claims. */
+        public List<String> witnessIds = new ArrayList<>();
+        public Instant madeAt;
+        /** Null until {@link #dueAt} has actually been checked against where {@link #byId} was - see
+         * ResidentSimulation.settlePromises. Non-null means this promise has already been resolved
+         * once and must never be resolved again, however many more simulation steps pass over it. */
+        public Instant settledAt;
+        /** Exactly one of two words - "came" or "did_not_come" - and nothing else. Both are plain
+         * facts about where {@link #byId} was at the moment of settlement; neither is a verdict, which
+         * is precisely why a value like "broken" or "kept" must never appear here (see this class's
+         * own doc comment above). */
+        public String outcome;
+        /** Who has already been asked "what do you make of this" about this settled promise (see
+         * ResidentSimulation.promisesAwaitingThought/markPromiseThoughtAsked) - the toId, byId, or a
+         * witness. Only ever records THAT someone was asked, never their answer: the answer is that
+         * person's own, and lands in their own memory through the ordinary reflection machinery, not
+         * here. Exists purely so the same person is not asked again every subsequent tick. */
+        public List<String> thoughtAskedIds = new ArrayList<>();
+    }
     /** "上次看到他时的样子" - for a pair where one of them has already decided NOT to approach the
      * other, what the scene looked like at the moment of that decision, keyed by the same sorted
      * "a:b" pair key. While the scene still looks like this, the rules do not put the question again:
@@ -187,6 +239,13 @@ public class CompanionWorld {
          * separate from every other cadence because the question is only worth asking when the town
          * has actually run dry - see ResidentSimulation.needsVenture. */
         public Instant lastVentureAt;
+        /** When this resident was last asked whether they want to make a promise to whoever they are
+         * standing with right now. A pure frequency gate, kept separate from every other cadence for
+         * the same reason {@link #lastVentureAt} is: a person who was just asked and said nothing
+         * does not become a different person a minute later, and pestering them about it defeats the
+         * point of asking at all. Never read by anything but the gate itself - see
+         * ResidentSimulation.needsPromiseAsk/markPromiseAsked - and never sent to any model. */
+        public Instant lastPromiseAskedAt;
         public Plan plan;
         public Map<String,Integer> relationships = new LinkedHashMap<>();
         /** Whether THIS resident has ever let their own private fondness for another show in
@@ -249,6 +308,18 @@ public class CompanionWorld {
          * same habit cannot fire again before its own cooldown has passed. Old saves deserialize with
          * the empty map default, the same self-healing shape as {@code relationships} above. */
         public Map<String,Instant> lastHabitAt = new LinkedHashMap<>();
+        /** The last thing this resident actually wrote down about each other resident they shared a
+         * room with - place, what that person was doing, which seat - keyed by that person's id. It
+         * exists so the same sighting is not recorded twice while nothing about it has changed, and
+         * it is <b>cleared for anyone who is no longer here</b>: seeing 小川 at the window seat again
+         * tomorrow is the whole point, and it can only be a second sighting if the first was let go
+         * of when he left. Never read by any model - only ResidentSimulation.perceive writes memories
+         * from it. Old saves deserialize with the empty map default, same shape as the maps above. */
+        public Map<String,String> lastSeenOfOthers = new LinkedHashMap<>();
+        /** When this resident last wrote anything down about each other resident, kept across their
+         * comings and goings so the floor between two sightings of the same person holds even for
+         * someone who keeps stepping in and out. */
+        public Map<String,Instant> lastWitnessOfOthersAt = new LinkedHashMap<>();
     }
     /** A resident's own coarse, interruptible day plan - see {@link ResidentState#dayPlan}. A segment
      * is deliberately just a short label and a status: nothing here forces it to happen, and nothing
@@ -323,7 +394,22 @@ public class CompanionWorld {
         public Turn(String speakerId,String text,Instant at){this(speakerId,text,at,"rules",null);}
         public Turn(String speakerId,String text,Instant at,String source){this(speakerId,text,at,source,null);}
     }
-    public record WorldEvent(String id,Instant at,String type,String place,List<String> actorIds,String text,String projectId) {}
+    /**
+     * @param positionId which named position (see {@code TownPlaces.Position.id}) the event's
+     * actor actually took or left, for the "took_spot"/"left_spot" events TownPlaces records when
+     * occupancy of a claimable spot genuinely changes hands - null for every other event type.
+     * Deliberately its own field rather than reusing {@code projectId}: a position id and a project
+     * id are two unrelated kinds of reference that can each be non-null independently of the other,
+     * and folding one into the other's field would leave every downstream reader guessing which
+     * kind of id a given event's last slot actually holds.
+     */
+    public record WorldEvent(String id,Instant at,String type,String place,List<String> actorIds,String text,String projectId,String positionId) {
+        /** Back-compat for call sites written before {@code positionId} existed (kept out of this
+         * batch's edit scope) - defaults it to null, exactly what every such event already means. */
+        public WorldEvent(String id,Instant at,String type,String place,List<String> actorIds,String text,String projectId){
+            this(id,at,type,place,actorIds,text,projectId,null);
+        }
+    }
     public record WorldObject(String id,String kind,String place,String label,String state,String projectId) {}
     public record Actor(String id, String name, String role, String place, String activity, String label,
                         double x, double y, Instant until) {}

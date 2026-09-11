@@ -245,6 +245,9 @@ public final class ResidentSimulation {
         // physical work but does not manufacture a reflection, social choice or new intention.
         expirePendingEncounters(w,at);
         expireDeclinedEncounters(w);
+        // Promises have their own clock too, the same way CafeService.tick above does: whether one
+        // is due does not depend on whose plan happens to be running right now.
+        settlePromises(w,at);
         comeRoundAgain(w,at);
         CafeService.finishClosingIfEmpty(w,at);
         syncLegacyObjects(w);
@@ -323,7 +326,16 @@ public final class ResidentSimulation {
             }
         } else if(Set.of("create","help").contains(p.action())) {
             Project project=project(w,p.targetId());
-            if(project!=null&&knows(w,r.id,project.id)&&actor(w,r.id).place().equals(project.place)&&!Set.of("ready","celebrating").contains(project.status)) {
+            if(project!=null&&knows(w,r.id,project.id)&&actor(w,r.id).place().equals(project.place)
+                &&!Set.of("ready","celebrating").contains(project.status)&&!canAdvance(project,r.id)) {
+                // He came back and put his hands on it again, and it did not move. Measured: 青叔 did
+                // this 163 times to one project in five simulated hours, once every two minutes, each
+                // one paying for a model call and writing an event, a memory and a witness pass that
+                // every metric built on contributions then swallowed whole (it inflated one pair's
+                // support to 197). The solo cap stopped the progress and stopped nothing else.
+                // The deed is the honest record: he tried, and it needs a second pair of hands.
+                recordDeed(w,r.id,"create",project.place,"又去动了动「"+project.title+"」，一个人推不动了。",at);
+            } else if(project!=null&&knows(w,r.id,project.id)&&actor(w,r.id).place().equals(project.place)&&!Set.of("ready","celebrating").contains(project.status)) {
                 boolean first=!project.contributors.contains(r.id);if(first)project.contributors.add(r.id);
                 // A conscientious resident follows through a little more thoroughly once committed;
                 // the least conscientious does a little less per attempt. Never lets personality wipe
@@ -440,7 +452,7 @@ public final class ResidentSimulation {
             int travel=travelSeconds(actor(w,r.id).place(),place);
             r.plan=new Plan("p-"+(++w.eventSequence),"travel",place,target,reason,at,at.plusSeconds(travel));
             r.revision++;r.thought=reason;
-            TownPlaces.release(w,r.id); // stepping away frees up the spot right away, not 12 seconds from now
+            TownPlaces.release(w,r.id,at); // stepping away frees up the spot right away, not 12 seconds from now
             replaceActor(w,r.id,"street","walk","准备去"+placeName(place)+"："+reason,r.plan.endsAt());
         } else schedule(w,r,action,place,target,reason,at,duration);
     }
@@ -457,7 +469,7 @@ public final class ResidentSimulation {
         // pathing already puts a standing actor. This is also why the garden's four named spots no
         // longer force four people into a pile - most of what happens there never claims one.
         String kind=preferredKind(action,place);
-        if(kind==null){TownPlaces.release(w,r.id);return;}
+        if(kind==null){TownPlaces.release(w,r.id,at);return;}
         TownPlaces.Outcome outcome=TownPlaces.claim(w,r.id,place,kind,at);
         if(outcome==TownPlaces.Outcome.WAITING) {
             // Only a bed, counter, study seat or home desk reaches here, so this is the genuinely-scarce case. Stand by a moment instead of
@@ -618,6 +630,55 @@ public final class ResidentSimulation {
     public static void markVentureAsked(CompanionWorld w,String residentId,Instant at){
         ResidentState r=state(w,residentId);if(r!=null)r.lastVentureAt=at;
     }
+    /** How long to wait before putting the promise question to the same person again. A full
+     * simulated day, not merely "a while": someone with nothing they wanted to commit to this
+     * afternoon may well feel differently once the day has turned over, but does not become a
+     * different person an hour later, so asking again inside the same day is only pestering - the
+     * same reasoning {@link #VENTURE_MIN_GAP_SECONDS} already applies to the other separately-asked
+     * question, just at the shorter gap that question's own measurements called for. */
+    private static final long PROMISE_ASK_MIN_GAP_SECONDS = 24*3600L;
+    /** Whether the town, taken as a whole, still has at least one unfinished thing that takes more
+     * than one pair of hands. Deliberately NOT scoped to what this resident personally knows about or
+     * could join, unlike {@link #sharedThingsLeft} - the promise question is about committing to
+     * whoever is standing there face to face, not about this resident's own backlog of shared work,
+     * so it only needs the fact that the town has not run out of reasons for people to arrange to
+     * meet at all. */
+    private static boolean townHasUnfinishedSharedWork(CompanionWorld w){
+        return w.projects.stream().anyMatch(p->takesMoreThanOnePerson(p)&&!Set.of("ready","celebrating").contains(p.status));
+    }
+    /** Whether it is worth asking this resident the one question the model answers so differently
+     * from everything else on the action menu: "想不想跟眼前这个人说定一个时候". Measured runs put it
+     * on that twenty-item menu and got nothing back - create offered 342 times and chosen 0, invite
+     * 285/0, celebrate 1658/0 - while the same model, asked this on its own, said yes 53% of the
+     * time; the model was never the problem, sharing a menu with nineteen other options was. This
+     * gate exists only to decide when asking could mean anything at all: somebody is actually there
+     * to say it to, this resident is not already carrying a promise nobody has checked on yet, the
+     * town still has something worth arranging around, and they were not just asked a moment ago.
+     * <p>It deliberately does not lean toward yes or no - it only ever answers "is this moment worth
+     * the question", the same restraint {@link #needsVenture} already exercises for its own question.
+     * Whether to actually make a promise, to whom, and about what stays entirely this resident's own
+     * answer once asked; nothing here decides any of that for them. */
+    public static boolean needsPromiseAsk(CompanionWorld w,String residentId,Instant now){
+        ResidentState r=state(w,residentId);
+        if(r==null||"self".equals(residentId))return false;
+        Actor self=actor(w,residentId);
+        // Same "in place, awake, not mid-errand" reading of activity witnessPeople and promise() both
+        // already use for whether someone actually counts as present.
+        if(Set.of("walk","travel","sleep","away").contains(self.activity()))return false;
+        boolean someoneElseHere=w.residentStates.stream().anyMatch(o->!o.id.equals(residentId)
+            &&actor(w,o.id).place().equals(self.place())
+            &&!Set.of("walk","travel","sleep","away").contains(actor(w,o.id).activity()));
+        if(!someoneElseHere)return false;
+        if(r.lastPromiseAskedAt!=null&&Duration.between(r.lastPromiseAskedAt,now).getSeconds()<PROMISE_ASK_MIN_GAP_SECONDS)return false;
+        if(w.promises.stream().anyMatch(p->residentId.equals(p.byId)&&p.settledAt==null))return false;
+        return townHasUnfinishedSharedWork(w);
+    }
+    /** Records that the question was put, whatever the answer was - same reasoning as
+     * {@link #markVentureAsked}: the point of the cadence is not to keep asking someone who just
+     * said no. */
+    public static void markPromiseAsked(CompanionWorld w,String residentId,Instant now){
+        ResidentState r=state(w,residentId);if(r!=null)r.lastPromiseAskedAt=now;
+    }
     public static boolean proposeDecision(CompanionWorld w,String id,long residentRevision,long intentRevision,String place,String title,String objectKind,String reason,List<String> evidence,Instant now) {
         ResidentState r=state(w,id);
         if(r==null||r.revision!=residentRevision||w.intentRevision!=intentRevision||!TownPlaces.contains(w,place)||TownPlaces.isHome(place))return false;
@@ -690,7 +751,7 @@ public final class ResidentSimulation {
             for(Conversation conversation:new ArrayList<>(w.conversations))if("active".equals(conversation.status)&&"cafe".equals(conversation.place))ConversationLifecycle.finish(w,conversation,now,"经营者暂停营业，这段谈话先停在这里");
             moveFocusedAvatarHome(w,now);
         }
-        r.occupation=occupation;r.goal=null;r.plan=null;r.suspendedAction=null;TownPlaces.release(w,residentId);r.careerIntent=lifeIntent(w,r,null,"试着过上"+occupation+"的日子","active",now);
+        r.occupation=occupation;r.goal=null;r.plan=null;r.suspendedAction=null;TownPlaces.release(w,residentId,now);r.careerIntent=lifeIntent(w,r,null,"试着过上"+occupation+"的日子","active",now);
         if(Objects.equals(CafeService.operatorId(w),residentId))replaceRole(w,residentId,"正在转向"+occupation);
         memory(w,residentId,residentId,"reflection",now,"work","我想把日子往“"+occupation+"”的方向试一试，先不把这当成已经成功。",List.of(),7);
         event(w,now,"occupation_change",actor(w,residentId).place(),List.of(residentId),actor(w,residentId).name()+"正在重新想自己想做什么。",null);return true;
@@ -731,10 +792,54 @@ public final class ResidentSimulation {
     }
     public static String cafeScheduleCue(CompanionWorld w,String residentId,Instant at){return CafeService.scheduleCue(w,residentId,at);}
     public static List<String> routineCues(CompanionWorld w,String residentId,Instant at){
-        ResidentState r=state(w,residentId);if(r==null||!r.sleepScheduleSeeded||"sleep".equals(actor(w,residentId).activity()))return List.of();
+        ResidentState r=state(w,residentId);if(r==null||"sleep".equals(actor(w,residentId).activity()))return List.of();
+        List<String> cues=new ArrayList<>();
         ZonedDateTime local=at.atZone(ZoneId.of(w.timezone));int minute=local.getHour()*60+local.getMinute();
-        boolean inWindow=r.usualSleepMinute<r.usualWakeMinute?minute>=r.usualSleepMinute&&minute<r.usualWakeMinute:minute>=r.usualSleepMinute||minute<r.usualWakeMinute;
-        return inWindow?List.of("到了我平常睡觉的时间"):List.of();
+        if(withinUsualSleepWindow(w,r.id,at))cues.add("到了我平常睡觉的时间");
+        cues.addAll(promiseCues(w,r,at));
+        return List.copyOf(cues);
+    }
+    /** Whether this is the stretch of the day this person usually sleeps through. One place knows how
+     * the window wraps past midnight, because two places knowing it is how the avatar ended up awake:
+     * {@link CompanionRules} had its own hardcoded 23-to-7 that produced the activity {@code "home"}
+     * rather than {@code "sleep"}, so the user's own figure sat in the living room every night, lost
+     * energy instead of recovering it, and counted as a person in the room to everyone else. */
+    public static boolean withinUsualSleepWindow(CompanionWorld w,String residentId,Instant at){
+        ResidentState r=state(w,residentId);
+        if(r==null||!r.sleepScheduleSeeded||at==null)return false;
+        ZonedDateTime local=at.atZone(ZoneId.of(w.timezone));
+        int minute=local.getHour()*60+local.getMinute();
+        return r.usualSleepMinute<r.usualWakeMinute
+            ?minute>=r.usualSleepMinute&&minute<r.usualWakeMinute
+            :minute>=r.usualSleepMinute||minute<r.usualWakeMinute;
+    }
+
+    /** How far ahead a promise this resident made starts being something they are aware of. */
+    static final int PROMISE_CUE_LEAD_SECONDS = 3 * 3600;
+    /**
+     * What you yourself said you would do, while there is still time to do it. Measured first, which is
+     * the only reason this exists: a half-day model run produced three promises and settled all three
+     * as {@code did_not_come} - not because anybody changed their mind, but because <b>nothing in the
+     * world ever told them their own promise was coming due</b>. Keeping it would have been an accident.
+     *
+     * <p>A rule that manufactures unreliability and then hands the town a norm about it is worse than no
+     * promise machinery at all, because every reader afterwards would take the pattern for a finding.
+     *
+     * <p>Stated as a fact and nothing else - what, where, roughly when. Not "you should go": routineCues
+     * is documented to the model as 习惯事实，不是命令, and going, forgetting, or deciding it is not worth
+     * it any more all have to stay available, or the promise is not a promise but a rail.
+     */
+    private static List<String> promiseCues(CompanionWorld w,ResidentState r,Instant at){
+        List<String> cues=new ArrayList<>();
+        for(CompanionWorld.Promise p:w.promises){
+            if(p.settledAt!=null||!p.byId.equals(r.id)||p.dueAt==null)continue;
+            long seconds=Duration.between(at,p.dueAt).getSeconds();
+            if(seconds>PROMISE_CUE_LEAD_SECONDS)continue;
+            String toName=state(w,p.toId)==null?p.toId:actor(w,p.toId).name();
+            String when=seconds<=0?"就是现在":seconds<15*60?"大约还有一刻钟":seconds<3600?"大约还有半小时多":"还有一两个小时";
+            cues.add("我答应过"+toName+"，会在"+placeName(p.place)+"做这件事："+p.what+"（"+when+"）");
+        }
+        return cues;
     }
     public static String cafeNotice(CompanionWorld w,String residentId){
         if(!"closing".equals(w.cafeStatus)||!"cafe".equals(actor(w,residentId).place()))return null;
@@ -1511,6 +1616,158 @@ public final class ResidentSimulation {
             if(stale||expired)w.pendingEncounters.remove(pending);
         }
     }
+
+    // ---- promises (§ a future spoken out loud) ----------------------------------------------------
+    /** Every promise-related memory is filed under this fixed topic, the same way {@link #WITNESS_TOPIC}
+     * marks every sighting - never a model-authored string, so nothing here can collide with or be
+     * mistaken for a topic a model chose. */
+    static final String PROMISE_TOPIC = "promise";
+    /** How long past {@link CompanionWorld.Promise#dueAt} settlement waits before deciding the
+     * promiser never showed - a small grace so a person who is one tick late (the clock advances in
+     * six-second steps but a real check only happens a few times a minute) is not judged against the
+     * exact instant. Not a grace period for the promise itself; {@link #promise} already refuses a
+     * {@code dueAt} that is not comfortably in the future. */
+    private static final long PROMISE_SETTLE_GRACE_SECONDS = 10*60;
+    /** Capacity bound, same shape as every other bounded list on {@link CompanionWorld} (see
+     * {@code memory}/{@code event} above): once full, the oldest promise that has already been
+     * settled is dropped first. An unsettled promise is never evicted early - it still has a fact to
+     * record - so this can only ever fall behind, never lose something nobody has looked at yet. */
+    private static final int MAX_PROMISES = 150;
+
+    /** The one way a Promise ever comes into being. Every check below either lands the whole promise
+     * or lands nothing at all - a promise with, say, an unchecked place or a fabricated witness list
+     * would be worse than no promise, because {@link #settlePromises} and every reader after it would
+     * treat it as real. See {@link CompanionWorld.Promise}'s own doc comment for why the rules never
+     * go further than the two bare facts (made, then came-or-not) once this returns true. */
+    public static boolean promise(CompanionWorld w,String byId,String toId,String what,String place,Instant dueAt,Instant now){
+        if(byId==null||toId==null||byId.equals(toId))return false;
+        ResidentState by=state(w,byId),to=state(w,toId);
+        if(by==null||to==null)return false;
+        if(what==null||what.isBlank()||what.length()>40)return false;
+        if(!TownPlaces.contains(w,place))return false;
+        if(now==null||dueAt==null||!dueAt.isAfter(now)||Duration.between(now,dueAt).toHours()>24)return false;
+        Actor byActor=actor(w,byId),toActor=actor(w,toId);
+        // A promise is spoken face to face, not sent across the town - both people have to actually
+        // be standing together, awake and not mid-errand, at the moment it is made.
+        if(!byActor.place().equals(toActor.place()))return false;
+        String here=byActor.place();
+        if(Set.of("walk","travel","sleep","away").contains(byActor.activity()))return false;
+        if(Set.of("walk","travel","sleep","away").contains(toActor.activity()))return false;
+
+        CompanionWorld.Promise p=new CompanionWorld.Promise();
+        p.id="pr-"+(++w.eventSequence);
+        p.byId=byId;p.toId=toId;p.what=what;p.place=place;p.dueAt=dueAt;p.madeAt=now;
+        // Same "who else is actually in the room" test witnessPeople uses: present, awake, not
+        // travelling. A witness only ever comes from this list - nobody is added after the fact.
+        for(ResidentState o:w.residentStates){
+            if(o.id.equals(byId)||o.id.equals(toId))continue;
+            Actor a=actor(w,o.id);
+            if(!a.place().equals(here))continue;
+            if(Set.of("walk","travel","sleep","away").contains(a.activity()))continue;
+            p.witnessIds.add(o.id);
+        }
+        w.promises.add(p);
+        while(w.promises.size()>MAX_PROMISES){
+            CompanionWorld.Promise oldest=w.promises.stream().filter(x->x.settledAt!=null)
+                .min(Comparator.comparing(x->x.madeAt)).orElse(null);
+            if(oldest==null)break;
+            w.promises.remove(oldest);
+        }
+
+        String byName=byActor.name(),toName=toActor.name(),placeStr=placeName(place);
+        String timeStr=promiseTimeStr(w,dueAt);
+        // Each person's memory is written from their own vantage point on the exact same fact - the
+        // point this whole feature exists to make possible (see this file's javadoc on Promise).
+        memory(w,byId,byId,"observed",now,PROMISE_TOPIC,
+            "我答应"+toName+"，"+timeStr+"会在"+placeStr+"做这件事："+what,List.of(),6);
+        memory(w,toId,byId,"heard",now,PROMISE_TOPIC,
+            byName+"答应我，"+timeStr+"会在"+placeStr+"做这件事："+what,List.of(),6);
+        for(String witnessId:p.witnessIds)
+            memory(w,witnessId,byId,"heard",now,PROMISE_TOPIC,
+                "我听见"+byName+"答应"+toName+"，"+timeStr+"会在"+placeStr+"做这件事："+what,List.of(),5);
+        return true;
+    }
+
+    /** Local hour:minute for a promise's due time, the same manual formatting every other place in
+     * this file already uses (see e.g. reconcileDayPlan) rather than pulling in a formatter. */
+    private static String promiseTimeStr(CompanionWorld w,Instant at){
+        ZonedDateTime local=at.atZone(ZoneId.of(w.timezone));
+        return String.format("%02d:%02d",local.getHour(),local.getMinute());
+    }
+
+    /** The other half of a promise: once {@link CompanionWorld.Promise#dueAt} has actually passed
+     * (plus {@link #PROMISE_SETTLE_GRACE_SECONDS}), compare where the promiser actually is against
+     * where they said they would be, write the one fact that comparison produces, and never touch
+     * this promise again. Deliberately a flat sweep over every open promise each step, the same shape
+     * as {@link #expirePendingEncounters} - promises settle on their own clock, independent of which
+     * resident's turn the outer loop happens to be on.
+     * <p>The sentences below name only what happened, never what it means: {@code outcome} is one of
+     * exactly "came"/"did_not_come" (see the field's own doc comment), and neither the toId's memory,
+     * the witnesses', nor the promiser's own carries a verdict about it. */
+    private static void settlePromises(CompanionWorld w,Instant at){
+        for(CompanionWorld.Promise p:w.promises){
+            if(p.settledAt!=null)continue;
+            if(at.isBefore(p.dueAt.plusSeconds(PROMISE_SETTLE_GRACE_SECONDS)))continue;
+            ResidentState by=state(w,p.byId);
+            boolean came=by!=null&&actor(w,p.byId).place().equals(p.place);
+            p.outcome=came?"came":"did_not_come";
+            p.settledAt=at;
+            String byName=by==null?p.byId:actor(w,p.byId).name();
+            String placeStr=placeName(p.place);
+            String factAboutHim=came
+                ?byName+"在约好的时间到了"+placeStr+"。"
+                :byName+"到了约好的时间，没有出现在"+placeStr+"。";
+            String factForSelf=came
+                ?"到了我答应"+ (state(w,p.toId)==null?p.toId:actor(w,p.toId).name()) +"的时间，我在"+placeStr+"。"
+                :"到了我答应"+ (state(w,p.toId)==null?p.toId:actor(w,p.toId).name()) +"的时间，我没有出现在"+placeStr+"。";
+            memory(w,p.toId,p.byId,"observed",at,PROMISE_TOPIC,factAboutHim,List.of(),6);
+            for(String witnessId:p.witnessIds)
+                memory(w,witnessId,p.byId,"observed",at,PROMISE_TOPIC,factAboutHim,List.of(),5);
+            if(by!=null)memory(w,p.byId,p.byId,"observed",at,PROMISE_TOPIC,factForSelf,List.of(),6);
+        }
+    }
+
+    /** Every promise this resident has any part in - having made it, having been promised to, or
+     * having stood there when it was made - newest first. */
+    public static List<CompanionWorld.Promise> promises(CompanionWorld w,String residentId){
+        return w.promises.stream()
+            .filter(p->p.byId.equals(residentId)||p.toId.equals(residentId)||p.witnessIds.contains(residentId))
+            .sorted(Comparator.comparing((CompanionWorld.Promise p)->p.madeAt).reversed())
+            .toList();
+    }
+    /** Every promise due by {@code at} that has not yet been settled - what {@link #settlePromises}
+     * is about to act on, exposed read-only for callers outside this file. */
+    public static List<CompanionWorld.Promise> promisesDue(CompanionWorld w,Instant at){
+        return w.promises.stream().filter(p->p.settledAt==null&&!at.isBefore(p.dueAt)).toList();
+    }
+    /** How long after settlement it still makes sense to ask someone "what do you make of this" - the
+     * layer above this one (application/adapters, not owned here) asks the question, but the window
+     * that bounds it is a domain fact: asking about something that settled half a day ago is not a
+     * real question anymore, it is an interview about old news, so past this window a promise simply
+     * stops being offered up for that conversation at all - not asked-and-skipped, just no longer
+     * current enough to raise. */
+    private static final long PROMISE_THOUGHT_WINDOW_SECONDS = 6*3600L;
+    /** Settled promises this resident (the promiser, the one promised to, or a witness) has not yet
+     * been asked their thought on, and which settled recently enough that asking is still asking
+     * about something current (see {@link #PROMISE_THOUGHT_WINDOW_SECONDS}). An unsettled promise
+     * never appears here - there is nothing yet to have a thought about. */
+    public static List<CompanionWorld.Promise> promisesAwaitingThought(CompanionWorld w,String residentId,Instant at){
+        return w.promises.stream()
+            .filter(p->p.settledAt!=null)
+            .filter(p->!at.isBefore(p.settledAt)&&Duration.between(p.settledAt,at).getSeconds()<=PROMISE_THOUGHT_WINDOW_SECONDS)
+            .filter(p->p.byId.equals(residentId)||p.toId.equals(residentId)||p.witnessIds.contains(residentId))
+            .filter(p->!p.thoughtAskedIds.contains(residentId))
+            .toList();
+    }
+    /** Records that this resident has been asked - never what they answered, which stays entirely
+     * theirs (see {@link CompanionWorld.Promise#thoughtAskedIds}'s own doc comment). Idempotent: a
+     * repeated call for the same person is a no-op rather than a duplicate entry. */
+    public static void markPromiseThoughtAsked(CompanionWorld w,String promiseId,String residentId,Instant at){
+        CompanionWorld.Promise p=w.promises.stream().filter(x->x.id.equals(promiseId)).findFirst().orElse(null);
+        if(p==null||residentId==null)return;
+        if(!p.thoughtAskedIds.contains(residentId))p.thoughtAskedIds.add(residentId);
+    }
+
     /** The fallback when nothing can answer "do you say anything?" - a mind that does not implement
      * reactions at all, or a rule-only world. Greeting is chosen over silence on purpose: a missing
      * capability should degrade to the town this project is trying to be, not to the empty one it
@@ -1626,8 +1883,8 @@ public final class ResidentSimulation {
         ResidentState r=state(w,residentId);if(r==null)return List.of();
         LinkedHashSet<String> actions=new LinkedHashSet<>(List.of("observe","rest","study","work","read","make","sleep","away","change_work"));
         if(r.plan!=null&&!("cafe".equals(actor(w,residentId).place())&&!"open".equals(w.cafeStatus)))actions.add("continue");
-        if(w.projects.stream().anyMatch(p->knows(w,residentId,p.id)&&!Set.of("ready","celebrating").contains(p.status)))actions.add("create");
-        if(w.projects.stream().anyMatch(p->knows(w,residentId,p.id)&&p.members.contains(residentId)&&!Set.of("ready","celebrating").contains(p.status)))actions.add("help");
+        if(w.projects.stream().anyMatch(p->knows(w,residentId,p.id)&&canAdvance(p,residentId)))actions.add("create");
+        if(w.projects.stream().anyMatch(p->knows(w,residentId,p.id)&&p.members.contains(residentId)&&canAdvance(p,residentId)))actions.add("help");
         // Showing people the finished thing. It had a completion branch, a label, and a personality
         // drift driver, and it was in no menu, in no DECISION_ACTIONS, and scheduled by nothing
         // anywhere - so a project that actually got finished could never be shown to anybody, and
@@ -1682,7 +1939,7 @@ public final class ResidentSimulation {
         if(w.avatar==null||!"cafe".equals(w.avatar.place()))return;
         Actor a=w.avatar;String home=TownPlaces.homeOf("self");
         w.avatar=new Actor(a.id(),a.name(),a.role(),home,a.activity(),a.label(),a.x(),a.y(),a.until());
-        TownPlaces.release(w,"self");TownPlaces.claim(w,"self",home,Set.of("focus","study").contains(a.activity())?"desk":null,at);
+        TownPlaces.release(w,"self",at);TownPlaces.claim(w,"self",home,Set.of("focus","study").contains(a.activity())?"desk":null,at);
     }
     private static int sleepDurationSeconds(CompanionWorld w,ResidentState r,Instant at){
         ZonedDateTime local=at.atZone(ZoneId.of(w.timezone));int wakeMinute=r.sleepScheduleSeeded?r.usualWakeMinute:7*60;
@@ -1719,7 +1976,7 @@ public final class ResidentSimulation {
         if("away".equals(action)){
             if(activeConversation(w,residentId)!=null)return false;
             if(r.plan!=null)suspend(r,now);
-            TownPlaces.release(w,residentId);
+            TownPlaces.release(w,residentId,now);
             int duration=Math.max(600,Math.min(2700,600+Math.floorMod(reason.hashCode()+(int)now.getEpochSecond(),2100)));
             r.plan=new Plan("p-"+(++w.eventSequence),"away","away",target,reason,now,now.plusSeconds(duration));
             r.revision++;r.thought=reason;
@@ -1850,6 +2107,100 @@ public final class ResidentSimulation {
             if(changed&&detailSensitive&&!p.contributors.contains(r.id))
                 memory(w,r.id,p.ownerId,"observed",now,p.id,"路过时注意到「"+p.title+"」的样子变了，好像又往前推进了一点。",List.of(),4);
         }
+        witnessPeople(w,r,a,now);
+    }
+
+    /** How long before the same person, in the same room, is worth writing down again. Started at 45
+     * minutes and measured: a rule-only day then wrote 301 sightings against a world that can hold 200
+     * memories at all, and by day three <b>86% of everything the town still remembered was "who was
+     * here"</b> - the other raw material fell 160 to 27 and the residents' own backstory was evicted
+     * outright. Noticing people is supposed to add material for a belief, not bury the material a
+     * belief would be about. */
+    static final int WITNESS_MIN_GAP_SECONDS = 120 * 60;
+    /** At most this share of the world's memory may be sightings. The gap above bounds the rate; this
+     * bounds the standing footprint, which is the number that actually hurt - and it is a floor for
+     * everything else rather than a ceiling for this, which is the honest way round: whatever else a
+     * resident has lived through has somewhere to stay. */
+    static final double WITNESS_MEMORY_SHARE = 0.4;
+    /** Topic every sighting of another person is filed under - see {@link #witnessPeople}. Named
+     * because {@link #needsReflection} has to be able to tell this material apart from events. */
+    static final String WITNESS_TOPIC = "who-was-here";
+
+    /**
+     * The other half of perceiving: <b>people</b>. Until this existed a resident looked around every
+     * tick and only ever saw <em>things</em> - the loop above notices a project's shape changing and
+     * nothing else. The only fact anyone ever recorded about another person was "X 又在忙「某个项目」"
+     * from {@link #witnessContribution}, 39 of them across three simulated days.
+     *
+     * <p>Which made a whole layer unreachable. The reflection prompt asks a resident to write down a
+     * standing view only if they can see something <em>recurring</em> in their own memories, and it
+     * offers "某个人总是坐在某个位置" as its example - while nothing in the world ever wrote down where
+     * anybody sat. Three days of a model run produced three beliefs and all three were about the
+     * resident themselves, because their own habits were the only repetition their memories contained.
+     * A norm is a fact about other people; you cannot form one from a diary.
+     *
+     * <p>What is written is a <b>fact and never a reading of it</b>: who, where, doing what, in which
+     * seat. Not why - the other person's {@code label} is their own reason for being there and stays
+     * theirs. Whether "小川 总是坐窗边" means anything is the resident's own conclusion to reach or not,
+     * later, in their own words.
+     *
+     * <p>The activity is mapped through a fixed phrase table rather than interpolated, so nothing a
+     * user typed can travel into another resident's memory and from there into a model context.
+     */
+    private static void witnessPeople(CompanionWorld w,ResidentState r,Actor self,Instant now){
+        Set<String> here=new HashSet<>();
+        for(ResidentState o:w.residentStates){
+            if(o.id.equals(r.id))continue;
+            Actor a=actor(w,o.id);
+            if(!a.place().equals(self.place()))continue;
+            if(Set.of("walk","travel","sleep","away").contains(a.activity()))continue;
+            here.add(o.id);
+        }
+        // Whoever is not in the room any more is forgotten, so that turning up again tomorrow counts
+        // as a fresh sighting. Done before the sensitivity gate: someone who notices nothing still
+        // stops keeping track of who was here.
+        r.lastSeenOfOthers.keySet().retainAll(here);
+        if(Personality.of(r).sensitivity()<35)return;
+        boolean detail=Personality.of(r).sensitivity()>=65;
+        for(String otherId:here){
+            Instant last=r.lastWitnessOfOthersAt.get(otherId);
+            if(last!=null&&Duration.between(last,now).getSeconds()<WITNESS_MIN_GAP_SECONDS)continue;
+            Actor a=actor(w,otherId);
+            ResidentState o=state(w,otherId);
+            String seat=o==null?null:o.positionId;
+            String signature=a.place()+"|"+a.activity()+"|"+seat;
+            if(signature.equals(r.lastSeenOfOthers.get(otherId)))continue;
+            r.lastSeenOfOthers.put(otherId,signature);
+            r.lastWitnessOfOthersAt.put(otherId,now);
+            String where=detail&&seat!=null?seatPhrase(w,seat):placeName(a.place());
+            memory(w,r.id,otherId,"observed",now,WITNESS_TOPIC,
+                detail?"我看见"+a.name()+"在"+where+doingPhrase(a.activity())+"。"
+                      :a.name()+"也在"+where+"，具体在做什么我没留意。",
+                List.of(),detail?3:2);
+        }
+    }
+    /** Fixed table on purpose - see witnessPeople on why an activity string is never interpolated. */
+    private static String doingPhrase(String activity){
+        return switch(activity){
+            case "read"->"看书";case "study"->"复习";case "make"->"做手上的活";
+            case "work"->"忙自己的活";case "rest"->"歇着";case "tend"->"照看吧台";
+            case "observe"->"四下看看";case "wait"->"等着什么";case "talk"->"和人说话";
+            case "focus"->"专心做一件事";case "ponder"->"发呆";case "flowers"->"侍弄花草";
+            case "idle"->"待着";case "study_home","read_home"->"看东西";
+            default->"忙着";
+        };
+    }
+    /** Package-visible (not private) so TownPlaces can reuse the exact same phrasing when it records
+     * a "took_spot"/"left_spot" event - a resident's seat is described identically whether the
+     * sentence ends up in another resident's own memory or in the shared event stream. */
+    static String seatPhrase(CompanionWorld w,String positionId){
+        Position p=TownPlaces.position(w,positionId);
+        if(p==null)return "某处";
+        String kind=switch(p.kind){
+            case "seat"->"窗边的位子";case "table"->"那张长桌";case "bench"->"长椅";
+            case "plot"->"苗圃";case "desk"->"书桌";case "bed"->"床";case "equipment"->"吧台";default->"那儿";
+        };
+        return placeName(p.place)+kind;
     }
     private static String knownStatus(ResidentState r,String id){ProjectKnowledge p=r.knownProjects.get(id);return p==null?"idea":p.status();}
     /** How far a project can get on one person's repeated work before it simply stops. A measured day
@@ -1858,6 +2209,17 @@ public final class ResidentSimulation {
      * only place it mattered - see ResidentDirector's projectStage, which now spends it on a sentence
      * rather than mapping 75 to a cheerful "进行中". */
     public static final int SOLO_PROGRESS_CAP = 75;
+    /** Whether this resident putting their hands on this thing right now would actually move it. Below
+     * the solo cap anyone can; at the cap only someone who brings the number of pairs of hands up to
+     * what the thing needs can. Deliberately per-resident and not "is this project stalled": the whole
+     * point of a stalled project is that it is still open to <em>somebody else</em>, and a check that
+     * closed it to everyone would remove the one thing that unblocks it. */
+    static boolean canAdvance(Project p,String residentId){
+        if(p==null||Set.of("ready","celebrating").contains(p.status))return false;
+        if(p.progress<SOLO_PROGRESS_CAP)return true;
+        int handsAfter=p.contributors.contains(residentId)?p.contributors.size():p.contributors.size()+1;
+        return handsAfter>=p.needed;
+    }
     /** Whether this project is, by its own nature, something more than one person has to be part of.
      * A property of the project as it was described when anyone first heard of it ("收集四个人眼里的
      * 小街"), not live state - so telling a resident this reveals nothing they were not already told. */
@@ -1950,8 +2312,24 @@ public final class ResidentSimulation {
             // belief is protected until nothing lower-tier is left to remove. Within a tier, the
             // oldest goes first - this is capacity trimming, not a judgement about which memory is
             // more "true".
+            // Sightings of other people are trimmed first once they are over their share (see
+            // WITNESS_MEMORY_SHARE). Without this they win the ordinary contest below on volume alone -
+            // they are tier 0 and there are hundreds of them - and a town remembers who stood where
+            // while forgetting everything anybody did or said.
+            long witnesses=w.memories.stream().filter(m->WITNESS_TOPIC.equals(m.topicId())).count();
+            boolean witnessesOverShare=witnesses>200*WITNESS_MEMORY_SHARE;
+            // Ranked cheapest to dearest. Sightings over their share go first; then ordinary raw
+            // experience; then the resident's own backstory alongside their one-off reflections - the
+            // eleven seeded memories are who each of them is before this town started, they cost almost
+            // nothing to keep, and the first thing the sighting flood did was evict all of them; a
+            // standing belief is still last, as it always was.
+            java.util.function.ToIntFunction<Memory> rank=m->
+                witnessesOverShare&&WITNESS_TOPIC.equals(m.topicId())?0
+                :"seed".equals(m.sourceType())?2
+                :CompanionRecall.tier(m.sourceType())+1;
+            Comparator<Memory> order=Comparator.comparingInt(rank).thenComparing(Memory::at);
             Memory removable=w.memories.stream().filter(m->!m.id().equals(id)&&!referenced.contains(m.id()))
-                .min(Comparator.<Memory>comparingInt(m->CompanionRecall.tier(m.sourceType())).thenComparing(Memory::at)).orElse(null);
+                .min(order).orElse(null);
             if(removable==null)break;
             w.memories.remove(removable);
         }return id;}
@@ -2007,6 +2385,13 @@ public final class ResidentSimulation {
             // Only raw experience counts as "something happened since I last thought this through" -
             // an earlier reflection or belief is the product of thinking, not new material for it.
             .filter(m->CompanionRecall.tier(m.sourceType())==0)
+            // Seeing who is in the room is the texture of an ordinary day, not an event: 青叔 sitting
+            // where 青叔 always sits is precisely the opposite of something having happened. These stay
+            // fully retrievable, because noticing that he ALWAYS sits there is the whole reason they
+            // are written down - they just do not, by themselves, send anyone off to think. Everything
+            // that genuinely happens (a contribution, a conversation, a request) is its own memory with
+            // its own weight and still triggers this normally.
+            .filter(m->!WITNESS_TOPIC.equals(m.topicId()))
             .mapToInt(Memory::importance).sum();
         boolean enoughHappened=freshImportance>=REFLECTION_IMPORTANCE_THRESHOLD;
         // The day-boundary trigger fires even on a quiet day that never crossed the importance bar -
@@ -2061,7 +2446,12 @@ public final class ResidentSimulation {
         return true;
     }
     static List<String> ownEvidence(CompanionWorld w,String id,String topic){return w.memories.stream().filter(m->m.ownerId().equals(id)&&Objects.equals(m.topicId(),topic)).sorted(Comparator.comparing(Memory::at).reversed()).limit(2).map(Memory::id).toList();}
-    static void event(CompanionWorld w,Instant at,String type,String place,List<String> ids,String text,String project){w.events.add(new WorldEvent("e-"+(++w.eventSequence),at,type,place,ids,text,project));while(w.events.size()>80)w.events.removeFirst();if(w.avatar!=null&&w.avatar.place().equals(place)&&Set.of("ready","agreement","change_of_mind","celebration").contains(type)){w.diary.add(new Entry("d2-"+w.eventSequence,at,"路过时看见："+text));while(w.diary.size()>80)w.diary.removeFirst();}}
+    static void event(CompanionWorld w,Instant at,String type,String place,List<String> ids,String text,String project){event(w,at,type,place,ids,text,project,null);}
+    /** Same as the six-argument {@link #event} above, but also carries which named position (see
+     * {@link CompanionWorld.WorldEvent#positionId}) the event is about - used only by TownPlaces for
+     * "took_spot"/"left_spot", so occupancy of an owned or shared spot has an actual trace in the
+     * event stream instead of silently changing {@code Position.occupantIds} and nothing else. */
+    static void event(CompanionWorld w,Instant at,String type,String place,List<String> ids,String text,String project,String positionId){w.events.add(new WorldEvent("e-"+(++w.eventSequence),at,type,place,ids,text,project,positionId));while(w.events.size()>80)w.events.removeFirst();if(w.avatar!=null&&w.avatar.place().equals(place)&&Set.of("ready","agreement","change_of_mind","celebration").contains(type)){w.diary.add(new Entry("d2-"+w.eventSequence,at,"路过时看见："+text));while(w.diary.size()>80)w.diary.removeFirst();}}
     private static double clamp(double v){return Math.max(0,Math.min(100,v));}
     private static String placeName(String place){if(TownPlaces.isHome(place))return"住处";return switch(place){case "cafe"->"咖啡馆";case "garden"->"花园";default->"小街";};}
 
@@ -2071,9 +2461,18 @@ public final class ResidentSimulation {
      * every advance, including for saves from before the avatar had a state at all. */
     public static ResidentState ensureAvatarState(CompanionWorld w) {
         ResidentState existing=state(w,"self");
-        if(existing!=null)return existing;
+        // ResidentSeed skips "self" for everything it seeds - occupation, life direction, the authored
+        // narrative - and rightly so, none of that is ours to write for the user. The sleep schedule got
+        // skipped along with them, and nothing else ever gave the avatar one: it had no hours, so
+        // nothing could tell when its night was. Old saves heal here rather than staying awake forever.
+        if(existing!=null){seedAvatarSleepSchedule(existing);return existing;}
         ResidentState r=new ResidentState();r.id="self";r.energy=70;r.social=60;r.curiosity=60;r.mood="如常";r.revision=1;
+        seedAvatarSleepSchedule(r);
         w.residentStates.add(r);return r;
+    }
+    private static void seedAvatarSleepSchedule(ResidentState r){
+        if(r.sleepScheduleSeeded)return;
+        r.usualSleepMinute=23*60;r.usualWakeMinute=7*60;r.sleepScheduleSeeded=true;
     }
     /** Repairs an older save: gives it the location/position catalog and an avatar state if it is
      * missing either, and moves anyone still parked at the old single shared "home" into their own

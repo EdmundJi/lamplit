@@ -236,6 +236,49 @@ public class QwenResidentMind implements ResidentMind {
     }
     private record ReflectInput(Context perspective,java.util.List<MemoryView> source,java.util.List<HabitTraitView> habits) {}
 
+    @Override public PromiseOfferDraft promiseOffer(PromiseOfferRequest request){return promiseOfferMetered(request).value();}
+    @Override public Result<PromiseOfferDraft> promiseOfferMetered(PromiseOfferRequest request){
+        return generateMetered("COMPANION_RESIDENT_PROMISE_OFFER","""
+            你是perspective.self中的这一个居民。peopleHere是此刻和你在同一个地方、醒着的人。
+            问题只有一句：**你想不想跟其中某个人，把一件事说定一个时候？**
+            "说定一个时候"就是当面对他说：我什么时候会在哪儿做什么。说出口之后这件事就搁在那儿了——到了那个点，你在或者不在，他会知道，当时听见的人也会知道。
+            想说定就说，不想就不说，两种都很正常，而且"没有"是最常见的答案。不必为了回答这个问题凑一件事出来。
+            但也别因为"说了就得做到、万一做不到呢"而不说。做不到会怎么样这件事，这里没有规定，也没有人会替你或替他判定什么。
+            thingsNeedingHands是镇上那些一个人做不完、还没做完的事，给你看是让你自己看，不是让你从里面挑一件来许诺。你想说定的完全可以是别的：一起吃点什么、把某样东西带给谁、明早陪谁去一趟。
+            要说定的话：toId填peopleHere里那个人的id；place只能是cafe、street或garden（自己家里不算）；inHours是从现在算起大约几小时之后，可以是小数，最多24。
+            what写**你到时候会去做的那件事**，不超过40个汉字。它会被原样记进在场每个人的记忆里，所以：
+            —— 写成做的事（"把新苗种到花园去"），不要写成你对他说的话（不要写"青叔，咱们一起把它种了吧？"）。
+            —— **里面不要出现任何时间**（不写"明早9点"、"待会儿"、"晚饭后"）。到点算哪一刻，完全由inHours决定；what里再写一个时间，两个会对不上，到时候你人在不在那儿就成了一笔糊涂账。
+            不想说定就把what留空（null），别的字段也留空。
+            evidenceIds填0到3条真正让你想到它的自己的记忆，没有就留空数组。
+            只返回JSON字段toId,what,place,inHours,evidenceIds，不输出推理过程。
+            """,new PromiseOfferInput(request.perspective(),request.peopleHere(),request.thingsNeedingHands()),"""
+            {"type":"object","required":["toId","what","place","inHours","evidenceIds"],"properties":{"toId":{"type":["string","null"]},"what":{"type":["string","null"]},"place":{"type":["string","null"],"enum":["cafe","street","garden",null]},"inHours":{"type":["number","null"]},"evidenceIds":{"type":"array","items":{"type":"string"}}}}
+            """,PromiseOfferDraft.class,decisionThinking);
+    }
+    private record PromiseOfferInput(Context perspective,java.util.List<ActorView> peopleHere,java.util.List<KnownProject> thingsNeedingHands) {}
+
+    @Override public PromiseThought promiseSettled(PromiseSettledRequest request){return promiseSettledMetered(request).value();}
+    @Override public Result<PromiseThought> promiseSettledMetered(PromiseSettledRequest request){
+        return generateMetered("COMPANION_RESIDENT_PROMISE_SETTLED","""
+            你是perspective.self中的这一个居民。promise是一件当时当面说定的事：byName说了他会在什么时候、在哪儿、做什么。
+            那个时候到了。outcome记的只有一个事实——"came"是他人在那儿，"did_not_come"是他人不在那儿。没有别的意思，也没有人替你判断这算什么。
+            role是你当时的位置："promised_to"是他答应的是你，"witnessed"是你当时在旁边听见了，"made_it"是这话是你自己说的。
+            问题只有一句：**你怎么想？**
+            怎么想都行，而且各种想法一样正常：可以觉得没什么、本来也没多当真；可以替他想到一个理由；可以不痛快；可以觉得他做到了是理所当然的，也可以记住他真的来了；可以想到自己下次还找不找他。
+            也完全可以什么想法都没有——那就把text留空，那是真话。不要因为被问到了就凑一句出来，也不要因为"不该计较"或者"该大度一点"就把想说的话咽回去。
+            aboutThem是你自己关于这个人的一些记忆，可能有关也可能无关，不必每条都用上。
+            supersedesKey只在一种情况下填：你觉得这件事让你对**这个人**（或者对这条街上的事该怎么办）有了一个会长期带着走的看法。那就自己起一个简短代号（比如"周野-说定的事"），以后同一个key会替换你之前对同一件事的看法。
+            只是这一次的一点感想，就把supersedesKey留空。一次感想不比一个长期看法低一等，只是两回事。
+            text一两句话，不超过60个汉字，用你自己说话的方式写，不要写成对事情的总结或评语。
+            evidenceIds从aboutThem里选0到3条真正让你这么想的自己的记忆；没有就留空数组。
+            只返回JSON字段text,supersedesKey,evidenceIds，不输出推理过程。
+            """,new PromiseSettledInput(request.perspective(),request.promise(),request.aboutThem()),"""
+            {"type":"object","required":["text","supersedesKey","evidenceIds"],"properties":{"text":{"type":["string","null"]},"supersedesKey":{"type":["string","null"]},"evidenceIds":{"type":"array","items":{"type":"string"}}}}
+            """,PromiseThought.class,decisionThinking);
+    }
+    private record PromiseSettledInput(Context perspective,PromiseView promise,java.util.List<MemoryView> aboutThem) {}
+
     @Override public VentureDraft venture(VentureRequest request){return ventureMetered(request).value();}
     @Override public Result<VentureDraft> ventureMetered(VentureRequest request){
         return generateMetered("COMPANION_RESIDENT_VENTURE","""
