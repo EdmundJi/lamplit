@@ -139,7 +139,13 @@ class EncounterReactionTest {
         CompanionRules.advance(w, now.plusSeconds(60));
         assertThat(w.pendingEncounters).isEmpty();
         // He closes his book and stands up. That is the whole trigger - well inside the half hour
-        // the pair used to be locked out for.
+        // the pair used to be locked out for. A real plan, not just the actor's label, is what a
+        // genuine change of activity looks like in production (see schedule()) - without one,
+        // awaitDecision would treat this as "nobody decided anything" and quietly put him straight
+        // back to idle before the encounter pass ever gets a look, which is a fact about a resident
+        // with nothing to do, not about the scene actually changing.
+        ResidentState otherState = ResidentSimulation.state(w, other);
+        otherState.plan = new Plan("p-handwork", "handwork", "garden", null, "收拾工具", now.plusSeconds(60), now.plusSeconds(900));
         ResidentSimulation.replaceActor(w, other, "garden", "handwork", "收拾工具", now.plusSeconds(900));
         CompanionRules.advance(w, now.plusSeconds(72));
         assertThat(w.pendingEncounters).as("the scene changed, so the question is worth asking again").isNotEmpty();

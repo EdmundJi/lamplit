@@ -295,7 +295,21 @@ class AcceleratedTownRunnerAutonomyIT {
         // The rules only put the two of them face to face; saying something is the resident's own
         // answer now (see ResidentSimulation.applyReaction). This test is about what happens once a
         // conversation is under way, so it gives that answer directly instead of relying on a model.
-        var noticed = world.pendingEncounters.stream().findFirst().orElseThrow();
+        // The rules put these two face to face; which of them walks over is theirs, not ours - the
+        // candidate order is a hash now, not w.residentStates' index (see ResidentSimulation's
+        // encounterPick). This scenario needs the owner to be the one who walks over, because only
+        // the owner can offer to hand the cafe on; so say that out loud instead of inheriting it from
+        // a list order that used to make it true by accident.
+        assertThat(world.pendingEncounters).singleElement().satisfies(introduced ->
+            assertThat(List.of(introduced.residentId, introduced.otherId)).containsExactlyInAnyOrder("owner", "artist"));
+        world.pendingEncounters.clear();
+        var noticed = new CompanionWorld.PendingEncounter();
+        noticed.id = "pe-owner-walks-over";
+        noticed.residentId = "owner"; noticed.otherId = "artist";
+        noticed.place = "cafe"; noticed.at = NOW.plusSeconds(6);
+        noticed.residentRevision = ResidentSimulation.state(world, "owner").revision;
+        world.pendingEncounters.add(noticed);
+
         assertThat(ResidentSimulation.applyReaction(world, noticed.id, ResidentSimulation.state(world, noticed.residentId).revision,
             "greet", "在店里碰上了，说两句", List.of(), NOW.plusSeconds(6))).isTrue();
         var conversation = world.conversations.stream().filter(c -> c.status.equals("active") && c.topicId.equals("life")).findFirst().orElseThrow();

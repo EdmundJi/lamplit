@@ -237,10 +237,16 @@ public final class ResidentSimulation {
             if(activeConversation(w,r.id)!=null)continue;
             if(r.plan!=null&&!at.isBefore(r.plan.endsAt())){Plan completed=r.plan;complete(w,r,at);if(r.plan==completed){r.plan=null;if(!Set.of("sleep","open_cafe").contains(completed.action()))resumeSuspended(w,r,at);}}
             if(r.plan==null){if(!maybePlaceHabit(w,r,at))awaitDecision(w,r,at);}
-            maybeEncounter(w,r,at);
             maybeSolitudeDrift(w,r,at);
             maybeHabit(w,r,at);
         }
+        // Encounter detection runs as its own pass, in its own deterministic-but-rotating order,
+        // rather than inline in the loop above in w.residentStates' fixed order. Inline, the list
+        // position IS who wins the race to lock in this tick's one pendingEncounter whenever two
+        // residents in the same room are simultaneously eligible - see maybeEncounter's own note and
+        // the report for the measured effect (one resident initiated 91% of her appearances, another
+        // 3%, purely by list position).
+        for(ResidentState r:encounterTurnOrder(w,at)) maybeEncounter(w,r,at);
         // The model is each resident's decision-maker. Rule-only fallback completes already approved
         // physical work but does not manufacture a reflection, social choice or new intention.
         expirePendingEncounters(w,at);
@@ -489,6 +495,30 @@ public final class ResidentSimulation {
         return switch(action) {
             case "sleep"->"bed";
             case "tend"->"equipment";
+            default->null;
+        };
+    }
+    /** The avatar's own counterpart to {@link #preferredKind} above. It cannot simply call that
+     * method: the avatar's action vocabulary is the user's own (see CompanionRules.KINDS and
+     * CompanionRules' own resolvedKind set - "focus", "flowers", "walk", "ponder", "home", "water"...),
+     * not a resident's ("study", "make", "tend"...), so a resident action name and an avatar action
+     * name that happen to collide (there is exactly one: "sleep") would otherwise have to be threaded
+     * through the same switch by coincidence rather than by design.
+     * <p>Used by every place the avatar's own position gets (re)claimed - CompanionRules.placeAvatar,
+     * and the two below ({@link #moveFocusedAvatarHome}, {@link #reconcileLegacyPlaces}) - which used
+     * to each keep their own narrower, silently-drifted copy of this same table (the legacy-repair
+     * branch, for one, only ever handed out "desk", never "seat"/"bed"/"plot"/"bench"). A null result
+     * means the current activity never claims a named spot at all - "能站的地方都能去" (docs/04) - and
+     * every caller must treat that as "release, do not claim any spot", not as "claim whichever spot
+     * is free": {@code TownPlaces.claim} is willing to hand out ANY position at the place when asked
+     * with a null kind, which is how "喝口水" once traded the student's window seat for the shared
+     * long table every time the old clock-driven autopilot happened to land there. */
+    static String avatarPreferredKind(String activity,String place) {
+        return switch(activity) {
+            case "focus","study"->TownPlaces.isHome(place)?"desk":"seat";
+            case "sleep","home","rest"->"bed";
+            case "flowers"->"plot";
+            case "walk","ponder"->"bench";
             default->null;
         };
     }
@@ -893,12 +923,36 @@ public final class ResidentSimulation {
      * be seen (see {@link #SECONDS_PER_STREET_UNIT}) and a {@link #greetable} check that does not
      * refuse to notice someone because they are moving. An interrupted journey is already a case
      * {@link #resumeSuspended} handles: both walkers pick their trip back up when the talking ends. */
+    /** Deterministic replacement for both "who gets first crack at locking in this tick's one
+     * pendingEncounter" and "which of several people in the same room does a resident notice first" -
+     * the same discipline {@code seatPick} already uses for a tied seat choice (never
+     * {@code Math.random}, see docs/04). {@code other} is empty for the outer, per-tick turn order
+     * (there is no candidate yet); non-empty for the inner candidate order inside one resident's own
+     * {@link #maybeEncounter} call. The time bucket keeps a replay reproducible while still rotating
+     * who goes first over the course of a day, rather than freezing one list position as the permanent
+     * winner - see the report for the measured bias this replaces (91% vs 3% initiation rates that
+     * tracked nothing but position in {@code w.residentStates}). */
+    private static int encounterPick(String worldId,String residentId,String other,Instant at){
+        long bucket=at.getEpochSecond()/60;
+        return Math.floorMod((worldId+"|"+residentId+"|"+other+"|"+bucket).hashCode(),1000);
+    }
+    /** The order {@link #step} calls {@link #maybeEncounter} in for a given tick - see that loop's own
+     * note on why iterating {@code w.residentStates} directly there was the other half of the same
+     * list-order bias {@code encounterPick} above fixes for the in-room candidate choice. */
+    private static List<ResidentState> encounterTurnOrder(CompanionWorld w,Instant at){
+        return w.residentStates.stream()
+            .sorted(Comparator.comparingInt(r->encounterPick(w.id,r.id,"",at)))
+            .toList();
+    }
     private static void maybeEncounter(CompanionWorld w,ResidentState resident,Instant at){
         if(!w.modelConversationsEnabled)return;
         String place=actor(w,resident.id).place();
         if(!PUBLIC_PLACES.contains(place)||!greetable(w,resident.id,at))return;
-        for(ResidentState other:w.residentStates){
-            if(other.id.equals(resident.id)||!actor(w,other.id).place().equals(place))continue;
+        List<ResidentState> candidates=w.residentStates.stream()
+            .filter(other->!other.id.equals(resident.id)&&actor(w,other.id).place().equals(place))
+            .sorted(Comparator.comparingInt(other->encounterPick(w.id,resident.id,other.id,at)))
+            .toList();
+        for(ResidentState other:candidates){
             if(!greetable(w,other.id,at))continue;
             String key=pairKey(resident.id,other.id);
             Instant last=w.encounterCooldowns.get(key);
@@ -1939,9 +1993,14 @@ public final class ResidentSimulation {
         if(w.avatar==null||!"cafe".equals(w.avatar.place()))return;
         Actor a=w.avatar;String home=TownPlaces.homeOf("self");
         w.avatar=new Actor(a.id(),a.name(),a.role(),home,a.activity(),a.label(),a.x(),a.y(),a.until());
-        TownPlaces.release(w,"self",at);TownPlaces.claim(w,"self",home,Set.of("focus","study").contains(a.activity())?"desk":null,at);
+        TownPlaces.release(w,"self",at);
+        String kind=avatarPreferredKind(a.activity(),home);
+        if(kind!=null)TownPlaces.claim(w,"self",home,kind,at);
     }
-    private static int sleepDurationSeconds(CompanionWorld w,ResidentState r,Instant at){
+    /** Package-visible (not private) so {@link com.betterself.growth.town.companion.domain.CompanionRules}'s
+     * own idle-fallback can give the avatar's sleep the exact same duration a real resident's sleep
+     * decision would get, rather than a second, independently-invented number. */
+    static int sleepDurationSeconds(CompanionWorld w,ResidentState r,Instant at){
         ZonedDateTime local=at.atZone(ZoneId.of(w.timezone));int wakeMinute=r.sleepScheduleSeeded?r.usualWakeMinute:7*60;
         ZonedDateTime wake=local.withHour(wakeMinute/60).withMinute(wakeMinute%60).withSecond(0).withNano(0);
         if(!wake.isAfter(local))wake=wake.plusDays(1);
@@ -2494,7 +2553,10 @@ public final class ResidentSimulation {
         if(w.avatar!=null) {
             if(w.avatar.place().equals("home"))w.avatar=new Actor(w.avatar.id(),w.avatar.name(),w.avatar.role(),TownPlaces.homeOf("self"),w.avatar.activity(),w.avatar.label(),w.avatar.x(),w.avatar.y(),w.avatar.until());
             ResidentState self=state(w,"self");
-            if(self.positionId==null||TownPlaces.position(w,self.positionId)==null)TownPlaces.claim(w,"self",w.avatar.place(),Set.of("focus","study").contains(w.avatar.activity())&&TownPlaces.isHome(w.avatar.place())?"desk":null,now);
+            if(self.positionId==null||TownPlaces.position(w,self.positionId)==null){
+                String kind=avatarPreferredKind(w.avatar.activity(),w.avatar.place());
+                if(kind!=null)TownPlaces.claim(w,"self",w.avatar.place(),kind,now);
+            }
         }
     }
     /** The one legacy WorldObject that used to advertise a "state" nobody ever wrote back: keep it

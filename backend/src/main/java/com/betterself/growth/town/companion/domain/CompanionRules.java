@@ -71,10 +71,10 @@ public final class CompanionRules {
         }
     }
     private static void start(CompanionWorld w, Intent i, Instant now) {
-        String action=i.resolvedKind==null?i.kind:i.resolvedKind;
+        String action=resolvedAction(i);
         i.status="active"; i.feedback="focus".equals(action)?"去咖啡馆坐好，陪你专注。":"好，就去做这件事。";
-        String place=switch(action){case "home","rest","sleep"->TownPlaces.homeOf("self");case "flowers"->"garden";case "walk","ponder"->"street";default->"open".equals(w.cafeStatus)?"cafe":TownPlaces.homeOf("self");};
-        String label=switch(action){case "sleep"->"回到住处，躺下睡了";case "focus"->"在公共书桌安静专注";case "visit"->"去咖啡馆看看邻居在做什么";case "study"->"找个位置，安静读几页书";case "ponder"->"在街边想一想，还没决定怎么实现这个念头";case "home"->"回到住处，整理今天";case "rest"->"靠一会儿，让脑子放空";case "flowers"->"看看刚开的花";case "water"->"喝一杯温水";default->"沿着小街慢慢散步";};
+        String place=avatarPlace(w,action);
+        String label=avatarLabel(action);
         Instant until=now.plusSeconds(action.equals("focus")?i.durationMinutes*60L:120);
         if(action.equals("focus")) w.focus=new Focus(i.taskId,now,until);
         w.avatar=actor("self",w.name,"小街住民",place,action,label,until);
@@ -82,32 +82,86 @@ public final class CompanionRules {
         if(i.text!=null)i.feedback="记下这个念头了："+i.text+"。现在"+label+"。";
         diary(w,now,label+"。");
     }
+    /** {@code i.resolvedKind} overrides {@code i.kind} whenever the user's own free text was resolved
+     * into something more specific (see {@code CompanionService.resolve}) - the one place this mapping
+     * happens, shared by {@link #start} and {@link #lastRealIntent}'s continuation so the two never
+     * quietly disagree about what an intent actually asked for. */
+    private static String resolvedAction(Intent i){return i.resolvedKind==null?i.kind:i.resolvedKind;}
+    private static String avatarPlace(CompanionWorld w,String action){
+        return switch(action){case "home","rest","sleep"->TownPlaces.homeOf("self");case "flowers"->"garden";case "walk","ponder"->"street";default->"open".equals(w.cafeStatus)?"cafe":TownPlaces.homeOf("self");};
+    }
+    private static String avatarLabel(String action){
+        return switch(action){case "sleep"->"回到住处，躺下睡了";case "focus"->"在公共书桌安静专注";case "visit"->"去咖啡馆看看邻居在做什么";case "study"->"找个位置，安静读几页书";case "ponder"->"在街边想一想，还没决定怎么实现这个念头";case "home"->"回到住处，整理今天";case "rest"->"靠一会儿，让脑子放空";case "flowers"->"看看刚开的花";case "water"->"喝一杯温水";default->"沿着小街慢慢散步";};
+    }
     /** The avatar shares the same location/position model as the four NPCs: claim a spot for it at
      * its current place so residents can perceive it there and, when a spot is scarce, contend for
-     * it the same way they would with each other. */
+     * it the same way they would with each other.
+     * <p>Only when the current activity actually needs one, exactly like {@link ResidentSimulation}'s
+     * own {@code schedule()} does for every resident ("能站的地方都能去", docs/04): {@code claim()} is
+     * willing to hand out ANY position at the place once asked with a null kind, which used to mean a
+     * plain "drink some water" reclaimed a random spot at the place - the student's window seat traded
+     * for the shared long table - every time the old clock-driven autopilot happened to land there. */
     private static void placeAvatar(CompanionWorld w, Instant now) {
         ResidentSimulation.ensureAvatarState(w);
-        String kind=switch(w.avatar.activity()){case "focus","study"->TownPlaces.isHome(w.avatar.place())?"desk":"seat";case "sleep","home","rest"->"bed";case "flowers"->"plot";case "walk","ponder"->"bench";default->null;};
+        String kind=ResidentSimulation.avatarPreferredKind(w.avatar.activity(),w.avatar.place());
+        if(kind==null){TownPlaces.release(w,"self",now);return;}
         TownPlaces.claim(w,"self",w.avatar.place(),kind,now);
     }
     private static void finishActive(CompanionWorld w,String feedback,String status) {
         for(Intent i:w.intents) if(i.status.equals("active")){i.status=status;i.feedback=feedback;}
     }
+    /** The user's own real arrangement, most recently. Never "cancelled" - that one was explicitly
+     * taken back - but "done" counts: it is the last thing this person actually decided to do, and
+     * there is nothing more recent to prefer over it. */
+    private static Intent lastRealIntent(CompanionWorld w){
+        return w.intents.stream().filter(i->!"cancelled".equals(i.status))
+            .max(Comparator.comparing(i->i.createdAt)).orElse(null);
+    }
+    /** Same order of magnitude {@link ResidentSimulation#applyDecision}'s own duration table already
+     * uses for the closest resident equivalent (study/observe/rest) - a continuation is a stretch of
+     * the day, not a two-minute clock tick. */
+    private static long continuationSeconds(String action){
+        return switch(action){
+            case "focus","study","visit","flowers"->1800;
+            case "rest","home"->1200;
+            case "walk","ponder"->900;
+            default->300;
+        };
+    }
+    /** What the avatar does with no explicit instruction pending - the fallback every resident also
+     * has, except the avatar's version cannot be either of the two shapes a resident's can be.
+     * <p>The residents' own pure-rule fallback ({@link ResidentSimulation}'s {@code awaitDecision})
+     * only ever answers "暂时没有新的安排" - which is exactly why residents barely move at all in a
+     * rule-only run (see docs/04). Copied straight across, the avatar would stop being erratic and
+     * simply stop, which is not the same thing as being alive.
+     * <p>The other shape, a {@code ResidentMind} that decides for the avatar the way one decides for
+     * an NPC, would make the model guess what the user is doing - a second paid call spent inventing a
+     * life the user already has.
+     * <p>So the base is the same as a resident's (sleep window, the same duration table an actual
+     * decision would use, the same seat-claiming rule), and the one thing that is genuinely different
+     * is the source of the plan: a resident's {@code dayPlan} is written by its own model; the avatar's
+     * is simply the user's own last real request, from {@link #lastRealIntent} - {@link CompanionWorld#intents}
+     * IS the user's day, already on file, for free. */
     private static Actor autonomous(CompanionWorld w,Instant now) {
-        int phase=(int)((now.getEpochSecond()/120)%8);
-        // Asleep, not "at home". The old line read (hour<7||hour>=23) ? "home" : ... with the label
-        // "回家休息，灯光轻轻暗下来", which sounds like going to bed and is not: the activity stayed
-        // "home", so the figure sat in the living room all night (the scene sends home+rest to the sofa
-        // and only home+sleep to the bed), drained energy at the waking rate the whole time, and stayed
-        // a person who could be spoken to and counted as present at three in the morning. Hours come
-        // from the avatar's own schedule now, so a user who changes them is actually obeyed.
         ResidentSimulation.ensureAvatarState(w);
-        boolean night=ResidentSimulation.withinUsualSleepWindow(w,"self",now);
-        String action=night?"sleep":switch(phase){case 0->"water";case 1->"rest";case 2->"walk";case 3->"flowers";default->"study";};
-        String place=switch(action){case "home","rest","sleep"->TownPlaces.homeOf("self");case "flowers"->"garden";case "walk","ponder"->"street";default->"open".equals(w.cafeStatus)?"cafe":TownPlaces.homeOf("self");};
-        String label=switch(action){case "sleep"->"躺下睡了，灯光轻轻暗下来";case "home"->"回屋待着，整理今天";case "rest"->"歇一小会儿";case "water"->"记得给自己倒杯水";case "walk"->"出门透透气";case "flowers"->"在花园看看新叶";default->"翻开书，安静读上几页";};
-        if(!w.avatar.activity().equals(action)) diary(w,now,label+"。");
-        Actor a=actor("self",w.name,"小街住民",place,action,label,now.plusSeconds(120));
+        String action; long durationSeconds;
+        // One clock for whether anyone is asleep (see withinUsualSleepWindow's own note on the bug two
+        // hardcoded night windows caused): sleep always wins over whatever the user last asked for,
+        // exactly as it would for any resident.
+        if(ResidentSimulation.withinUsualSleepWindow(w,"self",now)) {
+            action="sleep";
+            durationSeconds=ResidentSimulation.sleepDurationSeconds(w,ResidentSimulation.state(w,"self"),now);
+        } else {
+            Intent last=lastRealIntent(w);
+            action=last==null?null:resolvedAction(last);
+            durationSeconds=continuationSeconds(action==null?"":action);
+        }
+        boolean quiet=action==null;
+        String place=quiet?("open".equals(w.cafeStatus)?"cafe":TownPlaces.homeOf("self")):avatarPlace(w,action);
+        String label=quiet?"想着自己的事，不着急做什么":avatarLabel(action);
+        String activity=quiet?"thought":action;
+        if(!w.avatar.activity().equals(activity)) diary(w,now,label+"。");
+        Actor a=actor("self",w.name,"小街住民",place,activity,label,now.plusSeconds(durationSeconds));
         w.avatar=a; placeAvatar(w,now); return a;
     }
     private static Actor resident(int i,Instant now,String timezone) {

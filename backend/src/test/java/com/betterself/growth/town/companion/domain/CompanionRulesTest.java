@@ -152,4 +152,41 @@ class CompanionRulesTest {
         assertThat(w.memories.stream().filter(m->m.id().equals("citation")).findFirst().orElseThrow().evidenceIds()).containsExactly("old-a");
     }
 
+    /** The old autopilot was a wall-clock wheel (epochSecond/120 % 8): once the user's own explicit
+     * arrangement ran out, the avatar cycled through water/rest/walk/flowers/study every two minutes
+     * regardless of what it had just been doing. The new base is the user's own last real request
+     * (docs/04's "化身的 dayPlan 由用户自己的 intent 生成"), so it keeps doing the SAME thing across
+     * repeated idle-fallback ticks instead of being reshuffled by the clock. */
+    @Test void avatarContinuesTheUsersLastRealArrangementInsteadOfCyclingAWheel(){
+        var w=world();
+        // An explicit "walk" arrangement - the street bench is unowned, so nothing about seat
+        // ownership contention can explain what happens to the position below.
+        CompanionRules.submit(w,new CompanionWorld.Intent("walk-01","walk","explicit",null,25,now),now);
+        assertThat(w.avatar.activity()).isEqualTo("walk");
+        assertThat(w.avatar.place()).isEqualTo("street");
+        String seat=ResidentSimulation.state(w,"self").positionId;
+        assertThat(seat).isNotNull();
+        assertThat(TownPlaces.position(w,seat).kind).isEqualTo("bench");
+        // The explicit intent's own 120-second window elapses and the idle fallback takes over.
+        CompanionRules.advance(w,now.plusSeconds(121));
+        assertThat(w.avatar.activity()).as("still walking - the last real request, not a wheel phase").isEqualTo("walk");
+        assertThat(ResidentSimulation.state(w,"self").positionId).as("same bench, no seat swap").isEqualTo(seat);
+        // Well past the length of a full eight-phase wheel cycle (16 minutes) - the old autopilot
+        // would have cycled through every other activity several times over by now.
+        CompanionRules.advance(w,now.plusSeconds(1400));
+        assertThat(w.avatar.activity()).isEqualTo("walk");
+    }
+
+    /** "喝口水不该换一张桌子" (docs/04): an activity that needs no owned, capacity-limited spot must
+     * release whatever it was holding rather than have {@code TownPlaces.claim} hand out a random
+     * other one just because it was asked with a null kind. */
+    @Test void drinkingWaterReleasesTheSeatInsteadOfClaimingAnotherOne(){
+        var w=world();
+        CompanionRules.submit(w,new CompanionWorld.Intent("focus-01","focus","explicit","task",25,now),now);
+        assertThat(ResidentSimulation.state(w,"self").positionId).as("the focus session claims a real seat").isNotNull();
+        CompanionRules.advance(w,now.plusSeconds(1600)); // past the 25-minute focus session
+        assertThat(w.avatar.activity()).isEqualTo("water");
+        assertThat(ResidentSimulation.state(w,"self").positionId).as("released, not reseated at random").isNull();
+    }
+
 }
