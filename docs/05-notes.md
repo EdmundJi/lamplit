@@ -18,7 +18,9 @@
 
 ## 模型
 
-主模型是 **DeepSeek V4 Flash**（`QWEN_` 前缀是历史遗留，实际指向 `https://api.deepseek.com`）。视觉模型 `deepseek-v4-flash-vision-exp` 确实存在，2026-08-21 发布，每张图固定 384 token，单请求最多 600 张图，图片只能出现在 user message。
+**现状（2026-09-11）：小镇主力是 `qwen3.7-flash`，DeepSeek 退成备用路由。**`QWEN_*` 这组变量现在名副其实——`app.ai.*` 就是 Qwen，base-url 默认 dashscope；`QWEN3_*` 反过来成了兼容旧环境的退路，默认值还停在 `qwen3.8-flash`。验收的两次确认跑都是 `QWEN_MODEL=qwen3.7-flash`。
+
+下面这一段是 2026-09-08 当时的记录，**按当时的事实保留，不要照着它配置今天的环境**：主模型是 **DeepSeek V4 Flash**（`QWEN_` 前缀是历史遗留，实际指向 `https://api.deepseek.com`）。视觉模型 `deepseek-v4-flash-vision-exp` 确实存在，2026-08-21 发布，每张图固定 384 token，单请求最多 600 张图，图片只能出现在 user message。
 
 ### 换供应商的实测（同一个 prompt，让居民写一条记忆）
 
