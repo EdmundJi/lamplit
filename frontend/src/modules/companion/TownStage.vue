@@ -4,7 +4,11 @@ import { storeToRefs } from 'pinia'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { placeForPath } from '../../app/nav'
 import { resolveStagePlace, STAGE_PLACES } from './companion-art'
-import { residentTarget, scenePlace } from './companion-scene'
+// Pure geometry, no Phaser import (see companion-geometry.ts's header) - TownStage is mounted
+// synchronously by every UserLayout, so importing the real './companion-scene' (which pulls in
+// the whole Phaser runtime via CompanionStreetScene) here would drag Phaser into the first-paint
+// chunk even though CompanionScene.vue itself stays behind defineAsyncComponent below.
+import { residentTarget, scenePlace } from './companion-geometry'
 import { sceneProjection, useTownClock } from './companion.presentation'
 import { useTownWorld } from './companion.store'
 import { useTownUi } from './town-ui.store'

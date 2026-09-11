@@ -1,0 +1,145 @@
+/**
+ * Pure scene-geometry helpers - place resolution, seat/bed/desk lookup, free-standing spread and
+ * rain-shelter math. Deliberately free of any Phaser import (unlike companion-scene.ts, which
+ * pulls in the real `Phaser.Scene` runtime): TownStage.vue - mounted synchronously by every
+ * UserLayout, never deferred - needs `residentTarget`/`scenePlace` for its docked-strip camera
+ * target and place label, but must not drag the whole Phaser chunk into that first-paint bundle
+ * merely to read these two small, pure computations. companion-scene.ts re-exports everything
+ * here so its own internals (and existing test imports) are unaffected.
+ */
+import type { Point } from '../../shared/scene/collision'
+import { freeStandPosition } from './companion-navigation'
+import { POSITION_SLOTS, CAFE_SERVICE, CAFE_SEATS, GARDEN_OFFSET_X, HOME_ROOMS, CAFE_ROOM, CAFE_WINDOW_ROOM, ACADEMY_ROOM, GYM_ROOM, PLACE_FRAMES } from './companion-art'
+import type { SceneResident } from './companion-scene'
+
+type RainShelter = { x: number; y: number; width: number; height: number }
+// These use the shared stage geometry rather than a second set of hand-tuned rain rectangles.
+// The cafe frame includes its wall/roof margin; homes are the real room footprints.
+const RAIN_SHELTERS: RainShelter[] = [
+  ...Object.values(HOME_ROOMS).map(room => ({ x: room.x - 6, y: room.y - 5, width: room.w + 12, height: room.h + 12 })),
+  { x: CAFE_ROOM.x - 6, y: CAFE_ROOM.y - 5, width: CAFE_ROOM.w + 12, height: CAFE_ROOM.h + 12 },
+  { x: CAFE_WINDOW_ROOM.x - 6, y: CAFE_WINDOW_ROOM.y - 5, width: CAFE_WINDOW_ROOM.w + 12, height: CAFE_WINDOW_ROOM.h + 12 },
+  // The academy and gym are real rooms too (east wing, past the old x=1248 edge) - roofed the same
+  // way as every other room above so rain does not fall through their walls.
+  { x: ACADEMY_ROOM.x - 6, y: ACADEMY_ROOM.y - 5, width: ACADEMY_ROOM.w + 12, height: ACADEMY_ROOM.h + 12 },
+  { x: GYM_ROOM.x - 6, y: GYM_ROOM.y - 5, width: GYM_ROOM.w + 12, height: GYM_ROOM.h + 12 },
+]
+function inside(rect: RainShelter, x: number, y: number) { return x >= rect.x && x <= rect.x + rect.width && y >= rect.y && y <= rect.y + rect.height }
+/** A rain streak is omitted when any of its short diagonal would land inside a roofed room. */
+export function rainFallsOutside(x: number, y: number) {
+  const samples = [[x, y], [x - 2.5, y + 6.5], [x - 5, y + 13]]
+  return !RAIN_SHELTERS.some(rect => samples.some(([px, py]) => inside(rect, px!, py!)))
+}
+export function scenePlace(location: string) {
+  // The backend's TownPlaces gives each resident their own home location ("home-owner",
+  // "home-self", ...) instead of one shared "home", so a dash-prefixed id counts too.
+  return (['home', 'cafe', 'garden', 'street'] as const).find(key => location === key || location.startsWith(`${key}.`) || location.startsWith(`${key}/`) || location.startsWith(`${key}-`)) ?? 'street'
+}
+export function homeId(location: string) { return location.match(/^home[-./](.+)$/)?.[1] }
+export function homeRoom(location: string) { return HOME_ROOMS[homeId(location) ?? ''] }
+// 'weaver' is deliberately absent: she has no HOME_ROOMS entry of her own, she shares 'artist'.
+function legacyHomeRoom(index: number) { return HOME_ROOMS[['owner', 'student', 'artist', 'gardener', 'self', 'fixer'][Math.max(0, index) % 6]!] }
+export function placeFrame(location: string) {
+  const ownHome = homeRoom(location)
+  return ownHome ?? PLACE_FRAMES[scenePlace(location)]
+}
+export function placeCenter(location: string) {
+  const frame = placeFrame(location)
+  return { x: frame.x + frame.w / 2, y: frame.y + frame.h / 2 }
+}
+export function visibleActivity(activity = '', action = '', objectKind?: string) {
+  if (['create', 'help'].includes(activity)) return objectKind === 'flowers' ? 'garden' : objectKind === 'tea' ? 'drink' : 'create'
+  // Service at the counter (tend/prepare - actually making the drink) borrows the drink action
+  // sheet as its visible beat: docs/01 wants "等待... 你能看见他在弄" and there is no bespoke pour
+  // animation, but reusing the existing raise-a-cup frames at the counter (facing 'up', see
+  // update()) reads as him working the machine instead of standing idle for the whole wait.
+  // serve/wait/handover/assist are the surrounding, not-yet-making-it moments and stay idle.
+  if (['tend', 'prepare'].includes(activity)) return 'drink'
+  if (['serve', 'wait', 'handover', 'assist'].includes(activity)) return 'idle'
+  if (['home', 'rest'].includes(activity)) return 'rest'
+  if (['focus', 'study', 'read'].includes(activity)) return 'read'
+  if (activity === 'work') return 'read'
+  if (activity === 'make') return objectKind === 'flowers' ? 'garden' : 'create'
+  if (['water', 'drink'].includes(activity)) return 'drink'
+  if (['observe', 'flowers', 'invite', 'celebrate', 'talk', 'walk', 'travel'].includes(activity)) return 'idle'
+  const text = activity + ' ' + action
+  if (/\b(tend|serve|prepare)\b|吧台|柜台|热饮|咖啡/.test(text)) return 'idle'
+  if (/sleep|睡|入眠/.test(text)) return 'sleep'
+  if (/rest|休息|歇一会/.test(text)) return 'rest'
+  if (/drink|喝|饮|茶歇/.test(text)) return 'drink'
+  if (/garden|tend|plant|花|园艺|种植|照料|浇水/.test(text)) return 'garden'
+  if (/create|help|创作|帮忙|海报|画画|绘|合作/.test(text)) return 'create'
+  if (/focus|study|read|学|读|专注|备考/.test(text)) return 'read'
+  return 'idle'
+}
+/**
+ * Whether a resident currently taking their turn in an active conversation should show their
+ * speech bubble right now. Gated only on this resident's own arrival at their target - never on
+ * whether some other actor has also stopped moving. The previous version additionally required
+ * every actor sharing (`this.actors.values()...filter(other => other.conversationId ===
+ * actor.conversationId)`) - including, when a speaker's own conversationId was momentarily unset,
+ * every OTHER actor in town that also lacked one - to have an empty path before showing anyone's
+ * bubble. Acquiring (or changing) a backend positionId gives a resident a new authoritative
+ * target, which differs from their previous place+index guess and starts a short walk to settle
+ * into it; that walk alone was enough to blank a conversation partner's speech bubble the whole
+ * town over, for as long as the positionId walk took. A resident is "speaking" purely on their
+ * own terms now.
+ */
+export function isSpeaking(residentId: string, turnSpeakerId: string | undefined, hasArrived: boolean) {
+  return turnSpeakerId === residentId && hasArrived
+}
+export function conversationPosition(place: string, index: number) {
+  const center = scenePlace(place) === 'cafe' ? CAFE_SERVICE.conversation : placeCenter(place)
+  return { x: center.x + (index % 2 ? 21 : -21), y: center.y + Math.floor(index / 2) * 32 }
+}
+/**
+ * Where a resident's feet land. The backend's positionId (a specific bed, desk seat or garden
+ * plot - see TownPlaces.java) is authoritative once POSITION_SLOTS knows a pixel for it and for
+ * `occupantIndex` within it. Failing that, a handful of activities that visibly sit someone down
+ * at real furniture (sleeping, resting on the sofa, reading/creating/drinking at the cafe desks,
+ * tending a garden plot) still get their old furniture-anchored spot. Everyone else - which is
+ * now the common case, since "能站的地方都能去" (docs/04-decisions.md) - free-stands: `residentId`
+ * (never `index`, which shifts as other residents come and go) seeds a stable pixel inside the
+ * place's walkable area, spread apart from `occupied` (every other resident already settled
+ * there). Callers that omit `residentId` (unit tests, or an old caller) still get a valid,
+ * reachable point - just keyed off `location`+`index` instead of a real resident identity.
+ */
+export function residentPosition(location: string, index: number, activity = '', action = '', positionId?: string | null, occupantIndex = 0, residentId?: string, occupied: Point[] = []) {
+  if (positionId) {
+    const slots = POSITION_SLOTS[positionId]
+    if (slots?.length) return slots[Math.min(Math.max(0, occupantIndex), slots.length - 1)]!
+  }
+  const place = scenePlace(location), slot = index % 5
+  const room = homeRoom(location) ?? legacyHomeRoom(index)
+  if (place === 'home' && visibleActivity(activity, action) === 'sleep') return room.bed
+  if (place === 'home' && visibleActivity(activity, action) === 'rest') return room.anchor
+  if (place === 'cafe' && activity === 'wait') return CAFE_SERVICE.waiting[index % CAFE_SERVICE.waiting.length]!
+  if (place === 'cafe' && ['read', 'create', 'rest', 'drink'].includes(visibleActivity(activity, action))) {
+    // Four discussion seats and six independently occupied window seats.
+    const seat = CAFE_SEATS[index % CAFE_SEATS.length]!
+    return { x: seat.x, y: seat.y }
+  }
+  if (place === 'garden' && /garden|tend|plant|flowers|grow|花|园艺|种植|照料|浇水/i.test(activity + action)) {
+    // The native stream lands about 50px to the right and 10px below the feet.
+    // Keep its whole silhouette inside the default camera, including the last resident.
+    const plots = [{ x: 770, y: 276 }, { x: 849, y: 276 }, { x: 770, y: 356 }, { x: 849, y: 356 }, { x: 842, y: 421 }]
+    return { x: plots[slot]!.x + GARDEN_OFFSET_X, y: plots[slot]!.y }
+  }
+  if (place === 'home' && /focus|study|read|work|make|专注|学习|读书|工作|制作/i.test(activity + action)) return room.desk
+  return freeStandPosition(place === 'home' ? location : place, residentId ?? `${location}#${index}`, occupied)
+}
+/**
+ * Where a resident is currently headed - travelling toward a destination's own door/entry, or
+ * settled at their resolved seat/bed/desk/free-stand spot. Mirrors sync()'s own per-resident
+ * target computation (the `travelling` branch and the `residentPosition()` call below it) so a
+ * caller outside the running scene - the docked strip's "follow the avatar" camera target - can
+ * point at exactly the same spot the actor is walking to/standing at, without needing the live
+ * Phaser actor map. Approximates `occupantIndex` (real slot-sharing resolution only exists inside
+ * the scene's actor loop) - fine for a camera target, which does not need seat-exact precision.
+ */
+export function residentTarget(actor: SceneResident, positionId?: string | null, occupantIndex = 0) {
+  const travelling = Boolean(actor.destination) && (actor.activity === 'walk' || actor.activity === 'travel')
+  const location = travelling ? actor.destination! : actor.location
+  if (travelling) return homeRoom(location)?.door ?? (scenePlace(location) === 'cafe' ? CAFE_SERVICE.entry : placeCenter(location))
+  return residentPosition(location, 0, actor.activity, actor.action, positionId, occupantIndex, actor.id, [])
+}
