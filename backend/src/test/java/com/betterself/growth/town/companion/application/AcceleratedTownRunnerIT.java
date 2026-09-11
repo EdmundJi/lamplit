@@ -44,10 +44,17 @@ class AcceleratedTownRunnerIT {
         Path outDir = Path.of(System.getenv().getOrDefault("COMPANION_RUN_OUT", "target/accelerated-run"));
         String worldId = System.getenv().getOrDefault("COMPANION_RUN_WORLD_ID", modelEnabled ? "accelerated-model-run" : "accelerated-rule-run");
         String resumeFromEnv = System.getenv("COMPANION_RUN_RESUME_FROM");
+        // Which hour the run starts at, so a short slice can be aimed at the part of the day the
+        // question is about. The occasions this town now asks separately (closing up, locking the
+        // door on the way out) only come round in the evening, and the default 08:00 start with a
+        // quarter-day budget would simply never reach them - which would read as "nobody wanted to"
+        // for exactly the reason the whole mechanism exists to stop.
+        String startEnv = System.getenv("COMPANION_RUN_START");
 
         var base = modelEnabled ? AcceleratedTownRunner.RunConfig.withModel(outDir, days) : AcceleratedTownRunner.RunConfig.ruleOnly(outDir, days);
         var cfg = new AcceleratedTownRunner.RunConfig(
-            worldId, base.avatarName(), base.timezone(), base.start(), days, base.tickSeconds(),
+            worldId, base.avatarName(), base.timezone(),
+            startEnv == null || startEnv.isBlank() ? base.start() : java.time.Instant.parse(startEnv), days, base.tickSeconds(),
             modelEnabled, Integer.parseInt(System.getenv().getOrDefault("COMPANION_RUN_MODEL_BUDGET", String.valueOf(base.dailyModelBudget()))), base.userId(), outDir, base.realPaceMillisPerTick(),
             Integer.parseInt(System.getenv().getOrDefault("COMPANION_RUN_DRAIN_TICKS",String.valueOf(base.drainTicks()))), base.blindTestSeed(), base.blindTestSize(), base.scriptedAvatarIntents(),
             resumeFromEnv == null || resumeFromEnv.isBlank() ? null : Path.of(resumeFromEnv));
