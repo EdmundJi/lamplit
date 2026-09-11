@@ -30,6 +30,31 @@ public class CompanionWorld {
     public List<Conversation> conversations = new ArrayList<>();
     public List<WorldEvent> events = new ArrayList<>();
     public List<WorldObject> objects = new ArrayList<>();
+    /** The town's first stateful physical object with real consequences (see docs/06-society.md "物件
+     * 要有自己的类"): a door, currently only at the cafe. A flat, concrete class rather than a
+     * polymorphic Doorable/Lockable hierarchy on purpose - {@code CompanionWorld} is serialized whole
+     * as one JSON document, and a class hierarchy that needs Jackson's polymorphic type handling
+     * (@JsonTypeInfo and friends) is a trap laid directly in the save format: rename a subtype, drop
+     * one, or reorder a type id and every existing save silently fails to round-trip. The next
+     * stateful object (the coffee machine) gets its own list beside this one, not a shared supertype -
+     * less "correct" object orientation, never a serialization landmine. Self-healing on an old save
+     * via the empty-list default, same shape as {@link #serviceRequests}. */
+    public List<Door> doors = new ArrayList<>();
+    /** {@code lockedBy} is the entire point of this class - see docs/06-society.md: {@code cafeStatus}
+     * already blocks entry while the shop is closed, but it carries no "who", and a barrier nobody can
+     * be blamed for is only weather. Whether it is locked and who locked it are the only two facts
+     * this class knows; everything else (whether locking was reasonable, who is upset about it, what
+     * anyone should do about being shut out) is a resident's own reaction, never written here - see
+     * {@code DoorService}/{@code ResidentSimulation.schedule}. */
+    public static class Door {
+        public String id, place;
+        public boolean locked;
+        /** Never sent to a resident who was not standing right there when the door was locked - see
+         * {@code DoorService.lock}'s witness pass and {@code ResidentSimulation.schedule}'s arrival
+         * check, which perceives only the fact "locked", never this field. */
+        public String lockedBy;
+        public Instant lockedAt;
+    }
     /** The two-layer place model: locations (the street, the cafe, the garden, each resident's own
      * home) contain positions (a seat, a bed, a table) that have an optional owner, a capacity and
      * current occupants. Structure and ownership only - no pixel coordinates; the frontend maps ids
@@ -126,6 +151,27 @@ public class CompanionWorld {
      * is; {@code otherId} is who they are looking at. */
     public static class PendingEncounter {
         public String id, residentId, otherId, place;
+        public Instant at;
+        public long residentRevision;
+    }
+    /** Moments the rules recognised as the one moment a particular action makes sense in, waiting
+     * for the resident to say whether they want to do anything about them - see {@link Occasions},
+     * which is also the only thing that ever puts anything here. Same shape and same bound as
+     * {@link #pendingEncounters}, for the same reason: a moment that goes unanswered has to pass,
+     * not queue up. */
+    public List<PendingOccasion> pendingOccasions = new ArrayList<>();
+    /** "This one has already been put to them", keyed {@code residentId|occasionKey} and valued by
+     * the scene as it stood when it was asked. Written when the question is <b>raised</b>, not when
+     * it is answered, and that distinction is the whole mechanism: an occasion nobody got round to
+     * answering has to pass like any other moment. A first draft recorded it only on refusal, so an
+     * unanswered question was re-raised the instant its TTL ran out - a probe over two simulated days
+     * measured 407 asks for one occasion that comes round once a day. That is the menu problem
+     * rebuilt inside the thing that was supposed to fix it. */
+    public Map<String,String> askedOccasions = new LinkedHashMap<>();
+    /** One resident, one moment, one question. {@code fact} is the bystander-view sentence the
+     * resident is shown; {@code situation} is bookkeeping and never reaches a model. */
+    public static class PendingOccasion {
+        public String id, residentId, key, place, target, fact, situation;
         public Instant at;
         public long residentRevision;
     }

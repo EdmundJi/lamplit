@@ -48,6 +48,7 @@ public class RoutingResidentMind implements ResidentMind {
         @Value("${app.town.companion-model.routes.summary:qwen,deepseek}") String summaryRoute,
         @Value("${app.town.companion-model.routes.dayplan:qwen,deepseek}") String dayPlanRoute,
         @Value("${app.town.companion-model.routes.react:qwen,deepseek}") String reactRoute,
+        @Value("${app.town.companion-model.routes.consider:qwen,deepseek}") String considerRoute,
         @Value("${app.town.companion-model.routes.explain:qwen,deepseek}") String explainRoute,
         @Value("${app.town.companion-model.routes.reflect:qwen,deepseek}") String reflectRoute,
         @Value("${app.town.companion-model.routes.venture:qwen,deepseek}") String ventureRoute,
@@ -68,6 +69,9 @@ public class RoutingResidentMind implements ResidentMind {
             // calls before the routing existed.
             "dayplan", parseRoute(dayPlanRoute),
             "react", parseRoute(reactRoute),
+            // Same reasoning as dayplan's: a missing entry here would not look wrong anywhere, and
+            // every occasioned action in town would quietly stop being asked about.
+            "consider", parseRoute(considerRoute),
             // Same reasoning as dayplan's own comment: without an entry here, explain/reflect fall
             // through to ResidentMind's default (UnsupportedOperationException), which ResidentDirector
             // is careful never to treat as a real failure - but silently missing them here would still
@@ -109,6 +113,11 @@ public class RoutingResidentMind implements ResidentMind {
     @Override public ReactDraft react(ReactRequest request) { return reactMetered(request).value(); }
     @Override public Result<ReactDraft> reactMetered(ReactRequest request) {
         return attempt("react", mind -> mind.reactMetered(request));
+    }
+
+    @Override public ConsiderDraft consider(ConsiderRequest request) { return considerMetered(request).value(); }
+    @Override public Result<ConsiderDraft> considerMetered(ConsiderRequest request) {
+        return attempt("consider", mind -> mind.considerMetered(request));
     }
 
     @Override public DayPlanDraft planDay(DayPlanRequest request) { return planDayMetered(request).value(); }

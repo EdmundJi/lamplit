@@ -119,4 +119,45 @@ class PromptBalanceTest {
         assertThat(prompt).as("时间只能由一个地方定").contains("里面不要出现任何时间");
         assertThat(prompt).as("写做的事，不写说的话").contains("不要写成你对他说的话");
     }
+
+    @Test
+    @DisplayName("时机问句：做与不做都摆在台面上，而且「不做」不需要理由")
+    void theOccasionQuestionLeansNeitherWay() {
+        String prompt = promptFor(mind -> mind.consider(new ResidentMind.ConsiderRequest(
+                context(), "po-1", "lock_door", "店里现在只剩你一个，门还开着。", "要不要把门锁上再走？",
+                "锁上：这段时间只有你自己进得来，别人会被关在外面",
+                "不锁：门开着就走，这同样是正常的，不需要理由", "cafe")),
+            "{\"choice\":\"none\",\"reason\":\"没必要\",\"speech\":null,\"evidenceIds\":[]}");
+
+        assertThat(prompt).as("两个答案都摆在台面上").contains("两个都是正常答案");
+        assertThat(prompt).as("不做不需要理由").contains("none不需要理由");
+        // The exact failure mode this whole class exists for, in its newest disguise: a question asked
+        // at the right moment still dies if being asked at all reads as a hint that something is
+        // expected. 470 offers and 0 takers was our timing; this line is the other half.
+        assertThat(prompt).as("被问到本身不等于应该做点什么").contains("不要因为有人问了你，就觉得应该做点什么");
+        assertThat(prompt).as("但也不能把「不做」写成更稳妥的答案").contains("只有当你自己此刻确实想这么做");
+    }
+
+    @Test
+    @DisplayName("react 的第四个答案 invite：想叫和不想叫都留在提示词里")
+    void theReactPromptLeansNeitherWayOnInvite() {
+        String prompt = promptFor(mind -> mind.react(new ResidentMind.ReactRequest(
+                context(), "pe-1", "fixer", "周野", "make", "cafe",
+                List.of("greet", "join", "invite", "none"), "留一盏灯的读书小聚")),
+            "{\"reaction\":\"none\",\"reason\":\"\",\"evidenceIds\":[]}");
+
+        assertThat(prompt).as("想叫这一侧").contains("想叫就叫");
+        assertThat(prompt).as("不想叫也不需要理由这一侧").contains("不想叫也不需要理由");
+    }
+
+    @Test
+    @DisplayName("普通决定里的 none：和别的选项完全平等，不是认输")
+    void doingNothingInParticularIsOfferedAsAnEqualAnswer() {
+        String prompt = promptFor(mind -> mind.decide(context()),
+            "{\"action\":\"observe\",\"place\":\"cafe\",\"targetId\":null,\"reason\":\"看看四周\",\"speech\":\"\",\"evidenceIds\":[]}");
+
+        assertThat(prompt).as("「没什么特别想做的」得有自己的词").contains("none表示");
+        assertThat(prompt).as("而且是平等的一项，不是退而求其次").contains("它和其他选项完全平等");
+        assertThat(prompt).as("有时机的动作不该再出现在这份菜单里").contains("到了那个时刻会单独问你");
+    }
 }

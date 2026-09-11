@@ -56,6 +56,10 @@ export default defineConfig({
   },
   test: {
     environment: 'jsdom',
-    exclude: [...configDefaults.exclude, 'e2e/**'],
+    // .pnpm-store holds symlinked copies of every workspace this store has ever served, including
+    // ones in git worktrees that no longer exist. vitest globs into it, resolves each link, and
+    // reports 70 "failed" suites that are nothing but dead symlinks - which buries the 408 real
+    // results under an equal number of fake failures and makes the suite useless as a signal.
+    exclude: [...configDefaults.exclude, 'e2e/**', '.pnpm-store/**'],
   },
 })

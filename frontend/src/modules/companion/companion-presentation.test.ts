@@ -16,7 +16,12 @@ describe('quiet resident status', () => {
   })
   it('never presents cafe tending as gardening because of the shared English verb', () => {
     expect(residentStatus('tend', '回到吧台，照应一下柜台前的人')).toEqual({ emoji: '☕', shortAction: '在吧台忙着' })
-    expect(residentStatus('idle', '回到吧台，照应一下柜台前的人')).toEqual({ emoji: '☕', shortAction: '在吧台忙着' })
+    expect(residentStatus('stand', '回到吧台，照应一下柜台前的人')).toEqual({ emoji: '☕', shortAction: '在吧台忙着' })
+  })
+  it('keeps "nothing in particular" distinct from resting now that the backend tells them apart', () => {
+    const status = residentStatus('idle', '窗边发了会儿呆，没什么特别想做的')
+    expect(status).not.toEqual({ emoji: '☕', shortAction: '歇一会儿' })
+    expect(status).toEqual({ emoji: '🍃', shortAction: '没想做什么' })
   })
 })
 

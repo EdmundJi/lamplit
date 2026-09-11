@@ -5,6 +5,7 @@ export function residentStatus(activity: string, action: string, moving = false,
   const chosen: Record<string, { emoji: string; shortAction: string }> = {
     sleep: { emoji: '💤', shortAction: '安静睡着' },
     home: { emoji: '☕', shortAction: '在家歇一会儿' },
+    idle: { emoji: '🍃', shortAction: '没想做什么' },
     rest: { emoji: '☕', shortAction: '歇一会儿' },
     water: { emoji: '☕', shortAction: '喝口水' },
     focus: { emoji: '📖', shortAction: '安静读书' },

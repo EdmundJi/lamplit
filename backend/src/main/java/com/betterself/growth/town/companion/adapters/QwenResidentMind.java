@@ -46,8 +46,8 @@ public class QwenResidentMind implements ResidentMind {
      * happen in practice (ResidentSimulation.availableActions always returns a non-empty base set),
      * but the schema still needs a non-empty enum to stay valid JSON Schema. */
     private static final java.util.List<String> DECISION_ACTION_FALLBACK=java.util.List.of(
-        "continue","resume","observe","create","help","celebrate","invite","join","rest","study","work","read","make",
-        "tend","request_drink","change_work","propose","sleep","open_cafe","close_cafe","continue_home","away");
+        "none","continue","resume","observe","create","help","celebrate","join","rest","study","work","read","make",
+        "tend","request_drink","propose","sleep","open_cafe","continue_home","away");
     @Override public com.betterself.growth.town.companion.domain.ConversationLifecycle.Utterance generateTurn(DialogueRequest request){
         return generateTurnMetered(request).value();
     }
@@ -124,12 +124,13 @@ public class QwenResidentMind implements ResidentMind {
                 只返回一个可执行动作与一句简短理由，不输出推理过程。
                 action必须严格照抄availableActions这次实际给出的字符串之一，不能选择availableActions里没有的动作，哪怕它是别的时候合法的动作名——这次没列出就是这次真的做不到，选了也不会发生，你的意图会完全落空。availableActions因情况实时变化：continue/continue_home/resume/tend等并非总是可选，尤其咖啡馆开始打烊（cafeStatus=closing）后，即使手头还有一件没做完的事，continue也常常不会出现在这次的availableActions里；这种时候如果你仍想做原来那件事（比如还在等一杯已经点的饮料），改选一个这次确实列出的动作（例如rest，重新安排一段等待/休息），而不要选continue或continue_home，那样只会被判定为这次没有发生过。continue表示按currentPlan继续，不能重置计时或换一件事。reason一句话说清楚就好，不必展开分析，控制在80个汉字以内。
                 join表示走过去挨着某个熟人坐下（对方的桌子或旁边的位置），targetId填nearby中那个人的id；这只是想坐得近一些，不代表要开口说话或已经在交谈。away表示暂时离开这条街去处理自己的事，一段时间后才会回来，回来后只有自己知道那段时间做了什么；不要在away的reason里编造离场期间发生的具体情节，那要等回来后才补一句自己的回忆。
-                create/help 的 targetId 必须是 knownProjects 之一且 place 匹配；invite 只能针对 nearby 中一个人。
+                create/help 的 targetId 必须是 knownProjects 之一且 place 匹配；join 只能针对 nearby 中一个人。
+                none表示"没什么特别想做的"，place填自己此刻所在的地方，targetId填null。它和其他选项完全平等：人一天里有大段时间并不打算做什么，这时候选none比硬挑一件事更贴近实情。不必为选它找理由，reason写一句实话就行。
                 knownProjects里的事不一定是自己起的头，startedBy写着是谁起的头（为空就是自己的）。别人起头的事你也可以直接用create去添一笔，不用先问过谁、也不用等谁开口邀请你；这里没有"那是他的事"这回事。
                 celebrate只在一件你参与做过的事真的做完、而且你人就在它所在的地方时才会出现在availableActions里，targetId填那件事。它是把人叫过来看看做出来的东西，不是又一次动手。
                 有些事一个人做不完：那种事的stage会直接写着"剩下的得有人一起动手"。这不是提示你必须去做，只是说明它停在那里的原因就是没有第二个人；要不要成为第二个人是你自己的判断，你也完全可以觉得那不关自己的事。
                 如果正在conversation，可在speech写自己接着说的一句话，先回应最后一句里的具体事；可以很短、停顿、不赞同或结束话题，不替双方总结，也不能替另一人说话或声称尚未执行的事已完成。
-                如果没在交谈，speech通常留空；close_cafe或当前经营者用change_work结束营业时是例外，现场还有清醒的人就用speech写自己真正说出的简短通知。reason 是此刻打算，不是执行事实。evidenceIds可从输入自己的记忆ID中选0至3条；因salientPerceptions、currentPlan或眼前事实直接做决定时可以为空，不要硬拿无关历史凑依据。若填写，只能引用自己的真实记忆。
+                如果没在交谈，speech通常留空。reason 是此刻打算，不是执行事实。evidenceIds可从输入自己的记忆ID中选0至3条；因salientPerceptions、currentPlan或眼前事实直接做决定时可以为空，不要硬拿无关历史凑依据。若填写，只能引用自己的真实记忆。
                 如果实际经历、谈话或记忆让你想到一个新愿望，可以用propose，自由创作projectTitle(36字以内)与缘由。不要复述预设项目或为了提案而提案。
                 propose是例外，规则比别的动作严：place必须是cafe、street或garden之一（自己家里不算，那是私人空间不是共同的事），objectKind必须从poster/flowers/books/tea里选一个（不能留null），projectTitle不超过36字，evidenceIds填1至3条自己的真实记忆。少任何一条这个提案都不会成立。同时手上未完成的提案最多两个，已经有两个就先把它们做完再说。没有相关记忆、或者上面哪条满足不了，就不要propose。其他即时行动可以只依据当前感知或计划而让evidenceIds为空。
                 objectKind目前支持poster/flowers/books/tea四种可执行物件底座；这只是世界能表现的形式，不限制主题、风格或想象内容。这是尚未完成的新提案，之后需要真正动手，不能直接变出物件。
@@ -139,8 +140,8 @@ public class QwenResidentMind implements ResidentMind {
                 cafeRoleFacts只陈述自己真实保留的经营权、设备熟悉度或有效帮工身份。若自己仍是cafeOperatorId但曾暂停经营，经营权没有消失；只有availableActions含open_cafe时，才可以自主选择重新开门。若经营权已经通过takeover转给别人，不能靠自己的决定夺回来，但在营业时仍可像普通居民一样去咖啡馆读写、休息、制作或见人。
                 前经营者若想回来帮忙，可以先到店与当前经营者当面谈，再在真实对话里提出offer_assist；要重新受托或拿回经营权，必须由当前经营者在自己的回合提出delegate/takeover、本人再明确接受。这里只提供协商路径，不代表任何一方必定愿意。
                 rest只表示休息，不会自动点饮料。想喝点什么、且availableActions包含request_drink时就可以选它，place必须cafe；这会创建本人真实请求并在店里等，不要假装饮料已经做好。不想喝也完全不必选。
-                咖啡馆的帮工、委托、接手、拒绝和退出只能在两人当面的结构化对话回合里协商，不能用这次decision隔空提出或接受。仅有提议不代表能使用吧台。tend 只在canTend=true时可选。change_work 用 reason 描述自己想尝试的新生活，它可能让咖啡馆暂时无人服务，不会自动产生接手者。
-                cafeStatus、cafeScheduleCue和cafeNotice是你此刻知道的营业状态、时间提示和真实通知。sleep表示回自己家睡觉，不要求先出现疲惫体感。open_cafe只在availableActions允许时选择，去咖啡馆完成开门；这是cafeStatus=closed时唯一合法的、以cafe为place的管理动作。close_cafe是本人决定开始打烊；place必须cafe，现场还有清醒的人时speech要写自己实际说出的简短通知，不能在reason里假装通知过。continue_home只在portableAction存在且availableActions允许时选择，place必须home；系统会按portableAction里的真实原任务和剩余时间续做，不按reason编造新工作。cafeStatus为closing或closed时，除允许的open_cafe外，不要选择其他以cafe为place的新动作。
+                咖啡馆的帮工、委托、接手、拒绝和退出只能在两人当面的结构化对话回合里协商，不能用这次decision隔空提出或接受。仅有提议不代表能使用吧台。tend 只在canTend=true时可选。
+                cafeStatus、cafeScheduleCue和cafeNotice是你此刻知道的营业状态、时间提示和真实通知。sleep表示回自己家睡觉，不要求先出现疲惫体感。open_cafe只在availableActions允许时选择，去咖啡馆完成开门；这是cafeStatus=closed时唯一合法的、以cafe为place的管理动作。打烊、锁门、换一种活法这些只在某一个时刻才谈得上的事，不在这份菜单里，到了那个时刻会单独问你。continue_home只在portableAction存在且availableActions允许时选择，place必须home；系统会按portableAction里的真实原任务和剩余时间续做，不按reason编造新工作。cafeStatus为closing或closed时，除允许的open_cafe外，不要选择其他以cafe为place的新动作。
                 已有安排要保持连贯；若新的记忆或眼前发生的事让你改变主意，说出简短缘由即可。其他action的projectTitle和objectKind填null。
                 不可发明已完成的物件、承诺或事件。JSON字段严格为 action,place,targetId,reason,speech,evidenceIds,projectTitle,objectKind。
                 当前这一个居民的感知输入：
@@ -172,21 +173,63 @@ public class QwenResidentMind implements ResidentMind {
         return generateMetered("COMPANION_RESIDENT_REACT","""
             你是perspective.self这一个居民。刚才你注意到otherName就在同一个地方，他正在otherActivity。
             只回答一件事：你现在要不要为这件事做点什么。
-            reaction只能是greet/join/none三选一。greet=走过去开口说话；join=不说话，在他旁边坐下或站着；none=看见了，继续做自己的事。
+            reaction只能从reactions里选一个。greet=走过去开口说话；join=不说话，在他旁边坐下或站着；none=看见了，继续做自己的事。
+            reactions里出现invite时才有第四个选项：invite=走过去，叫他一起做你手上sharedThing这件事。它只在这种时候才问得出口——人就在眼前，你手上确实有件需要搭把手的事。想叫就叫，不想叫也不需要理由，自己做完同样正常。
             在一条小街上遇见认识的人，最常见的反应就是打个招呼。招呼很短，一句"来了""今天挺早"就够了，它不是一场对话，也不需要谁放下手上的事。
             对方在看书、在忙、在专注，不是不能打招呼的理由——一句招呼毁不掉别人的专注，何况说不说得下去是他自己的事。真正让人不出声的是别的：你自己此刻心里有事、跟这个人正别扭着、刚才才聊过、或者你就是这种不主动开口的人。
-            所以三个答案都是正常的，但不要把"体谅对方"当成默认答案：绝大多数擦肩而过的熟人之间，是有一声招呼的。
+            所以每个答案都是正常的，但不要把"体谅对方"当成默认答案：绝大多数擦肩而过的熟人之间，是有一声招呼的。
             perspective.peopleHere里有你和在场每个人的关系与你记得的关于他的事；closeness是你自己的感觉，不是一个可以拿来讨价还价的分数。越熟的人越不需要理由才开口。
             perspective.persona如果存在：actingSelf决定你会用什么方式接近人（有人靠动手、有人先开口、有人宁可等对方先说），oughtSelf是你给自己定的规矩而不是命令。
             currentPlan是你手上的事。它重要不代表不能放下，也不代表必须放下。
             reason写你自己此刻的想法，一句话，不要总结人生道理，也不要解释你的性格。
             evidenceIds从perspective.memories里选0至3条真正影响了这个判断的记忆；只是打个招呼可以为空。
             只返回JSON字段reaction,reason,evidenceIds，不输出推理过程。
-            """,new ReactInput(request.perspective(),request.otherName(),request.otherActivity(),request.place()),"""
-            {"type":"object","required":["reaction","reason","evidenceIds"],"properties":{"reaction":{"type":"string","enum":["greet","join","none"]},"reason":{"type":"string"},"evidenceIds":{"type":"array","items":{"type":"string"}}}}
+            """,new ReactInput(request.perspective(),request.otherName(),request.otherActivity(),request.place(),
+                    request.reactions()==null||request.reactions().isEmpty()?REACTION_FALLBACK:request.reactions(),request.sharedThing()),
+            """
+            {"type":"object","required":["reaction","reason","evidenceIds"],"properties":{"reaction":{"type":"string","enum":"""
+            +reactionEnum(request)+
+            """
+            },"reason":{"type":"string"},"evidenceIds":{"type":"array","items":{"type":"string"}}}}
             """,ReactDraft.class,decisionThinking);
     }
-    private record ReactInput(Context perspective,String otherName,String otherActivity,String place) {}
+    private static final java.util.List<String> REACTION_FALLBACK=java.util.List.of("greet","join","none");
+    /** The choices the rules could actually see at this instant, as a JSON enum - never a constant,
+     * because invite is only among them while somebody is standing there and there is something for
+     * them to be asked into. */
+    private String reactionEnum(ReactRequest request){
+        var choices=request.reactions()==null||request.reactions().isEmpty()?REACTION_FALLBACK:request.reactions();
+        try{return json.writeValueAsString(choices);}catch(Exception e){return "[\"greet\",\"join\",\"none\"]";}
+    }
+    private record ReactInput(Context perspective,String otherName,String otherActivity,String place,
+                              java.util.List<String> reactions,String sharedThing) {}
+
+    @Override public ConsiderDraft consider(ConsiderRequest request){return considerMetered(request).value();}
+    @Override public Result<ConsiderDraft> considerMetered(ConsiderRequest request){
+        return generateMetered("COMPANION_RESIDENT_CONSIDER","""
+            你是perspective.self这一个居民。fact是刚刚发生、你亲眼看见的一件事。question是要问你的那一个问题。
+            只回答这一个问题，不要顺手安排别的事。choice只有两个值：occasionKey表示"做"，none表示"不做"。
+            yes和no分别写清楚这两个答案各自意味着什么。两个都是正常答案。
+            none不需要理由，也不是消极或者失职；多数时候它就是对的答案。不要因为有人问了你，就觉得应该做点什么。
+            只有当你自己此刻确实想这么做、而且做了对你自己说得通的时候，才选occasionKey。别替别人考虑周全，也别因为"顺手"就做。
+            reason写你自己此刻的一句想法，不超过40个汉字；选none时可以很短，比如"没必要"。
+            speech只在这件事本身需要你当众说一句时才写你真的说出口的话，其余情况留null，不要把心里话写进去。
+            evidenceIds从perspective.memories里选0至3条真正影响了这个判断的记忆，没有就留空。
+            只返回JSON字段choice,reason,speech,evidenceIds，不输出推理过程。
+            """,new ConsiderInput(request.perspective(),request.fact(),request.question(),request.yes(),request.no(),
+                    request.key(),request.place()),
+            """
+            {"type":"object","required":["choice","reason","evidenceIds"],"properties":{"choice":{"type":"string","enum":"""
+            +considerEnum(request)+
+            """
+            },"reason":{"type":"string"},"speech":{"type":["string","null"]},"evidenceIds":{"type":"array","items":{"type":"string"}}}}
+            """,ConsiderDraft.class,decisionThinking);
+    }
+    private String considerEnum(ConsiderRequest request){
+        try{return json.writeValueAsString(java.util.List.of(request.key(),"none"));}catch(Exception e){return "[\"none\"]";}
+    }
+    private record ConsiderInput(Context perspective,String fact,String question,String yes,String no,
+                                 String occasionKey,String place) {}
     @Override public DayPlanDraft planDay(DayPlanRequest request){return planDayMetered(request).value();}
     @Override public Result<DayPlanDraft> planDayMetered(DayPlanRequest request){
         return generateMetered("COMPANION_DAY_PLAN","""

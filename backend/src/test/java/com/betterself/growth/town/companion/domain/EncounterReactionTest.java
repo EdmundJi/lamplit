@@ -82,6 +82,57 @@ class EncounterReactionTest {
         assertThat(resident.plan.targetId()).isEqualTo(pending.otherId);
     }
 
+    /** The fourth answer only exists while there is something of the resident's own to ask the other
+     * person into - see {@link ResidentSimulation#reactions} and the class javadoc's 555/0. Both
+     * owner and gardener start out mid-way through their own project (see ResidentSeed), so the
+     * default two-people-in-the-garden fixture already has one to offer. */
+    @Test void inviteIsOfferedOnlyWhileThereIsSomethingOfTheirOwnToAskTheOtherPersonInto() {
+        CompanionWorld w = twoPeopleInTheGarden();
+        assertThat(ResidentSimulation.reactions(w, "owner", "gardener", now))
+            .as("owner's own reading-night is under way and gardener is standing right there")
+            .containsExactlyInAnyOrder("greet", "join", "invite", "none");
+        ResidentSimulation.state(w, "owner").goal = null;
+        assertThat(ResidentSimulation.reactions(w, "owner", "gardener", now))
+            .as("nothing of owner's own is waiting to be shared, so there is nothing to invite into")
+            .containsExactlyInAnyOrder("greet", "join", "none");
+    }
+
+    @Test void answeringInviteQueuesAPlanAimedAtTheOtherPerson() {
+        CompanionWorld w = twoPeopleInTheGarden();
+        CompanionRules.advance(w, now.plusSeconds(12));
+        var pending = w.pendingEncounters.getFirst();
+        var resident = ResidentSimulation.state(w, pending.residentId);
+        assertThat(ResidentSimulation.applyReaction(w, pending.id, resident.revision, "invite", "手上这个还差个人手，正好你在", List.of(), now.plusSeconds(12))).isTrue();
+        assertThat(resident.plan.action()).isEqualTo("invite");
+        assertThat(resident.plan.targetId()).isEqualTo(pending.otherId);
+        // The plan is queued, not carried out on the spot - the actual conversation, if it still
+        // makes sense, happens when this plan completes (see ResidentSimulation.complete's "invite"
+        // branch), the same ordinary path a resident's own spontaneous invitation goes through.
+        assertThat(w.conversations).noneMatch(c -> "active".equals(c.status));
+    }
+
+    /** {@code applyReaction}'s "invite" branch re-checks {@link ResidentSimulation#inviteTopic}
+     * itself rather than trusting that the answer is still good by the time it arrives (see that
+     * branch's own comment) - the pair may have gone in and out of the per-pair cooldown {@link
+     * Personality#inviteCooldownSeconds} in between. */
+    @Test void invitingAfterTheyWereJustInvitedAppliesNothing() {
+        CompanionWorld w = twoPeopleInTheGarden();
+        CompanionRules.advance(w, now.plusSeconds(12));
+        var pending = w.pendingEncounters.getFirst();
+        var resident = ResidentSimulation.state(w, pending.residentId);
+        var other = ResidentSimulation.state(w, pending.otherId);
+        Project topic = ResidentSimulation.project(w, resident.goal);
+        // Already asked this same person into this same thing a moment ago - inside the cooldown
+        // canInvite enforces, so the fourth answer no longer means anything.
+        topic.invitationHistory.put(pairKey(resident.id, other.id), now.plusSeconds(12));
+        assertThat(ResidentSimulation.inviteTopic(w, resident.id, other.id, now.plusSeconds(12)))
+            .as("still inside the cooldown from the invitation they just had").isNull();
+        assertThat(ResidentSimulation.applyReaction(w, pending.id, resident.revision, "invite", "手上这个还差个人手，正好你在", List.of(), now.plusSeconds(12))).isFalse();
+        assertThat(resident.plan).as("a stale invite leaves nothing scheduled").isNull();
+    }
+
+    private static String pairKey(String a, String b) { return a.compareTo(b) < 0 ? a + ":" + b : b + ":" + a; }
+
     @Test void aReactionIsRefusedOutrightWhenItCitesAMemoryTheResidentDoesNotOwn() {
         CompanionWorld w = twoPeopleInTheGarden();
         CompanionRules.advance(w, now.plusSeconds(12));

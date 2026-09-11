@@ -26,6 +26,28 @@ public interface ResidentMind {
     default ReactDraft react(ReactRequest request){throw new UnsupportedOperationException("Reaction unavailable");}
     default Result<ReactDraft> reactMetered(ReactRequest request){return new Result<>(react(request),null);}
 
+    /** "This just happened. Do you want to do anything about it?" - asked once, at the moment, about
+     * one thing, with a free "no".
+     *
+     * <p>The same shape as {@link #react}, generalized, and it exists because the lesson react taught
+     * had to be learned four separate times before anybody wrote it down. An action that only makes
+     * sense at one kind of moment does not belong in a menu offered at every moment: {@code
+     * change_work} was offered 839 times in two simulated days and taken 0, {@code invite} 555/0,
+     * {@code lock_door} 470/0, {@code close_cafe} 142/0, while {@code greet} - the one thing this town
+     * asks about as it happens - ran at 80.6%.
+     *
+     * <p>{@code lock_door} is the one that showed what was really wrong. The refusals were not the
+     * model failing to see the point of locking a door; the real occasion for it (last one in the
+     * shop, on the way out) came round 7 times in those two days, and the other 463 asks were put to
+     * somebody standing in a busy open cafe at two in the afternoon. Every one of those refusals was
+     * correct. We had built an instrument that measured our own timing and read it as the residents'
+     * indifference.
+     *
+     * <p>The rules decide only whether this is the moment. They never decide the answer, and they
+     * never treat silence as consent - an unanswered occasion expires and nothing happens. */
+    default ConsiderDraft consider(ConsiderRequest request){throw new UnsupportedOperationException("Consideration unavailable");}
+    default Result<ConsiderDraft> considerMetered(ConsiderRequest request){return new Result<>(consider(request),null);}
+
     /**
      * Rules are the reflex; the model is the explanation. Most of what a person does, they do first
      * and account for afterwards - and the account is frequently not the real cause (Gazzaniga's
@@ -148,11 +170,32 @@ public interface ResidentMind {
     record DialogueRequest(Context perspective,String conversationId,long turnVersion,String operationId,String partnerName,String topicTitle) {}
     record SummaryRequest(Context perspective,String conversationId,String partnerName,List<Turn> transcript,List<MemoryView> conversationMemories) {}
     record DayPlanRequest(Context perspective) {}
-    /** One face-to-face fact put to the resident it happened to. */
-    record ReactRequest(Context perspective,String pendingId,String otherId,String otherName,String otherActivity,String place) {}
-    /** {@code reaction} is one of greet / join / none - walk up and say something, sit down near them
-     * without speaking, or leave them be. Declining is a first-class answer, not a failure. */
+    /** One face-to-face fact put to the resident it happened to. {@code reactions} is what the rules
+     * can see is actually possible at this instant, and it is data rather than a constant because of
+     * {@code invite}: asking somebody to come and do a thing with you is only a question worth asking
+     * while they are standing in front of you and you have a thing that needs hands, which is exactly
+     * this moment - so it is offered here, when both are true, instead of sitting in the ordinary
+     * action menu where it was offered 555 times and taken none (see
+     * {@link com.betterself.growth.town.companion.domain.Occasions}). {@code sharedThing} names what
+     * that is, and is null whenever invite is not among the choices. */
+    record ReactRequest(Context perspective,String pendingId,String otherId,String otherName,String otherActivity,String place,
+                        List<String> reactions,String sharedThing) {}
+    /** {@code reaction} is one of greet / join / invite / none - walk up and say something, sit down
+     * near them without speaking, ask them to come and do the thing you are in the middle of, or
+     * leave them be. Declining is a first-class answer, not a failure. */
     record ReactDraft(String reaction,String reason,List<String> evidenceIds) {}
+    /** A moment the rules recognised as the one moment some particular action makes sense in, put to
+     * the resident as its own question - see {@link
+     * com.betterself.growth.town.companion.domain.Occasions} for why this exists at all and what the
+     * four numbers were that forced it. {@code fact} is what an onlooker would have seen, {@code
+     * question} the one thing being asked, {@code yes}/{@code no} what each answer means in plain
+     * words. There are always exactly two answers and the second one is free. */
+    record ConsiderRequest(Context perspective,String pendingId,String key,String fact,String question,
+                           String yes,String no,String place) {}
+    /** {@code choice} is either the occasion's own key or {@code none}. {@code none} needs no reason
+     * and is the commonest answer; {@code speech} is what the resident actually says out loud if
+     * doing the thing involves saying something, and is null otherwise. */
+    record ConsiderDraft(String choice,String reason,String speech,List<String> evidenceIds) {}
     /** A resident's own recent unaccounted-for behaviour, described the way a bystander would - see
      * {@link com.betterself.growth.town.companion.domain.CompanionWorld.Deed}'s own doc comment. Never
      * carries a motive; supplying one is the entire point of {@link #explain}. */

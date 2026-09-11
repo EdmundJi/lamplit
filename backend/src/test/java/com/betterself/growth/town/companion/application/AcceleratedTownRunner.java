@@ -321,7 +321,17 @@ public final class AcceleratedTownRunner {
         public Result<ReactDraft> reactMetered(ReactRequest request){
             Map<String,Object> input=new LinkedHashMap<>();input.put("residentId",request.perspective().residentId());
             input.put("otherName",request.otherName());input.put("otherActivity",request.otherActivity());input.put("place",request.place());
+            input.put("reactions",request.reactions());input.put("sharedThing",request.sharedThing());
             return capture("react",input,()->delegate.reactMetered(request));
+        }
+        public ConsiderDraft consider(ConsiderRequest request){return considerMetered(request).value();}
+        public Result<ConsiderDraft> considerMetered(ConsiderRequest request){
+            // The occasion's key and the fact it was raised about are what the action audit needs to
+            // answer the question this whole mechanism was built for: how often does the moment for a
+            // given action actually come round, as against how often we used to ask about it.
+            Map<String,Object> input=new LinkedHashMap<>();input.put("residentId",request.perspective().residentId());
+            input.put("key",request.key());input.put("fact",request.fact());input.put("place",request.place());
+            return capture("consider",input,()->delegate.considerMetered(request));
         }
         public DayPlanDraft planDay(DayPlanRequest request){return planDayMetered(request).value();}
         public Result<DayPlanDraft> planDayMetered(DayPlanRequest request){
@@ -418,10 +428,21 @@ public final class AcceleratedTownRunner {
     }
 
     /** One row per (callType, action) combination actually seen, plus a callType-level total row named
-     * "*". {@code offered} only has a real meaning for "decision" (every action listed in that call's
-     * own {@code context.availableActions()}, whether or not it was picked) and "react" (always
-     * greet/join/none, a fixed three-way menu); other call kinds have no menu to offer from, so their
-     * only row is the callType-level total. {@code selected} is how many calls actually chose that
+     * "*". {@code offered} only has a real meaning where the call actually put a set of answers to the
+     * resident: "decision" (every action listed in that call's own {@code context.availableActions()},
+     * whether or not it was picked), "react" (whatever {@code ReactRequest.reactions} held for that
+     * call - not a constant, since invite is among them only when somebody is standing there and
+     * there is something to be asked into) and "consider" (exactly two: the occasion's own key, and
+     * none). Everything else has no menu to offer from, so its only row is the callType-level total.
+     *
+     * <p>The consider rows are the whole reason the occasion mechanism exists, and getting them wrong
+     * would hide precisely what it was built to show. {@code lock_door} read 470 offers / 0 taken off
+     * this table, and that number was our own timing, not the residents' indifference: the moment
+     * locking up belongs to came round 7 times in those two days. The question now is "of the times
+     * the moment actually came, how often did somebody take it" - and that answer only exists if the
+     * occasion's key gets its own row here rather than being swallowed into a callType total.
+     *
+     * <p>{@code selected} is how many calls actually chose that
      * action; {@code applied}/{@code rejected}/{@code failed}/{@code unsupported} come straight from
      * {@link ResidentDirector.OutcomeListener}, not a guess reconstructed from status text. A properly
      * high offered-count with a near-zero selected-count (invite/request_drink's own measured history)
@@ -443,8 +464,14 @@ public final class AcceleratedTownRunner {
                 for(String offeredAction:context.availableActions())bumpOffered(actions,offeredAction);
                 if(output instanceof ResidentMind.Decision decision&&decision.action()!=null)bumpOutcome(actions,decision.action(),outcome);
             } else if("react".equals(kind)){
-                for(String offeredReaction:List.of("greet","join","none"))bumpOffered(actions,offeredReaction);
+                for(String offeredReaction:reactionsOf(input))bumpOffered(actions,offeredReaction);
                 if(output instanceof ResidentMind.ReactDraft draft&&draft.reaction()!=null)bumpOutcome(actions,draft.reaction(),outcome);
+            } else if("consider".equals(kind)){
+                String key=input instanceof Map<?,?> map?(String)map.get("key"):null;
+                // Two answers, and both are offered - counting only the action would make every
+                // occasion look like a menu of one and hide how often "no" was the answer.
+                if(key!=null){bumpOffered(actions,key);bumpOffered(actions,"none");}
+                if(output instanceof ResidentMind.ConsiderDraft draft&&draft.choice()!=null)bumpOutcome(actions,draft.choice(),outcome);
             }
         }
         List<Map<String,Object>> rows=new ArrayList<>();
@@ -456,6 +483,15 @@ public final class AcceleratedTownRunner {
             rows.add(row);
         }
         return rows;
+    }
+    /** What this particular react call actually put to the resident. Falls back to the three that
+     * were once hardcoded here only for a recording made before the list became data - never as a
+     * default for a live call, because a wrong fallback would report invite as offered 0 times while
+     * it was being chosen, which is the same table lying in the opposite direction. */
+    private static List<String> reactionsOf(Object input){
+        if(input instanceof Map<?,?> map&&map.get("reactions") instanceof List<?> reactions&&!reactions.isEmpty())
+            return reactions.stream().map(String::valueOf).toList();
+        return List.of("greet","join","none");
     }
     private static int[] slot(Map<String,int[]> actions,String action){return actions.computeIfAbsent(action,k->new int[6]);}
     private static void bumpOffered(Map<String,int[]> actions,String action){slot(actions,action)[0]++;}

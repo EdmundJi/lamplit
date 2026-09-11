@@ -82,8 +82,13 @@ class ResidentMindJsonContractTest {
         // see the "continue"/"continue_home" rejection cluster this was written to fix). A broad
         // availableActions list here keeps this test's own assertions meaningful without pinning the
         // schema back to a static global set.
-        var broadAvailableActions=List.of("observe","rest","study","work","read","make","sleep","change_work","propose",
-            "continue","resume","request_drink","open_cafe","close_cafe","continue_home","tend","invite","join","away","create","help");
+        // change_work/close_cafe/invite are gone from this list: ResidentSimulation.availableActions
+        // never puts them in a real menu any more (they are asked on their own moment - see
+        // Occasions - or, for invite, as react's own fourth answer), so a schema fixture that still
+        // carried them was pinning behaviour nothing real ever exercises. none is added because it is
+        // the one action availableActions always includes now.
+        var broadAvailableActions=List.of("none","observe","rest","study","work","read","make","sleep","propose",
+            "continue","resume","request_drink","open_cafe","continue_home","tend","join","away","create","help");
         var context=new ResidentMind.Context("artist","14:00","sunny",ResidentMind.actorView(ResidentSimulation.actor(w,"artist")),state.goal,
             List.of(),List.of(),List.of(),List.of(),List.of(),List.of(),List.of(),List.of(),List.of(),
             null,null,null,List.of(),
@@ -93,7 +98,10 @@ class ResidentMindJsonContractTest {
         new QwenResidentMind(provider,new ObjectMapper().findAndRegisterModules(),"qwen",true).decide(context);
 
         assertThat(captured.get().schemaJson()).doesNotContain("offer_assist","offer_delegate","offer_takeover","accept_work");
-        assertThat(captured.get().schemaJson()).contains("continue","resume","sleep","request_drink","open_cafe","close_cafe","continue_home");
+        // close_cafe dropped from this assertion for the same reason it was dropped above: it can
+        // never actually be in availableActions, so schema-contains-close_cafe was never protecting
+        // anything real. none takes its place - the one entry this schema must always carry.
+        assertThat(captured.get().schemaJson()).contains("continue","resume","sleep","request_drink","open_cafe","continue_home","none");
         assertThat(captured.get().instruction()).contains("只能在两人当面的结构化对话回合里协商","必须严格照抄availableActions这次实际给出的字符串","不要猜测或要求任何隐藏数值");
     }
 

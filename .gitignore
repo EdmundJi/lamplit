@@ -37,3 +37,6 @@ logs/
 frontend/public/assets/town/*
 !frontend/public/assets/town/README.md
 tmp/
+
+# Claude Code 的会话目录与临时 worktree，不属于仓库
+.claude/

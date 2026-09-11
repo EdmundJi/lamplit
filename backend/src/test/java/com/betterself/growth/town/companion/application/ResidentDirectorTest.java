@@ -212,7 +212,11 @@ class ResidentDirectorTest {
             world.cafeOperatorId="artist";world.cafeOperating=true;world.cafeStatus="open";
             var former=director.perspective(world,"owner",morning,List.of());
             assertThat(former.cafeRoleFacts()).doesNotContain("我是咖啡馆当前经营者，经营权和吧台设备责任仍在我这里。");
-            assertThat(former.availableActions()).doesNotContain("open_cafe","close_cafe");
+            // close_cafe is not asserted here: it is never in anybody's availableActions, former
+            // manager or not - it is raised on its own moment instead (see Occasions) - so keeping it
+            // in this assertion would have been protecting nothing this test is actually about.
+            // open_cafe is the real claim: CafeService.mayManage denies it to a former operator.
+            assertThat(former.availableActions()).doesNotContain("open_cafe");
             assertThat(former.knownPlaces()).filteredOn(place->place.id().equals("cafe")).singleElement().satisfies(place->{assertThat(place.description()).contains("六个独立窗边座位","安静读书","制作");assertThat(place.possibleActivities()).contains("read","work","make");});
         }finally{director.close();}
     }

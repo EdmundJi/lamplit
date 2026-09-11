@@ -71,10 +71,14 @@ class AcceleratedTownRunnerActionAuditTest {
                 .singleElement().satisfies(r->assertThat(r.get("offered")).isEqualTo(1));
     }
 
-    @Test void reactMenuIsTheFixedThreeWayChoiceAndCallTypesWithoutAMenuStillGetATotalsRow() {
+    @Test void reactMenuIsWhateverThatCallActuallyOfferedAndCallTypesWithoutAMenuStillGetATotalsRow() {
         List<Map<String,Object>> calls = new ArrayList<>();
-        calls.add(row("react", null, new ResidentMind.ReactDraft("greet","r",List.of()), "applied"));
-        calls.add(row("react", null, new ResidentMind.ReactDraft("none","r",List.of()), "applied"));
+        // Not a constant any more: invite is among the answers only when somebody is standing there
+        // and there is something to be asked into, so the menu comes off each call's own record. A
+        // hardcoded three would report invite as offered 0 times while it was being chosen - the same
+        // table lying, just in the other direction.
+        calls.add(row("react", reactMenu(List.of("greet","join","none")), new ResidentMind.ReactDraft("greet","r",List.of()), "applied"));
+        calls.add(row("react", reactMenu(List.of("greet","join","none")), new ResidentMind.ReactDraft("none","r",List.of()), "applied"));
         calls.add(row("summary", null, null, "applied"));
         calls.add(row("dayplan", null, null, "rejected"));
         calls.add(row("explain", null, null, "unsupported"));
@@ -86,6 +90,8 @@ class AcceleratedTownRunnerActionAuditTest {
         assertThat(greet.get("offered")).isEqualTo(2);assertThat(greet.get("selected")).isEqualTo(1);assertThat(greet.get("applied")).isEqualTo(1);
         var join = audit.stream().filter(r->"react".equals(r.get("callType"))&&"join".equals(r.get("action"))).findFirst().orElseThrow();
         assertThat(join.get("offered")).isEqualTo(2);assertThat(join.get("selected")).isEqualTo(0);
+        assertThat(audit).as("这两次都没人可邀请，invite 就不该出现在这张表里")
+            .filteredOn(r->"react".equals(r.get("callType"))&&"invite".equals(r.get("action"))).isEmpty();
 
         // Call kinds with no menu of their own still surface a callType-level "*" total row, so
         // summary/dayplan/explain/reflect's applied/rejected/failed/unsupported counts are visible
@@ -94,6 +100,51 @@ class AcceleratedTownRunnerActionAuditTest {
         assertThat(rowFor(audit,"dayplan")).containsEntry("selected",1).containsEntry("rejected",1);
         assertThat(rowFor(audit,"explain")).containsEntry("selected",1).containsEntry("unsupported",1);
         assertThat(rowFor(audit,"reflect")).containsEntry("selected",1).containsEntry("failed",1);
+    }
+
+    @Test void reactCountsInviteOnlyForTheCallsThatActuallyOfferedIt() {
+        List<Map<String,Object>> calls = new ArrayList<>();
+        calls.add(row("react", reactMenu(List.of("greet","join","none")), new ResidentMind.ReactDraft("greet","r",List.of()), "applied"));
+        calls.add(row("react", reactMenu(List.of("greet","join","invite","none")), new ResidentMind.ReactDraft("invite","r",List.of()), "applied"));
+
+        var audit = AcceleratedTownRunner.buildActionAudit(calls);
+
+        var invite = audit.stream().filter(r->"react".equals(r.get("callType"))&&"invite".equals(r.get("action"))).findFirst().orElseThrow();
+        assertThat(invite.get("offered")).as("只有真的给了这个选项的那一次算数").isEqualTo(1);
+        assertThat(invite.get("selected")).isEqualTo(1);
+        assertThat(invite.get("applied")).isEqualTo(1);
+    }
+
+    @Test void everyOccasionGetsItsOwnRowWithBothAnswersCounted() {
+        // The row this whole mechanism exists to produce. lock_door once read 470 offers / 0 taken
+        // off this table, and that number measured our timing rather than anybody's indifference -
+        // the moment it belongs to came round 7 times in those two days. The question now is how
+        // often somebody took it when the moment really came, and that answer only exists if the
+        // occasion's key has its own row instead of being swallowed into a callType total.
+        List<Map<String,Object>> calls = new ArrayList<>();
+        calls.add(row("consider", occasion("lock_door"), new ResidentMind.ConsiderDraft("lock_door","锁上再走",null,List.of()), "applied"));
+        calls.add(row("consider", occasion("lock_door"), new ResidentMind.ConsiderDraft("none","没必要",null,List.of()), "applied"));
+        calls.add(row("consider", occasion("close_cafe"), new ResidentMind.ConsiderDraft("none","再开一会儿",null,List.of()), "applied"));
+
+        var audit = AcceleratedTownRunner.buildActionAudit(calls);
+
+        var lock = audit.stream().filter(r->"consider".equals(r.get("callType"))&&"lock_door".equals(r.get("action"))).findFirst().orElseThrow();
+        assertThat(lock.get("offered")).as("锁门这个时机来了两次").isEqualTo(2);
+        assertThat(lock.get("selected")).as("其中一次真锁了").isEqualTo(1);
+        var none = audit.stream().filter(r->"consider".equals(r.get("callType"))&&"none".equals(r.get("action"))).findFirst().orElseThrow();
+        assertThat(none.get("offered")).as("每一问都摆着一个免费的不做").isEqualTo(3);
+        assertThat(none.get("selected")).as("三次里两次答的是不做").isEqualTo(2);
+        var close = audit.stream().filter(r->"consider".equals(r.get("callType"))&&"close_cafe".equals(r.get("action"))).findFirst().orElseThrow();
+        assertThat(close.get("offered")).isEqualTo(1);assertThat(close.get("selected")).isEqualTo(0);
+    }
+
+    private static Map<String,Object> reactMenu(List<String> reactions){
+        Map<String,Object> input=new LinkedHashMap<>();input.put("residentId","artist");input.put("reactions",reactions);
+        return input;
+    }
+    private static Map<String,Object> occasion(String key){
+        Map<String,Object> input=new LinkedHashMap<>();input.put("residentId","owner");input.put("key",key);
+        return input;
     }
 
     private static Map<String,Object> rowFor(List<Map<String,Object>> audit,String callType){

@@ -251,6 +251,10 @@ public final class ResidentSimulation {
         // physical work but does not manufacture a reflection, social choice or new intention.
         expirePendingEncounters(w,at);
         expireDeclinedEncounters(w);
+        // Occasioned actions get recognised in exactly one place, right beside the encounter pass
+        // they are modelled on - see Occasions, which is also the only thing allowed to raise one.
+        Occasions.expire(w,at);
+        Occasions.scan(w,at);
         // Promises have their own clock too, the same way CafeService.tick above does: whether one
         // is due does not depend on whose plan happens to be running right now.
         settlePromises(w,at);
@@ -463,6 +467,25 @@ public final class ResidentSimulation {
         } else schedule(w,r,action,place,target,reason,at,duration);
     }
     static void schedule(CompanionWorld w,ResidentState r,String action,String place,String target,String reason,Instant at,int duration) {
+        // The cafe's door (see DoorService/docs/06-society.md "物件要有自己的类"): only an actual
+        // arrival needs asking, never someone already standing inside continuing whatever they were
+        // doing - the door blocks entry, not staying. "Arriving" is read straight off where the actor
+        // physically still is at this exact moment, which is either "street" (a travel plan just
+        // completed - see complete()'s "travel" branch above) or already `place` (moveOrSchedule chose
+        // not to travel because they were there already); nothing else reaches this method with `place`
+        // equal to "cafe" without having gone through one of those two paths first.
+        if("cafe".equals(place)&&!place.equals(actor(w,r.id).place())&&!DoorService.canEnter(w,r.id)){
+            DoorService.perceiveLockedOut(w,r,at);
+            r.plan=null;r.desiredAction=null;r.desiredDurationSeconds=0;r.revision++;
+            r.thought="咖啡馆的门锁着，进不去";
+            TownPlaces.release(w,r.id,at);
+            // A clean failure, not a retry loop (docs/06-society.md "不能变成死循环"): the plan is
+            // simply gone, which is exactly the condition ResidentDirector.needsDecision reads as
+            // "ask this resident what they want next" - a genuinely fresh decision next time, never an
+            // automatic re-attempt of the same walk this method itself would schedule.
+            replaceActor(w,r.id,"street","idle","咖啡馆的门锁着，进不去",at.plusSeconds(300));
+            return;
+        }
         r.plan=new Plan("p-"+(++w.eventSequence),action,place,target,reason,at,at.plusSeconds(duration));r.revision++;r.thought=reason;
         r.desiredAction=null;r.desiredDurationSeconds=0;
         String label=switch(action){case "create","help"->"动手准备"+(project(w,target)==null?"手上的小事":"「"+project(w,target).title+"」");case "study"->"在窗边复习，想守住一点安静";case "invite"->reason;case "join"->"过去和"+(target==null?"邻居":actor(w,target).name())+"坐一起";case "sleep"->"睡着了，给明天留一点精神";case "rest"->"捧着杯子歇一会儿";case "celebrate"->"想请大家看看一起做出来的东西";case "wait"->reason;case "tend"->r.id.equals(CafeService.operatorId(w))?"回到吧台，照应一下柜台前的人":"替"+actor(w,CafeService.operatorId(w)).name()+"照看吧台";case "away"->"出门去处理自己的事："+reason;default->reason;};
@@ -1836,6 +1859,25 @@ public final class ResidentSimulation {
         if(activeConversation(w,resident.id)!=null||activeConversation(w,other.id)!=null)return;
         startLifeConversation(w,resident,other,now);
     }
+    /** What this resident could really do about the person in front of them at this instant. Three
+     * answers always; a fourth - asking them to come and do the thing you are in the middle of -
+     * only when there actually is such a thing and this pair is not on its invitation cooldown. It is
+     * offered here rather than in the ordinary action menu because here is the only moment it means
+     * anything: 555 menu offers, none taken (see {@link Occasions}). */
+    public static List<String> reactions(CompanionWorld w,String residentId,String otherId,Instant at){
+        return inviteTopic(w,residentId,otherId,at)==null
+            ?List.of("greet","join","none"):List.of("greet","join","invite","none");
+    }
+    /** The thing this resident is in the middle of that the other person could be asked into, or null
+     * - which is the usual answer. Reads the resident's own current goal only: "come and help me with
+     * this" is about what you are doing, not about an inventory of everything unfinished in town. */
+    public static Project inviteTopic(CompanionWorld w,String residentId,String otherId,Instant at){
+        ResidentState r=state(w,residentId),other=state(w,otherId);
+        if(r==null||other==null)return null;
+        Project topic=project(w,r.goal);
+        if(topic==null||!canTalkTo(w,residentId,otherId)||!canInvite(w,r,other,topic,at))return null;
+        return topic;
+    }
     public static CompanionWorld.PendingEncounter pendingEncounter(CompanionWorld w,String id){
         return w.pendingEncounters.stream().filter(p->p.id.equals(id)).findFirst().orElse(null);
     }
@@ -1847,7 +1889,7 @@ public final class ResidentSimulation {
      * as a resident's own "invite" already does. */
     public static boolean applyReaction(CompanionWorld w,String pendingId,long residentRevision,String reaction,String reason,List<String> evidence,Instant now){
         CompanionWorld.PendingEncounter pending=pendingEncounter(w,pendingId);
-        if(pending==null||!Set.of("greet","join","none").contains(reaction))return false;
+        if(pending==null||!Set.of("greet","join","invite","none").contains(reaction))return false;
         ResidentState resident=state(w,pending.residentId),other=state(w,pending.otherId);
         if(resident==null||other==null||resident.revision!=residentRevision)return false;
         if(reason==null||reason.isBlank()||reason.length()>160)return false;
@@ -1868,6 +1910,19 @@ public final class ResidentSimulation {
                 if(resident.plan!=null)suspend(resident,now);
                 schedule(w,resident,"join",pending.place,other.id,reason,now,900);
                 memory(w,resident.id,resident.id,"observed",now,null,"我在"+placeName(pending.place)+"看见"+otherName+"，没说话，就在旁边坐了下来。",evidence,5);
+            }
+            case "invite"->{
+                // Asking them into the thing you are actually in the middle of. Scheduled as the
+                // ordinary "invite" plan and completed by the ordinary completion branch, so what an
+                // invitation does is still written in exactly one place - this only decides that the
+                // moment to ask about it is while the two of them are standing together.
+                // The pending fact was already taken off the queue above; gone stale between the
+                // question and the answer just means nothing happens.
+                if(inviteTopic(w,resident.id,other.id,now)==null)return false;
+                // Routed through applyDecision rather than scheduled here, so what an invitation IS
+                // stays written in exactly one place. This method only decides that the moment to ask
+                // about it is while the two of them are standing together.
+                return applyDecision(w,resident.id,residentRevision,w.intentRevision,pending.place,"invite",other.id,reason,null,evidence,now);
             }
             default->{
                 // Not approaching is still something that happened to this resident, and it is the
@@ -1935,7 +1990,11 @@ public final class ResidentSimulation {
     }
     public static List<String> availableActions(CompanionWorld w,String residentId,Instant at){
         ResidentState r=state(w,residentId);if(r==null)return List.of();
-        LinkedHashSet<String> actions=new LinkedHashSet<>(List.of("observe","rest","study","work","read","make","sleep","away","change_work"));
+        // "none" is first-class and always available. 26 verbs and no way to say "nothing in
+        // particular" meant that answer had to disguise itself as something: a measured two-day run
+        // put 18% of all decisions on rest, 18% on continue and 14% on make, and every one of those
+        // is a real action the town then had to carry out. See Occasions' own doc comment.
+        LinkedHashSet<String> actions=new LinkedHashSet<>(List.of("none","observe","rest","study","work","read","make","sleep","away"));
         if(r.plan!=null&&!("cafe".equals(actor(w,residentId).place())&&!"open".equals(w.cafeStatus)))actions.add("continue");
         if(w.projects.stream().anyMatch(p->knows(w,residentId,p.id)&&canAdvance(p,residentId)))actions.add("create");
         if(w.projects.stream().anyMatch(p->knows(w,residentId,p.id)&&p.members.contains(residentId)&&canAdvance(p,residentId)))actions.add("help");
@@ -1947,12 +2006,17 @@ public final class ResidentSimulation {
         // another building.
         if(w.projects.stream().anyMatch(p->"ready".equals(p.status)&&p.contributors.contains(residentId)
             &&p.place.equals(actor(w,residentId).place())))actions.add("celebrate");
-        if(w.residentStates.stream().anyMatch(other->canTalkTo(w,residentId,other.id))){actions.add("invite");actions.add("join");}
+        // invite is not here: asking somebody to come and do a thing with you only means anything
+        // when they are standing in front of you, which is the moment react already owns. See
+        // Occasions. join stays - sitting down near people is something you can set out to do.
+        if(w.residentStates.stream().anyMatch(other->canTalkTo(w,residentId,other.id)))actions.add("join");
         if(CafeService.mayTend(w,residentId)&&"cafe".equals(actor(w,residentId).place())&&CafeService.oldestWaitingRequestId(w)!=null)actions.add("tend");
         if(CafeService.acceptingOrders(w)&&"cafe".equals(actor(w,residentId).place())&&!residentId.equals(CafeService.operatorId(w))
             &&w.serviceRequests.stream().noneMatch(request->residentId.equals(request.requesterId)&&Set.of("waiting","preparing","delivered").contains(request.status)))actions.add("request_drink");
         if(CafeService.mayManage(w,residentId)&&"closed".equals(w.cafeStatus))actions.add("open_cafe");
-        if(CafeService.mayManage(w,residentId)&&"open".equals(w.cafeStatus)&&"cafe".equals(actor(w,residentId).place())&&!"sleep".equals(actor(w,residentId).activity()))actions.add("close_cafe");
+        // close_cafe and lock_door are not here either, for the reason Occasions documents at length:
+        // both were offered on every decision taken inside the cafe (142 and 470 times in two days,
+        // taken 0 and 0) when the moment either one belongs to comes round a handful of times a day.
         if(portableAction(w,residentId,at)!=null)actions.add("continue_home");
         PausedAction paused=pausedAction(w,residentId,at);if(paused!=null&&(!"cafe".equals(paused.place())||"open".equals(w.cafeStatus)))actions.add("resume");
         if(w.projects.stream().filter(project->residentId.equals(project.ownerId)&&!"celebrating".equals(project.status)).count()<2)actions.add("propose");
@@ -2007,7 +2071,7 @@ public final class ResidentSimulation {
         if(!routineCues(w,r.id,at).isEmpty())return (int)Math.max(90*60,Duration.between(local,wake).getSeconds());
         double hours=Math.max(1.5,Math.min(4.0,(65-r.energy)/10.0));return (int)Math.round(hours*3600);
     }
-    private static final Set<String> DECISION_ACTIONS=Set.of("continue","resume","observe","create","help","celebrate","invite","join","rest","sleep","study","work","read","make","request_drink","tend","open_cafe","close_cafe","continue_home","away","offer_assist","offer_delegate","offer_takeover","accept_work","change_work");
+    private static final Set<String> DECISION_ACTIONS=Set.of("none","continue","resume","observe","create","help","celebrate","invite","join","rest","sleep","study","work","read","make","request_drink","tend","open_cafe","close_cafe","lock_door","continue_home","away","offer_assist","offer_delegate","offer_takeover","accept_work","change_work");
     /** How many refusals in a row before this resident stops being asked for a while, and how long
      * that while can grow to. This is a retry backoff, not a judgement about how often a person
      * reconsiders their day - the situation the question was asked in has to change before the same
@@ -2030,6 +2094,26 @@ public final class ResidentSimulation {
         ResidentState r=state(w,residentId);if(r==null||r.revision!=residentRevision||w.intentRevision!=intentRevision||!DECISION_ACTIONS.contains(action))return false;
         if(reason==null||reason.isBlank()||reason.length()>160||speech!=null&&speech.length()>180)return false;
         if(evidence==null||evidence.stream().anyMatch(id->w.memories.stream().noneMatch(m->m.id().equals(id)&&m.ownerId().equals(residentId))))return false;
+        // "nothing in particular". A person asked what they are going to do next is often not going
+        // to do anything, and until this existed that answer had nowhere to go: the enum held 26
+        // verbs and every one of them was a thing the town then had to carry out, so the answer came
+        // back disguised as rest (18% of a measured two-day run), continue (18%) or make (14%). It
+        // costs nothing to give it its own word, and what it buys is that those three numbers start
+        // meaning what they say.
+        //
+        // Doing nothing is a real outcome, not a rejection: the backoff in recordDecisionOutcome
+        // counts refusals, and counting this one would punish a resident for answering honestly. It
+        // is a stretch of quiet, deliberately short of the thinking cooldown's own ceiling, and an
+        // encounter still cuts straight through it (ResidentDirector dispatches those without
+        // consulting any cooldown at all) - standing still is not the same as being unreachable.
+        if("none".equals(action)){
+            int quiet=600+Math.floorMod((r.id+"|"+now.getEpochSecond()/600).hashCode(),1200);
+            r.thought=reason;r.desiredAction=null;r.desiredDurationSeconds=0;r.revision++;
+            r.decisionRetryAfter=now.plusSeconds(quiet);
+            if(r.plan==null)replaceActor(w,residentId,actor(w,residentId).place(),"idle",reason,now.plusSeconds(quiet));
+            w.revision++;
+            return true;
+        }
         // "away" (item 8) genuinely leaves the map: its own place is a sentinel, not one of the four
         // real locations, so it is handled before the generic place-containment check below ever runs.
         if("away".equals(action)){
@@ -2073,6 +2157,10 @@ public final class ResidentSimulation {
             if(!"cafe".equals(resolvedPlace)||!CafeService.mayManage(w,residentId)||!"closed".equals(w.cafeStatus))return false;
             if(r.plan!=null)suspend(r,now);
             moveOrSchedule(w,r,"open_cafe","cafe",null,reason,now,30);
+            return appliedThought(w,r,residentId,reason,null,now);
+        }
+        if("lock_door".equals(action)){
+            if(!"cafe".equals(resolvedPlace)||!DoorService.lock(w,r,now))return false;
             return appliedThought(w,r,residentId,reason,null,now);
         }
         if("request_drink".equals(action)){

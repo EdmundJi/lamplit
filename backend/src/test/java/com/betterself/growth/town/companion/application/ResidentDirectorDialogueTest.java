@@ -146,18 +146,30 @@ class ResidentDirectorDialogueTest {
         }finally{director.close();}
     }
     @Test void operatorCanCloseAndAnotherResidentCanCarryPortableWorkHomeThroughDirector()throws Exception {
-        var clock=new MutableClock(Instant.parse("2026-09-08T12:59:00Z"));
+        // 21:10 Asia/Shanghai - ten minutes past the hour this shop usually stops, which is what
+        // makes closing a question at all. At 20:59 it is not one, and the occasion is not raised.
+        var clock=new MutableClock(Instant.parse("2026-09-08T13:10:00Z"));
         var world=CompanionRules.join("director-closing","住客","Asia/Shanghai",clock.instant(),true);world.conversations.clear();world.serviceRequests.clear();world.cafeStatus="open";
         var owner=ResidentSimulation.state(world,"owner");owner.plan=null;
         var artist=ResidentSimulation.state(world,"artist");artist.plan=new Plan("portable-sketch","make","cafe",null,"把窗边那张小稿收尾",clock.instant().minusSeconds(120),clock.instant().plusSeconds(600));artist.suspendedAction=null;
         move(world,"artist","cafe","make","还在画小稿",clock.instant().plusSeconds(600));
         for(var r:world.residentStates)if(Set.of("student","gardener").contains(r.id))r.plan=new Plan("park-"+r.id,"sleep","home-"+r.id,null,"睡着",clock.instant(),clock.instant().plusSeconds(600));
+        move(world,"owner","cafe","idle","在吧台后面",clock.instant().plusSeconds(600));
+        // Closing for the day is no longer one entry in the ordinary menu (142 offers, 0 taken - see
+        // Occasions); the rules recognise the moment the hour has passed and put it as its own
+        // question. Raising it is what advance() would do on any ordinary tick.
+        Occasions.scan(world,clock.instant());
+        assertThat(world.pendingOccasions).extracting(p->p.key).contains("close_cafe");
         var store=new Store(world);var decisions=new AtomicInteger();
         ResidentMind mind=new ResidentMind(){
             public boolean enabled(){return true;}
+            public ConsiderDraft consider(ConsiderRequest request){
+                assertThat(request.key()).isEqualTo("close_cafe");
+                assertThat(request.perspective().residentId()).isEqualTo("owner");
+                return new ConsiderDraft("close_cafe","到打烊时间了","今天先打烊，我要关灯了。",List.of());
+            }
             public Decision decide(Context context){
                 decisions.incrementAndGet();
-                if("owner".equals(context.residentId())){assertThat(context.availableActions()).contains("close_cafe");return new Decision("close_cafe","cafe",null,"到打烊时间了","今天先打烊，我要关灯了。",List.of(),null,null);}
                 assertThat(context.residentId()).isEqualTo("artist");assertThat(context.portableAction()).isNotNull();assertThat(context.availableActions()).contains("continue_home");
                 return new Decision("continue_home","home",null,"把没画完的带回去","",List.of(),null,null);
             }
@@ -166,7 +178,7 @@ class ResidentDirectorDialogueTest {
         try{
             await(()->{director.consider(51,world);return "closing".equals(world.cafeStatus);});
             clock.now=clock.now.plusSeconds(13);
-            await(()->{director.consider(51,world);return decisions.get()==2&&Set.of("travel","make").contains(artist.plan.action());});
+            await(()->{director.consider(51,world);return decisions.get()==1&&Set.of("travel","make").contains(artist.plan.action());});
             assertThat(world.cafeStatus).isEqualTo("closing");
             assertThat(artist.plan.place()).isIn("home-artist","cafe");
             if("travel".equals(artist.plan.action())){assertThat(artist.desiredAction).isEqualTo("make");assertThat(artist.desiredDurationSeconds).isEqualTo(587);}
