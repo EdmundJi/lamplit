@@ -34,7 +34,12 @@ export function cafeSeatAt(point: { x: number; y: number }) {
   return CAFE_SEATS.find(seat => Math.abs(seat.x - point.x) < .5 && Math.abs(seat.y - point.y) < .5)
 }
 
-export const COMPANION_WORLD_SIZE = { width: 1248, height: 768 } as const
+// Widened (never moved) to fit board/academy/gym - see tmp/town-stage-extension.md section 3.
+// Every rectangle that already existed at 1248x768 (HOME_ROOMS, the original four PLACE_FRAMES,
+// CAFE_SEATS, POSITION_SLOTS, RAIN_SHELTERS) keeps its exact old coordinates; the three new
+// buildings below live entirely past the old x=1248 right edge, in the newly added strip, so
+// nothing already drawn had to shift.
+export const COMPANION_WORLD_SIZE = { width: 1548, height: 768 } as const
 export interface HomeRoom {
   x: number; y: number; w: number; h: number
   /** An open standing point, the front doorstep, and the owned bed's foot anchor. */
@@ -63,9 +68,25 @@ export const HOME_ROOMS: Record<string, HomeRoom> = {
   artist: homeRoom(96, 492, 160, 208), gardener: homeRoom(288, 492, 160, 208),
   self: homeRoom(480, 492, 160, 208), fixer: homeRoom(1080, 480, 160, 224),
 }
+/**
+ * Three new buildings east of the original 1248-wide canvas (the new strip runs x=1248..1548).
+ * Academy and gym are real rooms drawn with the same `room()` helper as the homes/cafe; the board
+ * is a small open-air plaza (a bulletin board needs a paved patch, not four walls), so it has no
+ * `doorX`. Placed with the same ~28px alley width used elsewhere (e.g. student's home to the
+ * cafe) between them and fixer's house/garden, and stacked with 40px gaps between each other so a
+ * single vertical path can connect academy's doorway, through the board's plaza, into the gym's
+ * doorway, down to the street's main bottom path - see the connecting `path()` calls in
+ * companion-stage.ts.
+ */
+export const ACADEMY_ROOM = { x: 1268, y: 40, w: 260, h: 220, doorX: 1398 } as const
+export const GYM_ROOM = { x: 1268, y: 480, w: 260, h: 220, doorX: 1398 } as const
+export const BOARD_AREA = { x: 1268, y: 300, w: 200, h: 140 } as const
 export const PLACE_FRAMES = {
   home: { x: 72, y: 96, w: 576, h: 628 }, cafe: { x: 372, y: 0, w: 664, h: 576 },
   garden: { x: 1036, y: 192, w: 184, h: 274 }, street: { x: 32, y: 344, w: 816, h: 132 },
+  academy: { x: ACADEMY_ROOM.x, y: ACADEMY_ROOM.y, w: ACADEMY_ROOM.w, h: ACADEMY_ROOM.h },
+  gym: { x: GYM_ROOM.x, y: GYM_ROOM.y, w: GYM_ROOM.w, h: GYM_ROOM.h },
+  board: { x: BOARD_AREA.x, y: BOARD_AREA.y, w: BOARD_AREA.w, h: BOARD_AREA.h },
 } as const
 
 /**
@@ -93,13 +114,14 @@ export const STAGE_PLACES: Record<string, StagePlace> = {
   home: { id: 'home', label: '归家小屋', target: { x: 560, y: 596 }, frame: PLACE_FRAMES.home, scenePlace: 'home', status: 'ready' },
   cafe: { id: 'cafe', label: '慢慢咖啡', target: { x: 640, y: 190 }, frame: PLACE_FRAMES.cafe, scenePlace: 'cafe', status: 'ready' },
   garden: { id: 'garden', label: '门前花园', target: { x: 1128, y: 329 }, frame: PLACE_FRAMES.garden, scenePlace: 'garden', status: 'ready' },
-  // No real building yet - mapped near the cafe's own doorway (CAFE_SERVICE.entry) until a board
-  // gets drawn. status stays 'placeholder' until then.
-  board: { id: 'board', label: '公告板', target: { x: 682, y: 340 }, scenePlace: 'cafe', status: 'placeholder' },
-  // Reserved: maps/academy-study.json and maps/public-gym.json already exist as interiors but are
-  // not wired into the street scene. Target camera falls back to street through resolveStagePlace.
-  academy: { id: 'academy', label: '学院', target: { x: 440, y: 410 }, scenePlace: 'street', status: 'placeholder' },
-  gym: { id: 'gym', label: '健身房', target: { x: 440, y: 410 }, scenePlace: 'street', status: 'placeholder' },
+  // The board is an open-air plaza (BOARD_AREA), not a room - target points at the two mounted
+  // boards themselves, not the plaza's geometric centre (which would frame mostly empty paving).
+  board: { id: 'board', label: '公告板', target: { x: 1373, y: 360 }, frame: PLACE_FRAMES.board, scenePlace: 'street', status: 'ready' },
+  // Target points at the study desk/blackboard corner (ACADEMY_ROOM), the part of the room that
+  // actually has content, rather than the room's own geometric centre.
+  academy: { id: 'academy', label: '学院', target: { x: 1398, y: 180 }, frame: PLACE_FRAMES.academy, scenePlace: 'street', status: 'ready' },
+  // Target points at the mirror/rack equipment cluster (GYM_ROOM), same reasoning as academy.
+  gym: { id: 'gym', label: '健身房', target: { x: 1358, y: 620 }, frame: PLACE_FRAMES.gym, scenePlace: 'street', status: 'ready' },
   // A virtual place, not a building: "wherever the avatar currently is". /today binds here instead
   // of a fixed 'street' target, because the street itself is usually empty (everyone is inside a
   // home or the cafe) - TownStage.vue overrides both `target` and `label` every render from the

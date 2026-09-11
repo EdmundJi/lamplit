@@ -6,6 +6,15 @@ describe('stage place registry', () => {
     expect(resolveStagePlace('cafe')).toEqual(STAGE_PLACES.cafe)
     expect(resolveStagePlace('garden')).toEqual(STAGE_PLACES.garden)
   })
+  it('resolves the three east-wing places (board/academy/gym) to their own real geometry, not a street fallback', () => {
+    for (const id of ['board', 'academy', 'gym']) {
+      const resolved = resolveStagePlace(id)
+      expect(resolved.status).toBe('ready')
+      expect(resolved).toEqual(STAGE_PLACES[id])
+      expect(resolved.target).not.toEqual(STAGE_PLACES.street!.target)
+      expect(resolved.frame).toBeDefined()
+    }
+  })
   it('every ready place keeps its camera target inside the world bounds', () => {
     for (const place of Object.values(STAGE_PLACES)) {
       expect(place.target.x).toBeGreaterThanOrEqual(0)
@@ -14,11 +23,14 @@ describe('stage place registry', () => {
       expect(place.target.y).toBeLessThanOrEqual(COMPANION_WORLD_SIZE.height)
     }
   })
-  it('falls back a placeholder place\'s camera target to street, but keeps its own label/status', () => {
-    const resolved = resolveStagePlace('board')
-    expect(resolved.target).toEqual(STAGE_PLACES.street!.target)
-    expect(resolved.label).toBe('公告板')
-    expect(resolved.status).toBe('placeholder')
+  it('every ready place\'s frame stays within the world bounds too', () => {
+    for (const place of Object.values(STAGE_PLACES)) {
+      if (!place.frame) continue
+      expect(place.frame.x).toBeGreaterThanOrEqual(0)
+      expect(place.frame.y).toBeGreaterThanOrEqual(0)
+      expect(place.frame.x + place.frame.w).toBeLessThanOrEqual(COMPANION_WORLD_SIZE.width)
+      expect(place.frame.y + place.frame.h).toBeLessThanOrEqual(COMPANION_WORLD_SIZE.height)
+    }
   })
   it('falls back an unknown id entirely to street', () => {
     expect(resolveStagePlace('unknown-place')).toEqual(STAGE_PLACES.street)
@@ -28,9 +40,11 @@ describe('stage place registry', () => {
     beforeEach(() => { vi.spyOn(console, 'warn').mockImplementation(() => undefined) })
     afterEach(() => { vi.restoreAllMocks() })
     it('warns at most once per id, only in dev', () => {
-      resolveStagePlace('academy')
-      resolveStagePlace('academy')
-      resolveStagePlace('gym')
+      // board/academy/gym are all 'ready' now (no placeholder left in the registry), so this test
+      // exercises the other branch of the same guard - unknown ids - instead.
+      resolveStagePlace('unknown-place-a')
+      resolveStagePlace('unknown-place-a')
+      resolveStagePlace('unknown-place-b')
       // import.meta.env.DEV is true under vitest, so every distinct placeholder/unknown id warns
       // exactly once - repeat calls for the same id must not spam the console.
       expect(console.warn).toHaveBeenCalledTimes(2)

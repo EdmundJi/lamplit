@@ -89,7 +89,10 @@ const quietWorkspace = computed(() => route.path === '/ai' || route.path.include
 // /auth, /onboarding and /desktop-pet are already separate top-level routes that never mount
 // UserLayout at all - this guard is defensive, in case that routing structure ever changes.
 const excludedStagePaths = ['/auth', '/onboarding', '/desktop-pet']
-const showTownStage = computed(() => !mode.minimal && auth.signedIn && !excludedStagePaths.some(path => route.path === path || route.path.startsWith(`${path}/`)))
+// Both modes get a companion layer now - growth mode docks it in the street strip above the page,
+// minimal mode docks the same shared instance into the right-hand rail (see TownStage.vue's
+// computeTarget()); only the *slot* it lands in differs, never whether it exists.
+const showTownStage = computed(() => auth.signedIn && !excludedStagePaths.some(path => route.path === path || route.path.startsWith(`${path}/`)))
 const welcomeKey = computed(() => `better-self:welcome:${auth.user?.publicId ?? 'guest'}`)
 const mobileMoreActive = computed(() => mobileMoreNav.some(item => route.path === item.to || route.path.startsWith(`${item.to}/`)))
 const brandInitial = computed(() => {
@@ -145,7 +148,7 @@ onBeforeUnmount(() => {
       <div class="sidebar-account"><RouterLink to="/profile"><span class="account-avatar">{{ brandInitial }}</span><strong>{{ auth.user?.displayName || '我的成长档案' }}</strong></RouterLink><RouterLink class="account-settings" to="/settings" aria-label="设置"><Settings :size="18" /></RouterLink></div>
     </aside>
     <main id="main-content" class="workspace" tabindex="-1">
-      <header v-if="mode.minimal" class="minimal-topbar"><RouterLink to="/today" class="minimal-brand">我的清单</RouterLink><div><RouterLink to="/settings">设置</RouterLink><button type="button" @click="changeMode($event, false)">切换成长模式</button></div></header>
+      <header v-if="mode.minimal" class="minimal-topbar workspace-topbar"><RouterLink to="/today" class="minimal-brand"><span class="brand-mark" aria-hidden="true"><Building2 :size="18" /></span><strong>我的清单</strong></RouterLink><div><RouterLink class="icon-button" to="/settings" aria-label="设置"><Settings :size="18" /></RouterLink><button type="button" class="secondary mode-switch" @click="changeMode($event, false)">切换成长模式</button></div></header>
       <header v-else class="workspace-topbar">
         <span class="workspace-context"><PanelLeftClose :size="17" /><span>{{ currentNav?.group || '成长' }}</span><span class="context-slash">/</span><strong>{{ currentNav?.label || '更好的自己' }}</strong></span>
         <div>
@@ -160,10 +163,15 @@ onBeforeUnmount(() => {
           <RouterLink class="icon-button" to="/friends/chat" aria-label="消息中心"><Bell :size="18" /></RouterLink>
         </div>
       </header>
-      <div v-if="showTownStage" id="town-strip-slot" class="town-strip" :hidden="route.path === '/town'" aria-label="门前小街" />
-      <RouterView v-slot="{ Component, route }">
-        <component :is="Component" :key="route.path" />
-      </RouterView>
+      <div v-if="showTownStage && !mode.minimal" id="town-strip-slot" class="town-strip" :hidden="route.path === '/town'" aria-label="门前小街" />
+      <div class="workspace-body" :class="{ 'workspace-body--minimal': mode.minimal }">
+        <RouterView v-slot="{ Component, route }">
+          <component :is="Component" :key="route.path" />
+        </RouterView>
+        <!-- 左清单右小镇 (docs/04): minimal mode's own slot for the same shared Teleport target -
+             a quiet companion rail beside the list, never a second dashboard competing with it. -->
+        <div v-if="showTownStage && mode.minimal" id="town-minimal-slot" class="town-minimal" :hidden="route.path === '/town'" aria-label="小镇陪伴" />
+      </div>
       <TownStage v-if="showTownStage" />
     </main>
     <Transition name="mobile-more">
@@ -195,11 +203,16 @@ onBeforeUnmount(() => {
 <style scoped>
 .shell.shell--minimal { padding-left: 0; }
 .shell--minimal .workspace { padding-bottom: 24px; }
-.minimal-topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; max-width: 840px; margin: auto; padding: 24px; border-bottom: 1px solid var(--border); }
-.minimal-topbar a { text-decoration: none; color: var(--muted); }
-.minimal-topbar .minimal-brand { color: var(--ink); font-weight: 700; }
-.minimal-topbar > div { display: flex; align-items: center; gap: 16px; font-size: 13px; }
-.minimal-topbar button { border: 0; background: transparent; color: var(--muted); padding: 10px 0; cursor: pointer; font: inherit; }
+/* The minimal topbar is a narrowed *instance* of .workspace-topbar (same class, applied directly
+   in the template), not a parallel bar with its own height/padding/border numbers - it only adds
+   the width-centering that growth mode's topbar gets for free from the fixed sidebar narrowing
+   its available width. Its brand mark, icon-button and secondary-button children all reuse the
+   exact same shared classes as growth mode's sidebar/topbar (see .brand-mark, .icon-button,
+   .secondary below) instead of a second set of link/button rules. */
+.minimal-topbar { width: min(100%, 1144px); margin: 0 auto; }
+.minimal-brand { display: flex; align-items: center; gap: 10px; color: var(--ink); font-weight: 700; text-decoration: none; }
+.minimal-brand strong { font-size: 15px; letter-spacing: .02em; }
+.minimal-topbar .mode-switch { margin-bottom: 0; }
 .mode-switch { margin-bottom: 16px; }
 
 .shell { min-height: 100vh; padding-left: var(--sidebar); }
@@ -215,6 +228,39 @@ nav a.router-link-active { background: color-mix(in srgb, var(--primary-soft) 76
 .sidebar-note { margin-top: auto; display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 8px; align-items: start; padding: 13px 12px; border: 1px solid color-mix(in srgb, var(--amber) 30%, var(--border)); border-radius: var(--radius); background: color-mix(in srgb, var(--amber) 8%, var(--surface)); color: var(--muted); font-size: 12px; line-height: 1.65; }
 .sidebar-note svg { margin-top: 2px; color: var(--primary); }
 .workspace { min-width: 0; }
+.workspace-body { min-width: 0; }
+/* 左清单右小镇 (docs/04): minimal mode's one shape - whatever the current route renders (still in
+   its own .page wrapper) beside a persistent, quieter companion rail. Both this grid and
+   .minimal-topbar share the exact same width/gutter rhythm as growth mode's .page (min(100%,
+   1144px), 32px sides) so the rail's edges land where .page's own padding would have put them -
+   the list column then turns off .page's own horizontal centering/padding so the two rhythms
+   don't stack (see the ".page" override below). */
+/* The list column (minmax(0,1fr)) is flexible, not fixed - but it can never actually render wider
+   than ~736px, because the whole row is capped at 1144px total: 1144 - 64 (this row's own 32px
+   sides) - 24 (gap) - 320 (the rail's own max) = 736. Every page in this app (growth mode's .page,
+   minimal mode's own .checklist) already self-manages its width the same way - width:min(100%,
+   <its own cap>) plus margin:0 auto - so handing it a column that never exceeds ~736px (under
+   .checklist's own 744px cap) means that min() always resolves to 100% of the column: the page
+   fills it edge-to-edge and only shrinks further on its own from there, instead of ever having so
+   much slack that its self-centering would read as an island adrift in extra space. */
+.workspace-body--minimal { display: grid; grid-template-columns: minmax(0, 1fr) minmax(240px, 320px); align-items: start; gap: 24px; width: min(100%, 1144px); margin: 0 auto; padding: 0 32px 32px; }
+/* A quiet companion window, not a second dashboard: same box language as .town-strip below (same
+   border/radius/surface tone, no shadow - shadows are reserved for floating layers in this app).
+   Sticky so it keeps you company while a long list scrolls, same idea as a desk pet staying in
+   view - never grabs focus, never scrolls out of reach either. */
+.town-minimal { position: sticky; top: 20px; width: 100%; height: 360px; border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface-muted); box-shadow: none; overflow: hidden; }
+.town-minimal[hidden] { display: none; }
+@media (max-width: 1100px) {
+  .workspace-body--minimal { grid-template-columns: minmax(0, 1fr) 280px; gap: 18px; }
+  .town-minimal { height: 300px; }
+}
+@media (max-width: 760px) {
+  /* Narrower than this, the two columns cannot both stay legible - the rail collapses back into a
+     short, wide band (same shape as the docked strip at this width) that reads below the list
+     instead of beside it: 清单优先, the companion follows after it in both DOM and reading order. */
+  .workspace-body--minimal { grid-template-columns: 1fr; gap: 14px; padding: 0 18px 24px; }
+  .town-minimal { position: static; height: 112px; }
+}
 .mobile-nav { display: none; }
 .mobile-more-layer { display: none; }
 @media (max-width:760px) {
@@ -270,11 +316,17 @@ nav a.router-link-active { background: color-mix(in srgb, var(--primary-soft) 76
 .account-avatar { display: grid; place-items: center; width: 32px; height: 32px; flex: none; border-radius: 50%; background: var(--nav-avatar); color: var(--nav-avatar-ink); font-size: 12px; }
 .account-settings { color: var(--nav-faint); padding: 8px; }
 .workspace-topbar { min-height: 56px; display: flex; justify-content: space-between; align-items: center; padding: 0 32px; border-bottom: 1px solid var(--border); background: var(--canvas); }
-/* 门前小街: always-on strip, same width/gutters as .page so it lines up with the page below it. */
-.town-strip { width: min(100%, 1144px); height: 140px; margin: 12px auto 8px; border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface-muted); box-shadow: none; }
+/* 门前小街: always-on strip, same width/gutters as .page so it lines up with the page below it.
+   Height is a clamp (168-208px, driven by 18vh) rather than a fixed number: at the old 140px the
+   docked camera (dockedFrameHeight=128, see TownStage.vue) showed ~84% of the 1248px-wide world in
+   one frame, so different STAGE_PLACES targets barely read as different corners of town. Taller
+   zooms in enough (zoom = height/128) that the visible slice drops to roughly 56-70% of the world,
+   without giving up the CLS=0 property (clamp() resolves before paint, same as the old fixed
+   value - see tmp/town-stage-extension.md §4). */
+.town-strip { width: min(100%, 1144px); height: clamp(168px, 18vh, 208px); margin: 12px auto 8px; border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface-muted); box-shadow: none; }
 .town-strip[hidden] { display: none; }
-@media (max-width: 1100px) { .town-strip { height: 112px; } }
-@media (max-width: 760px) { .town-strip { height: 88px; margin: 10px auto 6px; } }
+@media (max-width: 1100px) { .town-strip { height: 144px; } }
+@media (max-width: 760px) { .town-strip { height: 112px; margin: 10px auto 6px; } }
 .workspace-context { display: flex; gap: 12px; align-items: center; color: var(--muted); font-size: 12px; }
 .workspace-context strong { color: var(--ink); font-weight: 500; }
 .context-slash { opacity: .4; }

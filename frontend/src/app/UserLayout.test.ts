@@ -51,9 +51,14 @@ describe('UserLayout', () => {
     expect(useWorkspaceModeStore(pinia).minimal).toBe(true)
     expect(wrapper.find('.sidebar').exists()).toBe(false)
     expect(wrapper.find('.mobile-nav').exists()).toBe(false)
-    expect(wrapper.find('.workspace-topbar').exists()).toBe(false)
+    // The minimal topbar is a narrowed *instance* of .workspace-topbar (same class, reused
+    // verbatim for height/padding/border), not a parallel bar - so growth-only content (the
+    // breadcrumb, guide and unread-message controls) is what should be absent, not the class.
+    expect(wrapper.find('.workspace-context').exists()).toBe(false)
+    expect(wrapper.find('[aria-label="使用提示"]').exists()).toBe(false)
+    expect(wrapper.find('[aria-label="消息中心"]').exists()).toBe(false)
     expect(wrapper.findComponent({ name: 'DesktopPet' }).exists()).toBe(false)
-    expect(wrapper.get('.minimal-topbar').text()).toContain('我的清单')
+    expect(wrapper.get('.minimal-topbar.workspace-topbar').text()).toContain('我的清单')
     await wrapper.get('.minimal-topbar button').trigger('click')
     expect(useWorkspaceModeStore(pinia).minimal).toBe(false)
     expect(wrapper.find('.sidebar').exists()).toBe(true)
@@ -153,7 +158,7 @@ describe('UserLayout', () => {
     wrapper.unmount()
   })
 
-  it('never mounts the street strip in minimal-checklist mode', async () => {
+  it('docks the same companion into the minimal-checklist rail instead of the street strip (左清单右小镇)', async () => {
     const pinia = createPinia()
     const auth = useAuthStore(pinia)
     auth.user = { publicId: 'u7', email: 'ta@example.test', displayName: '阿禾', timezone: 'Asia/Shanghai', role: 'USER' }
@@ -162,7 +167,23 @@ describe('UserLayout', () => {
     const wrapper = await mountLayout(pinia, '/today')
 
     expect(wrapper.find('#town-strip-slot').exists()).toBe(false)
-    expect(wrapper.findComponent({ name: 'TownStage' }).exists()).toBe(false)
+    expect(wrapper.find('#town-minimal-slot').exists()).toBe(true)
+    expect(wrapper.find('#town-minimal-slot').attributes('hidden')).toBeUndefined()
+    expect(wrapper.findComponent({ name: 'TownStage' }).exists()).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('keeps the minimal rail slot in the DOM but hidden while /town itself is open', async () => {
+    const pinia = createPinia()
+    const auth = useAuthStore(pinia)
+    auth.user = { publicId: 'u8', email: 'ta@example.test', displayName: '阿禾', timezone: 'Asia/Shanghai', role: 'USER' }
+    useWorkspaceModeStore(pinia).setMinimal(true)
+
+    const wrapper = await mountLayout(pinia, '/town')
+
+    expect(wrapper.find('#town-minimal-slot').exists()).toBe(true)
+    expect(wrapper.find('#town-minimal-slot').attributes('hidden')).toBe('')
+    expect(wrapper.findComponent({ name: 'TownStage' }).exists()).toBe(true)
     wrapper.unmount()
   })
 

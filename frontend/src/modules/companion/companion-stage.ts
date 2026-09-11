@@ -1,5 +1,5 @@
 import type Phaser from 'phaser'
-import { CAFE_TABLES, CAFE_WINDOW_SEATS, CAFE_WINDOW_TABLES, CAFE_ROOM, CAFE_WINDOW_ROOM, CAFE_SERVICE, COMPANION_WORLD_SIZE, HOME_ROOMS, GARDEN_OFFSET_X } from './companion-art'
+import { CAFE_TABLES, CAFE_WINDOW_SEATS, CAFE_WINDOW_TABLES, CAFE_ROOM, CAFE_WINDOW_ROOM, CAFE_SERVICE, COMPANION_WORLD_SIZE, HOME_ROOMS, GARDEN_OFFSET_X, ACADEMY_ROOM, GYM_ROOM, BOARD_AREA } from './companion-art'
 
 /** A small cutaway street, using the locally licensed LimeZu furniture at one human scale. */
 export function buildCompanionStage(scene: Phaser.Scene) {
@@ -51,6 +51,15 @@ export function buildCompanionStage(scene: Phaser.Scene) {
   rect(82, 459, 572, 4, 0xe0d6bd, 1, structure)
   for (const home of Object.values(HOME_ROOMS)) path(home.door.x - 16, home.y + home.h, 32, home.y < 400 ? 34 : 24)
   path(CAFE_ROOM.doorX - 16, 332, 32, 32)
+  // East wing, past the old x=1248 edge: a single vertical corridor connects academy's own
+  // doorway, through the open-air board plaza, into the gym's doorway, down to the same bottom
+  // path fixer's house already uses - see ACADEMY_ROOM/GYM_ROOM/BOARD_AREA in companion-art.ts.
+  // The bottom path itself is extended flush to the new world edge (old end 1218 -> new end 1548).
+  path(1218, 708, 330, 32)
+  path(ACADEMY_ROOM.doorX - 16, ACADEMY_ROOM.y + ACADEMY_ROOM.h, 32, BOARD_AREA.y - (ACADEMY_ROOM.y + ACADEMY_ROOM.h))
+  path(BOARD_AREA.x, BOARD_AREA.y, BOARD_AREA.w, BOARD_AREA.h)
+  path(GYM_ROOM.doorX - 16, BOARD_AREA.y + BOARD_AREA.h, 32, GYM_ROOM.y - (BOARD_AREA.y + BOARD_AREA.h))
+  path(GYM_ROOM.doorX - 16, GYM_ROOM.y + GYM_ROOM.h, 32, 24)
 
   function room(x: number, y: number, w: number, h: number, doorX: number | undefined, warm = false, openRight = false, openLeftUntil = y) {
     rect(x + 8, y + 12, w + 2, h + 1, 0x52634d, .23)
@@ -190,6 +199,36 @@ export function buildCompanionStage(scene: Phaser.Scene) {
   // The chicken survives, moved up next to the farm beds it always belonged near.
   const chicken = image(1195, 405, 'farm_chicken_0', 1, 'companion')
   if (chicken) scene.tweens.add({ targets: chicken, y: 403, duration: 1100, yoyo: true, repeat: -1 })
+
+  // --- East wing: academy, board plaza, gym - the three places past the old x=1248 canvas edge
+  // (see ACADEMY_ROOM/GYM_ROOM/BOARD_AREA in companion-art.ts). Academy and gym reuse the same
+  // room() footprint/wall style as the homes and cafe above; the board is a small open-air plaza,
+  // not a walled room, the same way the garden's public bench sits on open paving.
+  room(ACADEMY_ROOM.x, ACADEMY_ROOM.y, ACADEMY_ROOM.w, ACADEMY_ROOM.h, ACADEMY_ROOM.doorX)
+  label(ACADEMY_ROOM.x + ACADEMY_ROOM.w / 2, ACADEMY_ROOM.y - 15, '学院')
+  image(ACADEMY_ROOM.x + 60, ACADEMY_ROOM.y + 118, 'bookshelf_1', .9)
+  image(ACADEMY_ROOM.x + ACADEMY_ROOM.w - 50, ACADEMY_ROOM.y + 118, 'bookshelf_2', .9)
+  image(ACADEMY_ROOM.x + ACADEMY_ROOM.w / 2, ACADEMY_ROOM.y + 90, 'office_board', .75, 'companion')
+  image(ACADEMY_ROOM.x + ACADEMY_ROOM.w / 2, ACADEMY_ROOM.y + 165, 'study_desk_front', .85)
+  image(ACADEMY_ROOM.x + ACADEMY_ROOM.w / 2 - 30, ACADEMY_ROOM.y + 168, 'chair_1', .85, 'interior', ACADEMY_ROOM.y + 167)?.setFlipX(true)
+  image(ACADEMY_ROOM.x + 40, ACADEMY_ROOM.y + 198, 'office_books', .45, 'companion')
+
+  room(GYM_ROOM.x, GYM_ROOM.y, GYM_ROOM.w, GYM_ROOM.h, GYM_ROOM.doorX)
+  label(GYM_ROOM.x + GYM_ROOM.w / 2, GYM_ROOM.y - 15, '健身房')
+  image(GYM_ROOM.x + GYM_ROOM.w / 2, GYM_ROOM.y + 90, 'gymmirror_1', .85)
+  image(GYM_ROOM.x + 55, GYM_ROOM.y + 100, 'gymrack_1', .8)
+  image(GYM_ROOM.x + 90, GYM_ROOM.y + 170, 'gym_elliptical_1', .8)
+  image(GYM_ROOM.x + GYM_ROOM.w - 40, GYM_ROOM.y + 150, 'gymbike_1', .8)
+  image(GYM_ROOM.x + GYM_ROOM.w - 70, GYM_ROOM.y + 205, 'gym_yoga_mat', .85)
+  image(GYM_ROOM.x + 150, GYM_ROOM.y + 205, 'gymplate_1', .8)
+
+  label(BOARD_AREA.x + BOARD_AREA.w / 2, BOARD_AREA.y - 15, '公告板')
+  image(BOARD_AREA.x + 70, BOARD_AREA.y + 70, 'board_2', 1)
+  image(BOARD_AREA.x + 140, BOARD_AREA.y + 70, 'board_2', 1)
+  image(BOARD_AREA.x + 66, BOARD_AREA.y + 52, 'notice_1', .8)
+  image(BOARD_AREA.x + 136, BOARD_AREA.y + 55, 'notice_1', .8)
+  image(BOARD_AREA.x + 100, BOARD_AREA.y + 120, 'bench_1', .9)
+  image(BOARD_AREA.x + 180, BOARD_AREA.y + 40, 'lamp_5', .7, 'town')
 
   // A small amount of non-resident ambient life on the street (docs/01: "少量生活动作，让它适合放
   // 在旁边长时间陪伴"). Purely decorative - nothing here is ever a target for pathfinding or a

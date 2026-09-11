@@ -8,6 +8,7 @@ import { residentTarget, scenePlace } from './companion-scene'
 import { sceneProjection, useTownClock } from './companion.presentation'
 import { useTownWorld } from './companion.store'
 import { useTownUi } from './town-ui.store'
+import { useWorkspaceModeStore } from '../../shared/ui/workspace-mode.store'
 import { motionAllowed } from '../../shared/ui/interaction/motion'
 
 type ViewTransitionDocument = Document & { startViewTransition?: (callback: () => void | Promise<void>) => { ready: Promise<void> } }
@@ -19,6 +20,7 @@ const AsyncCompanionScene = defineAsyncComponent(() => import('./CompanionScene.
 
 const route = useRoute()
 const router = useRouter()
+const mode = useWorkspaceModeStore()
 const town = useTownWorld()
 const { world, loaded } = storeToRefs(town)
 const ui = useTownUi()
@@ -50,13 +52,17 @@ const placeLabel = computed(() => {
   return raw.status === 'placeholder' ? `${raw.label} · 筹备中` : raw.label
 })
 
-// -- Teleport target: '#town-strip-slot' (UserLayout) while docked, '#town-stage-slot'
+// -- Teleport target: '#town-strip-slot' (UserLayout's street strip, growth mode), '#town-minimal-
+// slot' (UserLayout's right-hand rail, minimal mode - 左清单右小镇, docs/04) or '#town-stage-slot'
 // (CompanionView) while fullscreen. Nothing to teleport into fullscreen before the resident has
 // joined the town - CompanionView shows its own arrival form there instead, and never renders the
 // slot in that state, so there is no fullscreen target to resolve yet either. ------------------
 const sceneRef = ref<{ refit?: () => void } | null>(null)
 const target = ref<string | null>(null)
-function computeTarget() { return isFullscreen.value ? (world.value ? '#town-stage-slot' : null) : '#town-strip-slot' }
+function computeTarget() {
+  if (isFullscreen.value) return world.value ? '#town-stage-slot' : null
+  return mode.minimal ? '#town-minimal-slot' : '#town-strip-slot'
+}
 async function applyTarget(next: string | null) {
   target.value = next
   await nextTick()
@@ -73,7 +79,20 @@ async function switchTarget() {
     await applyTarget(next)
   }
 }
-watch(() => [route.path, Boolean(world.value)] as const, () => { void switchTarget() })
+watch(() => [route.path, Boolean(world.value), mode.minimal] as const, () => { void switchTarget() })
+
+// -- Docked framing: the strip (wide, short) and the minimal rail (narrower, taller - see
+// UserLayout.vue's .town-minimal) have very different aspect ratios. companion-scene.ts's docked
+// camera derives the visible world width from the container's own aspect × dockedFrameHeight, so
+// reusing the strip's tight 128 for the rail's much less wide box would crop to a sliver a few
+// dozen world-px across. The rail gets its own, larger budget instead - still a close, cozy
+// "peek in on them" window (roughly a room's width), not the strip's wider establishing shot.
+// Below the 760px breakpoint the rail collapses back into a short, wide band (matches .town-strip
+// there), so it goes back to the strip's own number for that shape.
+const isNarrowViewport = ref(false)
+let narrowQuery: MediaQueryList | undefined
+function syncNarrowViewport(event?: MediaQueryList | MediaQueryListEvent) { isNarrowViewport.value = event?.matches ?? narrowQuery?.matches ?? false }
+const dockedFrameHeight = computed(() => (target.value === '#town-minimal-slot' && !isNarrowViewport.value ? 360 : 128))
 
 // -- Lifecycle: TownStage is the sole owner of the shared world's polling. It mounts once (for the
 // whole signed-in session, not per-route) and never disposes the world on unmount - just stops its
@@ -82,9 +101,14 @@ onMounted(() => {
   target.value = computeTarget()
   void town.load().then(() => { if (world.value) void town.load(true) })
   town.start({ intervalMs: isFullscreen.value ? 5000 : 15000 })
+  if (typeof window.matchMedia === 'function') {
+    narrowQuery = window.matchMedia('(max-width: 760px)')
+    syncNarrowViewport(narrowQuery)
+    narrowQuery.addEventListener('change', syncNarrowViewport)
+  }
 })
 watch(isFullscreen, full => town.setInterval(full ? 5000 : 15000))
-onBeforeUnmount(() => town.stop())
+onBeforeUnmount(() => { town.stop(); narrowQuery?.removeEventListener('change', syncNarrowViewport) })
 
 // -- Causal feedback: a 2s strip bubble per newly-appeared world event, name + label only. -------
 const eventBubble = ref<{ id: string; text: string } | null>(null)
@@ -134,7 +158,7 @@ function onSelectProject(id: string) { if (isFullscreen.value) ui.fullscreenHand
           :chrome="isFullscreen"
           :camera-mode="isFullscreen ? 'auto' : 'docked'"
           :camera-target="isFullscreen ? undefined : cameraTargetPoint"
-          :docked-frame-height="128"
+          :docked-frame-height="dockedFrameHeight"
           @select-resident="onSelectResident" @select-conversation="onSelectConversation" @select-project="onSelectProject"
         />
         <div v-else class="stage-placeholder" aria-hidden="true" />

@@ -156,7 +156,7 @@ button:disabled { opacity: .45; cursor: default; }
 .task-menu button:hover { background: var(--surface-muted); }
 .list-feedback { display: flex; gap: 18px; align-items: center; margin-top: 14px; font-size: 12px; color: var(--muted); }
 .list-feedback button { display: inline-flex; gap: 5px; align-items: center; }
-.checklist-error { font-size: 13px; color: var(--danger, #ad3636); }
+.checklist-error { font-size: 13px; color: var(--danger); }
 .list-empty { padding: 52px 0; text-align: center; }
 .list-empty :deep(.empty-sprite) { margin: 0 auto 14px; }
 .list-empty :deep(h3) { font-size: 15px; margin: 0 0 8px; }

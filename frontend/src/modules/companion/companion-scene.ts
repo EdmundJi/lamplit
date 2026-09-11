@@ -6,7 +6,7 @@ import { dominantDirection, stepTowardPoint, type Direction4 } from '../../share
 import { conversationEmoji, residentStatus } from './companion-presentation'
 import { motionAllowed } from '../../shared/ui/interaction/motion'
 import { buildCompanionStage } from './companion-stage'
-import { ACTION_FRAME, RESIDENT_ART, RESIDENT_ACTIONS, isArtAction, CAFE_WORK_SEATS, POSITION_SLOTS, COMPANION_WORLD_SIZE, HOME_ROOMS, PLACE_FRAMES, CAFE_ROOM, CAFE_WINDOW_ROOM, CAFE_SERVICE, CAFE_SEATS, cafeSeatAt, GARDEN_OFFSET_X } from './companion-art'
+import { ACTION_FRAME, RESIDENT_ART, RESIDENT_ACTIONS, isArtAction, CAFE_WORK_SEATS, POSITION_SLOTS, COMPANION_WORLD_SIZE, HOME_ROOMS, PLACE_FRAMES, CAFE_ROOM, CAFE_WINDOW_ROOM, CAFE_SERVICE, CAFE_SEATS, cafeSeatAt, GARDEN_OFFSET_X, ACADEMY_ROOM, GYM_ROOM } from './companion-art'
 
 export interface SceneResident { id: string; name: string; role?: string; location: string; action: string; activity?: string; destination?: string; objectKind?: string; positionId?: string | null }
 export interface SceneProject { id: string; title: string; place: string; status: string; progress: number; objectKind: string }
@@ -31,6 +31,10 @@ const RAIN_SHELTERS: RainShelter[] = [
   ...Object.values(HOME_ROOMS).map(room => ({ x: room.x - 6, y: room.y - 5, width: room.w + 12, height: room.h + 12 })),
   { x: CAFE_ROOM.x - 6, y: CAFE_ROOM.y - 5, width: CAFE_ROOM.w + 12, height: CAFE_ROOM.h + 12 },
   { x: CAFE_WINDOW_ROOM.x - 6, y: CAFE_WINDOW_ROOM.y - 5, width: CAFE_WINDOW_ROOM.w + 12, height: CAFE_WINDOW_ROOM.h + 12 },
+  // The academy and gym are real rooms too (east wing, past the old x=1248 edge) - roofed the same
+  // way as every other room above so rain does not fall through their walls.
+  { x: ACADEMY_ROOM.x - 6, y: ACADEMY_ROOM.y - 5, width: ACADEMY_ROOM.w + 12, height: ACADEMY_ROOM.h + 12 },
+  { x: GYM_ROOM.x - 6, y: GYM_ROOM.y - 5, width: GYM_ROOM.w + 12, height: GYM_ROOM.h + 12 },
 ]
 function inside(rect: RainShelter, x: number, y: number) { return x >= rect.x && x <= rect.x + rect.width && y >= rect.y && y <= rect.y + rect.height }
 /** A rain streak is omitted when any of its short diagonal would land inside a roofed room. */
