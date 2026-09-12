@@ -101,7 +101,7 @@ public interface ResidentMind {
      * hour that was named, the person who made it was there, or was not. This asks the other party -
      * and anyone who was standing there when it was made - what they make of that.
      *
-     * <p>It exists because of the most expensive thing this project has measured (docs/06-society.md
+     * <p>It exists because of the most expensive thing this project has measured (docs/05-notes.md
      * 四): {@code celebrate} was offered 1658 times and chosen zero times, {@code create} 342/0,
      * {@code invite} 285/0, while the same model asked {@code react} as its own separate question said
      * yes 53% of the time. <b>An obligation nobody is ever asked about is never honoured.</b> Adding a
@@ -121,7 +121,7 @@ public interface ResidentMind {
     /**
      * "There is someone standing in front of you. Is there anything you want to fix a time for?"
      *
-     * <p>docs/06-society.md 三: a contract is a claim on the future, and until this existed the
+     * <p>docs/01-requirements.md 的「社会怎么长出来」: a contract is a claim on the future, and until this existed the
      * residents could only ever express what they were doing right now. The decision prompt even said
      * so outright - 若只是想明天、改天或等有空再做，stance=consider - which was written to stop empty
      * promises and cancelled the whole idea of a promise along with them.

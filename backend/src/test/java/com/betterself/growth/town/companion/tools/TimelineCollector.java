@@ -314,7 +314,7 @@ public final class TimelineCollector {
         seatListenerWorldId = w.id;
     }
 
-    /** The complete half of docs/06-society.md's "座位事件拆成两股": one row per seat change, whole,
+    /** The complete half of docs/05-notes.md's "座位事件拆成两股": one row per seat change, whole,
      * with no cooldown and no eviction - {@code kind: "seat_state"}, deliberately not {@code "event"},
      * so it never competes with the narrative stream for a place in timeline.md/highlights.md or the
      * norm quiz (see {@code TimelineExporter}'s handling of that kind) and is only ever read back by

@@ -9,7 +9,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * The town's first stateful physical object with real consequences (docs/06-society.md "物件要有自己
+ * The town's first stateful physical object with real consequences (docs/05-notes.md "物件要有自己
  * 的类"): the cafe's door. Proves the six things the batch called out as load-bearing - locking is a
  * real, both-directions-open decision by whoever is physically there (never a clock); a locked door
  * genuinely stops an arrival; the person turned away gets one fact and nothing resembling an
@@ -89,7 +89,7 @@ class CafeDoorTest {
         assertThat(w.memories.stream().filter(m -> m.ownerId().equals("student") && "cafe-door".equals(m.topicId())))
             .as("the one fact")
             .anySatisfy(m -> assertThat(m.text()).isEqualTo("咖啡馆的门锁着，我进不去。"));
-        // Never an instruction - docs/06-society.md's "后果只给感知，不给指令" - and never who did it either.
+        // Never an instruction - docs/05-notes.md's "后果只给感知，不给指令" - and never who did it either.
         assertThat(w.memories.stream().filter(m -> m.ownerId().equals("student") && "cafe-door".equals(m.topicId())))
             .noneMatch(m -> m.text().contains("敲门") || m.text().contains("别的地方") || m.text().contains("应该") || m.text().contains("阿禾"));
     }

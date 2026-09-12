@@ -16,7 +16,7 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * End-to-end wiring for docs/06-society.md "座位事件拆成两股": {@link TimelineCollector} registers
+ * End-to-end wiring for docs/05-notes.md "座位事件拆成两股": {@link TimelineCollector} registers
  * itself with {@link TownPlaces} the moment it first sees a world, and from then on every seat change
  * - even the ones {@code TownPlaces}' own 30-minute cooldown keeps out of the narrative
  * {@code took_spot}/{@code left_spot} event stream entirely - lands in the exported timeline as a

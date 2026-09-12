@@ -383,7 +383,7 @@ class NormDetectorTest {
     // ---- 占用权 ---------------------------------------------------------------------------------
     //
     // NormDetector now replays occupancy off the complete seat record (kind "seat_state", produced by
-    // TownPlaces' seat-transition listener via TimelineCollector - see docs/06-society.md "座位事件拆成
+    // TownPlaces' seat-transition listener via TimelineCollector - see docs/05-notes.md "座位事件拆成
     // 两股") instead of pairing up the throttled took_spot/left_spot narrative events. Every fixture
     // below therefore has to be a genuinely coherent sequence - each landing's "from" is really wherever
     // that resident was last put down, not merely "some earlier positionId" - or it would trip the very

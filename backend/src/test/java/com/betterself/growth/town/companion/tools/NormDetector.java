@@ -15,7 +15,7 @@ import java.util.TreeMap;
 /**
  * Looks through a run for regularities that nobody wrote down: candidates for "这个镇上的一条规矩".
  *
- * The acceptance goal this serves (docs/06-society.md 七) is
+ * The acceptance goal this serves (docs/01-requirements.md 的「怎么验收」) is
  * <em>同一份种子跑两次，两次都长出一条我们从没写过的规矩，而且至少有一个居民能自己说出来</em>,
  * and every part of this class exists to stop that sentence from being satisfied cheaply:
  *
@@ -227,7 +227,7 @@ public final class NormDetector {
     // ---- 信念：材料，不是判决 -----------------------------------------------------------------
 
     /**
-     * A belief is a memory that superseded an earlier one on the same key - docs/06-society.md 七's own
+     * A belief is a memory that superseded an earlier one on the same key - docs/01-requirements.md 的「怎么验收」's own
      * definition of a norm is the same belief, held independently by enough residents, so
      * {@code sharedBeliefKeys} is that definition measured directly. This function only counts and
      * carries the material; whether any of it actually names a statistic's candidate is for the blind
@@ -466,7 +466,7 @@ public final class NormDetector {
 
     // ---- 互惠：你帮过我，我后来更愿意帮你 ------------------------------------------------------
 
-    /** The one metric docs/06-society.md says to keep if we may only keep one, and the one that cannot be
+    /** The one metric docs/05-notes.md says to keep if we may only keep one, and the one that cannot be
      * written as a rule: we can write "A 帮了 B", we cannot write "B 后来自发地更愿意帮 A". At the event
      * volumes this town currently reaches it will usually fail {@link #MIN_SUPPORT} and be dropped - that
      * report is the true one, and is more useful than a ratio computed over three events. */

@@ -448,7 +448,7 @@ public final class ResidentSimulation {
         } else schedule(w,r,action,place,target,reason,at,duration);
     }
     static void schedule(CompanionWorld w,ResidentState r,String action,String place,String target,String reason,Instant at,int duration) {
-        // The cafe's door (see DoorService/docs/06-society.md "物件要有自己的类"): only an actual
+        // The cafe's door (see DoorService/docs/05-notes.md "物件要有自己的类"): only an actual
         // arrival needs asking, never someone already standing inside continuing whatever they were
         // doing - the door blocks entry, not staying. "Arriving" is read straight off where the actor
         // physically still is at this exact moment, which is either "street" (a travel plan just
@@ -460,7 +460,7 @@ public final class ResidentSimulation {
             r.plan=null;r.desiredAction=null;r.desiredDurationSeconds=0;r.revision++;
             r.thought="咖啡馆的门锁着，进不去";
             TownPlaces.release(w,r.id,at);
-            // A clean failure, not a retry loop (docs/06-society.md "不能变成死循环"): the plan is
+            // A clean failure, not a retry loop (docs/05-notes.md "不能变成死循环"): the plan is
             // simply gone, which is exactly the condition ResidentDirector.needsDecision reads as
             // "ask this resident what they want next" - a genuinely fresh decision next time, never an
             // automatic re-attempt of the same walk this method itself would schedule.

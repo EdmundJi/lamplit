@@ -50,7 +50,7 @@ public final class TimelineExporter {
         String currentDay = null;
         for (Map<String, Object> e : sortedEntries) {
             // The complete seat record ("seat_state") is for NormDetector's replay only - never for a
-            // human reader (docs/06-society.md "座位事件拆成两股"). It has no place in a timeline a
+            // human reader (docs/05-notes.md "座位事件拆成两股"). It has no place in a timeline a
             // person reads start to finish.
             if ("seat_state".equals(e.get("kind"))) continue;
             Instant at = Instant.parse((String) e.get("at"));
@@ -200,7 +200,7 @@ public final class TimelineExporter {
     public record NormBlindTest(String quiz, String key) {}
 
     /**
-     * docs/06-society.md 七 asks for a second blind test, and it is the half of the acceptance goal that
+     * docs/01-requirements.md 的「怎么验收」 asks for a second blind test, and it is the half of the acceptance goal that
      * no statistic can stand in for: <b>hand a reader who has never seen this repository a stretch of
      * the town's life and ask one question - 「这个镇上有什么规矩？」</b> If they read out what we
      * measured, the norm is really in the text and not only in our arithmetic. If they read out
@@ -267,7 +267,7 @@ public final class TimelineExporter {
      * out: 863 of them in a three-day run would bury the events, and a norm has to be visible from the
      * outside or it is not one.
      *
-     * <p>Routine seat changes are furniture, not narrative: docs/06-society.md found 67% of a run's
+     * <p>Routine seat changes are furniture, not narrative: docs/05-notes.md found 67% of a run's
      * quiz material was "占了/离开了" - a resident sitting back at their own desk, one more time. Only
      * the handful {@code TownPlaces} itself flagged as the kind a bystander would actually remark on -
      * took someone else's spot, sat down next to someone, got up because the spot's owner just

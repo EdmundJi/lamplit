@@ -30,7 +30,7 @@ public class CompanionWorld {
     public List<Conversation> conversations = new ArrayList<>();
     public List<WorldEvent> events = new ArrayList<>();
     public List<WorldObject> objects = new ArrayList<>();
-    /** The town's first stateful physical object with real consequences (see docs/06-society.md "物件
+    /** The town's first stateful physical object with real consequences (see docs/05-notes.md "物件
      * 要有自己的类"): a door, currently only at the cafe. A flat, concrete class rather than a
      * polymorphic Doorable/Lockable hierarchy on purpose - {@code CompanionWorld} is serialized whole
      * as one JSON document, and a class hierarchy that needs Jackson's polymorphic type handling
@@ -40,7 +40,7 @@ public class CompanionWorld {
      * less "correct" object orientation, never a serialization landmine. Self-healing on an old save
      * via the empty-list default, same shape as {@link #serviceRequests}. */
     public List<Door> doors = new ArrayList<>();
-    /** {@code lockedBy} is the entire point of this class - see docs/06-society.md: {@code cafeStatus}
+    /** {@code lockedBy} is the entire point of this class - see docs/05-notes.md: {@code cafeStatus}
      * already blocks entry while the shop is closed, but it carries no "who", and a barrier nobody can
      * be blamed for is only weather. Whether it is locked and who locked it are the only two facts
      * this class knows; everything else (whether locking was reasonable, who is upset about it, what

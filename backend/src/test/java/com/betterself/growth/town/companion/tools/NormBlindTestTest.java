@@ -9,7 +9,7 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** The社会版盲测 of docs/06-society.md 七. What it must not do matters most: lead the reader. */
+/** The社会版盲测 of docs/01-requirements.md 的「怎么验收」. What it must not do matters most: lead the reader. */
 class NormBlindTestTest {
 
     private static Map<String, Object> event(String type, String actor, String name, String text, String at) {

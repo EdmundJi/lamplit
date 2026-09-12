@@ -23,7 +23,7 @@ public final class TownPlaces {
      * bystander in the room would actually have noticed it. Delivered to whoever registered for this
      * world (see {@link #setSeatTransitionListener}) for <b>every</b> transition, including the ones
      * {@link #seatEventDue}'s cooldown keeps out of the narrative {@code w.events} stream entirely -
-     * this is the "state" half of docs/06-society.md's "座位事件拆成两股", the narrative
+     * this is the "state" half of docs/05-notes.md's "座位事件拆成两股", the narrative
      * {@code took_spot}/{@code left_spot} world events are the other. */
     public record SeatTransitionNote(String residentId, String previousPositionId, String newPositionId,
                                       Instant at, String noticeReason) {

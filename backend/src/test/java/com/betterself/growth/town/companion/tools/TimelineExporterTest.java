@@ -14,7 +14,7 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * docs/06-society.md "座位事件拆成两股": routine seat changes are furniture and must not reach either
+ * docs/05-notes.md "座位事件拆成两股": routine seat changes are furniture and must not reach either
  * a human reader (timeline.md) or the norm blind test's quiz - only the handful {@code TownPlaces}
  * itself flagged as noticeable (via {@code noticeReason}) earn a line, and the complete {@code
  * seat_state} record must never reach a human reader at all.

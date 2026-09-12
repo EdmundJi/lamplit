@@ -569,13 +569,13 @@ public final class AcceleratedTownRunner {
 
         // Norm candidates: regularities nobody wrote down, with the gate each one passed or failed.
         // Written every run, including rule-only ones - a rule-only run of the same world is the negative
-        // control the whole "我们从没写过的" half of docs/06-society.md 七 rests on, and it is only a
+        // control the whole "我们从没写过的" half of docs/01-requirements.md 的「怎么验收」 rests on, and it is only a
         // control if it was actually exported. See NormDetector.
         NormDetector.Report norms = NormDetector.detect(cfg.worldId(), sorted, cfg.timezone());
         TimelineExporter.writeJson(cfg.outDir().resolve("norms.json"), norms);
         Files.writeString(cfg.outDir().resolve("norms.md"), NormDetector.markdown(norms), StandardCharsets.UTF_8);
 
-        // The social blind test (docs/06-society.md 七): one question, 「这个镇上有什么规矩？」, put to a
+        // The social blind test (docs/01-requirements.md 的「怎么验收」): one question, 「这个镇上有什么规矩？」, put to a
         // reader who has never seen this repository. Same quiz/key split as the personality blind test -
         // the reader gets what happened, never the residents' own conclusions.
         List<Map<String,Object>> snapshotMemories = new ArrayList<>();

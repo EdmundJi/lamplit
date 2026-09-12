@@ -8,14 +8,14 @@ import static com.betterself.growth.town.companion.domain.CompanionWorld.*;
 /**
  * The physical rules for the town's first lockable door - currently only the cafe's. Only home doors
  * were deliberately left out: locking the user's own avatar out of their own home would be a product
- * accident, and today there is no reason to lock a home at all (see docs/06-society.md).
+ * accident, and today there is no reason to lock a home at all (see docs/05-notes.md).
  *
  * <p>Exactly two facts live here, on the door itself: whether it is locked, and who locked it (see
  * {@link CompanionWorld.Door}). Everything else is a resident's own decision, never this class's:
  * <b>whether</b> to lock is a real model choice with both directions offered (see
  * {@code ResidentSimulation.availableActions}/{@code DECISION_ACTIONS} and the balanced prompt
  * language in {@code QwenResidentMind.decide}), never a clock ("过了营业时间自动锁" would be exactly
- * the kind of table-clock rule docs/04-decisions.md and docs/06-society.md both rule out). This class
+ * the kind of table-clock rule docs/04-decisions.md and docs/05-notes.md both rule out). This class
  * only ever validates physical presence and flips the one bit.
  *
  * <p>Consequence is perception, not instruction: a resident who cannot get in is told the one fact
@@ -64,7 +64,7 @@ final class DoorService {
      * A resident standing in the cafe right now decides to lock its door. No connection to
      * cafeStatus/business hours on purpose (see this class's own doc comment) - any resident actually
      * present may do this, not only the operator; who ends up locked out and how they feel about it is
-     * exactly the point docs/06-society.md is after. Returns false (nothing applied) if the resident is
+     * exactly the point docs/05-notes.md is after. Returns false (nothing applied) if the resident is
      * not actually there or the door is already locked - re-locking an already-locked door is not a
      * new fact.
      */
