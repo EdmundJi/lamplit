@@ -577,7 +577,10 @@ public class ResidentDirector {
         String intentText=r.lifeIntent==null?"":r.lifeIntent.purpose;
         String people=nearby.stream().map(Actor::name).reduce("",(a,b)->a+" "+b);
         String placeText=ResidentSimulation.placeName(self.place());
-        String doingText=r.plan==null?"":r.plan.action();
+        // Deliberately NOT r.plan.action(): that is an id like "rest"/"make", and retrieval tokenises
+        // Chinese memory text - an English id matches nothing in any memory this town ever wrote, so
+        // it was pure noise in the query. What the plan is aimed at (below) carries the topic instead.
+        String doingText="";
         Project aimedAt=r.plan==null?null:ResidentSimulation.project(w,r.plan.targetId());
         String thingText=aimedAt==null?"":aimedAt.title;
         String hereText=w.objects.stream().filter(o->o.place().equals(self.place()))

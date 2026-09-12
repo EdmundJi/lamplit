@@ -34,9 +34,57 @@ public final class CompanionRecall {
     private static final double WEIGHT_LAYER = 0.30;
     private CompanionRecall() {}
 
+    /**
+     * At most this share of what comes back may be the resident's own account of their own doings.
+     *
+     * <p>Measured, twice. A decision files the reason the resident gave for it as a {@code reflection}
+     * - one per decision, so they are both the most numerous thing in anybody's memory and always the
+     * freshest. {@code reflection} also sits a layer above raw memory in {@link #tier}. Recency and
+     * layer therefore agree with each other, every time, and the top of the ranking fills up with the
+     * resident talking to themselves: 51% of everything retrieved across 243 real decisions, and 66%
+     * in a later run whose query matched less prose and so leaned even harder on recency and layer.
+     * 44%, then 58%, of decisions received a byte-identical memory set to that resident's previous
+     * one.
+     *
+     * <p>Weights cannot fix this, because it is not a weighting problem: whatever the numbers, one
+     * kind of memory is produced far faster than any other and will crowd the window. So the window
+     * itself reserves room. A person recalls what happened to them, not only what they have told
+     * themselves about it.
+     *
+     * <p>Never reduces how much comes back: if there is not enough that the resident did not author,
+     * the remaining slots are filled from their own account as before. A resident whose whole
+     * recorded life is their own voice still gets their whole recorded life.
+     */
+    private static final double OWN_VOICE_SHARE = 0.5;
+
     public static List<Memory> retrieve(List<Memory> memories, String ownerId, String query, Instant now, int limit) {
         if (ownerId == null || now == null || memories == null || limit <= 0) return List.of();
         Set<String> question = terms(query);
+        List<Memory> ranked = ranked(memories, ownerId, question, now);
+        int ownVoiceCap = Math.max(1, (int) Math.floor(limit * OWN_VOICE_SHARE));
+        List<Memory> kept = new java.util.ArrayList<>();
+        List<Memory> overflow = new java.util.ArrayList<>();
+        int ownVoice = 0;
+        for (Memory memory : ranked) {
+            if (kept.size() >= limit) break;
+            if (isOwnAccount(memory, ownerId) && ownVoice >= ownVoiceCap) { overflow.add(memory); continue; }
+            if (isOwnAccount(memory, ownerId)) ownVoice++;
+            kept.add(memory);
+        }
+        // Nothing else to say - hand back their own voice rather than a shorter list.
+        for (Memory memory : overflow) { if (kept.size() >= limit) break; kept.add(memory); }
+        return List.copyOf(kept);
+    }
+
+    /** Their own account of their own doings - not merely a memory they happen to own (every memory
+     * here is owned by them), but one whose source is themselves and whose layer is a synthesis they
+     * made rather than something that happened. A standing belief is deliberately NOT this: those are
+     * rare, hard-won, and the whole point of the layer above. */
+    private static boolean isOwnAccount(Memory memory, String ownerId) {
+        return "reflection".equals(memory.sourceType()) && ownerId.equals(memory.sourceId());
+    }
+
+    private static List<Memory> ranked(List<Memory> memories, String ownerId, Set<String> question, Instant now) {
         return memories.stream()
             .filter(memory -> ownerId.equals(memory.ownerId()))
             .filter(memory -> memory.at() != null && !memory.at().isAfter(now))
@@ -47,7 +95,7 @@ public final class CompanionRecall {
             .filter(memory -> !memory.superseded())
             .sorted(Comparator.<Memory>comparingDouble(memory -> score(memory, question, now)).reversed()
                 .thenComparing(Memory::at, Comparator.reverseOrder()).thenComparing(Memory::id))
-            .limit(Math.min(limit, 30)).toList();
+            .toList();
     }
 
     private static double score(Memory memory, Set<String> question, Instant now) {

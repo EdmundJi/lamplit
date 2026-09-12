@@ -66,6 +66,54 @@ class CompanionRecallTest {
         assertThat(input).contains(old); // still on record - the evidence chain is never deleted
     }
 
+    @Test void aResidentsOwnAccountOfThemselvesCannotFillTheWholeWindow() {
+        // A decision files the reason the resident gave for it as a reflection, one per decision - so
+        // it is both the most numerous thing in anybody's memory and always the freshest, and it sits
+        // a layer above raw memory. Recency and layer agree with each other every time, and the window
+        // filled up with the resident talking to themselves: 51% of everything retrieved across 243
+        // real decisions, 66% in a later run, with 44%-58% of decisions receiving a byte-identical
+        // memory set to that resident's previous one.
+        var input = new java.util.ArrayList<Memory>();
+        for (int i = 0; i < 12; i++) // twelve of his own accounts, all fresher than anything else
+            input.add(new Memory("own-" + i, "student", "student", "reflection", now.minusSeconds(60L * (i + 1)), "先看完这页再说", null, List.of(), 7));
+        for (int i = 0; i < 6; i++) // and six things that actually happened, older
+            input.add(new Memory("seen-" + i, "student", "owner", "observed", now.minusSeconds(3600L * (i + 1)), "我看见阿禾在吧台后面忙", null, List.of(), 5));
+
+        var recalled = CompanionRecall.retrieve(input, "student", "", now, 10);
+
+        assertThat(recalled).hasSize(10);
+        assertThat(recalled.stream().filter(m -> "reflection".equals(m.sourceType())).count())
+            .as("自己给自己的说法不能占满整个记忆窗口").isLessThanOrEqualTo(5);
+        assertThat(recalled.stream().filter(m -> "observed".equals(m.sourceType())).count())
+            .as("真正发生过的事必须有位置").isGreaterThanOrEqualTo(5);
+    }
+
+    @Test void reservingRoomNeverReturnsLessThanItUsedTo() {
+        // A resident whose whole recorded life is their own voice still gets their whole recorded
+        // life: the reservation holds a seat open, it never leaves one empty.
+        var input = new java.util.ArrayList<Memory>();
+        for (int i = 0; i < 8; i++)
+            input.add(new Memory("own-" + i, "student", "student", "reflection", now.minusSeconds(60L * (i + 1)), "先看完这页再说", null, List.of(), 7));
+
+        assertThat(CompanionRecall.retrieve(input, "student", "", now, 10))
+            .as("没有别的可说时，就把他自己的话还给他，而不是还一个更短的列表").hasSize(8);
+    }
+
+    @Test void aStandingBeliefIsNeverTreatedAsJustAnotherThingTheySaid() {
+        // Beliefs are the rare, hard-won layer this whole memory model exists for - they are a
+        // resident's own conclusion about themselves, and capping them alongside passing
+        // rationalisations would quietly bury the one thing the town is being measured for.
+        var belief = new Memory("belief-1", "student", "student", "belief", now.minusSeconds(86400),
+            "每次光线正好，我就自动往窗边坐", null, List.of(), 8, "habit:student:study_cafe", false);
+        var input = new java.util.ArrayList<Memory>();
+        input.add(belief);
+        for (int i = 0; i < 12; i++)
+            input.add(new Memory("own-" + i, "student", "student", "reflection", now.minusSeconds(60L * (i + 1)), "先看完这页再说", null, List.of(), 7));
+
+        assertThat(CompanionRecall.retrieve(input, "student", "", now, 6))
+            .as("一条站得住的信念，不该和随口的说法一起被挤掉").contains(belief);
+    }
+
     private Memory memory(String id, String owner, Instant at, String text, String topic) {
         return new Memory(id, owner, "self", "observed", at, text, topic);
     }
