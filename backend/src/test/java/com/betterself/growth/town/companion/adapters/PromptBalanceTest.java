@@ -151,6 +151,21 @@ class PromptBalanceTest {
     }
 
     @Test
+    @DisplayName("「今天到现在你做了什么」是摆出来的事实，不是一句暗示")
+    void todaySoFarIsShownWithoutTellingThemWhatToConcludeFromIt() {
+        String prompt = promptFor(mind -> mind.decide(context()),
+            "{\"action\":\"observe\",\"place\":\"cafe\",\"targetId\":null,\"reason\":\"看看四周\",\"speech\":\"\",\"evidenceIds\":[]}");
+
+        assertThat(prompt).as("他得看得见自己的下午").contains("todaySoFar是你今天到现在已经做过的事");
+        assertThat(prompt).as("和 Deed 同一条红线：没有为什么").contains("不包含你当时怎么想");
+        // Both directions, for the reason this whole class exists: "you already did this three times"
+        // reads as "so stop", and a prompt that leans produced five separate zeros in this project's
+        // history. Seeing the afternoon is supposed to inform the choice, not make it.
+        assertThat(prompt).as("做过三次再做一次是正常的").contains("再做一次完全可以");
+        assertThat(prompt).as("想换点别的也是正常的").contains("换点别的，也完全可以");
+    }
+
+    @Test
     @DisplayName("普通决定里的 none：和别的选项完全平等，不是认输")
     void doingNothingInParticularIsOfferedAsAnEqualAnswer() {
         String prompt = promptFor(mind -> mind.decide(context()),

@@ -55,7 +55,7 @@ class ResidentMindJsonContractTest {
         var self=ResidentSimulation.actor(w,"artist");var state=ResidentSimulation.state(w,"artist");
         var arrangement=new ResidentMind.WorkArrangementView("work-42","delegate","cafe","owner","artist","proposed","想请你替我照看吧台",now.toString(),null,null);
         var context=new ResidentMind.Context("artist","14:00","sunny",ResidentMind.actorView(self),state.goal,List.of(),List.of(),
-            ResidentMind.memoryViews(w.memories.stream().filter(m->m.ownerId().equals("artist")).toList()),ResidentMind.actorViews(List.of(ResidentSimulation.actor(w,"owner"))),List.of(),List.of(new ResidentMind.PersonHereView("owner","阿禾","熟，处得来",List.of())),List.of(new ResidentMind.KnownPlaceView("cafe","有六个独立窗边座位，适合安静工作",List.of("read","work"))),List.of(),List.of(),
+            ResidentMind.memoryViews(w.memories.stream().filter(m->m.ownerId().equals("artist")).toList()),List.of(),ResidentMind.actorViews(List.of(ResidentSimulation.actor(w,"owner"))),List.of(),List.of(new ResidentMind.PersonHereView("owner","阿禾","熟，处得来",List.of())),List.of(new ResidentMind.KnownPlaceView("cafe","有六个独立窗边座位，适合安静工作",List.of("read","work"))),List.of(),List.of(),
             new ResidentMind.LifeIntentView(state.lifeIntent.id,state.lifeIntent.goalId,state.lifeIntent.purpose,state.lifeIntent.status,state.lifeIntent.formedAt.toString(),state.lifeIntent.updatedAt.toString(),state.lifeIntent.lastActedAt==null?null:state.lifeIntent.lastActedAt.toString()),
             new ResidentMind.LifeIntentView(state.careerIntent.id,state.careerIntent.goalId,state.careerIntent.purpose,state.careerIntent.status,state.careerIntent.formedAt.toString(),state.careerIntent.updatedAt.toString(),state.careerIntent.lastActedAt==null?null:state.careerIntent.lastActedAt.toString()),
             ResidentMind.planView(state.plan,now),List.of(arrangement),state.occupation,null,List.of("observe","rest"),"owner",List.of("我是咖啡馆当前经营者"),false,List.of(new ResidentMind.ServiceRequestView("drink-7","student","water","waiting","cafe")),"open",null,null,null,null);
@@ -90,7 +90,7 @@ class ResidentMindJsonContractTest {
         var broadAvailableActions=List.of("none","observe","rest","study","work","read","make","sleep","propose",
             "continue","resume","request_drink","open_cafe","continue_home","tend","join","away","create","help");
         var context=new ResidentMind.Context("artist","14:00","sunny",ResidentMind.actorView(ResidentSimulation.actor(w,"artist")),state.goal,
-            List.of(),List.of(),List.of(),List.of(),List.of(),List.of(),List.of(),List.of(),List.of(),
+            List.of(),List.of(),List.of(),List.of(),List.of(),List.of(),List.of(),List.of(),List.of(),List.of(),
             null,null,null,List.of(),
             state.occupation,null,broadAvailableActions,null,List.of(),false,List.of(),
             "open",null,null,null,null);
@@ -126,7 +126,7 @@ class ResidentMindJsonContractTest {
         // are deliberately absent from availableActions this call, "rest" is the real substitute.
         var narrowAvailableActions=List.of("observe","rest","study","sleep","away");
         var context=new ResidentMind.Context("artist","14:00","sunny",ResidentMind.actorView(ResidentSimulation.actor(w,"artist")),state.goal,
-            List.of(),List.of(),List.of(),List.of(),List.of(),List.of(),List.of(),List.of(),List.of(),
+            List.of(),List.of(),List.of(),List.of(),List.of(),List.of(),List.of(),List.of(),List.of(),List.of(),
             null,null,null,List.of(),
             state.occupation,null,narrowAvailableActions,null,List.of(),false,List.of(),
             "closing",null,null,null,null);

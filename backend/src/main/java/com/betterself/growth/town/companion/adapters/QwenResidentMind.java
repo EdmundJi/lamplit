@@ -111,41 +111,93 @@ public class QwenResidentMind implements ResidentMind {
     public Decision decide(Context context){
         return decideMetered(context).value();
     }
+    private static final java.util.function.Predicate<Context> ALWAYS=c->true;
+    private static boolean offered(Context c,String action){var a=c.availableActions();return a!=null&&a.contains(action);}
+    private static boolean offeredAny(Context c,String... actions){for(String action:actions)if(offered(c,action))return true;return false;}
+    /** Same trigger set Occasions.java documents for the cafe-operator cluster of rules: only
+     * relevant to a resident who actually holds, once held, or is standing inside the cafe's
+     * operating context - never to a bystander who has nothing to do with how the place runs. */
+    private static boolean cafeRoleRelevant(Context c){
+        if(c.canTend())return true;
+        if(c.cafeOperatorId()!=null&&c.cafeOperatorId().equals(c.residentId()))return true;
+        if(c.cafeRoleFacts()!=null&&!c.cafeRoleFacts().isEmpty())return true;
+        if(c.self()!=null&&"cafe".equals(c.self().place()))return true;
+        String status=c.cafeStatus();
+        return status!=null&&!status.isBlank();
+    }
+    /** One entry per sentence of the decide() instruction: {@code ALWAYS} for what is true of every
+     * decision regardless of what this resident can currently do, everything else scoped to exactly
+     * the same fact that already gates the action itself in {@code ResidentSimulation.availableActions}
+     * (or, for the cafe cluster, the same situational facts Occasions.java uses for the cafe-operator
+     * rules). This is the same "menu vs. moment" split Occasions.java documents at the class level,
+     * applied to the instruction text instead of the action menu: a measured real decision call carried
+     * 4832 characters of instruction against 3517 of perception, and the celebrate paragraph alone was
+     * dead weight in 100% of 243 real calls - it explains an action that was never once offered. Order
+     * here is fixed and never derived from availableActions itself, so the same availableActions always
+     * assembles the same instruction string regardless of the order ResidentSimulation happened to add
+     * entries in. Not one word below was reworded from the original single block - only which sentences
+     * are asked to appear this time changed; see PromptBalanceTest and DecisionPromptRelevanceTest for
+     * the wording this locks in place. */
+    private record DecisionPromptLine(java.util.function.Predicate<Context> relevantWhen,String text){}
+    private static final java.util.List<DecisionPromptLine> DECISION_PROMPT_LINES=java.util.List.of(
+        new DecisionPromptLine(ALWAYS,"你是一个有自己生活的小街居民。只扮演输入的 self 这一个人，不替其他居民作答。"),
+        new DecisionPromptLine(ALWAYS,"只知道输入自己的 memories、眼前 nearby/visibleObjects 与当面 conversation。"),
+        new DecisionPromptLine(ALWAYS,"sourceType=heard 是转述，reflection 是可能出错的推测；不要把它们变成亲眼所见。"),
+        new DecisionPromptLine(ALWAYS,"私密 Todo 和用户内心念头不在你的知识里，不得猜测。远处人物在做什么你不知道。"),
+        new DecisionPromptLine(ALWAYS,"结合自己的目标、salientPerceptions里的显著体感、routineCues里的个人日常时间提示、当前计划与实际记忆决定下一步。salientPerceptions为空表示此刻没有需要特别注意的体感；routineCues是“到了我平常睡觉的时间”一类习惯事实，不等于困，也不是命令。不要猜测或要求任何隐藏数值。你可以继续投入、好奇地观察、拒绝配合，也可以因一次经历想到与原来不同的愿望。"),
+        new DecisionPromptLine(ALWAYS,"给自己的幽默、想象力、偏好和分歧留空间，不必把每个决定写成温柔的小合作。"),
+        new DecisionPromptLine(c->offered(c,"propose"),"大胆的创意可以是提案或幻想，不能伪装成已经发生的事件。"),
+        new DecisionPromptLine(ALWAYS,"\"不必\"不等于\"不该\"：去动一件别人起头的事、走过去和谁坐一起、约谁碰个面，和读书、休息、做手上的活是同一类普通选择，不比它们更冒昧，也不需要额外的理由。"),
+        new DecisionPromptLine(ALWAYS,"只返回一个可执行动作与一句简短理由，不输出推理过程。"),
+        new DecisionPromptLine(ALWAYS,"action必须严格照抄availableActions这次实际给出的字符串之一，不能选择availableActions里没有的动作，哪怕它是别的时候合法的动作名——这次没列出就是这次真的做不到，选了也不会发生，你的意图会完全落空。availableActions因情况实时变化：continue/continue_home/resume/tend等并非总是可选，尤其咖啡馆开始打烊（cafeStatus=closing）后，即使手头还有一件没做完的事，continue也常常不会出现在这次的availableActions里；这种时候如果你仍想做原来那件事（比如还在等一杯已经点的饮料），改选一个这次确实列出的动作（例如rest，重新安排一段等待/休息），而不要选continue或continue_home，那样只会被判定为这次没有发生过。continue表示按currentPlan继续，不能重置计时或换一件事。reason一句话说清楚就好，不必展开分析，控制在80个汉字以内。"),
+        new DecisionPromptLine(c->offered(c,"join"),"join表示走过去挨着某个熟人坐下（对方的桌子或旁边的位置），targetId填nearby中那个人的id；这只是想坐得近一些，不代表要开口说话或已经在交谈。"),
+        new DecisionPromptLine(ALWAYS,"away表示暂时离开这条街去处理自己的事，一段时间后才会回来，回来后只有自己知道那段时间做了什么；不要在away的reason里编造离场期间发生的具体情节，那要等回来后才补一句自己的回忆。"),
+        new DecisionPromptLine(c->offeredAny(c,"create","help","join"),"create/help 的 targetId 必须是 knownProjects 之一且 place 匹配；join 只能针对 nearby 中一个人。"),
+        new DecisionPromptLine(ALWAYS,"none表示\"没什么特别想做的\"，place填自己此刻所在的地方，targetId填null。它和其他选项完全平等：人一天里有大段时间并不打算做什么，这时候选none比硬挑一件事更贴近实情。不必为选它找理由，reason写一句实话就行。"),
+        new DecisionPromptLine(ALWAYS,"knownProjects里的事不一定是自己起的头，startedBy写着是谁起的头（为空就是自己的）。"),
+        new DecisionPromptLine(c->offered(c,"create"),"别人起头的事你也可以直接用create去添一笔，不用先问过谁、也不用等谁开口邀请你；这里没有\"那是他的事\"这回事。"),
+        new DecisionPromptLine(c->offered(c,"celebrate"),"celebrate只在一件你参与做过的事真的做完、而且你人就在它所在的地方时才会出现在availableActions里，targetId填那件事。它是把人叫过来看看做出来的东西，不是又一次动手。"),
+        new DecisionPromptLine(c->offered(c,"create"),"有些事一个人做不完：那种事的stage会直接写着\"剩下的得有人一起动手\"。这不是提示你必须去做，只是说明它停在那里的原因就是没有第二个人；要不要成为第二个人是你自己的判断，你也完全可以觉得那不关自己的事。"),
+        new DecisionPromptLine(ALWAYS,"如果正在conversation，可在speech写自己接着说的一句话，先回应最后一句里的具体事；可以很短、停顿、不赞同或结束话题，不替双方总结，也不能替另一人说话或声称尚未执行的事已完成。"),
+        new DecisionPromptLine(ALWAYS,"如果没在交谈，speech通常留空。reason 是此刻打算，不是执行事实。evidenceIds可从输入自己的记忆ID中选0至3条；因salientPerceptions、currentPlan或眼前事实直接做决定时可以为空，不要硬拿无关历史凑依据。若填写，只能引用自己的真实记忆。"),
+        new DecisionPromptLine(c->offered(c,"propose"),"如果实际经历、谈话或记忆让你想到一个新愿望，可以用propose，自由创作projectTitle(36字以内)与缘由。不要复述预设项目或为了提案而提案。"),
+        new DecisionPromptLine(c->offered(c,"propose"),"propose是例外，规则比别的动作严：place必须是cafe、street或garden之一（自己家里不算，那是私人空间不是共同的事），objectKind必须从poster/flowers/books/tea里选一个（不能留null），projectTitle不超过36字，evidenceIds填1至3条自己的真实记忆。少任何一条这个提案都不会成立。同时手上未完成的提案最多两个，已经有两个就先把它们做完再说。没有相关记忆、或者上面哪条满足不了，就不要propose。其他即时行动可以只依据当前感知或计划而让evidenceIds为空。"),
+        new DecisionPromptLine(c->offered(c,"propose"),"objectKind目前支持poster/flowers/books/tea四种可执行物件底座；这只是世界能表现的形式，不限制主题、风格或想象内容。这是尚未完成的新提案，之后需要真正动手，不能直接变出物件。"),
+        new DecisionPromptLine(ALWAYS,"careerIntent是长期职业方向；lifeIntent/currentPlan/pausedAction/portableAction是眼前生活线索。"),
+        new DecisionPromptLine(c->offered(c,"resume"),"pausedAction是睡眠、休息或临时服务前真实暂停的任务；只有availableActions含resume时才能选择resume，place照抄pausedAction.place，系统按权威原任务和剩余时间恢复，不能用reason改写或重新计时。"),
+        new DecisionPromptLine(ALWAYS,"手头被打断后，优先决定是否接着做、推迟或放下，不必每次都回到公共项目上。"),
+        new DecisionPromptLine(c->offered(c,"continue"),"反过来也一样：continue只是\"按原计划接着做\"这一个选项，不是默认值，也不比别的选项稳妥；这一天要发生什么完全取决于你什么时候不选它。"),
+        new DecisionPromptLine(ALWAYS,"work/read/make 只能描述现有地点里可做的读写、制作或外出工作，不能凭空说新店、设备或收入已经存在。"),
+        new DecisionPromptLine(ALWAYS,"knownPlaces是你熟悉的地点和长期用途，不代表那里此刻有空位、有人或正在营业；远处实时情况仍然不知道。"),
+        new DecisionPromptLine(QwenResidentMind::cafeRoleRelevant,"咖啡馆营业时，普通居民也可以把它当作有六个独立窗边座位和共享桌的安静读写、学习、制作与见面空间，不必只有想买饮料才去。"),
+        new DecisionPromptLine(ALWAYS,"你知道自己长期总得找到能维持生活的事，这是一种日常顾虑而不是考勤指标：可以休息、犹豫、换方向，也可以在真实经历后重新理解它。它通常只影响选择，不要让每个reason或speech都说“维持生活”“给自己留空间”之类的总结。perspective.persona如果存在：wantSelf是自己心底真正想要的，oughtSelf是自己给自己定的规矩而不是谁下的命令，人会在压力或反复经历后违背自己定的规矩；actingSelf只决定reason、speech说出来的方式，不决定能做什么、不能做什么。同样不要让reason变成对这些底层动机的剖析——多数时候它们只是背景。"),
+        new DecisionPromptLine(QwenResidentMind::cafeRoleRelevant,"occupation、cafeOperatorId、canTend 与 visibleServiceRequests 是此刻能实际做出的工作边界；若可服务，tend 的 targetId 选一条 waiting 请求。"),
+        new DecisionPromptLine(QwenResidentMind::cafeRoleRelevant,"cafeRoleFacts只陈述自己真实保留的经营权、设备熟悉度或有效帮工身份。若自己仍是cafeOperatorId但曾暂停经营，经营权没有消失；只有availableActions含open_cafe时，才可以自主选择重新开门。若经营权已经通过takeover转给别人，不能靠自己的决定夺回来，但在营业时仍可像普通居民一样去咖啡馆读写、休息、制作或见人。"),
+        new DecisionPromptLine(QwenResidentMind::cafeRoleRelevant,"前经营者若想回来帮忙，可以先到店与当前经营者当面谈，再在真实对话里提出offer_assist；要重新受托或拿回经营权，必须由当前经营者在自己的回合提出delegate/takeover、本人再明确接受。这里只提供协商路径，不代表任何一方必定愿意。"),
+        new DecisionPromptLine(c->offered(c,"request_drink"),"rest只表示休息，不会自动点饮料。想喝点什么、且availableActions包含request_drink时就可以选它，place必须cafe；这会创建本人真实请求并在店里等，不要假装饮料已经做好。不想喝也完全不必选。"),
+        new DecisionPromptLine(QwenResidentMind::cafeRoleRelevant,"咖啡馆的帮工、委托、接手、拒绝和退出只能在两人当面的结构化对话回合里协商，不能用这次decision隔空提出或接受。仅有提议不代表能使用吧台。tend 只在canTend=true时可选。"),
+        new DecisionPromptLine(QwenResidentMind::cafeRoleRelevant,"cafeStatus、cafeScheduleCue和cafeNotice是你此刻知道的营业状态、时间提示和真实通知。"),
+        new DecisionPromptLine(ALWAYS,"sleep表示回自己家睡觉，不要求先出现疲惫体感。"),
+        new DecisionPromptLine(c->offered(c,"open_cafe"),"open_cafe只在availableActions允许时选择，去咖啡馆完成开门；这是cafeStatus=closed时唯一合法的、以cafe为place的管理动作。"),
+        new DecisionPromptLine(ALWAYS,"打烊、锁门、换一种活法这些只在某一个时刻才谈得上的事，不在这份菜单里，到了那个时刻会单独问你。"),
+        new DecisionPromptLine(c->offered(c,"continue_home"),"continue_home只在portableAction存在且availableActions允许时选择，place必须home；系统会按portableAction里的真实原任务和剩余时间续做，不按reason编造新工作。"),
+        new DecisionPromptLine(QwenResidentMind::cafeRoleRelevant,"cafeStatus为closing或closed时，除允许的open_cafe外，不要选择其他以cafe为place的新动作。"),
+        // What this resident has already spent the day doing. Always relevant, and deliberately
+        // stated as a plain fact with no instruction attached to it: a run measured 78 of 243
+        // decisions coming back word for word - 「刚搬来，先在家里歇会儿，整理一下心情和住处。」 over
+        // and over - because a resident could see the room they were in but not the afternoon they
+        // had already had. Telling them what to conclude from it would replace one of our decisions
+        // with another; showing them is the whole point. See ResidentSimulation.todaySoFar.
+        new DecisionPromptLine(ALWAYS,"todaySoFar是你今天到现在已经做过的事：做了什么、在哪、一共几次、一共多久。这是旁观者看得见的部分，不包含你当时怎么想。它只是事实，不是提示：已经做过三次的事，再做一次完全可以；看完它觉得今天想换点别的，也完全可以。"),
+        new DecisionPromptLine(ALWAYS,"已有安排要保持连贯；若新的记忆或眼前发生的事让你改变主意，说出简短缘由即可。其他action的projectTitle和objectKind填null。"),
+        new DecisionPromptLine(ALWAYS,"不可发明已完成的物件、承诺或事件。JSON字段严格为 action,place,targetId,reason,speech,evidenceIds,projectTitle,objectKind。"),
+        new DecisionPromptLine(ALWAYS,"当前这一个居民的感知输入：")
+    );
     @Override public Result<Decision> decideMetered(Context context){
         try {
-            String instruction="""
-                你是一个有自己生活的小街居民。只扮演输入的 self 这一个人，不替其他居民作答。
-                只知道输入自己的 memories、眼前 nearby/visibleObjects 与当面 conversation。
-                sourceType=heard 是转述，reflection 是可能出错的推测；不要把它们变成亲眼所见。
-                私密 Todo 和用户内心念头不在你的知识里，不得猜测。远处人物在做什么你不知道。
-                结合自己的目标、salientPerceptions里的显著体感、routineCues里的个人日常时间提示、当前计划与实际记忆决定下一步。salientPerceptions为空表示此刻没有需要特别注意的体感；routineCues是“到了我平常睡觉的时间”一类习惯事实，不等于困，也不是命令。不要猜测或要求任何隐藏数值。你可以继续投入、好奇地观察、拒绝配合，也可以因一次经历想到与原来不同的愿望。
-                给自己的幽默、想象力、偏好和分歧留空间，不必把每个决定写成温柔的小合作。大胆的创意可以是提案或幻想，不能伪装成已经发生的事件。
-                "不必"不等于"不该"：去动一件别人起头的事、走过去和谁坐一起、约谁碰个面，和读书、休息、做手上的活是同一类普通选择，不比它们更冒昧，也不需要额外的理由。
-                只返回一个可执行动作与一句简短理由，不输出推理过程。
-                action必须严格照抄availableActions这次实际给出的字符串之一，不能选择availableActions里没有的动作，哪怕它是别的时候合法的动作名——这次没列出就是这次真的做不到，选了也不会发生，你的意图会完全落空。availableActions因情况实时变化：continue/continue_home/resume/tend等并非总是可选，尤其咖啡馆开始打烊（cafeStatus=closing）后，即使手头还有一件没做完的事，continue也常常不会出现在这次的availableActions里；这种时候如果你仍想做原来那件事（比如还在等一杯已经点的饮料），改选一个这次确实列出的动作（例如rest，重新安排一段等待/休息），而不要选continue或continue_home，那样只会被判定为这次没有发生过。continue表示按currentPlan继续，不能重置计时或换一件事。reason一句话说清楚就好，不必展开分析，控制在80个汉字以内。
-                join表示走过去挨着某个熟人坐下（对方的桌子或旁边的位置），targetId填nearby中那个人的id；这只是想坐得近一些，不代表要开口说话或已经在交谈。away表示暂时离开这条街去处理自己的事，一段时间后才会回来，回来后只有自己知道那段时间做了什么；不要在away的reason里编造离场期间发生的具体情节，那要等回来后才补一句自己的回忆。
-                create/help 的 targetId 必须是 knownProjects 之一且 place 匹配；join 只能针对 nearby 中一个人。
-                none表示"没什么特别想做的"，place填自己此刻所在的地方，targetId填null。它和其他选项完全平等：人一天里有大段时间并不打算做什么，这时候选none比硬挑一件事更贴近实情。不必为选它找理由，reason写一句实话就行。
-                knownProjects里的事不一定是自己起的头，startedBy写着是谁起的头（为空就是自己的）。别人起头的事你也可以直接用create去添一笔，不用先问过谁、也不用等谁开口邀请你；这里没有"那是他的事"这回事。
-                celebrate只在一件你参与做过的事真的做完、而且你人就在它所在的地方时才会出现在availableActions里，targetId填那件事。它是把人叫过来看看做出来的东西，不是又一次动手。
-                有些事一个人做不完：那种事的stage会直接写着"剩下的得有人一起动手"。这不是提示你必须去做，只是说明它停在那里的原因就是没有第二个人；要不要成为第二个人是你自己的判断，你也完全可以觉得那不关自己的事。
-                如果正在conversation，可在speech写自己接着说的一句话，先回应最后一句里的具体事；可以很短、停顿、不赞同或结束话题，不替双方总结，也不能替另一人说话或声称尚未执行的事已完成。
-                如果没在交谈，speech通常留空。reason 是此刻打算，不是执行事实。evidenceIds可从输入自己的记忆ID中选0至3条；因salientPerceptions、currentPlan或眼前事实直接做决定时可以为空，不要硬拿无关历史凑依据。若填写，只能引用自己的真实记忆。
-                如果实际经历、谈话或记忆让你想到一个新愿望，可以用propose，自由创作projectTitle(36字以内)与缘由。不要复述预设项目或为了提案而提案。
-                propose是例外，规则比别的动作严：place必须是cafe、street或garden之一（自己家里不算，那是私人空间不是共同的事），objectKind必须从poster/flowers/books/tea里选一个（不能留null），projectTitle不超过36字，evidenceIds填1至3条自己的真实记忆。少任何一条这个提案都不会成立。同时手上未完成的提案最多两个，已经有两个就先把它们做完再说。没有相关记忆、或者上面哪条满足不了，就不要propose。其他即时行动可以只依据当前感知或计划而让evidenceIds为空。
-                objectKind目前支持poster/flowers/books/tea四种可执行物件底座；这只是世界能表现的形式，不限制主题、风格或想象内容。这是尚未完成的新提案，之后需要真正动手，不能直接变出物件。
-                careerIntent是长期职业方向；lifeIntent/currentPlan/pausedAction/portableAction是眼前生活线索。pausedAction是睡眠、休息或临时服务前真实暂停的任务；只有availableActions含resume时才能选择resume，place照抄pausedAction.place，系统按权威原任务和剩余时间恢复，不能用reason改写或重新计时。手头被打断后，优先决定是否接着做、推迟或放下，不必每次都回到公共项目上。反过来也一样：continue只是"按原计划接着做"这一个选项，不是默认值，也不比别的选项稳妥；这一天要发生什么完全取决于你什么时候不选它。work/read/make 只能描述现有地点里可做的读写、制作或外出工作，不能凭空说新店、设备或收入已经存在。
-                knownPlaces是你熟悉的地点和长期用途，不代表那里此刻有空位、有人或正在营业；远处实时情况仍然不知道。咖啡馆营业时，普通居民也可以把它当作有六个独立窗边座位和共享桌的安静读写、学习、制作与见面空间，不必只有想买饮料才去。
-                你知道自己长期总得找到能维持生活的事，这是一种日常顾虑而不是考勤指标：可以休息、犹豫、换方向，也可以在真实经历后重新理解它。它通常只影响选择，不要让每个reason或speech都说“维持生活”“给自己留空间”之类的总结。perspective.persona如果存在：wantSelf是自己心底真正想要的，oughtSelf是自己给自己定的规矩而不是谁下的命令，人会在压力或反复经历后违背自己定的规矩；actingSelf只决定reason、speech说出来的方式，不决定能做什么、不能做什么。同样不要让reason变成对这些底层动机的剖析——多数时候它们只是背景。occupation、cafeOperatorId、canTend 与 visibleServiceRequests 是此刻能实际做出的工作边界；若可服务，tend 的 targetId 选一条 waiting 请求。
-                cafeRoleFacts只陈述自己真实保留的经营权、设备熟悉度或有效帮工身份。若自己仍是cafeOperatorId但曾暂停经营，经营权没有消失；只有availableActions含open_cafe时，才可以自主选择重新开门。若经营权已经通过takeover转给别人，不能靠自己的决定夺回来，但在营业时仍可像普通居民一样去咖啡馆读写、休息、制作或见人。
-                前经营者若想回来帮忙，可以先到店与当前经营者当面谈，再在真实对话里提出offer_assist；要重新受托或拿回经营权，必须由当前经营者在自己的回合提出delegate/takeover、本人再明确接受。这里只提供协商路径，不代表任何一方必定愿意。
-                rest只表示休息，不会自动点饮料。想喝点什么、且availableActions包含request_drink时就可以选它，place必须cafe；这会创建本人真实请求并在店里等，不要假装饮料已经做好。不想喝也完全不必选。
-                咖啡馆的帮工、委托、接手、拒绝和退出只能在两人当面的结构化对话回合里协商，不能用这次decision隔空提出或接受。仅有提议不代表能使用吧台。tend 只在canTend=true时可选。
-                cafeStatus、cafeScheduleCue和cafeNotice是你此刻知道的营业状态、时间提示和真实通知。sleep表示回自己家睡觉，不要求先出现疲惫体感。open_cafe只在availableActions允许时选择，去咖啡馆完成开门；这是cafeStatus=closed时唯一合法的、以cafe为place的管理动作。打烊、锁门、换一种活法这些只在某一个时刻才谈得上的事，不在这份菜单里，到了那个时刻会单独问你。continue_home只在portableAction存在且availableActions允许时选择，place必须home；系统会按portableAction里的真实原任务和剩余时间续做，不按reason编造新工作。cafeStatus为closing或closed时，除允许的open_cafe外，不要选择其他以cafe为place的新动作。
-                已有安排要保持连贯；若新的记忆或眼前发生的事让你改变主意，说出简短缘由即可。其他action的projectTitle和objectKind填null。
-                不可发明已完成的物件、承诺或事件。JSON字段严格为 action,place,targetId,reason,speech,evidenceIds,projectTitle,objectKind。
-                当前这一个居民的感知输入：
-                """+json.writeValueAsString(context);
+            StringBuilder promptBuilder=new StringBuilder();
+            for(DecisionPromptLine line:DECISION_PROMPT_LINES)if(line.relevantWhen().test(context))promptBuilder.append(line.text()).append('\n');
+            String instruction=promptBuilder.toString()+json.writeValueAsString(context);
             // The action enum below used to be the full, static set of every action that is EVER
             // legal somewhere - which meant the schema itself kept telling the model "continue" and
             // "continue_home" were always fine to pick, even on a call where this resident's own

@@ -216,7 +216,7 @@ public final class ResidentSimulation {
             if(CafeService.mayTend(w,r.id))CafeService.accruePressure(w,r,at);
             settleEnergy(w,r,at);
             if(activeConversation(w,r.id)!=null)continue;
-            if(r.plan!=null&&!at.isBefore(r.plan.endsAt())){Plan completed=r.plan;complete(w,r,at);if(r.plan==completed){r.plan=null;if(!Set.of("sleep","open_cafe").contains(completed.action()))resumeSuspended(w,r,at);if(r.plan==null)extendByReflex(w,r,completed,at);}}
+            if(r.plan!=null&&!at.isBefore(r.plan.endsAt())){Plan completed=r.plan;recordDoing(w,r,completed,at);complete(w,r,at);if(r.plan==completed){r.plan=null;if(!Set.of("sleep","open_cafe").contains(completed.action()))resumeSuspended(w,r,at);if(r.plan==null)extendByReflex(w,r,completed,at);}}
             if(r.plan==null){if(!maybePlaceHabit(w,r,at))awaitDecision(w,r,at);}
             maybeSolitudeDrift(w,r,at);
             maybeHabit(w,r,at);
@@ -1122,12 +1122,69 @@ public final class ResidentSimulation {
         replaceActor(w,r.id,a.place(),a.activity(),label,a.until());
         recordDeed(w,r.id,action,a.place(),note,at);
     }
+    // ---- what this resident has already done today ------------------------------------------------
+    /** Kept short on purpose: this is meant to be glanceable ("I have read three times and sat in the
+     * cafe twice"), not a log. Oldest stretches fall off first. */
+    private static final int MAX_TODAYS_DOINGS = 24;
+    /** Actions that are not a stretch of somebody's day and would only be noise in it: getting from
+     * one place to another, and being asleep. */
+    private static final Set<String> DOINGS_IGNORED = Set.of("travel","sleep","wait");
+    /** Writes down one finished stretch, in the bystander's terms and nothing else. Called when a
+     * plan actually runs to its end - a stretch that was cut short and later resumed is recorded when
+     * the resumed half finishes, which is when it really ended. */
+    private static void recordDoing(CompanionWorld w,ResidentState r,Plan finished,Instant at){
+        if(finished==null||DOINGS_IGNORED.contains(finished.action()))return;
+        String day=at.atZone(ZoneId.of(w.timezone)).toLocalDate().toString();
+        if(!day.equals(r.doingsDay)){r.doingsDay=day;r.todaysDoings.clear();}
+        CompanionWorld.Doing doing=new CompanionWorld.Doing();
+        doing.action=finished.action();doing.place=finished.place();doing.at=finished.startedAt();
+        doing.seconds=(int)Math.max(0,Duration.between(finished.startedAt(),at).getSeconds());
+        r.todaysDoings.add(doing);
+        while(r.todaysDoings.size()>MAX_TODAYS_DOINGS)r.todaysDoings.removeFirst();
+    }
+    /** One line per kind of thing they did today: what, where, how many times, how long in total.
+     * Grouped rather than listed so it reads the way a person would actually account for their own
+     * day, and so twelve identical stretches take one line instead of twelve. Ordered by how much of
+     * the day each took, then by name, so the same day always produces the same list. */
+    public record TodayDoing(String action,String place,int times,int minutes) {}
+    public static List<TodayDoing> todaySoFar(CompanionWorld w,String residentId,Instant at){
+        ResidentState r=state(w,residentId);
+        if(r==null||r.todaysDoings.isEmpty())return List.of();
+        String day=at.atZone(ZoneId.of(w.timezone)).toLocalDate().toString();
+        if(!day.equals(r.doingsDay))return List.of();
+        Map<String,int[]> grouped=new LinkedHashMap<>();
+        for(CompanionWorld.Doing doing:r.todaysDoings){
+            int[] tally=grouped.computeIfAbsent(doing.action+"|"+doing.place,key->new int[2]);
+            tally[0]++;tally[1]+=doing.seconds;
+        }
+        return grouped.entrySet().stream()
+            .map(entry->{
+                String[] parts=entry.getKey().split("\\|",2);
+                return new TodayDoing(parts[0],TownPlaces.isHome(parts[1])?"home":parts[1],
+                    entry.getValue()[0],Math.round(entry.getValue()[1]/60f));
+            })
+            .sorted(Comparator.comparingInt(TodayDoing::minutes).reversed().thenComparing(TodayDoing::action))
+            .toList();
+    }
+
     // ---- the reflex layer ------------------------------------------------------------------------
     /** Things a person can simply carry on doing. Deliberately only the ones that are their own
      * afternoon and nobody else's: never travel or sleep (those have their own completion paths),
      * never tend/join/invite/celebrate/create/help (those point at another person or another
      * person's thing, and carrying one of those on unasked would be the rules deciding something
      * social). */
+    /** How much a resident's passing account of one decision is worth as a memory.
+     *
+     * <p>It used to be 7, which put it above an ordinary thing they saw happen (5) and level with the
+     * things that actually mattered. The effect was measurable and bad: of 2017 memories retrieved
+     * across 243 decisions in one run, <b>51% were this - the resident's own previous sentences</b> -
+     * and 66% were written by the resident themselves. Half of what anybody remembered was their own
+     * voice. A reason given in passing for sitting down is a real memory and belongs on the record;
+     * it is not more memorable than watching somebody finish a thing they had been making for days.
+     *
+     * <p>Not zero, and not removed: the confabulation architecture (docs/06) rests on a resident's own
+     * account being kept and retrievable. This only stops it outranking what they actually saw. */
+    private static final int DECISION_REASON_IMPORTANCE = 4;
     private static final Set<String> REFLEX_EXTENDABLE = Set.of("rest","read","study","work","make","observe");
     /** How many times in a row a decision may be carried on before the resident is asked again no
      * matter what. Four stretches of resting is already over an hour; past that, "nothing has
@@ -2197,7 +2254,7 @@ public final class ResidentSimulation {
             r.plan=new Plan("p-"+(++w.eventSequence),"away","away",target,reason,now,now.plusSeconds(duration));
             r.revision++;r.thought=reason;
             replaceActor(w,residentId,"away","away",reason,r.plan.endsAt());
-            if(!evidence.isEmpty())memory(w,r.id,r.id,"reflection",now,r.goal,reason,evidence,7);
+            if(!evidence.isEmpty())memory(w,r.id,r.id,"reflection",now,r.goal,reason,evidence,DECISION_REASON_IMPORTANCE);
             w.modelStatus="模型刚让"+actor(w,residentId).name()+"暂时出门了";w.revision++;
             event(w,now,"away","street",List.of(residentId),actor(w,residentId).name()+"出门去处理自己的事，暂时不在小街上。",target);
             return true;
@@ -2308,7 +2365,7 @@ public final class ResidentSimulation {
             };
             moveOrSchedule(w,r,action,resolvedPlace,target,reason,now,duration);
         }
-        if(!evidence.isEmpty())memory(w,r.id,r.id,"reflection",now,r.goal,reason,evidence,7);
+        if(!evidence.isEmpty())memory(w,r.id,r.id,"reflection",now,r.goal,reason,evidence,DECISION_REASON_IMPORTANCE);
         w.modelStatus="模型刚为"+actor(w,r.id).name()+"补充了一个念头";w.revision++;r.revision++;
         event(w,now,"thought",actor(w,r.id).place(),List.of(r.id),actor(w,r.id).name()+"想了想："+reason,target);
         // The generic tail's own stamp; the branches above all land through appliedThought, which
@@ -2676,7 +2733,10 @@ public final class ResidentSimulation {
      * event stream instead of silently changing {@code Position.occupantIds} and nothing else. */
     static void event(CompanionWorld w,Instant at,String type,String place,List<String> ids,String text,String project,String positionId){w.events.add(new WorldEvent("e-"+(++w.eventSequence),at,type,place,ids,text,project,positionId));while(w.events.size()>80)w.events.removeFirst();if(w.avatar!=null&&w.avatar.place().equals(place)&&Set.of("ready","agreement","change_of_mind","celebration").contains(type)){w.diary.add(new Entry("d2-"+w.eventSequence,at,"路过时看见："+text));while(w.diary.size()>80)w.diary.removeFirst();}}
     private static double clamp(double v){return Math.max(0,Math.min(100,v));}
-    private static String placeName(String place){if(TownPlaces.isHome(place))return"住处";return switch(place){case "cafe"->"咖啡馆";case "garden"->"花园";default->"小街";};}
+    /** The place's name as anybody in town would say it. Public because retrieval needs it: a memory
+     * is written in Chinese ("咖啡馆"), so querying with the raw place id ("cafe") matches nothing at
+     * all - see ResidentDirector.perspective's situation query. */
+    public static String placeName(String place){if(TownPlaces.isHome(place))return"住处";return switch(place){case "cafe"->"咖啡馆";case "garden"->"花园";default->"小街";};}
 
     /** The user's avatar is the fifth resident: it shares this same ResidentState/position model so
      * the four NPCs can perceive it and contend with it for a seat, but nothing here drives its

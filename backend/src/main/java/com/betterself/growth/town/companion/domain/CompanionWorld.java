@@ -334,6 +334,21 @@ public class CompanionWorld {
          * any decision that lands. Self-healing on an old save via the 0/null defaults. */
         public int consecutiveDecisionRejections;
         public Instant decisionRetryAfter;
+        /** What this resident has actually spent today doing, in their own bystander-visible terms -
+         * one entry per stretch of work that ran to its end, the day it belongs to, and nothing else.
+         * Reset when the local date turns over; bounded, oldest dropped first.
+         *
+         * <p>It exists because a resident could not see their own afternoon. A six-hour run took 243
+         * decisions and 78 of them (32.1%) repeated that resident's previous decision word for word -
+         * 「刚搬来，先在家里歇会儿，整理一下心情和住处。」 came back verbatim dozens of times. A person
+         * who had said that three times running would know they had; ours could not. The reflex layer
+         * stops us <i>asking</i> the same question into an unchanged room, and this is the other half:
+         * when they are asked, they can see what they have already done with the day.
+         *
+         * <p>Deliberately the bystander's view - action, place, how long - never a motive, exactly
+         * like {@link Deed}. Why they did it is theirs to say, not ours to record. */
+        public List<Doing> todaysDoings = new ArrayList<>();
+        public String doingsDay;
         /** The reflex layer's bookkeeping (see ResidentSimulation's "extendByReflex"). {@code
          * planFromDecision} says the plan currently running is one this resident themselves chose,
          * not one the rules arranged - only a decision of their own may be quietly carried on.
@@ -488,6 +503,12 @@ public class CompanionWorld {
     /** One thing a resident did without deciding to. {@code note} is the rules' plain account of what
      * happened - never a motive, because the rules do not know one and must not invent one. The
      * motive is the resident's own, and arrives later. */
+    /** One finished stretch of a resident's own day: what they did, where, and for how long. */
+    public static class Doing {
+        public String action, place;
+        public Instant at;
+        public int seconds;
+    }
     public static class Deed {
         public String id, action, place, note;
         public Instant at;

@@ -258,7 +258,8 @@ public interface ResidentMind {
      * over. */
     record DayPlanDraft(List<String> segments,List<String> evidenceIds) {}
     record Context(String residentId,String localTime,String weather,ActorView self,String goal,
-                   List<String> salientPerceptions,List<String> routineCues,List<MemoryView> memories,List<ActorView> nearby,
+                   List<String> salientPerceptions,List<String> routineCues,List<MemoryView> memories,
+                   List<com.betterself.growth.town.companion.domain.ResidentSimulation.TodayDoing> todaySoFar,List<ActorView> nearby,
                    List<WorldObjectView> visibleObjects,List<PersonHereView> peopleHere,List<KnownPlaceView> knownPlaces,List<KnownProject> knownProjects,List<TurnView> conversation,
                    LifeIntentView lifeIntent,LifeIntentView careerIntent,PlanView currentPlan,List<WorkArrangementView> workArrangements,
                    String occupation,PersonaView persona,List<String> availableActions,String cafeOperatorId,List<String> cafeRoleFacts,boolean canTend,List<ServiceRequestView> visibleServiceRequests,
@@ -270,9 +271,9 @@ public interface ResidentMind {
                        String weather,Actor self,String goal,String mood,String thought,double energy,double social,
                        java.util.Map<String,Integer> relationships,List<Memory> memories,List<Actor> nearby,
                        List<WorldObject> visibleObjects,List<KnownProject> knownProjects,List<Turn> conversation){
-            this(residentId,localTime,weather,actorView(self),goal,List.of(),List.of(),memoryViews(memories),actorViews(nearby),
+            this(residentId,localTime,weather,actorView(self),goal,List.of(),List.of(),memoryViews(memories),List.of(),actorViews(nearby),
                 objectViews(visibleObjects),List.of(),List.of(),knownProjects,turnViews(conversation),null,null,null,List.of(),null,null,
-                List.of("observe","rest","study","work","read","make","sleep","change_work","propose"),null,List.of(),false,List.of(),null,null,null,null,null);
+                List.of("none","observe","rest","study","work","read","make","sleep","propose"),null,List.of(),false,List.of(),null,null,null,null,null);
         }
     }
     /**

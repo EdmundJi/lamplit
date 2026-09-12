@@ -77,7 +77,7 @@ class ResidentDialogueNaturalnessLiveIT {
                                                  List<ResidentMind.WorkArrangementView> work) {
         var state = ResidentSimulation.state(world, selfId);
         var context = new ResidentMind.Context(selfId,"15:00","clear",ResidentMind.actorView(ResidentSimulation.actor(world,selfId)),
-            state.goal,List.of(),List.of(),ResidentMind.memoryViews(memories),ResidentMind.actorViews(List.of(ResidentSimulation.actor(world,partnerId))),
+            state.goal,List.of(),List.of(),ResidentMind.memoryViews(memories),List.of(),ResidentMind.actorViews(List.of(ResidentSimulation.actor(world,partnerId))),
             List.of(),List.of(),List.of(),List.of(),ResidentMind.turnViews(transcript),null,null,ResidentMind.planView(state.plan,NOW),work,state.occupation,com.betterself.growth.town.companion.application.ResidentDirector.personaView(selfId),List.of("observe","rest","work"),"owner",List.of(),"owner".equals(selfId),List.of(),"open",null,null,null,null);
         return context;
     }

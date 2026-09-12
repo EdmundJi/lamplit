@@ -560,12 +560,31 @@ public class ResidentDirector {
         // pre-written phrases from CompanionRules - never anything the user typed.
         var visible=new ArrayList<Actor>(w.residents);if(w.avatar!=null)visible.add(w.avatar);
         var nearby=visible.stream().filter(a->!a.id().equals(r.id)&&a.place().equals(self.place())&&!a.activity().equals("walk")).toList();
+        // What this resident is being asked about, in facts - never in their own last sentence about
+        // it. The query used to include r.plan.reason(), which is the rationalisation the resident
+        // themselves wrote the previous time they were asked, and every such reason is also filed as
+        // a memory. So the question that fetched a resident's memories was built out of the answer
+        // they last gave, and it fetched that answer back: across 243 measured decisions, 51% of
+        // everything retrieved was the resident's own previous sentences, 66% was written by them at
+        // all, and 44% of decisions got a byte-identical memory set to that resident's previous one.
+        // An echo chamber with a retrieval score on it.
+        //
+        // Generative Agents queries retrieval with the agent's *situation*, and that is what this is
+        // now: where they are, what they are in the middle of (the action and the thing it is aimed
+        // at - world facts, not prose), who is standing there, what is in the room, and the standing
+        // purpose they have named for themselves. The one piece of their own writing left is
+        // lifeIntent.purpose, which is a stated direction rather than a passing excuse.
         String intentText=r.lifeIntent==null?"":r.lifeIntent.purpose;
-        String planText=r.plan==null?"":r.plan.reason();
         String people=nearby.stream().map(Actor::name).reduce("",(a,b)->a+" "+b);
-        // Retrieval follows the unfinished thread and the people actually in front of this resident,
-        // rather than treating the current public project as their entire reason to remember.
-        var memories=CompanionRecall.retrieve(w.memories,r.id,intentText+" "+planText+" "+people,now,10);
+        String placeText=ResidentSimulation.placeName(self.place());
+        String doingText=r.plan==null?"":r.plan.action();
+        Project aimedAt=r.plan==null?null:ResidentSimulation.project(w,r.plan.targetId());
+        String thingText=aimedAt==null?"":aimedAt.title;
+        String hereText=w.objects.stream().filter(o->o.place().equals(self.place()))
+            .map(CompanionWorld.WorldObject::label).filter(Objects::nonNull).reduce("",(a,b)->a+" "+b);
+        String situation=String.join(" ",placeText,doingText,thingText,people,hereText,intentText,
+            String.join(" ",ResidentSimulation.salientPerceptions(w,r.id,now)));
+        var memories=CompanionRecall.retrieve(w.memories,r.id,situation,now,10);
         var known=w.projects.stream().filter(p->ResidentSimulation.knows(w,r.id,p.id)).map(p->{
             var view=r.knownProjects.get(p.id);
             String startedBy=p.ownerId==null||p.ownerId.equals(r.id)?null:ResidentSimulation.actor(w,p.ownerId).name();
@@ -584,7 +603,7 @@ public class ResidentDirector {
         var peopleHere=nearby.stream().filter(person->!person.id().equals("self")||ResidentSimulation.selfIsFree(w))
             .map(person->new ResidentMind.PersonHereView(person.id(),person.name(),closeness(r.relationships.getOrDefault(person.id(),40)),
                 memories.stream().filter(m->m.text()!=null&&m.text().contains(person.name())||person.id().equals(m.sourceId())).map(Memory::id).toList())).toList();
-        return new ResidentMind.Context(r.id,now.atZone(ZoneId.of(w.timezone)).toLocalTime().toString(),w.weather,ResidentMind.actorView(self),r.goal,List.copyOf(perceptions),ResidentSimulation.routineCues(w,r.id,now),ResidentMind.memoryViews(memories),ResidentMind.actorViews(nearby),ResidentMind.objectViews(w.objects.stream().filter(o->o.place().equals(self.place())).toList()),peopleHere,knownPlaces,known,ResidentMind.turnViews(transcript),intentView(r.lifeIntent),intentView(r.careerIntent),ResidentMind.planView(r.plan,now),arrangements,r.occupation,personaView(r.id),ResidentSimulation.availableActions(w,r.id,now),ResidentSimulation.cafeOperatorId(w),cafeRoleFacts,ResidentSimulation.mayTend(w,r.id),requests,w.cafeStatus,ResidentSimulation.cafeScheduleCue(w,r.id,now),ResidentSimulation.cafeNotice(w,r.id),paused==null?null:new ResidentMind.PausedActionView(paused.action(),TownPlaces.isHome(paused.place())?"home":paused.place(),paused.reason(),paused.remainingSeconds()),portable==null?null:new ResidentMind.PortableActionView(portable.action(),portable.reason(),portable.remainingSeconds()));
+        return new ResidentMind.Context(r.id,now.atZone(ZoneId.of(w.timezone)).toLocalTime().toString(),w.weather,ResidentMind.actorView(self),r.goal,List.copyOf(perceptions),ResidentSimulation.routineCues(w,r.id,now),ResidentMind.memoryViews(memories),ResidentSimulation.todaySoFar(w,r.id,now),ResidentMind.actorViews(nearby),ResidentMind.objectViews(w.objects.stream().filter(o->o.place().equals(self.place())).toList()),peopleHere,knownPlaces,known,ResidentMind.turnViews(transcript),intentView(r.lifeIntent),intentView(r.careerIntent),ResidentMind.planView(r.plan,now),arrangements,r.occupation,personaView(r.id),ResidentSimulation.availableActions(w,r.id,now),ResidentSimulation.cafeOperatorId(w),cafeRoleFacts,ResidentSimulation.mayTend(w,r.id),requests,w.cafeStatus,ResidentSimulation.cafeScheduleCue(w,r.id,now),ResidentSimulation.cafeNotice(w,r.id),paused==null?null:new ResidentMind.PausedActionView(paused.action(),TownPlaces.isHome(paused.place())?"home":paused.place(),paused.reason(),paused.remainingSeconds()),portable==null?null:new ResidentMind.PortableActionView(portable.action(),portable.reason(),portable.remainingSeconds()));
     }
     /** Copies {@link ResidentSeed#narrative} straight into {@code ResidentMind.Context} - text only,
      * never a gate: {@code null} for the avatar ("self") and any resident this batch never authored

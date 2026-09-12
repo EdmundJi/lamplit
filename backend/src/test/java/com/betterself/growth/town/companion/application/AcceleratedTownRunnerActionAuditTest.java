@@ -20,7 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class AcceleratedTownRunnerActionAuditTest {
     private static ResidentMind.Context contextWithActions(List<String> availableActions) {
         return new ResidentMind.Context(null,null,null,null,null,
-            List.of(),List.of(),List.of(),List.of(),List.of(),List.of(),List.of(),List.of(),List.of(),
+            List.of(),List.of(),List.of(),List.of(),List.of(),List.of(),List.of(),List.of(),List.of(),List.of(),
             null,null,null,List.of(),
             null,null,availableActions,null,List.of(),false,List.of(),
             null,null,null,null,null);
