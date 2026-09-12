@@ -12,70 +12,51 @@ public final class ResidentSimulation {
      * "tend" belongs in this set even though it is not a passive/absent state like the other four. */
     private static final Set<String> UNAVAILABLE_FOR_CONVERSATION = Set.of("travel","sleep","rest","away","tend");
 
-    /** Abstract positions along the shared street, in walking-seconds units - not frontend pixels (04:
-     * 后端定结构，前端定像素). The owner's home sits right by the cafe he runs; the student's desk is a
-     * few doors down; the cafe itself is the busiest, most central point; the far homes (artist,
-     * gardener, the user's own avatar) sit toward the other end, roughly twenty seconds' walk away -
-     * see {@link #travelSeconds} for how this becomes an actual travel duration. */
-    private static final Map<String,Integer> STREET_POSITION = new LinkedHashMap<>();
-    static {
-        STREET_POSITION.put(TownPlaces.homeOf("owner"),0);
-        STREET_POSITION.put("street",4);
-        STREET_POSITION.put("cafe",4);
-        STREET_POSITION.put(TownPlaces.homeOf("student"),8);
-        STREET_POSITION.put("garden",14);
-        STREET_POSITION.put(TownPlaces.homeOf("artist"),20);
-        STREET_POSITION.put(TownPlaces.homeOf("gardener"),26);
-        STREET_POSITION.put(TownPlaces.homeOf("self"),30);
-        // 周野's own home (see ResidentSeed.initialize's "周野 gets a new home of his own, next to
-        // 青叔's garden") - an explicit entry so his travel times are the same kind of deliberate
-        // placement as everyone else's, rather than falling through to streetPosition()'s
-        // hash-of-the-place-id fallback below (still deterministic, but not an authored position).
-        STREET_POSITION.put(TownPlaces.homeOf("fixer"),16);
-    }
-    private static int streetPosition(String place){
-        Integer known=STREET_POSITION.get(place);
-        if(known!=null)return known;
-        // A manually authored resident's home (see ResidentSeed.addResident) predates this table;
-        // place it deterministically along the same span instead of failing on an unknown key.
-        return Math.floorMod(place.hashCode(),30);
-    }
-    /** How many walking-seconds one unit of {@link #STREET_POSITION} is worth. The table is drawn in
-     * abstract units; this turns it into a duration a person would recognise - the far end of the
-     * street is about a ten-minute walk, next door about a minute.
-     * <p>The first version of this used the table's units as seconds directly, which made the whole
-     * town three to twenty seconds wide. That is not a walk, and it had a consequence beyond
-     * flavour: an accelerated run advances roughly a hundred simulated seconds per tick, so every
-     * journey began and ended inside a single tick. Nobody was ever observed on the street, which is
-     * why {@link #maybeStreetEncounter} could not have found anyone there however it was written. A
-     * walk has to last longer than the clock's own resolution to exist at all. */
-    private static final int SECONDS_PER_STREET_UNIT = 20;
-    /** Real walking duration between two places (item 2), from the abstract layout in
-     * {@link #STREET_POSITION}. Bounded at both ends so a trip is never instant and never longer than
-     * the map actually is. */
+    /** The floor under any single walk, including a "walk" between two ids that turn out to be the
+     * exact same physical place (e.g. {@code home-artist} against itself, which is what
+     * {@code TownPlaces.homeOf} returns for both the artist and his flat-mate the weaver): getting up
+     * and crossing a room, or stepping out one door and back in, still takes a few seconds - it is
+     * never instant, and "0" would read as a glitch rather than a short trip. See {@link #travelSeconds}. */
+    private static final int MIN_TRAVEL_SECONDS = 10;
+    /** Real walking duration between two places (item 2), from the pixel-accurate table in
+     * {@link TownDistances} - the same distances the frontend's own pathfinder measures on the real
+     * scene (see that class's doc comment for how and why). A place {@link TownDistances} has no
+     * measured entry for at all (a newly added building nobody's route has been walked yet, or an
+     * unrecognised id) falls back to the single longest measured trip in town rather than a
+     * suspiciously short or instant one. */
     static int travelSeconds(String from,String to){
-        if(Objects.equals(from,to))return 60;
-        int units=Math.abs(streetPosition(from)-streetPosition(to));
-        return Math.max(60,Math.min(600,units*SECONDS_PER_STREET_UNIT));
+        if(Objects.equals(from,to))return MIN_TRAVEL_SECONDS;
+        Integer pixels=TownDistances.distancePixels(from,to);
+        int distance=pixels!=null?pixels:TownDistances.LONGEST_MEASURED_PIXELS;
+        return Math.max(MIN_TRAVEL_SECONDS,distance/TownDistances.WALK_PIXELS_PER_SECOND);
     }
-    /** How far apart, in the same abstract street units {@link #travelSeconds} already uses, two
-     * residents' own homes sit. Read-only distance, never a duration - see
-     * {@link #encounterCooldownSeconds} for the one place this feeds into. */
+    /** How far apart, in the same measured pixels {@link #travelSeconds} already uses, two residents'
+     * own homes sit. Read-only distance, never a duration - see {@link #encounterCooldownSeconds} for
+     * the one place this feeds into. A pair with no measured distance between their homes (a manually
+     * authored resident predating {@link TownDistances}, or two flat-mates sharing one literal home
+     * id) falls back to 0 - nearby, the ordinary cooldown - rather than failing: sharing a roof, or
+     * simply not being in the table yet, is never grounds to treat two people as living far apart. */
     private static int homeDistance(String a,String b){
-        return Math.abs(streetPosition(TownPlaces.homeOf(a))-streetPosition(TownPlaces.homeOf(b)));
+        Integer pixels=TownDistances.distancePixels(TownPlaces.homeOf(a),TownPlaces.homeOf(b));
+        return pixels!=null?pixels:0;
     }
-    /** Item 4: a pair who live far apart on {@link #STREET_POSITION} gets fewer chances to ever share
-     * a place at all - a fact this method does not try to fix (see {@link #travelSeconds}'s own note
-     * on why a walk may never be shortened to fix that). What it does fix is the one thing rule-owned
-     * and safe to change: once such a pair does happen to cross paths, the ordinary forty-minute
-     * "we just met" cooldown taxes them exactly as much as it taxes two neighbours who bump into each
-     * other constantly - for the far pair that tax can eat their one rare opportunity for the rest of
-     * the day. A pair whose homes sit at least {@link #FAR_PAIR_DISTANCE_UNITS} street-units apart
-     * gets half the ordinary cooldown instead, so a rare crossing is worth more, not less, than a
-     * routine one. Nearby pairs are completely unaffected. */
-    private static final int FAR_PAIR_DISTANCE_UNITS = 15;
+    /** Item 4: a pair who live far apart gets fewer chances to ever share a place at all - a fact this
+     * method does not try to fix (see {@link #travelSeconds}'s own note on why a walk may never be
+     * shortened to fix that). What it does fix is the one thing rule-owned and safe to change: once
+     * such a pair does happen to cross paths, the ordinary forty-minute "we just met" cooldown taxes
+     * them exactly as much as it taxes two neighbours who bump into each other constantly - for the
+     * far pair that tax can eat their one rare opportunity for the rest of the day. A pair whose homes
+     * sit at least {@link #FAR_PAIR_DISTANCE_PIXELS} apart gets half the ordinary cooldown instead, so
+     * a rare crossing is worth more, not less, than a routine one. Nearby pairs are completely
+     * unaffected.
+     * <p>Chosen to sit strictly between the owner-student distance (160px, the closest home pair in
+     * town, and meant to stay on the ordinary cooldown) and the owner-gardener distance (737px, the
+     * farthest home pair in town, and meant to get the shortened one) - see
+     * ResidentLifeTest.aFarApartPairGetsHalfTheOrdinaryReencounterCooldownButANearbyPairDoesNot for
+     * the pinned example. */
+    private static final int FAR_PAIR_DISTANCE_PIXELS = 500;
     private static long encounterCooldownSeconds(String a,String b){
-        return homeDistance(a,b)>=FAR_PAIR_DISTANCE_UNITS ? ENCOUNTER_COOLDOWN_SECONDS/2 : ENCOUNTER_COOLDOWN_SECONDS;
+        return homeDistance(a,b)>=FAR_PAIR_DISTANCE_PIXELS ? ENCOUNTER_COOLDOWN_SECONDS/2 : ENCOUNTER_COOLDOWN_SECONDS;
     }
     /** Mean-once-every-~40-simulated-minutes, purely time-and-identity-derived so replay stays
      * deterministic (never Math.random - see Personality's own abandonThreshold() for the same
@@ -235,7 +216,7 @@ public final class ResidentSimulation {
             if(CafeService.mayTend(w,r.id))CafeService.accruePressure(w,r,at);
             settleEnergy(w,r,at);
             if(activeConversation(w,r.id)!=null)continue;
-            if(r.plan!=null&&!at.isBefore(r.plan.endsAt())){Plan completed=r.plan;complete(w,r,at);if(r.plan==completed){r.plan=null;if(!Set.of("sleep","open_cafe").contains(completed.action()))resumeSuspended(w,r,at);}}
+            if(r.plan!=null&&!at.isBefore(r.plan.endsAt())){Plan completed=r.plan;complete(w,r,at);if(r.plan==completed){r.plan=null;if(!Set.of("sleep","open_cafe").contains(completed.action()))resumeSuspended(w,r,at);if(r.plan==null)extendByReflex(w,r,completed,at);}}
             if(r.plan==null){if(!maybePlaceHabit(w,r,at))awaitDecision(w,r,at);}
             maybeSolitudeDrift(w,r,at);
             maybeHabit(w,r,at);
@@ -488,6 +469,11 @@ public final class ResidentSimulation {
         }
         r.plan=new Plan("p-"+(++w.eventSequence),action,place,target,reason,at,at.plusSeconds(duration));r.revision++;r.thought=reason;
         r.desiredAction=null;r.desiredDurationSeconds=0;
+        // Every new plan starts out as the rules' own until something says otherwise: applyDecision
+        // stamps it back on afterwards (markSelfChosen), and extendByReflex re-stamps the one it is
+        // deliberately carrying on. Defaulting the other way would let a plan the rules arranged
+        // inherit the "this was their own choice" mark from a decision made an hour ago.
+        r.planFromDecision=false;
         String label=switch(action){case "create","help"->"动手准备"+(project(w,target)==null?"手上的小事":"「"+project(w,target).title+"」");case "study"->"在窗边复习，想守住一点安静";case "invite"->reason;case "join"->"过去和"+(target==null?"邻居":actor(w,target).name())+"坐一起";case "sleep"->"睡着了，给明天留一点精神";case "rest"->"捧着杯子歇一会儿";case "celebrate"->"想请大家看看一起做出来的东西";case "wait"->reason;case "tend"->r.id.equals(CafeService.operatorId(w))?"回到吧台，照应一下柜台前的人":"替"+actor(w,CafeService.operatorId(w)).name()+"照看吧台";case "away"->"出门去处理自己的事："+reason;default->reason;};
         replaceActor(w,r.id,place,action,label,r.plan.endsAt());
         // "能站的地方都能去" (04-decisions.md): a named position is only claimed for the handful of
@@ -943,7 +929,9 @@ public final class ResidentSimulation {
      * town's whole social life on. Passing someone on the street is covered by the same code for the
      * same reason - a walker's place IS "street" for the length of the walk (see
      * {@link #moveOrSchedule}), so crossing paths needs no separate rule, only a walk long enough to
-     * be seen (see {@link #SECONDS_PER_STREET_UNIT}) and a {@link #greetable} check that does not
+     * be seen (see {@link TownDistances#WALK_PIXELS_PER_SECOND} and {@link #MIN_TRAVEL_SECONDS} - a
+     * walk has to outlast a tick to exist at all, exactly the same reasoning {@link #travelSeconds}
+     * itself is built on) and a {@link #greetable} check that does not
      * refuse to notice someone because they are moving. An interrupted journey is already a case
      * {@link #resumeSuspended} handles: both walkers pick their trip back up when the talking ends. */
     /** Deterministic replacement for both "who gets first crack at locking in this tick's one
@@ -1133,6 +1121,87 @@ public final class ResidentSimulation {
         Actor a=actor(w,r.id);
         replaceActor(w,r.id,a.place(),a.activity(),label,a.until());
         recordDeed(w,r.id,action,a.place(),note,at);
+    }
+    // ---- the reflex layer ------------------------------------------------------------------------
+    /** Things a person can simply carry on doing. Deliberately only the ones that are their own
+     * afternoon and nobody else's: never travel or sleep (those have their own completion paths),
+     * never tend/join/invite/celebrate/create/help (those point at another person or another
+     * person's thing, and carrying one of those on unasked would be the rules deciding something
+     * social). */
+    private static final Set<String> REFLEX_EXTENDABLE = Set.of("rest","read","study","work","make","observe");
+    /** How many times in a row a decision may be carried on before the resident is asked again no
+     * matter what. Four stretches of resting is already over an hour; past that, "nothing has
+     * changed" stops being a good enough reason not to ask a person anything. */
+    private static final int MAX_REFLEX_EXTENSIONS = 3;
+    /** What this resident can see of their own situation, as one comparable string. Compared, never
+     * sent to any model - simulation bookkeeping exactly like {@code encounterFingerprint}, and for
+     * exactly its reason.
+     * <p>Deliberately stricter than {@code ResidentDirector.decisionFingerprint}: it also carries who
+     * else is standing in the same place. A room that filled up or emptied out IS a changed
+     * situation, and a resident whose company changed has to be asked again rather than carried on. */
+    static String situationFingerprint(CompanionWorld w,String residentId,Instant at){
+        ResidentState r=state(w,residentId);Actor a=actor(w,residentId);
+        if(r==null||a==null)return "";
+        var signals=new ArrayList<String>(salientPerceptions(w,residentId,at));
+        routineCues(w,residentId,at).forEach(cue->signals.add("routine:"+cue));
+        String cue=cafeScheduleCue(w,residentId,at);if(cue!=null)signals.add("schedule:"+cue);
+        PausedAction paused=pausedAction(w,residentId,at);if(paused!=null)signals.add("paused:"+paused.action());
+        if(mayTend(w,residentId))w.serviceRequests.stream().filter(request->"waiting".equals(request.status))
+            .map(request->"request:"+request.id).sorted().forEach(signals::add);
+        signals.add("place:"+a.place());
+        signals.add("with:"+w.residentStates.stream().filter(other->!other.id.equals(residentId)
+            &&a.place().equals(actor(w,other.id).place())).map(other->other.id).sorted().collect(java.util.stream.Collectors.joining(",")));
+        signals.add("cafe:"+w.cafeStatus);
+        signals.add("period:"+w.period);
+        return String.join("|",signals);
+    }
+    /**
+     * The bottom of the three layers a resident is answered from: reflex, then occasion, then the
+     * model. This one costs nothing and says nothing new - it carries on the thing this resident
+     * themselves last chose, and only while the room has not changed around them.
+     *
+     * <p>It exists because of one measurement. A six-hour run took 243 decisions, and <b>78 of them
+     * (32.1%) were a byte-identical repeat of that same resident's previous decision</b> - the same
+     * action with the same sentence, in the same unchanged room, ten minutes later. 「刚搬来，先在家
+     * 里歇会儿，整理一下心情和住处。」 appeared verbatim dozens of times. About 440K of that run's
+     * 1.37M input tokens bought nothing at all.
+     *
+     * <p>The cause is that a finished plan is unconditionally a reason to ask again, so {@code rest}
+     * - which schedules a plan that finishes - put its chooser straight back in the queue, and the
+     * cheap honest answer ({@code none}, which sets a quiet stretch) was the only one that did not.
+     * <b>The cheapest answer was the expensive one.</b>
+     *
+     * <p>What this is NOT: the rules deciding a life. It only ever repeats a decision the resident
+     * made themselves ({@code planFromDecision}), only into an unchanged situation, only a few times
+     * before they are asked again regardless, and it is written into {@code decisionTriggers} as
+     * {@code reflex:<action>} so "how much of this town is the rules repeating themselves" stays a
+     * number anybody can read off the export. Every other route out - somebody walking up, an
+     * occasion coming round, the day turning over, the shop closing - takes precedence, because each
+     * of those changes the fingerprint or is checked here directly.
+     */
+    private static boolean extendByReflex(CompanionWorld w,ResidentState r,Plan finished,Instant at){
+        if(finished==null||!REFLEX_EXTENDABLE.contains(finished.action()))return false;
+        if(!r.planFromDecision||r.reflexExtensions>=MAX_REFLEX_EXTENSIONS)return false;
+        if(activeConversation(w,r.id)!=null)return false;
+        // Anything already waiting for this resident's own answer outranks carrying them on.
+        if(w.pendingEncounters.stream().anyMatch(pending->pending.residentId.equals(r.id)))return false;
+        if(w.pendingOccasions.stream().anyMatch(pending->pending.residentId.equals(r.id)))return false;
+        if(driftDue(w,r,at))return false;
+        if("cafe".equals(finished.place())&&!"open".equals(w.cafeStatus))return false;
+        if(!situationFingerprint(w,r.id,at).equals(r.situationAtDecision))return false;
+        r.reflexExtensions++;
+        int duration=(int)Math.max(60,Duration.between(finished.startedAt(),finished.endsAt()).getSeconds());
+        schedule(w,r,finished.action(),finished.place(),finished.targetId(),finished.reason(),at,duration);
+        r.planFromDecision=true; // still their own decision, just still running
+        recordDecisionTrigger(w,r.id,"reflex:"+finished.action(),at);
+        return true;
+    }
+    /** Stamps a decision as this resident's own, together with the room they made it in. Called from
+     * every path a real decision lands through, and nowhere else - a plan the rules arranged is
+     * deliberately not extendable, because carrying on something nobody chose is just a rule running
+     * a life. */
+    private static void markSelfChosen(CompanionWorld w,ResidentState r,Instant now){
+        r.planFromDecision=true;r.reflexExtensions=0;r.situationAtDecision=situationFingerprint(w,r.id,now);
     }
     /** One habitual reflex per resident (item 1), sunk from ResidentSeed.NARRATIVES' actingSelf prose
      * down into a rule the simulation runs on its own, without asking the model - see each habitXxx
@@ -1333,11 +1402,12 @@ public final class ResidentSimulation {
      * actingSelf line for him) is an errand, and an errand goes wherever the people are, not only
      * wherever the plants are. A measured full simulated day found him sharing a place with anyone
      * else exactly once: {@link #placeHabitTendGarden} is his only default, and it defaults him
-     * toward the one public place ({@code garden}, street-position 14) that none of the other five
-     * residents' own place habits ({@link #placeHabitStudyAtCafe}, {@link #placeHabitSeekInspiration},
+     * toward the one public place ({@code garden}) that none of the other five residents' own place
+     * habits ({@link #placeHabitStudyAtCafe}, {@link #placeHabitSeekInspiration},
      * {@link #placeHabitMindTheCafe}, {@link #placeHabitCheckCafe}, {@link #placeHabitBeAroundPeople})
-     * ever visit - they all converge on the cafe, the actually busy point on the street (see {@link
-     * #STREET_POSITION}'s own doc comment on why). Shortening his walk there was explicitly rejected
+     * ever visit - they all converge on the cafe, the actually busy point in town (see
+     * {@link TownDistances}, where "cafe" is a short measured hop from every other place). Shortening
+     * his walk there was explicitly rejected
      * (see this batch's report) because a walk shorter than a tick's own resolution stops existing on
      * the street at all - so the fix is not a faster trip, it is a second, independent reason to make
      * the trip: living far and working alone is answered by going toward people occasionally, not by
@@ -2109,6 +2179,9 @@ public final class ResidentSimulation {
         if("none".equals(action)){
             int quiet=600+Math.floorMod((r.id+"|"+now.getEpochSecond()/600).hashCode(),1200);
             r.thought=reason;r.desiredAction=null;r.desiredDurationSeconds=0;r.revision++;
+            // Nothing to carry on: doing nothing in particular has its own quiet stretch already and
+            // must never be re-scheduled by the reflex layer as though it were a plan.
+            r.planFromDecision=false;r.reflexExtensions=0;
             r.decisionRetryAfter=now.plusSeconds(quiet);
             if(r.plan==null)replaceActor(w,residentId,actor(w,residentId).place(),"idle",reason,now.plusSeconds(quiet));
             w.revision++;
@@ -2238,9 +2311,12 @@ public final class ResidentSimulation {
         if(!evidence.isEmpty())memory(w,r.id,r.id,"reflection",now,r.goal,reason,evidence,7);
         w.modelStatus="模型刚为"+actor(w,r.id).name()+"补充了一个念头";w.revision++;r.revision++;
         event(w,now,"thought",actor(w,r.id).place(),List.of(r.id),actor(w,r.id).name()+"想了想："+reason,target);
+        // The generic tail's own stamp; the branches above all land through appliedThought, which
+        // stamps there. Both together mean "every decision that actually applied", and nothing else.
+        markSelfChosen(w,r,now);
         return true;
     }
-    private static boolean appliedThought(CompanionWorld w,ResidentState r,String residentId,String reason,String target,Instant now){w.modelStatus="模型刚为"+actor(w,residentId).name()+"补充了一个念头";w.revision++;r.revision++;event(w,now,"thought",actor(w,r.id).place(),List.of(r.id),actor(w,r.id).name()+"想了想："+reason,target);return true;}
+    private static boolean appliedThought(CompanionWorld w,ResidentState r,String residentId,String reason,String target,Instant now){markSelfChosen(w,r,now);w.modelStatus="模型刚为"+actor(w,residentId).name()+"补充了一个念头";w.revision++;r.revision++;event(w,now,"thought",actor(w,r.id).place(),List.of(r.id),actor(w,r.id).name()+"想了想："+reason,target);return true;}
     private static void perceive(CompanionWorld w,ResidentState r,Instant now) {
         Actor a=actor(w,r.id);if(a.activity().equals("walk")||a.activity().equals("sleep"))return;
         boolean detailSensitive=Personality.of(r).sensitivity()>=65;

@@ -35,12 +35,15 @@ class ResidentLifeTest {
     }
 
     @Test void travelDurationIsRealDistanceNotAFixedTwelveSeconds(){
-        // Item 2: minutes-scale. A walk has to outlast the simulation's own tick to exist - at three to
-        // twenty seconds the whole town fitted inside one advance step and nobody was ever seen on the
-        // street, which is why the first encounter implementation could not find anyone there.
-        assertThat(ResidentSimulation.travelSeconds("cafe","cafe")).isEqualTo(60);
-        assertThat(ResidentSimulation.travelSeconds("home-owner","cafe")).isBetween(60,180);
-        assertThat(ResidentSimulation.travelSeconds("home-owner","home-gardener")).isEqualTo(520);
+        // Item 2 (this batch): travel time now comes straight from TownDistances' pixel-accurate
+        // table, the same distances the frontend's own pathfinder measures on the real scene, divided
+        // by the shared walking speed (TownDistances.WALK_PIXELS_PER_SECOND, 32px/s) - so these are
+        // not tuned numbers, they are 537/32 and 737/32 rounded down. Same place still takes a floor
+        // of ResidentSimulation.MIN_TRAVEL_SECONDS (10s: getting up and crossing a room, or turning
+        // straight back through the same door), never zero.
+        assertThat(ResidentSimulation.travelSeconds("cafe","cafe")).isEqualTo(10);
+        assertThat(ResidentSimulation.travelSeconds("home-owner","cafe")).isEqualTo(16);
+        assertThat(ResidentSimulation.travelSeconds("home-owner","home-gardener")).isEqualTo(23);
         assertThat(ResidentSimulation.travelSeconds("home-owner","cafe"))
             .isLessThan(ResidentSimulation.travelSeconds("home-owner","home-gardener"));
     }
@@ -90,14 +93,20 @@ class ResidentLifeTest {
         assertThat(ResidentSimulation.actor(w,"owner").activity()).isEqualTo("walk");
         assertThat(ResidentSimulation.actor(w,"gardener").activity()).isEqualTo("walk");
         w.updatedAt=now;w.simulatedAt=now;
-        advanceTo(w,now.plusSeconds(30));
+        // The window this used to rely on ("both are still walking") is now explicit rather than
+        // assumed: the gardener's home-to-cafe walk is the shorter of the two (617px/32px-per-second
+        // = 19s, see TownDistances), so she is off the street and this pending encounter goes stale
+        // (see expirePendingEncounters's place check) at or after that instant. Checking at 12
+        // simulated seconds - two of the internal 6-second ticks in, comfortably inside [6,19) - both
+        // still guarantees at least one tick has run and stays clear of the gardener's own arrival.
+        advanceTo(w,now.plusSeconds(12));
         var crossing=w.pendingEncounters.stream().filter(p->List.of(p.residentId,p.otherId).containsAll(List.of("owner","gardener"))).findFirst();
         assertThat(crossing).as("two people on the same street at the same time have crossed paths").isPresent();
         assertThat(crossing.get().place).isEqualTo("street");
         // And if the one who noticed decides to say something, neither of them forgets where they
         // were going: an interrupted journey is resumed, not thrown away.
         var noticer=ResidentSimulation.state(w,crossing.get().residentId);
-        assertThat(ResidentSimulation.applyReaction(w,crossing.get().id,noticer.revision,"greet","路上碰见了，打个招呼",List.of(),now.plusSeconds(30))).isTrue();
+        assertThat(ResidentSimulation.applyReaction(w,crossing.get().id,noticer.revision,"greet","路上碰见了，打个招呼",List.of(),now.plusSeconds(12))).isTrue();
         assertThat(w.conversations).anyMatch(c->"active".equals(c.status)&&c.participantIds.contains("owner")&&c.participantIds.contains("gardener"));
         assertThat(owner.suspendedAction).isNotNull();
         assertThat(owner.suspendedAction.plan.action()).isEqualTo("travel");
@@ -290,13 +299,13 @@ class ResidentLifeTest {
     }
 
     @Test void aFarApartPairGetsHalfTheOrdinaryReencounterCooldownButANearbyPairDoesNot(){
-        // Item 4: walking may never be shortened to fix the far end of the street being isolated (a
-        // walk still has to outlast a tick - see travelSeconds's own note), so this is the one lever
-        // that is safe to change instead: once a rare, far-apart pair does happen to cross paths, the
-        // ordinary forty-minute "we just met" cooldown should not tax their one opportunity as heavily
-        // as it taxes two neighbours who bump into each other constantly. Owner (position 0) and
-        // gardener (position 26) are the two farthest-apart homes in the whole town; owner and student
-        // (position 8) are two of the closest.
+        // Item 4: walking may never be shortened to fix a far pair being isolated (a walk still has to
+        // outlast a tick - see travelSeconds's own note), so this is the one lever that is safe to
+        // change instead: once a rare, far-apart pair does happen to cross paths, the ordinary
+        // forty-minute "we just met" cooldown should not tax their one opportunity as heavily as it
+        // taxes two neighbours who bump into each other constantly. Owner and gardener's homes measure
+        // 737px apart (TownDistances) - past FAR_PAIR_DISTANCE_PIXELS (500) - while owner and student's
+        // measure only 160px, comfortably under it.
         CompanionWorld w=CompanionRules.join("far-pair-cooldown","住客","Asia/Shanghai",now,true);
         w.conversations.forEach(c->c.status="ended");
         for(String id:List.of("owner","student","gardener")){

@@ -8,7 +8,8 @@
  * here so its own internals (and existing test imports) are unaffected.
  */
 import type { Point } from '../../shared/scene/collision'
-import { freeStandPosition } from './companion-navigation'
+import { nearestStandable } from '../../shared/scene/collision'
+import { COMPANION_COLLISION, freeStandPosition } from './companion-navigation'
 import { POSITION_SLOTS, CAFE_SERVICE, CAFE_SEATS, GARDEN_OFFSET_X, HOME_ROOMS, CAFE_ROOM, CAFE_WINDOW_ROOM, ACADEMY_ROOM, GYM_ROOM, PLACE_FRAMES } from './companion-art'
 import type { SceneResident } from './companion-scene'
 
@@ -137,9 +138,28 @@ export function residentPosition(location: string, index: number, activity = '',
  * Phaser actor map. Approximates `occupantIndex` (real slot-sharing resolution only exists inside
  * the scene's actor loop) - fine for a camera target, which does not need seat-exact precision.
  */
+/**
+ * The single pixel a traveller is walking toward: a home's own front door, the cafe's public entry,
+ * or the middle of any other place. Extracted so exactly one definition of "where does this trip end"
+ * exists, because three separate things need it and a disagreement between any two of them is a
+ * visible bug: the scene walks a body to it, the backend's TownDistances table was measured between
+ * these exact points, and companion-walk-parity.test.ts re-measures them to prove the two have not
+ * drifted apart. An earlier round used the garden frame's bottom edge in one place and its centre in
+ * another, and 12 of 28 distances quietly disagreed by up to 23px.
+ *
+ * The generic case is snapped to standable ground, which is not a nicety: the garden frame's own
+ * centre sits inside one of its raised beds, so the raw centre is unreachable, `companionPath`
+ * returned an empty route for every trip to the garden, and anybody heading there never walked at
+ * all - they stood still until the backend flipped their place and then appeared inside. Homes and
+ * the cafe name a real doorway already and are left exactly as they are.
+ */
+export function travelAnchor(location: string) {
+  const door = homeRoom(location)?.door ?? (scenePlace(location) === 'cafe' ? CAFE_SERVICE.entry : undefined)
+  return door ?? nearestStandable(placeCenter(location), COMPANION_COLLISION)
+}
 export function residentTarget(actor: SceneResident, positionId?: string | null, occupantIndex = 0) {
   const travelling = Boolean(actor.destination) && (actor.activity === 'walk' || actor.activity === 'travel')
   const location = travelling ? actor.destination! : actor.location
-  if (travelling) return homeRoom(location)?.door ?? (scenePlace(location) === 'cafe' ? CAFE_SERVICE.entry : placeCenter(location))
+  if (travelling) return travelAnchor(location)
   return residentPosition(location, 0, actor.activity, actor.action, positionId, occupantIndex, actor.id, [])
 }

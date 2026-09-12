@@ -5,7 +5,7 @@ import { dominantDirection, stepTowardPoint, type Direction4 } from '../../share
 import { conversationEmoji, residentStatus } from './companion-presentation'
 import { motionAllowed } from '../../shared/ui/interaction/motion'
 import { buildCompanionStage } from './companion-stage'
-import { ACTION_FRAME, RESIDENT_ART, RESIDENT_ACTIONS, isArtAction, COMPANION_WORLD_SIZE, HOME_ROOMS, CAFE_ROOM, CAFE_WINDOW_ROOM, CAFE_SERVICE, CAFE_SEATS, cafeSeatAt, GARDEN_OFFSET_X, POSITION_SLOTS } from './companion-art'
+import { ACTION_FRAME, RESIDENT_ART, RESIDENT_ACTIONS, isArtAction, COMPANION_WORLD_SIZE, HOME_ROOMS, CAFE_ROOM, CAFE_WINDOW_ROOM, CAFE_SERVICE, CAFE_SEATS, cafeSeatAt, GARDEN_OFFSET_X, POSITION_SLOTS, WALK_PIXELS_PER_SECOND } from './companion-art'
 // scenePlace/residentPosition/residentTarget/etc. live in companion-geometry.ts, which has no
 // Phaser import - see that file's own header comment for why. companion-scene.ts (this file, the
 // real Phaser.Scene) re-exports them below so every existing import of './companion-scene' -
@@ -361,7 +361,7 @@ export class CompanionStreetScene extends Phaser.Scene {
       const waypoint = actor.path[0]
       const from = { x: actor.root.x, y: actor.root.y }
       if (waypoint) {
-        const next = resolveMove(from, stepTowardPoint(from, waypoint, 72, Math.min(delta, 50)), COMPANION_COLLISION)
+        const next = resolveMove(from, stepTowardPoint(from, waypoint, WALK_PIXELS_PER_SECOND, Math.min(delta, 50)), COMPANION_COLLISION)
         actor.facing = dominantDirection(next.x - from.x, next.y - from.y, actor.facing)
         actor.root.setPosition(next.x, next.y)
       }

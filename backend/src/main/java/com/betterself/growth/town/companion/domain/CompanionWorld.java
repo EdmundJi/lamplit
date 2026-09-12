@@ -334,6 +334,21 @@ public class CompanionWorld {
          * any decision that lands. Self-healing on an old save via the 0/null defaults. */
         public int consecutiveDecisionRejections;
         public Instant decisionRetryAfter;
+        /** The reflex layer's bookkeeping (see ResidentSimulation's "extendByReflex"). {@code
+         * planFromDecision} says the plan currently running is one this resident themselves chose,
+         * not one the rules arranged - only a decision of their own may be quietly carried on.
+         * {@code situationAtDecision} is what the room looked like when they chose it, and {@code
+         * reflexExtensions} counts how many times it has been carried on since, so nobody can be
+         * carried along forever without ever being asked again.
+         *
+         * <p>Measured reason this exists: 243 decisions in a six-hour run, 78 of them (32.1%) a
+         * byte-identical repeat of that same resident's previous decision - the same sentence, in the
+         * same unchanged room, ten minutes later. Roughly 440K of that run's 1.37M input tokens
+         * bought nothing. Never sent to any model; this is simulation bookkeeping, like every other
+         * fingerprint in this file. Self-healing on an old save via the false/null/0 defaults. */
+        public boolean planFromDecision;
+        public String situationAtDecision;
+        public int reflexExtensions;
         /** The world's own day-part (morning/afternoon/evening/night, see CompanionRules.environment)
          * as of this resident's last applied decision - a broad, general "time anchor" (item 5),
          * distinct from the personal sleep-window routine cue. Compared, never sent to any model. */

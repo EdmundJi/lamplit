@@ -1,3 +1,16 @@
+/**
+ * The single walking speed every actor in the scene moves at (companion-scene.ts's per-frame
+ * stepTowardPoint call). This number MUST equal `WALK_PIXELS_PER_SECOND` in the backend's
+ * `backend/src/main/java/com/betterself/growth/town/companion/domain/TownDistances.java`, which
+ * divides a leg's real on-screen pixel distance by this same speed to get the number of seconds
+ * that leg's travel plan should take. If the two ever drift apart: a backend value lower than
+ * this one leaves the resident parked at the door waiting out a countdown that finishes after
+ * they already arrived (the original "罚站" bug this constant exists to prevent); a backend value
+ * higher than this one teleports them into the room before they have actually walked there.
+ * See companion-walk-parity.test.ts, which recomputes real pathfinding distances and cross-checks
+ * this constant and the backend's whole distance table against each other.
+ */
+export const WALK_PIXELS_PER_SECOND = 32
 /** Action-sheet geometry from scripts/build-companion-assets.py; every action shares a foot anchor. */
 export const ACTION_FRAME = { width: 96, height: 96, originX: 32 / 96, originY: 80 / 96 }
 // [1, 3, 6, 9, 12] have bespoke create/drink/garden action sheets (c0N-actions.png); 4 and 7 do
