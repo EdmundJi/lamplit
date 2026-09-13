@@ -46,6 +46,22 @@ class NormDetectorTest {
         return m;
     }
 
+    /** The full shape of a {@code world-snapshot.json} memory - {@code id}/{@code sourceType}/
+     * {@code evidenceIds} included, needed for {@link NormDetector}'s independence trace
+     * ({@code isIndependentlyGrounded}), which the plain 3-arg {@link #memory} above has nothing for. */
+    private static Map<String, Object> memoryFull(String id, String ownerId, String sourceId, String sourceType,
+                                                    String supersedesKey, String text, List<String> evidenceIds) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("id", id);
+        m.put("ownerId", ownerId);
+        m.put("sourceId", sourceId);
+        m.put("sourceType", sourceType);
+        m.put("supersedesKey", supersedesKey);
+        m.put("text", text);
+        m.put("evidenceIds", evidenceIds);
+        return m;
+    }
+
     /** A memory-kind timeline entry - the only shape {@link NormDetector} needs to learn a real name for
      * an actorId, since that pairing is how every exported timeline entry already reads. */
     private static Map<String, Object> named(String actorId, String actorName) {
@@ -267,15 +283,22 @@ class NormDetectorTest {
     // ---- 信念：材料，不是判决 ------------------------------------------------------------------
 
     @Test
-    @DisplayName("一条信念都没有的时候，四个信念数都要是明确的 0，而不是干脆不出现")
+    @DisplayName("一条信念都没有的时候，所有信念数都要是明确的 0，而不是干脆不出现")
     void reportsExplicitZerosWhenThereAreNoBeliefs() {
         NormDetector.Report report = NormDetector.detect("empty", List.of(), List.of(), TZ);
         assertThat(report.counts()).containsEntry("beliefs", 0);
         assertThat(report.counts()).containsEntry("beliefsAboutOthers", 0);
+        assertThat(report.counts()).containsEntry("beliefsAboutSocialRole", 0);
+        assertThat(report.counts()).containsEntry("beliefsGroundedInOwnExperience", 0);
         assertThat(report.counts()).containsEntry("beliefHolders", 0);
         assertThat(report.counts()).containsEntry("sharedBeliefKeys", 0);
+        assertThat(report.counts()).containsEntry("sharedBeliefKeysIndependent", 0);
+        assertThat(report.counts()).containsEntry("changedTheirMind", 0);
         assertThat(report.beliefs()).isEmpty();
+        assertThat(report.sharedBeliefAudit()).isEmpty();
+        assertThat(report.changedMind()).isEmpty();
         assertThat(NormDetector.markdown(report)).contains("没有。**这是一个真实的 0**，不是没找。");
+        assertThat(NormDetector.markdown(report)).contains("有没有人改主意了");
     }
 
     @Test
@@ -378,6 +401,157 @@ class NormDetectorTest {
         NormDetector.Report report = NormDetector.detect("run", entries, memories, TZ);
         assertThat(report.counts()).containsEntry("beliefs", 1);
         assertThat(report.counts()).containsEntry("beliefsAboutOthers", 0);
+    }
+
+    // ---- sharedBeliefKeys 该比文本，不只比整串键 -------------------------------------------------
+
+    @Test
+    @DisplayName("habit 键只有所属人那一段不同，标准化后算同一个共享信念——周野/青叔那对 lend_a_hand")
+    void foldsHabitKeysThatDifferOnlyByOwnerSegment() {
+        List<Map<String, Object>> memories = new ArrayList<>();
+        memories.add(memory("fixer", "habit:fixer:lend_a_hand", "顺手就搭把手，不用谁开口"));
+        memories.add(memory("gardener", "habit:gardener:lend_a_hand", "看见有人忙不过来就搭把手"));
+        NormDetector.Report report = NormDetector.detect("run", List.of(), memories, TZ);
+        assertThat(report.counts()).containsEntry("sharedBeliefKeys", 1);
+        assertThat(report.sharedBeliefAudit()).anySatisfy(row -> {
+            assertThat(row.get("canonicalKey")).isEqualTo("habit:*:lendahand");
+            assertThat(row.get("rawKeys")).isEqualTo(
+                    List.of("habit:fixer:lend_a_hand", "habit:gardener:lend_a_hand"));
+        });
+    }
+
+    @Test
+    @DisplayName("同一个人一句话产生的两个自由键拼写，标准化后能看出是同一个话题，前后文本不同就算改了主意——阿满的 weaver配合者")
+    void foldsOneOwnersUnstableFreeKeySpellingIntoOneChangedMindEntry() {
+        List<Map<String, Object>> memories = new ArrayList<>();
+        memories.add(memory("weaver", "weaver配合者", "我好像总是那个配合的人"));
+        memories.add(memory("weaver", "weaver-配合者", "后来想想，其实是我自己每次都先应了声"));
+        NormDetector.Report report = NormDetector.detect("run", List.of(), memories, TZ);
+        // Same owner, so this was never going to be a sharedBeliefKeys hit - it is a changedMind one,
+        // and only visible at all because canonicalization folds the two spellings together first.
+        assertThat(report.counts()).containsEntry("sharedBeliefKeys", 0);
+        assertThat(report.counts()).containsEntry("changedTheirMind", 1);
+        assertThat(report.changedMind()).anySatisfy(row -> {
+            assertThat(row.get("ownerId")).isEqualTo("weaver");
+            assertThat(row.get("canonicalKey")).isEqualTo("weaver配合者");
+        });
+    }
+
+    // ---- 独立性：各自持有，不是听说传开 ---------------------------------------------------------
+
+    @Test
+    @DisplayName("一个人亲眼所见、另一个人只是听说——共享键算 1，独立共享算 0")
+    void distinguishesObservedFromHeardForIndependentSharing() {
+        List<Map<String, Object>> memories = new ArrayList<>();
+        memories.add(memoryFull("m1", "fixer", "fixer", "observed", null, "看见有人东西掉了，随手接住了", List.of()));
+        memories.add(memoryFull("b1", "fixer", "fixer", "belief", "habit:fixer:lend_a_hand",
+                "顺手就搭把手，不用谁开口", List.of("m1")));
+        memories.add(memoryFull("m2", "gardener", "fixer", "heard", null,
+                "周野当面说：“我这个人啊，顺手就搭把手”", List.of()));
+        memories.add(memoryFull("b2", "gardener", "gardener", "belief", "habit:gardener:lend_a_hand",
+                "听他这么说，我好像也是这样", List.of("m2")));
+        NormDetector.Report report = NormDetector.detect("run", List.of(), memories, TZ);
+        assertThat(report.counts()).containsEntry("sharedBeliefKeys", 1);
+        assertThat(report.counts()).containsEntry("sharedBeliefKeysIndependent", 0);
+        assertThat(report.counts()).containsEntry("beliefsGroundedInOwnExperience", 1);
+        assertThat(report.sharedBeliefAudit()).anySatisfy(row ->
+                assertThat(row.get("countsAsIndependentlyShared")).isEqualTo(false));
+    }
+
+    @Test
+    @DisplayName("两个人各自亲眼所见，才算独立共享")
+    void countsIndependentSharedKeyWhenBothOwnersAreGrounded() {
+        List<Map<String, Object>> memories = new ArrayList<>();
+        memories.add(memoryFull("m1", "fixer", "fixer", "observed", null, "亲眼看见的一件事", List.of()));
+        memories.add(memoryFull("b1", "fixer", "fixer", "belief", "habit:fixer:lend_a_hand", "顺手搭把手", List.of("m1")));
+        memories.add(memoryFull("m2", "gardener", "gardener", "observed", null, "自己也这么做过", List.of()));
+        memories.add(memoryFull("b2", "gardener", "gardener", "belief", "habit:gardener:lend_a_hand",
+                "看见谁忙不过来就搭把手", List.of("m2")));
+        NormDetector.Report report = NormDetector.detect("run", List.of(), memories, TZ);
+        assertThat(report.counts()).containsEntry("sharedBeliefKeys", 1);
+        assertThat(report.counts()).containsEntry("sharedBeliefKeysIndependent", 1);
+    }
+
+    @Test
+    @DisplayName("独立性判定会追到底：把听说包一层反思也不能冒充亲眼所见")
+    void seesThroughHearsayLaunderedThroughAReflection() {
+        List<Map<String, Object>> memories = new ArrayList<>();
+        memories.add(memoryFull("h1", "gardener", "fixer", "heard", null, "周野当面说他顺手就搭把手", List.of()));
+        memories.add(memoryFull("r1", "gardener", "gardener", "reflection", null,
+                "听他这么一说，我觉得这镇上是这样的", List.of("h1")));
+        memories.add(memoryFull("b1", "gardener", "gardener", "belief", "habit:gardener:lend_a_hand",
+                "这镇上大家都这样", List.of("r1")));
+        NormDetector.Report report = NormDetector.detect("run", List.of(), memories, TZ);
+        assertThat(report.counts()).containsEntry("beliefsGroundedInOwnExperience", 0);
+    }
+
+    @Test
+    @DisplayName("一份导出里找不到某条证据 id，追溯就此打住，不当成独立")
+    void treatsAMissingEvidenceMemoryAsNotGrounded() {
+        List<Map<String, Object>> memories = new ArrayList<>();
+        memories.add(memoryFull("b1", "fixer", "fixer", "belief", "habit:fixer:lend_a_hand",
+                "顺手搭把手", List.of("does-not-exist")));
+        NormDetector.Report report = NormDetector.detect("run", List.of(), memories, TZ);
+        assertThat(report.counts()).containsEntry("beliefsGroundedInOwnExperience", 0);
+    }
+
+    // ---- beliefsAboutSocialRole：不点名也能是关于人际角色的判断 -----------------------------------
+
+    @Test
+    @DisplayName("不点名但描述人际角色模式的话，算进 beliefsAboutSocialRole，不算进 beliefsAboutOthers")
+    void countsUnnamedRelationalRoleSeparatelyFromNamedOthers() {
+        List<Map<String, Object>> memories = new ArrayList<>();
+        memories.add(memory("weaver", "weaver-配合者", "我好像总是那个配合的人"));
+        memories.add(memory("student", "habit:student:window", "我总是坐在靠窗那个位置"));
+        NormDetector.Report report = NormDetector.detect("run", List.of(), memories, TZ);
+        assertThat(report.counts()).containsEntry("beliefsAboutOthers", 0);
+        assertThat(report.counts()).containsEntry("beliefsAboutSocialRole", 1);
+    }
+
+    // ---- MIN_SUPPORT：从绝对次数改成人口比例 -----------------------------------------------------
+
+    @Test
+    @DisplayName("MIN_SUPPORT 按人口线性缩放：六人的镇子是 4，二十五人的镇子是 17，且从不低于 4")
+    void scalesMinSupportWithMeasuredPopulation() {
+        List<Map<String, Object>> entries = new ArrayList<>();
+        for (int day = 1; day <= 3; day++) {
+            entries.add(contribution("artist", "quiet-corner", "cafe", at(day, 10, day * 7)));
+            entries.add(contribution("fixer", "quiet-corner", "cafe", at(day, 15, day * 11)));
+            entries.add(contribution("gardener", "seed-exchange", "garden", at(day, 9, 20)));
+            entries.add(contribution("owner", "reading-night", "cafe", at(day, 19, 30)));
+        }
+        NormDetector.Report small = NormDetector.detect("small", entries, TZ);
+        assertThat(small.counts()).containsEntry("residents", 4).containsEntry("minSupport", 4);
+
+        List<Map<String, Object>> big = new ArrayList<>(entries);
+        for (int i = 0; i < 21; i++) big.add(contribution("extra" + i, "solo-" + i, "garden", at(1, 8, 0)));
+        NormDetector.Report large = NormDetector.detect("large", big, TZ);
+        assertThat(large.counts()).containsEntry("residents", 25).containsEntry("minSupport", 17);
+    }
+
+    @Test
+    @DisplayName("同样 6 次的搭伙，六人的小镇够格，二十五人的小镇因为 MIN_SUPPORT 变大而不再够格")
+    void theSamePairAffinityPassesAtSixResidentsButNotAtTwentyFive() {
+        List<Map<String, Object>> entries = new ArrayList<>();
+        for (int day = 1; day <= 3; day++) {
+            entries.add(contribution("artist", "quiet-corner", "cafe", at(day, 10, day * 7)));
+            entries.add(contribution("fixer", "quiet-corner", "cafe", at(day, 15, day * 11)));
+            entries.add(contribution("gardener", "seed-exchange", "garden", at(day, 9, 20)));
+            entries.add(contribution("owner", "reading-night", "cafe", at(day, 19, 30)));
+        }
+        NormDetector.Report small = NormDetector.detect("small", entries, TZ);
+        assertThat(small.counts()).containsEntry("residents", 4).containsEntry("minSupport", 4);
+        assertThat(small.candidates()).anySatisfy(c -> assertThat(c.key()).isEqualTo("artist+fixer"));
+
+        List<Map<String, Object>> big = new ArrayList<>(entries);
+        for (int i = 0; i < 21; i++) big.add(contribution("extra" + i, "solo-" + i, "garden", at(1, 8, 0)));
+        NormDetector.Report large = NormDetector.detect("large", big, TZ);
+        assertThat(large.counts()).containsEntry("residents", 25).containsEntry("minSupport", 17);
+        assertThat(large.candidates()).noneMatch(c -> c.key().equals("artist+fixer"));
+        assertThat(large.dropped()).anySatisfy(d -> {
+            assertThat(d).containsEntry("key", "artist+fixer");
+            assertThat(String.valueOf(d.get("reason"))).contains("支持事件不足 17");
+        });
     }
 
     // ---- 占用权 ---------------------------------------------------------------------------------

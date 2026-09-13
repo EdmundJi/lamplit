@@ -174,7 +174,13 @@ class ResidentDirectorDialogueTest {
                 return new Decision("continue_home","home",null,"把没画完的带回去","",List.of(),null,null);
             }
         };
-        var director=new ResidentDirector(store,mind,clock);
+        // Pinned to one call in flight: this test's mind asserts the decision it is asked for belongs
+        // to the artist, and since docs/04-decisions.md 「只并行"想"，写世界仍串行」 several residents may
+        // now be asked at once, an unpinned director would hand a second worker somebody else's
+        // decision and that assertion would fire from inside the model stub. What this test is about -
+        // the operator closing up while another resident carries portable work home - is unrelated to
+        // how many calls are in flight; concurrency has its own test (ResidentDirectorParallelTest).
+        var director=new ResidentDirector(store,mind,clock,100000,(userId,day,callType,inputTokens,outputTokens)->{},8,64,12,1);
         try{
             await(()->{director.consider(51,world);return "closing".equals(world.cafeStatus);});
             clock.now=clock.now.plusSeconds(13);

@@ -166,6 +166,41 @@ class PromptBalanceTest {
     }
 
     @Test
+    @DisplayName("翻记忆那一问：随口一想和看出反复发生的事，两条路一样好走")
+    void theReflectQuestionLeansNeitherWayOnWhetherThisBecomesAStandingBelief() {
+        String prompt = promptFor(mind -> mind.reflect(new ResidentMind.ReflectRequest(
+                context(), List.of(), List.of())),
+            "{\"text\":\"\",\"evidenceIds\":[],\"supersedesKey\":null}");
+
+        assertThat(prompt).as("随口一想这一侧：不必提炼道理").contains("不必提炼出道理");
+        assertThat(prompt).as("随口一想这一侧：不必强求有收获").contains("也不必强求有收获");
+        assertThat(prompt).as("看出反复这一侧要像promiseSettled一样具体列出来")
+                .contains("也可以是你确实从source里看出一件事反复出现");
+        assertThat(prompt).as("看出反复之后要能落成长期看法").contains("把它写成一条你会长期带着走的看法");
+        // 这正是本类要钉住的那件事：原文九句往"别写"推、零句列出"可以写"的那一侧，
+        // 而这一句是从 promiseSettled 的「一次感想不比一个长期看法低一等，只是两回事」搬过来的对称收尾。
+        assertThat(prompt).as("一次性的想法和长期看法必须被说成同一等级")
+                .contains("一次性的想法不比长期看法低一等，只是两回事");
+        assertThat(prompt).as("规则不替他判断该往哪个方向想").contains("都完全是你自己的事，没有对错");
+        assertThat(prompt).as("但也不能反过来鼓励凑一个不存在的重复").contains("没看出来就别硬凑一个");
+        // 平衡不是新增鼓励堆在旧的劝退墙上——这一句守住的是「看出来了就该敢写」，
+        // 不让对称之后残留的谨慎语气变成新的另一侧压力。
+        assertThat(prompt).as("看出来了也不能因为求稳就不写").contains("别因为\"这么快就下结论\"而不写");
+    }
+
+    @Test
+    @DisplayName("翻记忆里的 habits：现成的 key 不是要凑单子逐条点评")
+    void theReflectPromptDoesNotPressureUseOfHabitKeys() {
+        String prompt = promptFor(mind -> mind.reflect(new ResidentMind.ReflectRequest(
+                context(), List.of(), List.of(new ResidentMind.HabitTraitView("habit:owner:tidy", "习惯把桌子收拾干净")))),
+            "{\"text\":\"\",\"evidenceIds\":[],\"supersedesKey\":null}");
+
+        assertThat(prompt).as("多数时候这份清单跟这次翻记忆无关").contains("多数时候用不上它");
+        assertThat(prompt).as("不能为了用掉现成的key而硬扯上关系").contains("不必为了用它而硬扯上关系");
+        assertThat(prompt).as("但确实又看出来的时候，key要原样填回去").contains("这次如果确实又看到自己那样做了一次");
+    }
+
+    @Test
     @DisplayName("普通决定里的 none：和别的选项完全平等，不是认输")
     void doingNothingInParticularIsOfferedAsAnEqualAnswer() {
         String prompt = promptFor(mind -> mind.decide(context()),

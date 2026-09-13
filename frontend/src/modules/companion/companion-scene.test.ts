@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('phaser', () => ({ default: { Scene: class {} } }))
 import { residentPosition, scenePlace, visibleActivity, conversationPosition, rainFallsOutside, isSpeaking } from './companion-scene'
 
@@ -54,6 +54,38 @@ describe('authoritative activity presentation', () => {
     // 'weaver' has no separate home-<id> location of her own - she shares 'home-artist', already
     // covered by 'artist' here.
     for (const id of ['owner', 'student', 'artist', 'gardener', 'self', 'fixer']) expect(scenePlace(`home-${id}`)).toBe('home')
+  })
+})
+
+describe('unknown places are loud, not silently redrawn as somewhere real (task: docs/05 wardrobe-as-table)', () => {
+  beforeEach(() => { vi.spyOn(console, 'warn').mockImplementation(() => undefined) })
+  afterEach(() => { vi.restoreAllMocks() })
+  it('warns once per unrecognised location, still landing safely on the street', () => {
+    expect(scenePlace('bathhouse')).toBe('street')
+    expect(scenePlace('bathhouse')).toBe('street')
+    expect(scenePlace('noodle-shop')).toBe('street')
+    expect(console.warn).toHaveBeenCalledTimes(2)
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('"bathhouse"'))
+  })
+  it('warns once per positionId that POSITION_SLOTS has no pixel for, but still returns a real, standable point', () => {
+    const first = residentPosition('cafe', 0, 'focus', '', 'bathhouse-tub')
+    residentPosition('cafe', 0, 'focus', '', 'bathhouse-tub')
+    expect(first).toEqual({ x: 438, y: 176 }) // falls through to the same heuristic as before
+    expect(console.warn).toHaveBeenCalledTimes(1)
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('"bathhouse-tub"'))
+  })
+  it('warns once per home location with no registered room, cycling through the rooms that actually exist rather than a stale hard-coded name list', () => {
+    residentPosition('home-newcomer', 0, 'sleep')
+    residentPosition('home-newcomer', 0, 'sleep')
+    expect(console.warn).toHaveBeenCalledTimes(1)
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('"home-newcomer"'))
+  })
+  it('never warns for a place it actually knows, including cafe/garden/street calls that never touch home geometry', () => {
+    residentPosition('cafe', 0, 'focus')
+    residentPosition('garden', 0, 'garden')
+    residentPosition('street', 0, 'idle')
+    scenePlace('cafe'); scenePlace('garden'); scenePlace('street'); scenePlace('home-owner')
+    expect(console.warn).not.toHaveBeenCalled()
   })
 })
 

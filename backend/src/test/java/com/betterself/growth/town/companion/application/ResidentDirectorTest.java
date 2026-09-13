@@ -14,6 +14,19 @@ import java.util.function.*;
 import static org.assertj.core.api.Assertions.*;
 
 class ResidentDirectorTest {
+    /** A director pinned to one model call in flight at a time. Every test that uses it is about
+     * something else entirely - which perspective the model saw, what gets recorded as usage, what the
+     * outcome listener reports, whether a late reply is discarded - and each was written back when one
+     * call per world was the only shape {@link ResidentDirector} had. docs/04-decisions.md
+     * 「只并行"想"，写世界仍串行」 changed that, so without this pin those tests would quietly stop asking
+     * their own question and start accidentally re-testing dispatch concurrency, which has a test of its
+     * own ({@link ResidentDirectorParallelTest}). Nothing here asserts anything about parallelism. */
+    private static ResidentDirector oneAtATime(WorldStore store,ResidentMind mind,Clock clock){
+        return oneAtATime(store,mind,clock,100000,(userId,day,callType,inputTokens,outputTokens)->{});
+    }
+    private static ResidentDirector oneAtATime(WorldStore store,ResidentMind mind,Clock clock,int dailyBudget,ModelUsageRecorder recorder){
+        return new ResidentDirector(store,mind,clock,dailyBudget,recorder,8,64,12,1);
+    }
     final Instant now=Instant.parse("2026-09-08T06:00:00Z");
     @Test void modelSeesOnePerspectiveOutsideTransactionAndLateCancelDiscardsReply()throws Exception {
         var world=CompanionRules.join("model-test","我","Asia/Shanghai",now);
@@ -31,7 +44,7 @@ class ResidentDirectorTest {
                 return new Decision("observe",c.self().place(),null,"先听完邻居的话","你刚才说的主意，我想认真听一听。",List.of(c.memories().getFirst().id()),null,null);
             }
         };
-        var director=new ResidentDirector(store,mind,Clock.fixed(now,ZoneOffset.UTC));
+        var director=oneAtATime(store,mind,Clock.fixed(now,ZoneOffset.UTC));
         try {
             director.consider(1,world);assertThat(started.await(2,TimeUnit.SECONDS)).isTrue();
             store.update(1,null,w->{CompanionRules.cancel(w,intent.id,now);return w;});release.countDown();
@@ -47,12 +60,21 @@ class ResidentDirectorTest {
             public boolean enabled(){return true;}
             public Decision decide(Context c){return new Decision("observe",c.self().place(),null,"我想先听听知夏对颜色的想法","我们先挑一种你最想留下的颜色，好吗？",List.of(c.memories().getFirst().id()),null,null);}
         };
-        var director=new ResidentDirector(store,mind,Clock.fixed(now,ZoneOffset.UTC));
+        // Both directors here are pinned to one call in flight, and for a sharper reason than the
+        // other oneAtATime uses in this file: store.finished fires from inside the FIRST qualifying
+        // apply, and the assertions below then iterate w.events / w.residentStates on the test thread.
+        // With several residents thinking at once (docs/04 「只并行"想"，写世界仍串行」) the other workers
+        // are still mutating the world at that moment, and iterating it raced into a genuine
+        // ConcurrentModificationException - observed once under CPU contention, not reproducible on an
+        // idle machine, which is exactly the shape of flake that wastes a day later. What this test is
+        // about - a model failure leaving existing plans running, and a valid reply still landing - has
+        // nothing to do with how many calls are in flight.
+        var director=oneAtATime(store,mind,Clock.fixed(now,ZoneOffset.UTC));
         try{director.consider(1,w);assertThat(store.finished.await(2,TimeUnit.SECONDS)).isTrue();assertThat(w.events).anyMatch(e->e.type().equals("thought"));}
         finally{director.close();}
         var failedStore=new FakeStore(CompanionRules.join("model-fails","我","Asia/Shanghai",now));
         var plansBeforeFailure=failedStore.world.residentStates.stream().filter(r->!r.id.equals("self")).map(r->r.plan==null?null:r.plan.id()).toList();
-        var unavailable=new ResidentDirector(failedStore,new ResidentMind(){public boolean enabled(){return true;}public Decision decide(Context c){throw new IllegalStateException("network unavailable");}},Clock.fixed(now,ZoneOffset.UTC));
+        var unavailable=oneAtATime(failedStore,new ResidentMind(){public boolean enabled(){return true;}public Decision decide(Context c){throw new IllegalStateException("network unavailable");}},Clock.fixed(now,ZoneOffset.UTC));
         try{unavailable.consider(1,failedStore.world);assertThat(failedStore.finished.await(2,TimeUnit.SECONDS)).isTrue();assertThat(failedStore.world.residentStates.stream().filter(r->!r.id.equals("self")).map(r->r.plan==null?null:r.plan.id()).toList()).containsExactlyElementsOf(plansBeforeFailure);assertThat(failedStore.world.modelStatus).contains("习惯");}
         finally{unavailable.close();}
     }
@@ -233,7 +255,7 @@ class ResidentDirectorTest {
             }
         };
         ModelUsageRecorder recorder=(userId,day,callType,inputTokens,outputTokens)->recorded.add(new Object[]{userId,day,callType,inputTokens,outputTokens});
-        var director=new ResidentDirector(store,mind,Clock.fixed(now,ZoneOffset.UTC),128,recorder);
+        var director=oneAtATime(store,mind,Clock.fixed(now,ZoneOffset.UTC),128,recorder);
         try{director.consider(7,world);assertThat(store.finished.await(2,TimeUnit.SECONDS)).isTrue();}
         finally{director.close();}
         assertThat(recorded).hasSize(1);
@@ -264,6 +286,15 @@ class ResidentDirectorTest {
         // Item 1: the old world-global modelRequestedAt gate meant nobody else could think again for
         // the whole throttle window after ANY one resident's decision. With a per-resident cooldown, a
         // second resident who has never been throttled gets a chance in the very same instant.
+        //
+        // Pinned to one call in flight (docs/04-decisions.md 「只并行"想"，写世界仍串行」 changed the
+        // director since this test was written): this test's proof that the point holds is its own
+        // two-call structure - owner decided on the first consider(), gardener on the very next one,
+        // neither made to wait out the other's cooldown. Under real parallel dispatch the chain would
+        // race through BOTH residents inside the FIRST call (an even stronger demonstration of the same
+        // claim, not a violation of it - see ResidentDirectorParallelTest for that proof), which would
+        // leave nothing for the second call to do and time it out. What this test is actually about -
+        // no world-global throttle - is unaffected by how many workers are in flight.
         var world=CompanionRules.join("per-resident-throttle","我","Asia/Shanghai",now,true);world.conversations.clear();world.serviceRequests.clear();
         var owner=ResidentSimulation.state(world,"owner");owner.plan=null;
         var gardener=ResidentSimulation.state(world,"gardener");gardener.plan=null;
@@ -274,7 +305,7 @@ class ResidentDirectorTest {
             public boolean enabled(){return true;}
             public Decision decide(Context c){decided.add(c.residentId());return new Decision("observe",c.self().place(),null,"先看看四周","",List.of(c.memories().getFirst().id()),null,null);}
         };
-        var director=new ResidentDirector(store,mind,Clock.fixed(now,ZoneOffset.UTC));
+        var director=oneAtATime(store,mind,Clock.fixed(now,ZoneOffset.UTC));
         try{
             director.consider(61,world);assertThat(store.finished.await(2,TimeUnit.SECONDS)).isTrue();
             store.finished=new CountDownLatch(1);
@@ -347,9 +378,9 @@ class ResidentDirectorTest {
             public boolean enabled(){return true;}
             public Decision decide(Context c){return new Decision("rest","home",null,"先回去坐一会儿","",List.of(),null,null);}
         };
-        var director=new ResidentDirector(store,mind,Clock.fixed(now,ZoneOffset.UTC));
+        var director=oneAtATime(store,mind,Clock.fixed(now,ZoneOffset.UTC));
         List<String> outcomes=Collections.synchronizedList(new ArrayList<>());
-        director.setOutcomeListener((callType,action,outcome)->outcomes.add(callType+":"+action+":"+outcome));
+        director.setOutcomeListener((callType,residentId,action,outcome)->outcomes.add(callType+":"+action+":"+outcome));
         try{director.consider(81,world);assertThat(store.finished.await(2,TimeUnit.SECONDS)).isTrue();}
         finally{director.close();}
         assertThat(outcomes).containsExactly("decision:rest:applied");
@@ -367,28 +398,127 @@ class ResidentDirectorTest {
             public boolean enabled(){return true;}
             public Decision decide(Context c){assertThat(c.availableActions()).doesNotContain("fly");return new Decision("fly","home",null,"想飞一会儿","",List.of(),null,null);}
         };
-        var director=new ResidentDirector(store,mind,Clock.fixed(now,ZoneOffset.UTC));
+        var director=oneAtATime(store,mind,Clock.fixed(now,ZoneOffset.UTC));
         List<String> outcomes=Collections.synchronizedList(new ArrayList<>());
-        director.setOutcomeListener((callType,action,outcome)->outcomes.add(callType+":"+action+":"+outcome));
+        director.setOutcomeListener((callType,residentId,action,outcome)->outcomes.add(callType+":"+action+":"+outcome));
         try{director.consider(82,world);assertThat(store.finished.await(2,TimeUnit.SECONDS)).isTrue();}
         finally{director.close();}
         assertThat(outcomes).containsExactly("decision:fly:rejected");
     }
     @Test void outcomeListenerReportsFailedOnARealModelException()throws Exception {
         var store=new FakeStore(CompanionRules.join("outcome-failed","我","Asia/Shanghai",now));
-        var director=new ResidentDirector(store,new ResidentMind(){public boolean enabled(){return true;}public Decision decide(Context c){throw new IllegalStateException("network unavailable");}},Clock.fixed(now,ZoneOffset.UTC));
+        var director=oneAtATime(store,new ResidentMind(){public boolean enabled(){return true;}public Decision decide(Context c){throw new IllegalStateException("network unavailable");}},Clock.fixed(now,ZoneOffset.UTC));
         List<String> outcomes=Collections.synchronizedList(new ArrayList<>());
-        director.setOutcomeListener((callType,action,outcome)->outcomes.add(callType+":"+action+":"+outcome));
+        director.setOutcomeListener((callType,residentId,action,outcome)->outcomes.add(callType+":"+action+":"+outcome));
         try{director.consider(83,store.world);assertThat(store.finished.await(2,TimeUnit.SECONDS)).isTrue();}
         finally{director.close();}
         assertThat(outcomes).containsExactly("decision:null:failed");
     }
+    /** docs/01 「心智」「记忆改成两层」: perspective()'s memories field used to be a situation-ranked
+     * retrieve() over everything this resident ever wrote, and a dozen of their own past reflections -
+     * exactly the shape CompanionRecallTest.aResidentsOwnAccountOfThemselvesCannotFillTheWholeWindow
+     * pins at the unit level - used to be able to fill most of that window (measured 51-66% own voice
+     * across real decisions). This is the same claim at the perspective()/Context level: a one-off
+     * reflection is neither the self-account (belief-tier only) nor the raw working set, so it must
+     * not appear in the prompt at all any more. */
+    @Test void perspectiveMemoriesNoLongerFloodedByThisResidentsOwnPastReflections() {
+        var world=CompanionRules.join("no-echo-chamber","我","Asia/Shanghai",now,true);
+        for(int i=0;i<12;i++)
+            world.memories.add(new CompanionWorld.Memory("own-"+i,"artist","artist","reflection",
+                now.minusSeconds(60L*(i+1)),"先画完这张草图再说",null,List.of(),8));
+        var director=new ResidentDirector(new FakeStore(world),new ResidentMind(){public boolean enabled(){return false;}public Decision decide(Context c){throw new UnsupportedOperationException();}},Clock.fixed(now,ZoneOffset.UTC));
+        try{
+            var context=director.perspective(world,"artist",now,List.of());
+            assertThat(context.memories()).as("一次性的反思既不是自述也不是工作集，不该再出现在提示词里")
+                .noneMatch(m->"reflection".equals(m.sourceType()));
+        }finally{director.close();}
+    }
+    /** docs/04 「小工作集按'上次被问之后发生了什么'切，不按计时器」: the floor is this resident's OWN
+     * {@code lastAskedAt} marker, not a fixed duration - move the marker and the same raw memory that
+     * was visible a moment ago must drop out, while something newer than the marker must appear. */
+    @Test void workingSetHonoursThisResidentsOwnLastAskedAtMarkerRatherThanAFixedWindow() {
+        var world=CompanionRules.join("cut-by-change","我","Asia/Shanghai",now,true);
+        var artist=ResidentSimulation.state(world,"artist");
+        var director=new ResidentDirector(new FakeStore(world),new ResidentMind(){public boolean enabled(){return false;}public Decision decide(Context c){throw new UnsupportedOperationException();}},Clock.fixed(now,ZoneOffset.UTC));
+        try{
+            world.memories.add(new CompanionWorld.Memory("old-raw","artist","artist","observed",now.minusSeconds(600),"很久以前看见的事",null,List.of(),5));
+            // Nobody has ever asked this resident anything yet (lastAskedAt is null): no floor, so the
+            // old raw memory is visible - exactly the self-heal an old save (which also has it null)
+            // relies on.
+            assertThat(director.perspective(world,"artist",now,List.of()).memories()).extracting(ResidentMind.MemoryView::id).contains("old-raw");
+
+            // What ResidentDirector.reserved() stamps on every dispatch, simulated directly here so
+            // this assertion is not at the mercy of which of six residents a real dispatch happens to
+            // pick.
+            artist.lastAskedAt=now.minusSeconds(60);
+            world.memories.add(new CompanionWorld.Memory("fresh-raw","artist","artist","observed",now.minusSeconds(10),"刚刚发生的事",null,List.of(),5));
+
+            var after=director.perspective(world,"artist",now,List.of());
+            assertThat(after.memories()).extracting(ResidentMind.MemoryView::id).contains("fresh-raw");
+            assertThat(after.memories()).extracting(ResidentMind.MemoryView::id).as("这条不是计时器，是这个人自己的'上次被问'").doesNotContain("old-raw");
+        }finally{director.close();}
+    }
+    /** The unified marker itself (see {@code CompanionWorld.ResidentState#lastAskedAt}'s own doc
+     * comment): whichever resident an ordinary dispatch actually lands on must have it moved forward,
+     * exactly once, to the instant they were asked - not to some other time, and not left null. */
+    @Test void aDispatchedDecisionStampsThatResidentsLastAskedAt()throws Exception {
+        var world=CompanionRules.join("stamps-last-asked","我","Asia/Shanghai",now);
+        var store=new FakeStore(world);
+        ResidentMind mind=new ResidentMind(){
+            public boolean enabled(){return true;}
+            public Decision decide(Context c){return new Decision("observe",c.self().place(),null,"先看看四周","",List.of(c.memories().getFirst().id()),null,null);}
+        };
+        var director=oneAtATime(store,mind,Clock.fixed(now,ZoneOffset.UTC));
+        try{director.consider(97,world);assertThat(store.finished.await(2,TimeUnit.SECONDS)).isTrue();}
+        finally{director.close();}
+        var stamped=world.residentStates.stream().filter(r->r.lastAskedAt!=null).toList();
+        assertThat(stamped).as("exactly the one resident this dispatch was actually for").hasSize(1);
+        assertThat(stamped.getFirst().lastAskedAt).isEqualTo(now);
+    }
+
+    /** The other half of {@link #aDispatchedDecisionStampsThatResidentsLastAskedAt}, and the more
+     * easily lost one: a conversation turn must NOT move the marker. Every turn writes two raw memories
+     * (ConversationLifecycle.appendSpeech) and turns land seconds apart, so a marker that moved on each
+     * of them would leave every memory of the conversation behind the floor by the time it ended -
+     * and the recollection summarising it is a `reflection`, which the self-account no longer admits.
+     * The resident would finish a long talk and decide what to do next with no trace of it in the
+     * prompt. Asserted on the marker rather than through a full multi-turn conversation because it is
+     * the marker that decides it, and a turn-shaped dispatch is the cheapest way to show it. */
+    @Test void aConversationTurnDoesNotConsumeTheWorkingSet()throws Exception {
+        var w=CompanionRules.join("turn-keeps-window","我","Asia/Shanghai",now,true);
+        var talkers=w.conversations.stream().filter(c->"model".equals(c.mode)&&"active".equals(c.status)).toList();
+        assertThat(talkers).as("the seeded world should open with a model conversation to exercise").isNotEmpty();
+        var speakers=talkers.getFirst().participantIds;
+        var store=new FakeStore(w);
+        var asked=new java.util.concurrent.atomic.AtomicReference<String>();
+        ResidentMind mind=new ResidentMind(){
+            public boolean enabled(){return true;}
+            public Decision decide(Context c){throw new AssertionError("a turn was due, not a decision");}
+            public com.betterself.growth.town.companion.domain.ConversationLifecycle.Utterance generateTurn(DialogueRequest request){
+                asked.set(request.perspective().residentId());
+                return new com.betterself.growth.town.companion.domain.ConversationLifecycle.Utterance(
+                    "那我先说一句。",false,"平静","none",null,List.of());
+            }
+        };
+        var director=oneAtATime(store,mind,Clock.fixed(now,ZoneOffset.UTC));
+        try{director.consider(1,w);await(()->asked.get()!=null);}
+        finally{director.close();}
+
+        assertThat(speakers).contains(asked.get());
+        assertThat(ResidentSimulation.state(w,asked.get()).lastAskedAt)
+            .as("a turn must leave the working-set floor exactly where it was").isNull();
+    }
+
+    private static void await(java.util.function.BooleanSupplier c)throws Exception{long d=System.nanoTime()+java.time.Duration.ofSeconds(3).toNanos();while(!c.getAsBoolean()&&System.nanoTime()<d)Thread.sleep(5);assertThat(c.getAsBoolean()).isTrue();}
+
     static class FakeStore implements WorldStore {
         CompanionWorld world;
         ThreadLocal<Boolean> transaction=ThreadLocal.withInitial(()->false);
         CountDownLatch finished=new CountDownLatch(1);
         FakeStore(CompanionWorld w){world=w;}
-        public CompanionWorld read(long id){return world;}
+        // synchronized to match update(): with more than one worker per world, an unsynchronized read
+        // publishes a world another thread is midway through mutating.
+        public synchronized CompanionWorld read(long id){return world;}
         public synchronized CompanionWorld update(long id,Supplier<CompanionWorld> initial,UnaryOperator<CompanionWorld> change){
             transaction.set(true);try{world=change.apply(world);if(world.modelStatus.contains("过时")||world.modelStatus.contains("补充")||world.modelStatus.contains("习惯"))finished.countDown();return world;}finally{transaction.set(false);}
         }

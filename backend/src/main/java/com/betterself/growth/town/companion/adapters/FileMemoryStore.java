@@ -115,11 +115,14 @@ public class FileMemoryStore implements MemoryStore {
             topic: %s
             importance: %d
             evidence: %s
+            supersedes: %s
+            superseded: %s
             ---
             %s
             """.formatted(m.id(), m.ownerId(), nullToEmpty(m.sourceId()), nullToEmpty(m.sourceType()),
                 m.at() == null ? "" : m.at().toString(), nullToEmpty(m.topicId()), m.importance(),
-                m.evidenceIds() == null ? "" : String.join(",", m.evidenceIds()), nullToEmpty(m.text()));
+                m.evidenceIds() == null ? "" : String.join(",", m.evidenceIds()),
+                nullToEmpty(m.supersedesKey()), m.superseded() ? "true" : "false", nullToEmpty(m.text()));
         try {
             Files.createDirectories(file.getParent());
             // Write beside the target and move into place, so a crash mid-write never leaves a
@@ -168,7 +171,11 @@ public class FileMemoryStore implements MemoryStore {
             String at = head.getOrDefault("at", "");
             return new Memory(id, owner, emptyToNull(head.get("source")), emptyToNull(head.get("type")),
                 at.isBlank() ? null : Instant.parse(at), text, emptyToNull(head.get("topic")),
-                evidence, parseInt(head.get("importance")));
+                evidence, parseInt(head.get("importance")),
+                // Absent in every file written before these two lines existed, and absent is exactly
+                // what those files mean: no key, not superseded - the same values the shorter Memory
+                // constructor used to hand back. So an old memory directory still reads correctly.
+                emptyToNull(head.get("supersedes")), "true".equals(head.getOrDefault("superseded", "").strip()));
         } catch (Exception e) { return null; }
     }
     private static int parseInt(String v) { try { return v == null ? 5 : Integer.parseInt(v.strip()); } catch (NumberFormatException e) { return 5; } }

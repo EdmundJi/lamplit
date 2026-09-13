@@ -113,6 +113,21 @@ public final class MetricsExporter {
 
     // ---- duty: complaints, interruptions, reflections ----------------------------------------
 
+    /**
+     * <b>{@code reflectionsTriggered} counts a shared narrative-tier label, not a mechanism.</b> Eight
+     * different call sites tag a memory {@code sourceType="reflection"} (decision rationale, conversation
+     * summaries, occupation changes, duty conscientiousness bumps, missed-plan notes, self-reflection...)
+     * purely so {@code CompanionRecall.tier} treats them as a layer above raw memory - the timeline this
+     * reads cannot tell which of the eight wrote any given one. Only
+     * {@code ResidentSimulation.applyReflection} can attach a {@code supersedesKey} and mint a real
+     * {@code belief} (see that method: {@code String type=supersedesKey!=null?"belief":"reflection";}).
+     * Dividing {@code NormDetector}'s {@code beliefs} count by this one is exactly the wrong-denominator
+     * mistake docs/05-notes.md's "146 次反思出 5 条信念" made - the real denominator is belief-capable
+     * calls (measured ≈2.7/resident/day, structural ceiling 8/day from {@code REFLECTION_MIN_GAP_SECONDS}
+     * =3h), which cannot be isolated from the other seven sites using only what this class reads. This
+     * count stays only for the duty feedback loop it was built for ({@code reflectionsByTopic}'s "duty"
+     * bucket) - see {@code writeMarkdown}'s label for the same caveat spelled out for a human reader.
+     */
     @SuppressWarnings("unchecked")
     private static Map<String, Object> dutyMetrics(List<Map<String, Object>> entries) {
         long complaints = entries.stream()
@@ -345,8 +360,10 @@ public final class MetricsExporter {
         sb.append("## 责任感反馈闭环\n\n");
         sb.append("- 抱怨次数：").append(duty.get("complaints")).append('\n');
         sb.append("- 被打断次数：").append(duty.get("interruptions")).append('\n');
-        sb.append("- 反思实际触发次数：").append(duty.get("reflectionsTriggered"))
-            .append("（按 topic：").append(duty.get("reflectionsByTopic")).append("）\n\n");
+        sb.append("- 打上『反思层』标记的记忆条数：").append(duty.get("reflectionsTriggered"))
+            .append("（按 topic：").append(duty.get("reflectionsByTopic"))
+            .append("——覆盖 8 个不同写入点的合集，不是 reflect 机制的调用次数，不能拿它当"
+                + "反思→信念转化率的分母，见 MetricsExporter#dutyMetrics 的类注释）\n\n");
 
         Map<String, Object> asym = (Map<String, Object>) metrics.get("relationshipAsymmetry");
         sb.append("## 关系矩阵不对称程度\n\n");

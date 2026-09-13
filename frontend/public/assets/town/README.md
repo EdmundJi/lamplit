@@ -35,3 +35,18 @@ Interiors 杯子，浇水使用 Farm 工具表的真实水流帧。保留每位�
 
 本地可打开 `/harness/companion-art.html` 检查白天、夜晚、动作与对话气泡。
 四个资源包均由 LimeZu 制作；页面保留署名，不重新分发原始或生成的授权素材。
+
+25 个外观 = 20 个现成（above）+ 5 个从分层件合成（docs/01「人」）。合成脚本是
+`scripts/build-companion-character.py`，从 `moderninteriors-win.zip` 的
+`Character_Generator` 分层件（身体/眼睛/发型/衣服/配饰）里选一套帧对齐一致的图层叠加：
+
+```bash
+python3 scripts/build-companion-character.py tmp/moderninteriors-win.zip --inspect
+```
+
+**先跑 `--inspect`**：它打开真实压缩包，打印 `Character_Generator` 下真实的文件夹名，
+并对每一层抽样检查列数是否等于文档记的 56 列——这条路径和列数目前是推断出来的，
+没有人拿真实素材验证过（本仓库的 `tmp/*.zip` 不进版本库）。全部 `OK` 之后再手填一份
+`--spec` JSON（每个角色一条 `{id, body, outfit, hairstyle, accessory, eyes}`）跑合成；
+`compose()` 在拼层前会先比较每层的真实像素尺寸，任何一层不一致就直接报错退出，
+不会悄悄拼出错位的角色（已用合成的假图层验证过这条报错路径，见 PR/会议记录）。

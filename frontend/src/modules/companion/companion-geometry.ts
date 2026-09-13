@@ -10,7 +10,7 @@
 import type { Point } from '../../shared/scene/collision'
 import { nearestStandable } from '../../shared/scene/collision'
 import { COMPANION_COLLISION, freeStandPosition } from './companion-navigation'
-import { POSITION_SLOTS, CAFE_SERVICE, CAFE_SEATS, GARDEN_OFFSET_X, HOME_ROOMS, CAFE_ROOM, CAFE_WINDOW_ROOM, ACADEMY_ROOM, GYM_ROOM, PLACE_FRAMES } from './companion-art'
+import { POSITION_SLOTS, CAFE_SERVICE, CAFE_SEATS, GARDEN_OFFSET_X, HOME_ROOMS, CAFE_ROOM, CAFE_WINDOW_ROOM, ACADEMY_ROOM, GYM_ROOM, PLACE_FRAMES, STAGE_PLACES } from './companion-art'
 import type { SceneResident } from './companion-scene'
 
 type RainShelter = { x: number; y: number; width: number; height: number }
@@ -31,15 +31,55 @@ export function rainFallsOutside(x: number, y: number) {
   const samples = [[x, y], [x - 2.5, y + 6.5], [x - 5, y + 13]]
   return !RAIN_SHELTERS.some(rect => samples.some(([px, py]) => inside(rect, px!, py!)))
 }
+// Every real place id STAGE_PLACES knows about except the virtual 'avatar' entry ("wherever the
+// avatar currently is" is not something a `location` string ever names).
+const SCENE_PLACE_IDS = Object.keys(STAGE_PLACES).filter(id => id !== 'avatar')
+const warnedScenePlaceIds = new Set<string>()
+/**
+ * Resolve any server-given `location` string down to the four coarse render buckets
+ * companion-scene.ts actually branches on (bed logic only for 'home', seating only for 'cafe',
+ * plots only for 'garden', everyone else free-stands as 'street'). Reads STAGE_PLACES - the same
+ * registry TownStage's nav/camera already uses - instead of keeping a second, independent list of
+ * known place ids: adding a building means adding one STAGE_PLACES entry, not editing this
+ * function too. A truly unrecognised id (a building the backend grew that this table has never
+ * heard of - the docs/05 "wardrobe drawn as a table" class of bug) still has to land somewhere
+ * walkable, so it falls back to 'street' like before, but now says so once per id in dev instead
+ * of pretending the mapping was intentional.
+ */
 export function scenePlace(location: string) {
-  // The backend's TownPlaces gives each resident their own home location ("home-owner",
-  // "home-self", ...) instead of one shared "home", so a dash-prefixed id counts too.
-  return (['home', 'cafe', 'garden', 'street'] as const).find(key => location === key || location.startsWith(`${key}.`) || location.startsWith(`${key}/`) || location.startsWith(`${key}-`)) ?? 'street'
+  // A subplace hangs off its place id with '.', '/' or '-' - only 'home' actually uses this today
+  // (the backend hands out per-resident "home-owner", "home-self", ...) but every id is matched
+  // the same generic way for whichever building grows one next.
+  const matchedId = SCENE_PLACE_IDS.find(id => location === id || location.startsWith(`${id}.`) || location.startsWith(`${id}/`) || location.startsWith(`${id}-`))
+  if (matchedId) return STAGE_PLACES[matchedId]!.scenePlace
+  if (import.meta.env.DEV && !warnedScenePlaceIds.has(location)) {
+    warnedScenePlaceIds.add(location)
+    console.warn(`[town] 位置 "${location}" 不在地点登记表（STAGE_PLACES）里，暂时按门前小街处理`)
+  }
+  return 'street'
 }
+const warnedMissingPositionSlots = new Set<string>()
 export function homeId(location: string) { return location.match(/^home[-./](.+)$/)?.[1] }
 export function homeRoom(location: string) { return HOME_ROOMS[homeId(location) ?? ''] }
-// 'weaver' is deliberately absent: she has no HOME_ROOMS entry of her own, she shares 'artist'.
-function legacyHomeRoom(index: number) { return HOME_ROOMS[['owner', 'student', 'artist', 'gardener', 'self', 'fixer'][Math.max(0, index) % 6]!] }
+const warnedLegacyHomeIds = new Set<string>()
+/**
+ * Fallback room for a home `location` with no room of its own: either a flat old-save "home" (no
+ * per-resident id at all) or a resident id HOME_ROOMS has never been given geometry for. Cycles
+ * through whichever rooms actually exist (`Object.keys(HOME_ROOMS)`, currently the same six names
+ * this used to hard-code, 'weaver' still deliberately absent - she shares 'artist's room) instead
+ * of a fixed name list, so a newly registered home is picked up automatically; a genuinely new,
+ * still-unregistered home still warns once per `location` in dev rather than silently reusing
+ * someone else's bedroom with no trace in the console.
+ */
+function legacyHomeRoom(index: number, location: string) {
+  const ids = Object.keys(HOME_ROOMS)
+  const fallbackId = ids[Math.max(0, index) % ids.length]!
+  if (import.meta.env.DEV && !warnedLegacyHomeIds.has(location)) {
+    warnedLegacyHomeIds.add(location)
+    console.warn(`[town] "${location}" 还没有登记专属房间，暂时借用 ${fallbackId} 的家`)
+  }
+  return HOME_ROOMS[fallbackId]!
+}
 export function placeFrame(location: string) {
   const ownHome = homeRoom(location)
   return ownHome ?? PLACE_FRAMES[scenePlace(location)]
@@ -109,11 +149,21 @@ export function residentPosition(location: string, index: number, activity = '',
   if (positionId) {
     const slots = POSITION_SLOTS[positionId]
     if (slots?.length) return slots[Math.min(Math.max(0, occupantIndex), slots.length - 1)]!
+    // A real backend positionId with no pixel registered yet - either an old save with a stale id,
+    // or (the case task 1 cares about) a position the artist genuinely has not placed. Either way
+    // it must be visible in dev, not just silently fall through to the place+index guess below.
+    if (import.meta.env.DEV && !warnedMissingPositionSlots.has(positionId)) {
+      warnedMissingPositionSlots.add(positionId)
+      console.warn(`[town] 位置 id "${positionId}" 在 POSITION_SLOTS 里还没有像素落点，暂时按处境猜一个位置`)
+    }
   }
   const place = scenePlace(location), slot = index % 5
-  const room = homeRoom(location) ?? legacyHomeRoom(index)
-  if (place === 'home' && visibleActivity(activity, action) === 'sleep') return room.bed
-  if (place === 'home' && visibleActivity(activity, action) === 'rest') return room.anchor
+  // Only resolved for a home location - computing it unconditionally (as before) would run
+  // legacyHomeRoom's dev warning for every cafe/garden/street call too, even though its result is
+  // never used outside the two 'home' branches below.
+  const room = place === 'home' ? (homeRoom(location) ?? legacyHomeRoom(index, location)) : undefined
+  if (room && visibleActivity(activity, action) === 'sleep') return room.bed
+  if (room && visibleActivity(activity, action) === 'rest') return room.anchor
   if (place === 'cafe' && activity === 'wait') return CAFE_SERVICE.waiting[index % CAFE_SERVICE.waiting.length]!
   if (place === 'cafe' && ['read', 'create', 'rest', 'drink'].includes(visibleActivity(activity, action))) {
     // Four discussion seats and six independently occupied window seats.
@@ -126,7 +176,7 @@ export function residentPosition(location: string, index: number, activity = '',
     const plots = [{ x: 770, y: 276 }, { x: 849, y: 276 }, { x: 770, y: 356 }, { x: 849, y: 356 }, { x: 842, y: 421 }]
     return { x: plots[slot]!.x + GARDEN_OFFSET_X, y: plots[slot]!.y }
   }
-  if (place === 'home' && /focus|study|read|work|make|专注|学习|读书|工作|制作/i.test(activity + action)) return room.desk
+  if (room && /focus|study|read|work|make|专注|学习|读书|工作|制作/i.test(activity + action)) return room.desk
   return freeStandPosition(place === 'home' ? location : place, residentId ?? `${location}#${index}`, occupied)
 }
 /**

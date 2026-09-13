@@ -12,12 +12,16 @@ class CompanionEmergenceTest {
     @Test void aRuleOnlyAfternoonFinishesExistingEventsWithoutInventingNewIntentions() {
         Instant start = Instant.parse("2026-09-08T06:00:00Z");
         CompanionWorld world = CompanionRules.join("afternoon-alice", "住客", "Asia/Shanghai", start);
+        int seededResidents=world.residents.size();
         Set<String> eventKinds = new HashSet<>();
         Set<String> eventIds = new HashSet<>();
         for (int second = 6; second <= 1800; second += 6) {
             CompanionRules.advance(world, start.plusSeconds(second));
             world.events.forEach(event -> { eventKinds.add(event.type()); eventIds.add(event.id()); });
-            assertThat(world.residents).hasSize(6);
+            // The claim is that a rule-only afternoon invents nobody, not that the town has six
+            // people in it - docs/01 第二版「人」 took it to 25. Pinned to the roster the world was
+            // actually seeded with, so this keeps meaning what it meant at any population.
+            assertThat(world.residents).hasSize(seededResidents);
             assertThat(world.residentStates).allSatisfy(resident -> {
                 assertThat(resident.energy).isBetween(0.0, 100.0);
                 assertThat(resident.social).isBetween(0.0, 100.0);

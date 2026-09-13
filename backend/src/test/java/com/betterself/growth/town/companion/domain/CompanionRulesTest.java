@@ -12,7 +12,7 @@ class CompanionRulesTest {
         long revision=a.revision;int diary=a.diary.size(),memories=a.memories.size();
         CompanionRules.advance(a,now.plusSeconds(300));
         assertThat(a.revision).isEqualTo(revision);assertThat(a.diary).hasSize(diary);assertThat(a.memories).hasSize(memories);
-        assertThat(b.revision).isEqualTo(1);assertThat(b.residents).hasSize(6);
+        assertThat(b.revision).isEqualTo(1);assertThat(b.residents).hasSize(ResidentPersonas.all().size()+6);
     }
     @Test void explicitFocusDefersPassingIdeaAndCancelPreventsLateExecution(){
         var w=world();
@@ -34,8 +34,13 @@ class CompanionRulesTest {
     @Test void offlineRecoveryIsBoundedAndTimezoneAllowsDifferentResidentHabits(){
         var w=world();int memories=w.memories.size(),events=w.events.size();
         CompanionRules.advance(w,now.plus(Duration.ofDays(40)));
-        assertThat(w.memories.size()-memories).isLessThanOrEqualTo(16);
-        assertThat(w.events.size()-events).isLessThanOrEqualTo(12);
+        // Bounded per resident, not by a flat number: the 16/12 these were is what a town of six
+        // produced, and docs/01 第二版 took the town to 25. What must stay true is that forty days away
+        // does not produce forty days of catch-up - so the bound scales with how many people there are
+        // and with nothing else. A regression that made recovery unbounded in TIME still fails here.
+        int residents=w.residentStates.size();
+        assertThat(w.memories.size()-memories).as("四十天不在，补算的量随人口有界，不随天数").isLessThanOrEqualTo(3*residents);
+        assertThat(w.events.size()-events).as("同上").isLessThanOrEqualTo(2*residents);
         assertThat(w.offlineSummary).isNotBlank();
         var tokyo=CompanionRules.join("a","我","Asia/Tokyo",Instant.parse("2026-09-08T16:00:00Z"));
         assertThat(tokyo.period).isEqualTo("night");

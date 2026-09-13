@@ -55,16 +55,24 @@ public class CompanionWorld {
         public String lockedBy;
         public Instant lockedAt;
     }
-    /** The two-layer place model: locations (the street, the cafe, the garden, each resident's own
+    /** The place model: locations (buildings - the street, the cafe, the garden, each resident's own
      * home) contain positions (a seat, a bed, a table) that have an optional owner, a capacity and
      * current occupants. Structure and ownership only - no pixel coordinates; the frontend maps ids
      * to art on its own. See TownPlaces for the rules that read and write this state. */
     public List<Location> locations = new ArrayList<>();
     public List<Position> positions = new ArrayList<>();
+    /** The "房间" layer - see {@link Room}'s own doc comment for why it is a new list rather than a
+     * change to either list above. Self-healing on an old save via the empty-list default. */
+    public List<Room> rooms = new ArrayList<>();
     /** The coffee/water service chain (see {@link CafeService}): every request a resident has ever
      * made of the owner, in real time, allowed to break at any link. Self-healing on an old save via
      * the empty-list default - nobody had made a request yet. */
     public List<ServiceRequest> serviceRequests = new ArrayList<>();
+    /** Every lend or gift ever made of an owned {@link WorldObject} (docs/01-requirements.md 第二版
+     * 「世界」「有所有权，可借可赠，不引入货币」): what, from whom, to whom, when, and whether it has
+     * come back - see {@link Loan}'s own doc comment for why that list and no more. Self-healing on
+     * an old save via the empty-list default - nobody had lent anything yet. */
+    public List<Loan> loans = new ArrayList<>();
     /** Per-pair cooldown for a rule-detected face-to-face encounter (see ResidentSimulation's
      * "maybeEncounter"): the last instant this pair was pulled into a conversation this way, keyed by
      * the same sorted "a:b" pair key already used for invitation cooldowns. Purely simulation-internal
@@ -146,6 +154,18 @@ public class CompanionWorld {
      * version of this file skipped the question and started the conversation itself, which is the one
      * place this town was more forceful than the paper it is modelled on. Bounded, and cleared
      * whenever the two are no longer standing together. */
+    /** docs/01-requirements.md 第二版「世界」「进别人家由所有权和门决定……被邀请或门没锁就进得去」 -
+     * a bounded, single-use pass into one specific home for one specific guest. Structural fact only,
+     * same red line as {@link Loan}: who, whose home, until when - never a reason. The invitation
+     * itself carries no judgement about whether the visit is a good idea; that stays the guest's own
+     * decision (see {@code ResidentSimulation}'s {@code visit_home}), and using it up or letting it
+     * lapse are equally ordinary outcomes. See {@code DoorService} for how this and the door's own
+     * locked bit combine ("OR", never "AND" - either is enough to get in). */
+    public List<HomeInvitation> homeInvitations = new ArrayList<>();
+    public static class HomeInvitation {
+        public String id, homeId, hostId, guestId;
+        public Instant at, expiresAt;
+    }
     public List<PendingEncounter> pendingEncounters = new ArrayList<>();
     /** One resident noticing one other person, at one moment. {@code residentId} is whose decision it
      * is; {@code otherId} is who they are looking at. */
@@ -326,6 +346,31 @@ public class CompanionWorld {
          * whole town taking turns round-robin on one shared timer. Null until this resident's first
          * decision is ever dispatched. */
         public Instant lastDecisionRequestedAt;
+        /** The unified "when was this resident last asked anything at all" marker - decision, turn,
+         * dayplan, explain, reflect, venture or promise_settled, every one of them, stamped
+         * unconditionally in {@code ResidentDirector.reserved()} (the one choke point all of them pass
+         * through) rather than in a per-kind branch the way {@link #lastDecisionRequestedAt} is.
+         * <p>Exists to answer a question progress.md's "信念为什么是 0" named by pointing at its
+         * absence: {@code lastDecisionRequestedAt} only moves for a decision, {@link #lastReflectionAt}
+         * only for a landed reflection, {@link #lastSocialAt} only at conversation end - nothing
+         * recorded "this person was asked", full stop. {@code ResidentDirector.perspective()} reads the
+         * OLD value of this field to bound the "小工作集" (docs/01 「心智」) it hands the model - this
+         * resident's own raw experience since that instant, capped by {@code
+         * CompanionRecall.WORKING_SET_CAPACITY} - before this field is moved forward to the current
+         * instant for the next ask. That makes the window's width a fact about how long it has actually
+         * been since somebody had a reason to ask this resident anything (itself decided by rule-level
+         * triggers - an encounter, a plan ending, a perceivable change - never a clock), which is the
+         * "cut by change, not a timer" docs/04 asks for, in the same way the 30-minute seat cooldown
+         * and the 12-minute encounter cooldown both had to learn not to be. Null until this resident's
+         * first ever dispatch, which {@link CompanionRecall#workingSet} treats as "no floor" - the
+         * correct behaviour for a fresh or pre-existing save that predates this field: the first working
+         * set is simply the most recent raw memories on record, exactly as if they had never been asked
+         * before, which is true. */
+        /** Moved for every dispatch kind EXCEPT a conversation turn and its recollection: a turn reads
+         * the live transcript rather than this window, and every turn writes raw memories that have to
+         * survive to be seen at the next real decision. See {@code ResidentDirector.reserved()} for why
+         * stamping on turns silently erased whole conversations from the prompt that followed them. */
+        public Instant lastAskedAt;
         /** How many decisions in a row this resident has had refused, and until when to stop asking.
          * A refused decision leaves them with nothing decided, which is itself the condition for
          * asking again - so a decision that can never apply is an unbounded loop, and one really
@@ -429,13 +474,41 @@ public class CompanionWorld {
         public List<String> proposerEvidenceIds = new ArrayList<>();
         public List<String> workerEvidenceIds = new ArrayList<>();
     }
-    /** A place a resident can be: the three shared places, or one resident's own home. `ownerId` is
-     * null for a shared place. */
+    /** A place a resident can be: the shared public buildings (cafe, garden, street, and - see
+     * docs/01-requirements.md's 第二版「世界」 - academy/gym/board/shop), or one resident's own home.
+     * `ownerId` is null for a shared place. This is the "建筑" layer of the four-layer address
+     * `世界:建筑:房间:物件` the second version calls for; {@link Room} is the new "房间" layer between
+     * this and {@link Position}/{@link WorldObject} - see that record's own doc comment for why it is
+     * additive rather than a rename of this one. */
     public record Location(String id, String kind, String ownerId) {}
+    /** The "房间" layer inside one {@link Location}: a bedroom, a shared kitchen, the cafe's back
+     * room. Deliberately its own new list rather than a field folded onto {@code Location} or
+     * {@code Position} - docs/02-modules.md's own layering note ("先用清晰的类和子目录组织") and the
+     * worked example in this batch's own brief both point the same way: {@code Location} keeps
+     * meaning exactly what it always has (a building), {@code Position} keeps meaning exactly what it
+     * always has (a claimable spot, with {@code place} still resolving to the building id so every
+     * existing {@code "cafe".equals(position.place)} call site in this file keeps working untouched),
+     * and a room is a new, third thing between them. `residentIds` is who this room actually belongs
+     * to - empty for a shared common room (a flat-mates' kitchen), one id for an ordinary bedroom, two
+     * for an older couple's shared room (docs/01 「住所按人生阶段分」) - never a single nullable
+     * `ownerId` the way {@link Location} and {@link Position} use, because a shared bedroom is not an
+     * edge case here the way an unowned bench is for a Position; it is one of the two shapes this
+     * version explicitly asks for. Self-healing on an old save via the empty-list default, same shape
+     * as {@link #doors}: an old world simply has none yet, and {@code TownPlaces.seed} backfills them
+     * the same way it already backfills beds and desks. */
+    public record Room(String id, String buildingId, String kind, List<String> residentIds) {}
     /** A specific spot inside a place - a bed, a window seat, a shared table. `ownerId` null means
      * anyone can sit; capacity limits how many occupants fit at once. */
     public static class Position {
         public String id, place, kind, ownerId;
+        /** Which {@link Room} this position sits inside, or {@code null} for a position at a place
+         * that has not been given room subdivision yet (every public building today, and any save
+         * from before {@link Room} existed) - {@code place} alone still fully identifies where a
+         * resident is for every existing purpose (occupancy, distance, the frontend's own layout);
+         * this is additional address precision, never a replacement for it. Left unpopulated rather
+         * than guessed for an old save - see {@code TownPlaces.seed}'s repair loop, which sets this
+         * going forward but never invents a room for furniture nobody described one for. */
+        public String roomId;
         public int capacity;
         public List<String> occupantIds = new ArrayList<>();
     }
@@ -486,7 +559,43 @@ public class CompanionWorld {
             this(id,at,type,place,actorIds,text,projectId,null);
         }
     }
-    public record WorldObject(String id,String kind,String place,String label,String state,String projectId) {}
+    /**
+     * @param ownerId who this decorative object currently belongs to, or {@code null} for a communal
+     * one nobody owns (the worktable, the noticeboard) and therefore not lend/gift-eligible - see
+     * {@code Lending}, docs/01-requirements.md 第二版「世界」「物件按会不会被争分两类」. This is the
+     * "纯装饰的走自由文本" half of that split: {@code state} stays free text precisely because nothing
+     * about who currently holds an ownable object needs occupancy, a timer or a queue the way a
+     * contested {@link Position} does - the mutex that matters here is a much smaller one
+     * ({@code Lending.isOnLoan}: an item already out cannot be lent again), not a capacity count.
+     * Changes hands by replacement (this is a record, like every other {@code w.objects} entry
+     * already is) - a gift moves it permanently, a loan only moves {@code place} to wherever the
+     * borrower is while {@code ownerId} stays with the lender, exactly like a real object does not
+     * stop belonging to you just because a neighbour is holding it.
+     */
+    public record WorldObject(String id,String kind,String place,String label,String state,String projectId,String ownerId) {
+        /** Back-compat for every call site written before {@code ownerId} existed (kept out of this
+         * batch's edit scope) - defaults it to null, i.e. "nobody in particular owns this", exactly
+         * what every such object already meant. */
+        public WorldObject(String id,String kind,String place,String label,String state,String projectId){
+            this(id,kind,place,label,state,projectId,null);
+        }
+    }
+    /**
+     * One lend or one gift of an owned {@link WorldObject}, whole - who lent/gave what to whom, when,
+     * and whether it has come back. This is the entire "欠" boundary docs/01-requirements.md 第二版
+     * 「世界」 calls the most important edge of this batch: <b>no reason field, ever</b> - the same red
+     * line {@link Deed} already draws for a habitual action, and for the same argument. A bystander
+     * standing right there could see this exact tuple happen; nobody standing there could see WHY, so
+     * this record never carries one, and nothing in this package ever writes "X owes Y" into it. If a
+     * resident ever comes to believe they owe somebody a turn, that belief is theirs to write, in
+     * their own self-authored memory text - never a field the rules populate for them. That is the
+     * whole measurement this batch is betting on: whether anyone ever writes down a debt the rules
+     * never told them about.
+     * @param gift true for an outright gift (nothing is ever expected back - {@code returnedAt} is
+     * always null and irrelevant, not merely "not yet"); false for a real loan, where a null
+     * {@code returnedAt} means it is still out.
+     */
+    public record Loan(String id,String itemId,String lenderId,String borrowerId,Instant lentAt,Instant returnedAt,boolean gift) {}
     public record Actor(String id, String name, String role, String place, String activity, String label,
                         double x, double y, Instant until) {}
     public static class Intent {

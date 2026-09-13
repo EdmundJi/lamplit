@@ -13,14 +13,20 @@
 export const WALK_PIXELS_PER_SECOND = 32
 /** Action-sheet geometry from scripts/build-companion-assets.py; every action shares a foot anchor. */
 export const ACTION_FRAME = { width: 96, height: 96, originX: 32 / 96, originY: 80 / 96 }
-// [1, 3, 6, 9, 12] have bespoke create/drink/garden action sheets (c0N-actions.png); 4 and 7 do
-// not - they only have the generic walk/idle/sleep/sit/read sheet that exists for all 20 base
-// characters. That is fine: sync() already guards every action-sheet animation behind
-// `this.textures.exists(`${sheet}-actions`)`, so fixer/weaver (whichever index lands on 4 or 7)
-// simply fall back to the native idle/read/sit poses instead of a missing/floating action frame.
-// Length must match the total actor count (avatar + residents) so every one of the seven gets a
-// distinct sprite by position, the same guarantee the original five-actor roster had.
-export const RESIDENT_ART = [1, 3, 6, 9, 12, 4, 7] as const
+// [1, 3, 6, 9, 12] have bespoke create/drink/garden action sheets (c0N-actions.png); every other
+// number here only has the generic walk/idle/sleep/sit/read sheet that build-town-assets.py
+// generates for all 20 purchased premade characters (c01.png..c20.png - see that script's own
+// `for i in range(1, 21)`). That is fine: sync() already guards every action-sheet animation
+// behind `this.textures.exists(`${sheet}-actions`)`, so anyone whose index lands past those five
+// simply falls back to the native idle/read/sit poses instead of a missing/floating action frame.
+// docs/01's 25-avatar plan is 20 ready-made identities + 5 synthesised from layered parts (see
+// scripts/build-companion-character.py) - this list holds the first half of that today. Every
+// number 1-20 exists once assets are built, so `RESIDENT_ART[index % RESIDENT_ART.length]`
+// (companion-scene.ts) now gives up to 20 residents a genuinely distinct sprite instead of
+// repeating after 7; past 20 it cycles, same as it always has past its own length. The first seven
+// entries keep their original order (1, 3, 6, 9, 12, 4, 7) so today's six residents + avatar keep
+// exactly the sprite they always had - only indices 7+ (new residents) are new territory.
+export const RESIDENT_ART = [1, 3, 6, 9, 12, 4, 7, 2, 5, 8, 10, 11, 13, 14, 15, 16, 17, 18, 19, 20] as const
 export type CafeSeat = { x: number; y: number; facing: 'left' | 'right' }
 /** Compact two-tops with real opposing seats. All coordinates are residents' foot anchors. */
 export const CAFE_TABLES = [

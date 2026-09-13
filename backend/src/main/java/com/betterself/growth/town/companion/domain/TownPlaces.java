@@ -67,7 +67,22 @@ public final class TownPlaces {
      * separately-owned furniture rather than nothing. Declared before {@link #PLACES} below, which
      * calls {@code homeOf} during class initialization - out of order here means a null map at that
      * moment, not merely a wrong answer. */
-    private static final Map<String, String> HOME_SHARED_WITH = Map.of("weaver", "artist");
+    private static final Map<String, String> HOME_SHARED_WITH = flatmates();
+    /** Derived from {@link ResidentPersonas#households()} rather than written out here, because the
+     * households are frozen source data over there and a second hand-maintained copy in this file would
+     * drift the moment either changed - and the way it would drift is silent: {@code homeOf} would keep
+     * answering {@code "home-<flatmate>"} for somebody whose bed is actually in the host's flat, so
+     * every "go home" would route them to a Location that does not exist. 阿满/知夏 stay hard-coded
+     * alongside it: they predate ResidentPersonas, they are the pair every existing test and every
+     * measured run refers to, and docs/01 第二版 keeps the original six exactly as they are. */
+    private static Map<String, String> flatmates() {
+        Map<String, String> shared = new LinkedHashMap<>();
+        shared.put("weaver", "artist");
+        ResidentPersonas.households().forEach((host, members) -> {
+            for (String member : members) if (!member.equals(host)) shared.put(member, host);
+        });
+        return Map.copyOf(shared);
+    }
     private static final Set<String> PLACES;
     static {
         Set<String> set = new LinkedHashSet<>(List.of("street", "cafe", "garden"));
@@ -86,6 +101,21 @@ public final class TownPlaces {
         if(w.locations.stream().noneMatch(l->l.id().equals(home)))w.locations.add(new Location(home,"home",residentId));
         if(position(w,home+"-bed")==null)w.positions.add(position(home+"-bed",home,"bed",residentId,1));
         if(position(w,home+"-desk")==null)w.positions.add(position(home+"-desk",home,"desk",residentId,1));
+        ensureBedroom(w,home,residentId);
+    }
+    /** The "房间" layer for one resident's own corner of a home - see {@code CompanionWorld.Room}'s
+     * own doc comment for why this is a new record rather than folded onto {@code Location} or
+     * {@code Position}. Self-healing exactly like the rest of {@link #seed}: creates the room if
+     * missing, then stamps its id onto whichever of this resident's own positions at `home` do not
+     * have one yet - covering both a fresh world (created moments ago, in the same {@link #seed} call
+     * that got here through {@link #addHome}) and an older save whose bed and desk predate {@link
+     * CompanionWorld.Room} entirely. Never touches a position that already has a room, so a future,
+     * more deliberate room layout is free to move furniture between rooms without this silently
+     * stamping it back. */
+    private static void ensureBedroom(CompanionWorld w,String home,String residentId){
+        String roomId=home+"-room-"+residentId;
+        if(w.rooms.stream().noneMatch(rm->rm.id().equals(roomId)))w.rooms.add(new Room(roomId,home,"bedroom",List.of(residentId)));
+        for(Position p:at(w,home))if(residentId.equals(p.ownerId)&&p.roomId==null)p.roomId=roomId;
     }
 
     /** A flat-mate moving into an existing resident's home: no new Location, but a real bed and a
@@ -106,6 +136,26 @@ public final class TownPlaces {
         String bed = "home-" + flatmateId + "-bed", desk = "home-" + flatmateId + "-desk";
         if (position(w, bed) == null) w.positions.add(position(bed, home, "bed", flatmateId, 1));
         if (position(w, desk) == null) w.positions.add(position(desk, home, "desk", flatmateId, 1));
+        ensureBedroom(w, home, flatmateId);
+        ensureCommonRoom(w, home, hostId, flatmateId);
+    }
+    /** The one room in a shared flat nobody owns alone (docs/01-requirements.md 第二版「世界」「合住
+     * 还是重复互动的免费来源，而重复互动是规范的前提——你每天都得和同一个人分一个厨房」) - a kitchen or
+     * living room every flat-mate crosses every day. Carries the household's stove: nobody owns it,
+     * capacity 1, a real occupancy mutex through the same {@link #claim}/{@link Outcome#WAITING}
+     * machinery the shop's workbench already uses - "两个人会不会同时想要它" is exactly why a kitchen
+     * was docs/01's own example ("炉子；浴室；工具台；床"), and a solo resident's own kitchen is not
+     * contested, so only a shared household gets one at all - a solo/paired older resident's home
+     * never calls {@link #addFlatmate}, so it never calls this either. */
+    private static void ensureCommonRoom(CompanionWorld w,String home,String hostId,String flatmateId){
+        String roomId=home+"-common";
+        if(w.rooms.stream().noneMatch(rm->rm.id().equals(roomId)))w.rooms.add(new Room(roomId,home,"common",List.of(hostId,flatmateId)));
+        String stove=home+"-stove";
+        if(position(w,stove)==null){
+            Position p=position(stove,home,"stove",null,1);
+            p.roomId=roomId;
+            w.positions.add(p);
+        }
     }
 
     /** A position kind that cannot be borrowed even when nothing shared is free: the coffee machine
@@ -141,6 +191,38 @@ public final class TownPlaces {
         for (Map.Entry<String, String> flatmate : HOME_SHARED_WITH.entrySet()) addFlatmate(w, flatmate.getKey(), flatmate.getValue());
         ensureQuietCafeSeats(w);
         ensureCounter(w);
+        ensurePublicBuildings(w);
+    }
+    /** The three remaining public buildings this version's 「六栋公共建筑」 calls for, beyond the cafe
+     * and garden this town already had - 学院 (academy) and 健身房 (gym), which the frontend already
+     * draws real art for (see {@code companion-art.ts}'s {@code ACADEMY_ROOM}/{@code GYM_ROOM}, both
+     * still pointed at the street's own camera target - wiring that up is frontend's to do, not this
+     * file's), and the 公告板广场 (board) beside them - plus 商店 (shop) itself, the one building
+     * nobody had drawn or coded yet. docs/01-requirements.md 第二版「世界」picks the shop specifically
+     * as 「"所有权/借/赠"最自然的来源地」. Backend structure needs no art to exist first
+     * (docs/02-modules.md: "后端只描述结构与归属，像素画在哪由前端定"), so all four land here together
+     * rather than the shop alone. Self-healing, like every other piece of {@link #seed}. */
+    private static void ensurePublicBuildings(CompanionWorld w){
+        ensureBuilding(w,"academy");
+        // Three independent one-person study spots, the same "seat" kind (and the same real
+        // occupancy mutex via claim()/release()) cafe's own quiet window desks already use - see
+        // ResidentSimulation.preferredKind, which routes study/read/work/make here too.
+        for(int index=1;index<=3;index++){String id="academy-desk-"+index;if(position(w,id)==null)w.positions.add(position(id,"academy","seat",null,1));}
+        ensureBuilding(w,"gym");
+        if(position(w,"gym-bench")==null)w.positions.add(position("gym-bench","gym","bench",null,3));
+        // An open-air plaza, not a room (the frontend's own BOARD_AREA has no doorX) - addressable and
+        // encounterable like every other public building, but nothing here claims a named position.
+        ensureBuilding(w,"board");
+        ensureBuilding(w,"shop");
+        // The one contested object this batch actually wires to a real resident action (work/make at
+        // the shop - see ResidentSimulation.preferredKind): a workbench, capacity one, unowned so
+        // anyone may queue for it - the same real occupancy mutex/queueing every other named position
+        // already has through claim()/release(), not a new mechanism invented for this one spot. Named
+        // after docs/01's own example list ("工具台") rather than after the shop that houses it.
+        if(position(w,"shop-workbench")==null)w.positions.add(position("shop-workbench","shop","workbench",null,1));
+    }
+    private static void ensureBuilding(CompanionWorld w,String id){
+        if(w.locations.stream().noneMatch(l->l.id().equals(id)))w.locations.add(new Location(id,id,null));
     }
     private static void ensureQuietCafeSeats(CompanionWorld w){
         // The original window place stays the student's owned seat. Five neighbouring one-person
@@ -166,6 +248,12 @@ public final class TownPlaces {
 
     public static Position position(CompanionWorld w, String id) { return w.positions.stream().filter(p -> p.id.equals(id)).findFirst().orElse(null); }
     public static List<Position> at(CompanionWorld w, String place) { return w.positions.stream().filter(p -> p.place.equals(place)).toList(); }
+    /** The "房间" layer lookup to go with the two above - completes the four-layer address
+     * `世界:建筑:房间:物件` a position's own {@code roomId} points into. Null for any id this world has
+     * no room for (every position predating {@link Room}, or a place that has not been given room
+     * subdivision at all - every public building today). */
+    public static Room room(CompanionWorld w, String id) { return id == null ? null : w.rooms.stream().filter(rm -> rm.id().equals(id)).findFirst().orElse(null); }
+    public static List<Room> roomsAt(CompanionWorld w, String buildingId) { return w.rooms.stream().filter(rm -> rm.buildingId().equals(buildingId)).toList(); }
 
     /** Give up whatever spot residentId currently holds, if any. No event is recorded - see the
      * {@code (w, residentId, at)} overload below for the version that records one. This bare form
@@ -358,6 +446,24 @@ public final class TownPlaces {
     private static boolean hasActor(CompanionWorld w, String residentId) {
         if ("self".equals(residentId)) return w.avatar != null;
         return w.residents.stream().anyMatch(a -> a.id().equals(residentId));
+    }
+    /** Claims exactly one position by id, never substituting a different one at the same place the
+     * way {@link #claim} deliberately does ("能站的地方都能去" - any chair will do, so a mismatched
+     * kind falls back to whatever else has room). That fallback is right for a chair and wrong for a
+     * household's one shared stove: every other contested spot in this town is either owned by exactly
+     * one person (a bed, the student's window seat, the gardener's plot - {@link #claim}'s "reclaim
+     * your own" branch handles those before any fallback is even considered) or sits alone in a
+     * building with nothing else to fall back onto (the shop's workbench). A shared home's common room
+     * is the one place neither protection holds - every flat-mate's own bed and desk sit right there,
+     * free, and would otherwise silently absorb a second cook while the resident's own plan still read
+     * "cook". Used by {@code ResidentSimulation.schedule}'s "cook" branch only; every other action
+     * keeps using {@link #claim}, unmodified. */
+    public static Outcome claimExact(CompanionWorld w, String residentId, String positionId, Instant now) {
+        release(w, residentId);
+        Position p = position(w, positionId);
+        if (p == null || p.occupantIds.size() >= p.capacity) return Outcome.WAITING;
+        seat(w, residentId, p);
+        return Outcome.SEATED;
     }
     private static void seat(CompanionWorld w, String residentId, Position p) {
         p.occupantIds.add(residentId);

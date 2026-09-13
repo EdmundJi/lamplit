@@ -142,7 +142,12 @@ public class QwenResidentMind implements ResidentMind {
     private static final java.util.List<DecisionPromptLine> DECISION_PROMPT_LINES=java.util.List.of(
         new DecisionPromptLine(ALWAYS,"你是一个有自己生活的小街居民。只扮演输入的 self 这一个人，不替其他居民作答。"),
         new DecisionPromptLine(ALWAYS,"只知道输入自己的 memories、眼前 nearby/visibleObjects 与当面 conversation。"),
-        new DecisionPromptLine(ALWAYS,"sourceType=heard 是转述，reflection 是可能出错的推测；不要把它们变成亲眼所见。"),
+        // The sourceTypes a DECISION can actually see, and only those. Since memory became two layers
+        // (docs/01 「心智」) this call's memories are the self-account (belief + seed) plus the raw
+        // working set (observed / heard) - a one-off `reflection` is in neither, so the previous version
+        // of this line explained a sourceType that can no longer appear here, while `seed` went
+        // unexplained. Dead guidance in a prompt is not free: it describes a world the model is not in.
+        new DecisionPromptLine(ALWAYS,"sourceType=observed 是你自己看见或做过的；heard 是别人转述给你的，不要当成亲眼所见；seed 是这条街开始之前你就有的经历；belief 是你自己已经下过的判断、此刻仍然这么认为。"),
         new DecisionPromptLine(ALWAYS,"私密 Todo 和用户内心念头不在你的知识里，不得猜测。远处人物在做什么你不知道。"),
         new DecisionPromptLine(ALWAYS,"结合自己的目标、salientPerceptions里的显著体感、routineCues里的个人日常时间提示、当前计划与实际记忆决定下一步。salientPerceptions为空表示此刻没有需要特别注意的体感；routineCues是“到了我平常睡觉的时间”一类习惯事实，不等于困，也不是命令。不要猜测或要求任何隐藏数值。你可以继续投入、好奇地观察、拒绝配合，也可以因一次经历想到与原来不同的愿望。"),
         new DecisionPromptLine(ALWAYS,"给自己的幽默、想象力、偏好和分歧留空间，不必把每个决定写成温柔的小合作。"),
@@ -151,6 +156,13 @@ public class QwenResidentMind implements ResidentMind {
         new DecisionPromptLine(ALWAYS,"只返回一个可执行动作与一句简短理由，不输出推理过程。"),
         new DecisionPromptLine(ALWAYS,"action必须严格照抄availableActions这次实际给出的字符串之一，不能选择availableActions里没有的动作，哪怕它是别的时候合法的动作名——这次没列出就是这次真的做不到，选了也不会发生，你的意图会完全落空。availableActions因情况实时变化：continue/continue_home/resume/tend等并非总是可选，尤其咖啡馆开始打烊（cafeStatus=closing）后，即使手头还有一件没做完的事，continue也常常不会出现在这次的availableActions里；这种时候如果你仍想做原来那件事（比如还在等一杯已经点的饮料），改选一个这次确实列出的动作（例如rest，重新安排一段等待/休息），而不要选continue或continue_home，那样只会被判定为这次没有发生过。continue表示按currentPlan继续，不能重置计时或换一件事。reason一句话说清楚就好，不必展开分析，控制在80个汉字以内。"),
         new DecisionPromptLine(c->offered(c,"join"),"join表示走过去挨着某个熟人坐下（对方的桌子或旁边的位置），targetId填nearby中那个人的id；这只是想坐得近一些，不代表要开口说话或已经在交谈。"),
+        // invite_home / visit_home (docs/01-requirements.md 第二版「世界」「进别人家由所有权和门决定」).
+        // No obligation language, no "记得回请"/"欠了一次人情" - that would be the same secrecy breach
+        // lend/gift's own prompt line avoids: a resident who later writes about owing somebody must be
+        // reaching that thought on their own, not repeating a hint we planted here.
+        new DecisionPromptLine(c->offered(c,"invite_home"),"invite_home是请眼前这个人以后来自己家坐坐，targetId填nearby中那个人的id。这只是开口请一句，对方要不要真的来、什么时候来，是他自己后续的事，不需要你现在就知道。"),
+        new DecisionPromptLine(c->offered(c,"visit_home"),"visit_home是去一个曾经请过你的人家里坐坐，targetId填那个人的id，place仍写home。想去就去，不想去也完全正常，不去不需要理由；请你的人可能压根不记得，也可能这次刚好不在家，这些都不是你能提前知道的事。"),
+        new DecisionPromptLine(c->offered(c,"cook"),"cook表示用家里公用的炉子做点吃的，place写home。炉子一次只能一个人用，如果正好有人在用，你会先在旁边等一等，不是选不了；不想等、换一件事做也完全正常。"),
         new DecisionPromptLine(ALWAYS,"away表示暂时离开这条街去处理自己的事，一段时间后才会回来，回来后只有自己知道那段时间做了什么；不要在away的reason里编造离场期间发生的具体情节，那要等回来后才补一句自己的回忆。"),
         new DecisionPromptLine(c->offeredAny(c,"create","help","join"),"create/help 的 targetId 必须是 knownProjects 之一且 place 匹配；join 只能针对 nearby 中一个人。"),
         new DecisionPromptLine(ALWAYS,"none表示\"没什么特别想做的\"，place填自己此刻所在的地方，targetId填null。它和其他选项完全平等：人一天里有大段时间并不打算做什么，这时候选none比硬挑一件事更贴近实情。不必为选它找理由，reason写一句实话就行。"),
@@ -177,6 +189,23 @@ public class QwenResidentMind implements ResidentMind {
         new DecisionPromptLine(c->offered(c,"request_drink"),"rest只表示休息，不会自动点饮料。想喝点什么、且availableActions包含request_drink时就可以选它，place必须cafe；这会创建本人真实请求并在店里等，不要假装饮料已经做好。不想喝也完全不必选。"),
         new DecisionPromptLine(QwenResidentMind::cafeRoleRelevant,"咖啡馆的帮工、委托、接手、拒绝和退出只能在两人当面的结构化对话回合里协商，不能用这次decision隔空提出或接受。仅有提议不代表能使用吧台。tend 只在canTend=true时可选。"),
         new DecisionPromptLine(QwenResidentMind::cafeRoleRelevant,"cafeStatus、cafeScheduleCue和cafeNotice是你此刻知道的营业状态、时间提示和真实通知。"),
+        // Lending and giving (docs/01-requirements.md 第二版「世界」「有所有权，可借可赠，不引入货币」).
+        //
+        // These two lines say what the action DOES and nothing whatsoever about what it MEANS. No
+        // obligation, no reciprocity, no gratitude, no "他会记得你", no hint that a borrowed thing
+        // ought to come back. That omission is the entire point and it is load-bearing: docs/01 makes
+        // the measurement 「有没有人写下了一笔规则从没告诉过他的债」 - whether anyone writes down a debt
+        // the rules never told them about. The moment this prompt mentions owing, every resident who
+        // later writes about owing is quoting us, and the finding is dead before it is measured. Same
+        // red line as Deed and as CompanionWorld.Loan, which carries no reason field at all.
+        //
+        // Not returning something is therefore not discouraged here, and returning it is not urged:
+        // return_loan simply appears in availableActions while a loan is outstanding and both people
+        // are in the same place, and choosing anything else is as free as choosing it. See
+        // LendingPromptBalanceTest, which asserts by keyword that no obligation language ever creeps
+        // back in - the cheapest possible guard on the one measurement this mechanism exists for.
+        new DecisionPromptLine(c->offeredAny(c,"lend","gift"),"lend是把自己的一件东西先借给此刻和你在同一个地方的另一个人，gift是直接给他、不再是自己的。targetId填visibleObjects里属于你自己的那件东西的id，不是人的id——谁收下由规则按\"此刻还有谁站在这儿\"确定，所以身边不止一个人、或者一个人也没有的时候，这次借或给不会发生。一件东西借出去之后，在回到你手上之前不能再借给别人。"),
+        new DecisionPromptLine(c->offered(c,"return_loan"),"return_loan是让一件借出去的东西回到物主手上：借的人和物主都可以做这个动作，它只在两个人此刻在同一个地方时才出现。targetId填那件东西的id。"),
         new DecisionPromptLine(ALWAYS,"sleep表示回自己家睡觉，不要求先出现疲惫体感。"),
         new DecisionPromptLine(c->offered(c,"open_cafe"),"open_cafe只在availableActions允许时选择，去咖啡馆完成开门；这是cafeStatus=closed时唯一合法的、以cafe为place的管理动作。"),
         new DecisionPromptLine(ALWAYS,"打烊、锁门、换一种活法这些只在某一个时刻才谈得上的事，不在这份菜单里，到了那个时刻会单独问你。"),
@@ -213,12 +242,57 @@ public class QwenResidentMind implements ResidentMind {
             String actionEnumJson=json.writeValueAsString(offeredActions==null||offeredActions.isEmpty()?DECISION_ACTION_FALLBACK:offeredActions);
             var result=provider.generateStructured(new QwenProvider.StructuredPrompt("COMPANION_RESIDENT",instruction,
                 "{\"type\":\"object\",\"required\":[\"action\",\"place\",\"targetId\",\"reason\",\"speech\",\"evidenceIds\"],\"properties\":{\"action\":{\"type\":\"string\",\"enum\":"
-                    +actionEnumJson+"},\"place\":{\"type\":\"string\",\"enum\":[\"home\",\"cafe\",\"street\",\"garden\"]},\"targetId\":{\"type\":[\"string\",\"null\"]},\"reason\":{\"type\":\"string\"},\"speech\":{\"type\":\"string\"},\"evidenceIds\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"projectTitle\":{\"type\":[\"string\",\"null\"]},\"objectKind\":{\"type\":[\"string\",\"null\"]}}}",
+                    +actionEnumJson+"},\"place\":{\"type\":\"string\",\"enum\":"+placeEnumJson(context)+"},\"targetId\":{\"type\":[\"string\",\"null\"]},\"reason\":{\"type\":\"string\"},\"speech\":{\"type\":\"string\"},\"evidenceIds\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"projectTitle\":{\"type\":[\"string\",\"null\"]},\"objectKind\":{\"type\":[\"string\",\"null\"]}}}",
                 decisionThinking));
             Decision decision=json.readValue(result.json(),Decision.class);
             return new Result<>(decision,usageOf(result));
         }catch(Exception e){throw new IllegalStateException("Resident decision unavailable",e);}
     }
+    /** The place enum for a schema, taken from the very list of places this same call already handed
+     * the resident ({@code Context.knownPlaces}, built by {@code ResidentDirector.knownPlaces} out of
+     * {@code w.locations}). Deriving it from that list rather than writing the ids out here is what
+     * makes a new building addressable at all: the old literal {@code ["home","cafe","street","garden"]}
+     * meant a seventh building could exist, be drawn, and still be unnameable. It also makes one thing
+     * true by construction that a second hard-coded list could only make true by luck - <b>the model is
+     * never offered a place it was not also told about.</b> docs/04-decisions.md 「定位是"规则收窄候选集
+     * + 一次调用"…用 JSON schema 的动态 enum 锁死，非法项压根不在选项里」. */
+    private String placeEnumJson(Context context){
+        var ids=placeIds(context);
+        return writeJson(ids.isEmpty()?PLACE_FALLBACK:ids);
+    }
+    /** Same, for the calls that are about a place two people could meet at or leave something in: a
+     * private home is not one of those, and that exclusion is the rule's to make, not the model's. The
+     * trailing null is the "I do not want to name anywhere" answer, which must stay exactly as easy to
+     * give as naming somewhere (see PromptBalanceTest). */
+    private String sharedPlaceEnumJson(Context context){
+        var ids=new java.util.ArrayList<Object>(sharedPlaceIds(context));
+        if(ids.isEmpty())ids.addAll(SHARED_PLACE_FALLBACK);
+        ids.add(null);
+        return writeJson(ids);
+    }
+    /** Serialising a list of place ids cannot actually fail; wrapped rather than declared so the two
+     * schema strings that need it stay expressions. */
+    private String writeJson(Object value){
+        try{return json.writeValueAsString(value);}
+        catch(Exception e){throw new IllegalStateException("Cannot encode place enum",e);}
+    }
+    private static java.util.List<String> placeIds(Context context){
+        return context.knownPlaces()==null?java.util.List.of():context.knownPlaces().stream().map(KnownPlaceView::id).filter(java.util.Objects::nonNull).toList();
+    }
+    private static java.util.List<String> sharedPlaceIds(Context context){
+        return placeIds(context).stream().filter(id->!"home".equals(id)).toList();
+    }
+    /** Read back to the model in its own prose so the sentence and the schema can never disagree - the
+     * instruction used to spell out "cafe、street、garden" while the schema spelled out its own copy. */
+    private static String sharedPlaceNames(Context context){
+        var ids=sharedPlaceIds(context);
+        return String.join("、",(java.util.List<CharSequence>)(java.util.List<?>)(ids.isEmpty()?SHARED_PLACE_FALLBACK:ids));
+    }
+    /** Only ever reached by a context built without any places at all (a hand-rolled test fixture);
+     * a real world always has locations. Never a silent substitute for a real answer - see
+     * DECISION_ACTION_FALLBACK, which exists for the same reason and says the same thing. */
+    private static final java.util.List<String> PLACE_FALLBACK=java.util.List.of("home","cafe","street","garden");
+    private static final java.util.List<String> SHARED_PLACE_FALLBACK=java.util.List.of("cafe","street","garden");
     private Usage usageOf(QwenProvider.StructuredResult result){return new Usage(result.inputTokens(),result.outputTokens(),providerCode,result.model(),result.reasoningContentPresent(),result.reasoningTokens());}
     @Override public ReactDraft react(ReactRequest request){return reactMetered(request).value();}
     @Override public Result<ReactDraft> reactMetered(ReactRequest request){
@@ -317,19 +391,22 @@ public class QwenResidentMind implements ResidentMind {
     @Override public Result<ReflectDraft> reflectMetered(ReflectRequest request){
         return generateMetered("COMPANION_RESIDENT_REFLECT","""
             你是perspective.self中的这一个居民。source是你自己过去的一段真实记忆，没有特定要回答的问题，就是随手翻一翻，看看有没有想起点什么。
-            大多数时候翻完不会有什么特别的结论，那就写一句很随口的感想，不必每次都提炼出道理，也不必强求有收获。
-            只有当你自己真的从source里看出一件事反复出现——比如某个人总是坐在某个位置、某件事总在类似的时间发生、面对某类情况自己总是同一种反应——才把它写成一条你会长期带着走的看法，并给出supersedesKey；这必须是你自己从材料里看出来的重复，不是替你数好、指定好方向的规律，没看出反复出现的东西就不要勉强编一个。
-            如果只是这一次随口想到的感想，说不上"反复出现"，就把supersedesKey留空——那只是一次性的想法，不要占用长期看法这一层。
-            supersedesKey是你自己起的一个简短代号（例如"小川-座位"），之后同一个key会替换你自己之前对同一件事、同一个人的看法；只有真正认定这是长期看法时才给它起名字。
-            habits里是别人眼里你常做的几件事，各带一个现成的key（这一项可能是空的）。它不是要你逐条点评的清单，绝大多数次翻记忆都跟它无关，不要为了用它而用它。
-            只有当你这次确实从source里看出自己又那样做了一次、并且对这件事本身有了一句自己的看法时，才把那一条的key原样填进supersedesKey，把看法写进text。看法是什么、朝哪个方向，完全是你自己的事，没有对错。
-            text一两句话，不超过60个汉字。evidenceIds必须从source中选1条以上、真正让你这么想的自己的记忆，不能是别人的、也不能是source之外的。
+            问题只有一句：**翻完这些，你把这算成什么——随口一想，还是看出了一件反复发生的事？**
+            两种答案一样正常，也一样好给：
+            ——可以只是随口的感想，说不上"反复"，那就写一句就好，不必提炼出道理，也不必强求有收获；这时把supersedesKey留空，一次性的想法不比长期看法低一等，只是两回事。
+            ——也可以是你确实从source里看出一件事反复出现，比如某个人总是坐在某个位置、某件事总在类似的时间发生、面对某类情况自己总是同一种反应；那就照实说出这个重复是什么，把它写成一条你会长期带着走的看法，并给出supersedesKey。
+            是不是"反复"、看出的是什么、朝哪个方向，都完全是你自己的事，没有对错：没看出来就别硬凑一个，看出来了也别因为"这么快就下结论"而不写。
+            supersedesKey是你自己起的一个简短代号（例如"小川-座位"），之后同一个key会替换你自己之前对同一件事、同一个人的看法。
+            standingBeliefs是你现在还带着走的几条长期看法，每条都写着它自己的key（这一项可能是空的）。如果这次翻到的还是其中某一条说的那件事——无论是又一次印证了它，还是让你不再那么想——就把那一条的key原样填回supersedesKey，不要另起一个新代号；只有这件事没有任何一条旧看法覆盖到时，才自己起一个新的。
+            habits里是别人眼里你常做的几件事，各带一个现成的key（这一项可能是空的）；这次如果确实又看到自己那样做了一次、并且对这件事本身有了一句自己的看法，就把那条key原样填进supersedesKey，多数时候用不上它，不必为了用它而硬扯上关系。
+            text一两句话，不超过60个汉字；如果要记的是别人说过的内容本身，就直接写那句话说的是什么，不要写"提到""说过""表示"这类转述动词——除非"这件事被说出口了"这一点本身就是你要记住的事。
+            evidenceIds必须从source中选1条以上、真正让你这么想的自己的记忆，不能是别人的、也不能是source之外的。
             只返回JSON字段text,evidenceIds,supersedesKey，不输出推理过程。
-            """,new ReflectInput(request.perspective(),request.source(),request.habits()),"""
+            """,new ReflectInput(request.perspective(),request.source(),request.habits(),request.standingBeliefs()),"""
             {"type":"object","required":["text","evidenceIds","supersedesKey"],"properties":{"text":{"type":"string"},"evidenceIds":{"type":"array","items":{"type":"string"},"minItems":1},"supersedesKey":{"type":["string","null"]}}}
             """,ReflectDraft.class,decisionThinking);
     }
-    private record ReflectInput(Context perspective,java.util.List<MemoryView> source,java.util.List<HabitTraitView> habits) {}
+    private record ReflectInput(Context perspective,java.util.List<MemoryView> source,java.util.List<HabitTraitView> habits,java.util.List<StandingBeliefView> standingBeliefs) {}
 
     @Override public PromiseOfferDraft promiseOffer(PromiseOfferRequest request){return promiseOfferMetered(request).value();}
     @Override public Result<PromiseOfferDraft> promiseOfferMetered(PromiseOfferRequest request){
@@ -340,16 +417,18 @@ public class QwenResidentMind implements ResidentMind {
             想说定就说，不想就不说，两种都很正常，而且"没有"是最常见的答案。不必为了回答这个问题凑一件事出来。
             但也别因为"说了就得做到、万一做不到呢"而不说。做不到会怎么样这件事，这里没有规定，也没有人会替你或替他判定什么。
             thingsNeedingHands是镇上那些一个人做不完、还没做完的事，给你看是让你自己看，不是让你从里面挑一件来许诺。你想说定的完全可以是别的：一起吃点什么、把某样东西带给谁、明早陪谁去一趟。
-            要说定的话：toId填peopleHere里那个人的id；place只能是cafe、street或garden（自己家里不算）；inHours是从现在算起大约几小时之后，可以是小数，最多24。
+            要说定的话：toId填peopleHere里那个人的id；place只能是<places>之一（自己家里不算）；inHours是从现在算起大约几小时之后，可以是小数，最多24。
             what写**你到时候会去做的那件事**，不超过40个汉字。它会被原样记进在场每个人的记忆里，所以：
             —— 写成做的事（"把新苗种到花园去"），不要写成你对他说的话（不要写"青叔，咱们一起把它种了吧？"）。
             —— **里面不要出现任何时间**（不写"明早9点"、"待会儿"、"晚饭后"）。到点算哪一刻，完全由inHours决定；what里再写一个时间，两个会对不上，到时候你人在不在那儿就成了一笔糊涂账。
             不想说定就把what留空（null），别的字段也留空。
             evidenceIds填0到3条真正让你想到它的自己的记忆，没有就留空数组。
             只返回JSON字段toId,what,place,inHours,evidenceIds，不输出推理过程。
-            """,new PromiseOfferInput(request.perspective(),request.peopleHere(),request.thingsNeedingHands()),"""
-            {"type":"object","required":["toId","what","place","inHours","evidenceIds"],"properties":{"toId":{"type":["string","null"]},"what":{"type":["string","null"]},"place":{"type":["string","null"],"enum":["cafe","street","garden",null]},"inHours":{"type":["number","null"]},"evidenceIds":{"type":"array","items":{"type":"string"}}}}
-            """,PromiseOfferDraft.class,decisionThinking);
+            """.replace("<places>",sharedPlaceNames(request.perspective())),new PromiseOfferInput(request.perspective(),request.peopleHere(),request.thingsNeedingHands()),
+            "{\"type\":\"object\",\"required\":[\"toId\",\"what\",\"place\",\"inHours\",\"evidenceIds\"],\"properties\":{\"toId\":{\"type\":[\"string\",\"null\"]},\"what\":{\"type\":[\"string\",\"null\"]},\"place\":{\"type\":[\"string\",\"null\"],\"enum\":"
+                +sharedPlaceEnumJson(request.perspective())
+                +"},\"inHours\":{\"type\":[\"number\",\"null\"]},\"evidenceIds\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}}}}",
+            PromiseOfferDraft.class,decisionThinking);
     }
     private record PromiseOfferInput(Context perspective,java.util.List<ActorView> peopleHere,java.util.List<KnownProject> thingsNeedingHands) {}
 
@@ -382,13 +461,15 @@ public class QwenResidentMind implements ResidentMind {
             会被问到这句话，本身就说明这条街上大家一起做的事刚好全部告一段落了。接下来这里会发生什么，取决于有没有人想到点什么；没人想到，就什么都不会发生。
             想不出来也没关系，把title留空就行，那是真话，不是失败——但也别因为觉得"应该谦虚"或者"这不该由我起头"就留空。你自己的记忆里但凡有什么一直搁在那儿——某次谈话里没接住的话、某个反复出现的念头、你羡慕过或者遗憾过的某件事、你一直想试试但一个人试不了的——那就是它，写出来。
             这件事必须是**要有别人一起才成立**的：一个人关起门来能做完的，不属于这里。
-            place只能是cafe、street、garden之一（自己家里不算，那是私人空间不是共同的地方）。objectKind从poster/flowers/books/tea里选一个，这只是世界能表现的形式，不限制主题。
+            place只能是<places>之一（自己家里不算，那是私人空间不是共同的地方）。objectKind从poster/flowers/books/tea里选一个，这只是世界能表现的形式，不限制主题。
             title不超过36个汉字，reason一两句说清楚你为什么想要它，不超过80个汉字。evidenceIds填1到3条真正让你想到它的自己的记忆。
             不要复述已经存在过的项目，也不要把愿望写成已经发生的事。
             只返回JSON字段title,place,objectKind,reason,evidenceIds，不输出推理过程。
-            """,new VentureInput(request.perspective(),request.sharedThingsLeft()),"""
-            {"type":"object","required":["title","place","objectKind","reason","evidenceIds"],"properties":{"title":{"type":["string","null"]},"place":{"type":["string","null"],"enum":["cafe","street","garden",null]},"objectKind":{"type":["string","null"],"enum":["poster","flowers","books","tea",null]},"reason":{"type":["string","null"]},"evidenceIds":{"type":"array","items":{"type":"string"}}}}
-            """,VentureDraft.class,decisionThinking);
+            """.replace("<places>",sharedPlaceNames(request.perspective())),new VentureInput(request.perspective(),request.sharedThingsLeft()),
+            "{\"type\":\"object\",\"required\":[\"title\",\"place\",\"objectKind\",\"reason\",\"evidenceIds\"],\"properties\":{\"title\":{\"type\":[\"string\",\"null\"]},\"place\":{\"type\":[\"string\",\"null\"],\"enum\":"
+                +sharedPlaceEnumJson(request.perspective())
+                +"},\"objectKind\":{\"type\":[\"string\",\"null\"],\"enum\":[\"poster\",\"flowers\",\"books\",\"tea\",null]},\"reason\":{\"type\":[\"string\",\"null\"]},\"evidenceIds\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}}}}",
+            VentureDraft.class,decisionThinking);
     }
     private record VentureInput(Context perspective,java.util.List<KnownProject> sharedThingsLeft) {}
 }

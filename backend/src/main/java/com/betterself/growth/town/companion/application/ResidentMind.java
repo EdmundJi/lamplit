@@ -212,7 +212,28 @@ public interface ResidentMind {
      * about other people or about one particular day, and only a resident who has actually noticed
      * one of these in themselves should reach for it. */
     record HabitTraitView(String key,String description) {}
-    record ReflectRequest(Context perspective,List<MemoryView> source,List<HabitTraitView> habits) {}
+    /** A standing view this resident already holds, and the key it is filed under. Handed back to them
+     * so a later reflection about the same thing can REPLACE it instead of minting a second label for
+     * one topic - {@code supersedesKey} only ever supersedes on an exact string match
+     * ({@code ResidentSimulation.supersedePrevious}), so a resident who invents a fresh code name every
+     * time accumulates parallel opinions that never meet.
+     *
+     * <p>Every surveyed system that actually revises a belief does this and none ask the model to
+     * invent an identifier: Zep/Graphiti hands the model integer indices into a candidate list
+     * ({@code contradicted_facts: list[int]}), Mem0 masks its uuids as "0".."9" and instructs "do not
+     * generate any new ID", Affordable Generative Agents prints the current relationship and asks
+     * whether it needs updating. Ours asked for a made-up label from nothing, and measured 0 beliefs.
+     *
+     * <p>Text and key are both the resident's own words from an earlier turn - the rules never author
+     * either, and offering them back is not a suggestion about what to think now. Which way a view
+     * should move, or whether it should move at all, stays entirely the model's. */
+    record StandingBeliefView(String key,String text) {}
+    record ReflectRequest(Context perspective,List<MemoryView> source,List<HabitTraitView> habits,List<StandingBeliefView> standingBeliefs) {
+        /** Shape used before standing beliefs were offered back; keeps hand-built test fixtures compiling. */
+        public ReflectRequest(Context perspective,List<MemoryView> source,List<HabitTraitView> habits){
+            this(perspective,source,habits,List.of());
+        }
+    }
     /** {@code sharedThingsLeft} is what this resident still knows of that anybody could put a hand on -
      * empty is the whole reason this call is being made, and it is handed over rather than described
      * so the resident can see for themselves that there is nothing rather than being told so. */

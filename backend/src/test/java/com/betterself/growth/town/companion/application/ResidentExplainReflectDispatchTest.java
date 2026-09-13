@@ -202,6 +202,62 @@ class ResidentExplainReflectDispatchTest {
         assertThat(artist.lastReflectionAt).isEqualTo(now);
     }
 
+    /**
+     * A resident who already holds a standing view gets it handed back, key and all, when they next
+     * reflect.
+     *
+     * <p>Why it matters: {@code supersedesKey} supersedes on an exact string match only (see {@code
+     * ResidentSimulation.supersedePrevious}). A resident asked to invent a short label from nothing
+     * every time will invent a different one every time - measured, twice, in the same run: 阿满 wrote
+     * {@code weaver配合者} and {@code weaver-配合者} for one idea, so neither ever replaced the other and
+     * the town read as though she had never changed her mind. Offering the existing keys back is what
+     * turns "invent an identifier" into "pick the one this is about", which is what every surveyed
+     * system that actually revises beliefs does (Graphiti hands integer indices, Mem0 masks its ids
+     * and forbids new ones, Affordable Generative Agents prints the current value and asks whether to
+     * update it).
+     *
+     * <p>What is NOT asserted here, deliberately: which way the view should move. The rules hand back
+     * the resident's own earlier words and nothing else - confirming it and abandoning it are the same
+     * shape from here (docs/04 「允许往坏了长」).
+     */
+    @Test void aResidentsOwnStandingViewsAreHandedBackSoTheKeyCanBeReusedRatherThanReinvented() throws Exception {
+        CompanionWorld w = world();
+        parkEveryoneElseAsleep(w, now, "artist");
+        ResidentState artist = ResidentSimulation.state(w, "artist");
+        artist.plan = new Plan("artist-sleep", "sleep", "home-artist", null, "睡着", now, now.plusSeconds(600));
+        artist.lastReflectionAt = now.minusSeconds(4 * 3600);
+        addRawMemory(w, "artist", now.minusSeconds(3600), 9);
+        addRawMemory(w, "artist", now.minusSeconds(1800), 9);
+        addRawMemory(w, "artist", now.minusSeconds(600), 9);
+
+        // One view she already holds, and one she has since moved on from. Only the live one comes back.
+        w.memories.add(new Memory("m-belief-live", "artist", "artist", "belief", now.minusSeconds(7200),
+            "小川总是坐窗边那个位子。", "seat", List.of(), 9, "artist:小川-座位", false));
+        w.memories.add(new Memory("m-belief-old", "artist", "artist", "belief", now.minusSeconds(90000),
+            "以前觉得他只是随便挑的。", "seat", List.of(), 9, "artist:小川-座位", true));
+        // Somebody else's belief must never leak into her prompt.
+        w.memories.add(new Memory("m-belief-other", "owner", "owner", "belief", now.minusSeconds(7200),
+            "阿满做事最稳。", "work", List.of(), 9, "owner:阿满-做事", false));
+
+        var store = new CountingStore(w);
+        var captured = new ResidentMind.ReflectRequest[1];
+        ResidentMind mind = new ResidentMind() {
+            public boolean enabled() { return true; }
+            public Decision decide(Context c) { throw new AssertionError("no ordinary decision should be needed here"); }
+            public ReflectDraft reflect(ReflectRequest request) { captured[0] = request; return null; }
+        };
+        var director = new ResidentDirector(store, mind, Clock.fixed(now, ZoneOffset.UTC));
+        try {
+            director.consider(1, w);
+            await(() -> captured[0] != null);
+        } finally { director.close(); }
+
+        assertThat(captured[0]).as("reflect must actually have been invoked").isNotNull();
+        assertThat(captured[0].standingBeliefs())
+            .extracting(ResidentMind.StandingBeliefView::key, ResidentMind.StandingBeliefView::text)
+            .containsExactly(tuple("artist:小川-座位", "小川总是坐窗边那个位子。"));
+    }
+
     @Test void reflectNeverPreemptsAnOrdinaryDecisionEvenWhenBothAreDue() throws Exception {
         CompanionWorld w = world();
         parkEveryoneElseAsleep(w, now, "artist");
@@ -245,7 +301,15 @@ class ResidentExplainReflectDispatchTest {
             public Decision decide(Context c) { decideCalls.incrementAndGet(); return new Decision("observe", c.self().place(), null, "先看看四周", "", List.of(), null, null); }
             // explain deliberately not overridden: ResidentMind's own default throws UnsupportedOperationException.
         };
-        var director = new ResidentDirector(store, mind, Clock.fixed(now, ZoneOffset.UTC));
+        // Pinned to one call in flight. "Not on the very same tick" below is a statement about
+        // sequencing, and sequencing within one consider() is exactly what docs/04-decisions.md
+        // 「只并行"想"，写世界仍串行」 changed: unpinned, this resident's explain fails as unsupported and
+        // releases them again fast enough (there is no network here) that the next worker in the chain
+        // legitimately picks up their ordinary decision inside the same await window. Nothing this test
+        // is actually about changes - a missing capability still never burns the failure budget, and
+        // the later tick must still fall through rather than be starved; both are asserted below.
+        var director = new ResidentDirector(store, mind, Clock.fixed(now, ZoneOffset.UTC), 100000,
+            (userId, day, callType, inputTokens, outputTokens) -> {}, 8, 64, 12, 1);
         try {
             director.consider(1, w); // first tick: explain is attempted and fails as unsupported
             await(() -> store.updates.get() >= 2);
@@ -256,9 +320,9 @@ class ResidentExplainReflectDispatchTest {
 
             // A later tick must no longer be starved by the same unsupported explain request winning
             // the same priority race every time - it should now fall through to the ordinary decision.
-            // Retried (rather than called once) because consider() is single-flight per user and may
-            // still legitimately no-op if the first dispatch's own inFlight bookkeeping has not yet
-            // cleared at the exact moment this polls.
+            // Retried (rather than called once) because this director is pinned to one call at a time
+            // and may still legitimately no-op if the first dispatch's own worker bookkeeping has not
+            // yet cleared at the exact moment this polls.
             long deadline = System.nanoTime() + Duration.ofSeconds(3).toNanos();
             while (decideCalls.get() < 1 && System.nanoTime() < deadline) {
                 director.consider(1, w);

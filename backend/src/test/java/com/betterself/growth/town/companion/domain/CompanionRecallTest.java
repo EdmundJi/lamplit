@@ -117,4 +117,99 @@ class CompanionRecallTest {
     private Memory memory(String id, String owner, Instant at, String text, String topic) {
         return new Memory(id, owner, "self", "observed", at, text, topic);
     }
+
+    // ---- selfAccount (docs/01 「心智」自述文档) --------------------------------------------------
+
+    @Test void selfAccountReturnsOnlyLiveBeliefsMostRecentlyAffirmedFirst() {
+        var raw = new Memory("raw1", "artist", "artist", "observed", now.minusSeconds(10), "随手记的一件事", "seat", List.of(), 5);
+        var reflection = new Memory("refl1", "artist", "artist", "reflection", now.minusSeconds(5), "随口一想", "seat", List.of(), 7);
+        var oldBelief = new Memory("belief-old", "artist", "artist", "belief", now.minusSeconds(3600), "以前的看法", "seat", List.of(), 9, "artist:seat:owner", true);
+        var currentBelief = new Memory("belief-current", "artist", "artist", "belief", now.minusSeconds(1800), "现在的看法", "seat", List.of(), 9, "artist:seat:owner", false);
+        var otherBelief = new Memory("belief-other", "artist", "artist", "belief", now.minusSeconds(60), "另一件事上的看法", "duty", List.of(), 9, "artist:duty:x", false);
+
+        var account = CompanionRecall.selfAccount(List.of(raw, reflection, oldBelief, currentBelief, otherBelief), "artist", now, 10);
+
+        // Neither the raw sighting nor the one-off reflection belongs here - only currently-true
+        // standing views, superseded ones excluded, most recently affirmed first.
+        assertThat(account).extracting(Memory::id).containsExactly("belief-other", "belief-current");
+    }
+
+    // Found in review: workingSet excludes anything at or before `since`, and a seed memory's own
+    // timestamp predates the town starting - so the very first time a resident is ever asked anything
+    // (the instant lastAskedAt stops being null), workingSet would exclude their own backstory forever.
+    // With belief-tier memories at ~0 in every measured run, that would have left a resident's origin
+    // reachable nowhere in any prompt. selfAccount is where it has to live instead.
+    @Test void selfAccountBackfillsWithSeedMemoriesWhenThereAreFewerBeliefsThanCapacity() {
+        var belief = new Memory("belief-1", "artist", "artist", "belief", now.minusSeconds(60), "现在的看法", "seat", List.of(), 9, "artist:seat:owner", false);
+        var seedOld = new Memory("seed-old", "artist", "history", "seed", now.minusSeconds(200000), "很久以前的自我介绍", null, List.of(), 7);
+        var seedNewer = new Memory("seed-newer", "artist", "owner", "seed", now.minusSeconds(100000), "另一条更晚一点的背景", "reading-night", List.of(), 8);
+        var raw = new Memory("raw-1", "artist", "artist", "observed", now.minusSeconds(5), "刚刚看见的事", null, List.of(), 5);
+
+        var account = CompanionRecall.selfAccount(List.of(belief, seedOld, seedNewer, raw), "artist", now, 3);
+
+        // Beliefs (the part that grows/revises) always take priority; seed backstory backfills
+        // whatever capacity is left over, oldest/most-foundational first; an ordinary raw observation
+        // is neither and never appears here.
+        assertThat(account).extracting(Memory::id).containsExactly("belief-1", "seed-old", "seed-newer");
+    }
+
+    @Test void selfAccountNeverLetsSeedBackstoryCrowdOutARealBelief() {
+        var beliefs = new java.util.ArrayList<Memory>();
+        for (int i = 0; i < CompanionRecall.SELF_ACCOUNT_CAPACITY; i++)
+            beliefs.add(new Memory("belief-" + i, "artist", "artist", "belief", now.minusSeconds(i), "看法" + i, "topic" + i, List.of(), 9, "key-" + i, false));
+        var input = new java.util.ArrayList<>(beliefs);
+        input.add(new Memory("seed-1", "artist", "history", "seed", now.minusSeconds(200000), "背景", null, List.of(), 7));
+
+        assertThat(CompanionRecall.selfAccount(input, "artist", now, CompanionRecall.SELF_ACCOUNT_CAPACITY))
+            .as("满员的信念不该被背景故事挤掉").extracting(Memory::id).doesNotContain("seed-1");
+    }
+
+    @Test void selfAccountIsBoundedByItsOwnFixedCapacityRegardlessOfHowManyBeliefsExist() {
+        var input = new java.util.ArrayList<Memory>();
+        for (int i = 0; i < 20; i++)
+            input.add(new Memory("belief-" + i, "artist", "artist", "belief", now.minusSeconds(i), "看法" + i, "topic" + i, List.of(), 9, "key-" + i, false));
+        // The store (ResidentSimulation.MEMORIES_PER_RESIDENT) never trims a live belief - this is the
+        // separate, smaller bound that keeps a prolific reflector's PROMPT from growing without limit.
+        assertThat(CompanionRecall.selfAccount(input, "artist", now, CompanionRecall.SELF_ACCOUNT_CAPACITY))
+            .hasSize(CompanionRecall.SELF_ACCOUNT_CAPACITY);
+    }
+
+    // ---- workingSet (docs/01 「心智」小工作集) ---------------------------------------------------
+
+    @Test void workingSetIsRawOnlyAndExcludesReflectionsAndBeliefs() {
+        var raw = new Memory("raw1", "student", "student", "observed", now.minusSeconds(10), "看见的事", "seat", List.of(), 5);
+        var heard = new Memory("heard1", "student", "owner", "heard", now.minusSeconds(20), "听说的事", "seat", List.of(), 5);
+        var reflection = new Memory("refl1", "student", "student", "reflection", now.minusSeconds(5), "自己的想法", "seat", List.of(), 7);
+        var belief = new Memory("belief1", "student", "student", "belief", now.minusSeconds(1), "自己的看法", "seat", List.of(), 9, "k", false);
+
+        var result = CompanionRecall.workingSet(List.of(raw, heard, reflection, belief), "student", null, now, 10);
+
+        // A reflection/belief is a synthesis this resident already produced, not something that
+        // happened - excluding that tier here (rather than merely capping its share, as retrieve()
+        // does) is what removes the own-voice flood at its root.
+        assertThat(result).extracting(Memory::id).containsExactly("raw1", "heard1");
+    }
+
+    @Test void workingSetExcludesAnythingAtOrBeforeSince() {
+        var before = new Memory("before", "student", "student", "observed", now.minusSeconds(100), "早前的事", null, List.of(), 5);
+        var boundary = new Memory("boundary", "student", "student", "observed", now.minusSeconds(50), "边界时刻", null, List.of(), 5);
+        var after = new Memory("after", "student", "student", "observed", now.minusSeconds(10), "后来的事", null, List.of(), 5);
+        Instant since = now.minusSeconds(50);
+
+        var result = CompanionRecall.workingSet(List.of(before, boundary, after), "student", since, now, 10);
+
+        assertThat(result).extracting(Memory::id).containsExactly("after");
+    }
+
+    @Test void workingSetWithNoFloorReturnsTheMostRecentRawMemoriesInsteadOfCrashingOrGoingEmpty() {
+        // since==null is what a resident who has never been asked anything looks like - a brand new
+        // resident, or an old save from before ResidentState.lastAskedAt existed. The correct answer is
+        // "the most recent raw memories on record", not an empty working set.
+        var input = new java.util.ArrayList<Memory>();
+        for (int i = 0; i < 15; i++)
+            input.add(new Memory("raw-" + i, "student", "student", "observed", now.minusSeconds(i), "事" + i, null, List.of(), 5));
+        var result = CompanionRecall.workingSet(input, "student", null, now, 10);
+        assertThat(result).hasSize(10);
+        assertThat(result.getFirst().id()).isEqualTo("raw-0"); // newest first
+    }
 }

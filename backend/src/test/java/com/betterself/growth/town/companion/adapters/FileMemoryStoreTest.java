@@ -10,6 +10,7 @@ import java.time.Instant;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 
 class FileMemoryStoreTest {
     private static final Instant AT = Instant.parse("2026-09-09T02:00:00Z");
@@ -27,6 +28,48 @@ class FileMemoryStoreTest {
                 assertThat(m.importance()).isEqualTo(6);
                 assertThat(m.evidenceIds()).containsExactly("m-1");
             });
+    }
+
+    /** "他曾经这么想过"永远查得到（docs/01「记忆分了层」）——那条保证的全部实现是 supersedesKey /
+     * superseded 两个字段，而文件才是权威（docs/02「记忆存在哪」）。这两个字段以前根本没写进文件头：
+     * 同一个进程里靠 {@code cache} 握着活对象看不出来，一旦重启、缓存冷了从盘上读回来，每一次
+     * 改主意都被抹平成"他一直就是这么想的"。这条测试就是那道缺口的守门人。 */
+    @Test void changingYourMindSurvivesARestartToo(@TempDir Path root) {
+        Memory earlier = new Memory("m-1", "artist", "artist", "belief", AT, "窗边那个位子该留给小川。",
+            null, List.of("m-0"), 9, "artist:seat:owner", true);
+        Memory now = new Memory("m-2", "artist", "artist", "belief", AT, "谁先坐下就是谁的。",
+            null, List.of("m-0"), 9, "artist:seat:owner", false);
+        new FileMemoryStore(root).save(1L, List.of(earlier, now));
+        // A second instance shares nothing but the directory - the files have to carry it themselves.
+        assertThat(new FileMemoryStore(root).byOwner(1L, "artist"))
+            .extracting(Memory::id, Memory::supersedesKey, Memory::superseded)
+            .containsExactly(tuple("m-1", "artist:seat:owner", true),
+                             tuple("m-2", "artist:seat:owner", false));
+    }
+
+    /** A memory directory written before those two header lines existed still reads back, and reads
+     * back as what it actually meant: no key, not superseded. */
+    @Test void aFileFromBeforeSupersessionExistedStillReadsBack(@TempDir Path root) throws Exception {
+        Path file = root.resolve("u1/student/m-9.md");
+        Files.createDirectories(file.getParent());
+        Files.writeString(file, """
+            ---
+            id: m-9
+            owner: student
+            source: student
+            type: observed
+            at: 2026-09-09T02:00:00Z
+            topic: service
+            importance: 5
+            evidence:
+            ---
+            旧存档里的一条。
+            """);
+        assertThat(new FileMemoryStore(root).byOwner(1L, "student")).singleElement().satisfies(m -> {
+            assertThat(m.supersedesKey()).isNull();
+            assertThat(m.superseded()).isFalse();
+            assertThat(m.text()).isEqualTo("旧存档里的一条。");
+        });
     }
 
     @Test void oneResidentsMemoriesAreNeverReturnedToAnother(@TempDir Path root) {

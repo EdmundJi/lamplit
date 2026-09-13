@@ -467,6 +467,19 @@ public final class ResidentSimulation {
             replaceActor(w,r.id,"street","idle","咖啡馆的门锁着，进不去",at.plusSeconds(300));
             return;
         }
+        // Home doors (docs/01-requirements.md 第二版「世界」「进别人家由所有权和门决定」): the exact
+        // same "arrival, not continued presence" shape as the cafe's own check above - only an actual
+        // arrival at somebody ELSE's home needs asking; nobody is ever turned away from their own.
+        boolean arrivingElsewheresHome=TownPlaces.isHome(place)&&!place.equals(TownPlaces.homeOf(r.id))&&!place.equals(actor(w,r.id).place());
+        if(arrivingElsewheresHome&&!DoorService.canEnterHome(w,r.id,place,at)){
+            DoorService.perceiveLockedOutOfHome(w,r,at);
+            r.plan=null;r.desiredAction=null;r.desiredDurationSeconds=0;r.revision++;
+            r.thought="那扇门锁着，进不去";
+            TownPlaces.release(w,r.id,at);
+            replaceActor(w,r.id,"street","idle","那扇门锁着，进不去",at.plusSeconds(300));
+            return;
+        }
+        if(arrivingElsewheresHome)arriveAsGuest(w,r,place,at);
         r.plan=new Plan("p-"+(++w.eventSequence),action,place,target,reason,at,at.plusSeconds(duration));r.revision++;r.thought=reason;
         r.desiredAction=null;r.desiredDurationSeconds=0;
         // Every new plan starts out as the rules' own until something says otherwise: applyDecision
@@ -483,9 +496,20 @@ public final class ResidentSimulation {
         // the resident is loosely "at" the place, exactly where the frontend's own walkable-area
         // pathing already puts a standing actor. This is also why the garden's four named spots no
         // longer force four people into a pile - most of what happens there never claims one.
+        // "cook" deliberately does not go through preferredKind()/the line below: TownPlaces.claim's
+        // fallback substitutes ANY other free position at the place when the requested kind is full
+        // ("能站的地方都能去", correct for a chair - any chair will do). A home always has other free
+        // furniture nearby (every flat-mate's own bed and desk), which would otherwise silently seat a
+        // second cook at their own desk while the plan still read "cook" - the resident asked for the
+        // ONE shared stove specifically, and either gets it or genuinely waits, never a substitute.
+        // TownPlaces.claimExact never substitutes, unlike every other contested spot in this town,
+        // none of which need that guarantee: a bed/window-seat/plot is owned by exactly one person and
+        // hits claim()'s "reclaim your own" branch before any fallback is even considered, and the
+        // shop's workbench is the only Position in that building at all, so there is nothing else to
+        // fall back onto - a home is the one place both of those protections are absent at once.
         String kind=preferredKind(action,place);
-        if(kind==null){TownPlaces.release(w,r.id,at);return;}
-        TownPlaces.Outcome outcome=TownPlaces.claim(w,r.id,place,kind,at);
+        if(!action.equals("cook")&&kind==null){TownPlaces.release(w,r.id,at);return;}
+        TownPlaces.Outcome outcome=action.equals("cook")?TownPlaces.claimExact(w,r.id,place+"-stove",at):TownPlaces.claim(w,r.id,place,kind,at);
         if(outcome==TownPlaces.Outcome.WAITING) {
             // Only a bed, counter, study seat or home desk reaches here, so this is the genuinely-scarce case. Stand by a moment instead of
             // being placed on top of someone.
@@ -494,13 +518,62 @@ public final class ResidentSimulation {
             replaceActor(w,r.id,place,"wait",waitReason,r.plan.endsAt());
         }
     }
+    /** What happens the instant a guest actually gets through somebody else's door - called from
+     * {@link #schedule} only once {@link DoorService#canEnterHome} has already said yes, never as part
+     * of deciding whether to let them in.
+     *
+     * <p>Two things, both one-shot: the pass that got them in is spent (a no-op if they walked through
+     * an unlocked door on nobody's specific invitation - see {@link DoorService#consumeInvitation}),
+     * and whoever actually lives here and is home right now gets one chance to react to someone showing
+     * up (docs/01-requirements.md 第二版「社会怎么长出来」 "碰到人了" being what drives a resident, not a
+     * clock). This deliberately reuses {@link CompanionWorld.PendingEncounter}/{@code applyReaction}
+     * wholesale rather than inventing a parallel "somebody's at the door" mechanism - a person you did
+     * not expect standing in your own living room is exactly the kind of moment that machinery already
+     * exists for, and greet/join/none are exactly as good an answer to it as they are to a street
+     * crossing.
+     *
+     * <p>Deliberately NOT routed through {@code maybeEncounter}/{@link #PUBLIC_PLACES}: a home is not
+     * added to that set (a household does not need a "did we just run into each other" ritual every
+     * time two flat-mates are in the same room - see {@code PUBLIC_PLACES}'s own doc comment), and the
+     * trigger here is not a periodic scan but this one concrete event, an outsider's arrival - which is
+     * rarer and more specific than anything the scan is built to notice. Only offered to the HOST
+     * reacting to the guest, not the reverse: the guest already expressed their own intent by choosing
+     * {@code visit_home} moments ago, so asking them a second time whether they want to be here would
+     * be asking them to re-decide a choice they just made. */
+    private static void arriveAsGuest(CompanionWorld w,ResidentState guest,String home,Instant at){
+        DoorService.consumeInvitation(w,guest.id,home,at);
+        if(!w.modelConversationsEnabled)return;
+        for(ResidentState host:w.residentStates){
+            if(host.id.equals(guest.id)||!home.equals(TownPlaces.homeOf(host.id)))continue;
+            if(!home.equals(actor(w,host.id).place())||!greetable(w,host.id,at))continue;
+            CompanionWorld.PendingEncounter pending=new CompanionWorld.PendingEncounter();
+            pending.id="pe-"+(++w.eventSequence);pending.residentId=host.id;pending.otherId=guest.id;
+            pending.place=home;pending.at=at;pending.residentRevision=host.revision;
+            w.pendingEncounters.add(pending);
+            while(w.pendingEncounters.size()>12)w.pendingEncounters.removeFirst();
+            recordDecisionTrigger(w,host.id,"encounter",at);
+            return; // one host reacting is the moment; a shared flat's other residents get their own turn on their own tick, same as any public place
+        }
+    }
     /** Which actions still need a named, owned position claimed - see the "能站的地方都能去" note in
      * schedule() above. Null means this action never claims one at all, not merely "any spot will
      * do". */
     private static String preferredKind(String action,String place) {
         if(TownPlaces.isHome(place)&&Set.of("study","read","work","make").contains(action))return "desk";
-        if("cafe".equals(place)&&Set.of("study","read","work","make").contains(action))return "seat";
-        if("join".equals(action))return switch(place){case "cafe"->"seat";case "street","garden"->"bench";default->null;};
+        // The academy's three quiet desks (docs/01-requirements.md 第二版「世界」's six public
+        // buildings) reuse the cafe's own "seat" kind and the same real occupancy mutex - see
+        // TownPlaces.ensurePublicBuildings.
+        if(Set.of("cafe","academy").contains(place)&&Set.of("study","read","work","make").contains(action))return "seat";
+        // The shop's workbench (docs/01's own example of a contested object - "工具台") is the one
+        // this batch actually wires to an existing, already-legal action rather than inventing a new
+        // verb the model would need fresh prompt guidance for (out of scope here - see adapters).
+        if("shop".equals(place)&&Set.of("work","make").contains(action))return "workbench";
+
+        // "board" is deliberately absent here: it is an open-air plaza with no bench of its own (see
+        // TownPlaces.ensurePublicBuildings), so joining someone there falls through to null - "能站的
+        // 地方都能去" (docs/04-decisions.md) - rather than claiming a position that does not exist and
+        // reading back as a false "full, please wait".
+        if("join".equals(action))return switch(place){case "cafe","academy"->"seat";case "street","garden","gym"->"bench";default->null;};
         return switch(action) {
             case "sleep"->"bed";
             case "tend"->"equipment";
@@ -527,7 +600,12 @@ public final class ResidentSimulation {
             case "focus","study"->TownPlaces.isHome(place)?"desk":"seat";
             case "sleep","home","rest"->"bed";
             case "flowers"->"plot";
-            case "walk","ponder"->"bench";
+            // "board" is the one public place with no named position at all (see
+            // TownPlaces.ensurePublicBuildings - it is an open-air plaza, not a room): asking it for a
+            // "bench" it does not have would find nothing to fall back to (claim()'s fallback still
+            // searches only THIS place's own positions) and read back as a false "full, please wait"
+            // for a plaza that is actually empty.
+            case "walk","ponder"->"board".equals(place)?null:"bench";
             default->null;
         };
     }
@@ -894,8 +972,11 @@ public final class ResidentSimulation {
         return speaker.place().equals(candidate.place())&&!Set.of("walk","travel","sleep","rest","away","tend").contains(candidate.activity());
     }
     /** The public places, and only these: being alone in your own home is not an encounter waiting to
-     * happen, and nobody is greeted through their own front door. */
-    private static final Set<String> PUBLIC_PLACES = Set.of("street","cafe","garden");
+     * happen, and nobody is greeted through their own front door. Extended to the new public buildings
+     * (docs/01-requirements.md 第二版「世界」's six) for the same reason cafe and garden are here -
+     * 25 people over 6 places is meant to keep producing real face-to-face crossings, not fewer of
+     * them just because a new building exists. */
+    private static final Set<String> PUBLIC_PLACES = Set.of("street","cafe","garden","shop","academy","gym","board");
     /** Long enough after anyone's last conversation before the rules will put them in front of someone
      * again. The per-pair cooldown below stops the same two people greeting in a loop; this stops one
      * sociable resident being handed round the whole town in a single afternoon. */
@@ -2137,6 +2218,37 @@ public final class ResidentSimulation {
         // when they are standing in front of you, which is the moment react already owns. See
         // Occasions. join stays - sitting down near people is something you can set out to do.
         if(w.residentStates.stream().anyMatch(other->canTalkTo(w,residentId,other.id)))actions.add("join");
+        // Inviting somebody home (docs/01 第二版「世界」): offered only face to face with somebody who
+        // does not already live at this resident's own home, and not on top of an invitation just
+        // extended a moment ago - the same "narrow enough that the menu itself keeps this rare" shape
+        // join/lend/gift already rely on, which is why this belongs in the ordinary menu and not in
+        // Occasions (contrast lock_home, whose trigger has no such natural narrowing and therefore does
+        // belong there).
+        if(w.residentStates.stream().anyMatch(other->canTalkTo(w,residentId,other.id)
+            &&!TownPlaces.homeOf(other.id).equals(TownPlaces.homeOf(residentId))
+            &&!DoorService.recentlyInvited(w,residentId,other.id,at)))actions.add("invite_home");
+        // Visiting somewhere you were actually invited (docs/04-decisions.md "模型永远不被问'能不能'，
+        // 只被问'要不要'和'为什么'"): only ever offered for a home a live invitation already exists for,
+        // so choosing it can never be a guess about a locked door the resident has no way of knowing
+        // about - see DoorService.invitedHomes' own doc comment.
+        if(!DoorService.invitedHomes(w,residentId,at).isEmpty())actions.add("visit_home");
+        // Cooking at the shared flat's stove (docs/01「物件按会不会被争分两类」「炉子」): narrowly
+        // gated on this resident's OWN home actually having one, which only a shared household does
+        // (TownPlaces.ensureCommonRoom) - a solo/paired older resident is never offered it, exactly
+        // the structural narrowing that keeps a new verb from becoming another lock_door.
+        if(w.positions.stream().anyMatch(p->"stove".equals(p.kind)&&p.place.equals(TownPlaces.homeOf(residentId))))actions.add("cook");
+        // Lending/gifting an owned WorldObject (docs/01-requirements.md 第二版「世界」「有所有权，可借
+        //可赠，不引入货币」): offered only when there is exactly one other resident standing right here
+        // to hand it to - see Lending.soleOtherResidentHere's own doc comment for why a crowd is left
+        // out rather than guessed at - and this resident actually owns something not already out on
+        // loan. return_loan is offered independently: whichever side of an outstanding loan this
+        // resident is on, once the other side of that same loan is standing here with them.
+        String here=actor(w,residentId).place();
+        if(Lending.soleOtherResidentHere(w,residentId,here)!=null
+            &&w.objects.stream().anyMatch(o->residentId.equals(o.ownerId())&&!Lending.isOnLoan(w,o.id()))){actions.add("lend");actions.add("gift");}
+        if(w.loans.stream().anyMatch(l->!l.gift()&&l.returnedAt()==null
+            &&(residentId.equals(l.lenderId())||residentId.equals(l.borrowerId()))
+            &&here.equals(actor(w,l.lenderId()).place())&&here.equals(actor(w,l.borrowerId()).place())))actions.add("return_loan");
         if(CafeService.mayTend(w,residentId)&&"cafe".equals(actor(w,residentId).place())&&CafeService.oldestWaitingRequestId(w)!=null)actions.add("tend");
         if(CafeService.acceptingOrders(w)&&"cafe".equals(actor(w,residentId).place())&&!residentId.equals(CafeService.operatorId(w))
             &&w.serviceRequests.stream().noneMatch(request->residentId.equals(request.requesterId)&&Set.of("waiting","preparing","delivered").contains(request.status)))actions.add("request_drink");
@@ -2198,7 +2310,7 @@ public final class ResidentSimulation {
         if(!routineCues(w,r.id,at).isEmpty())return (int)Math.max(90*60,Duration.between(local,wake).getSeconds());
         double hours=Math.max(1.5,Math.min(4.0,(65-r.energy)/10.0));return (int)Math.round(hours*3600);
     }
-    private static final Set<String> DECISION_ACTIONS=Set.of("none","continue","resume","observe","create","help","celebrate","invite","join","rest","sleep","study","work","read","make","request_drink","tend","open_cafe","close_cafe","lock_door","continue_home","away","offer_assist","offer_delegate","offer_takeover","accept_work","change_work");
+    private static final Set<String> DECISION_ACTIONS=Set.of("none","continue","resume","observe","create","help","celebrate","invite","join","rest","sleep","study","work","read","make","request_drink","tend","open_cafe","close_cafe","lock_door","lock_home","continue_home","away","offer_assist","offer_delegate","offer_takeover","accept_work","change_work","lend","gift","return_loan","invite_home","visit_home","cook");
     /** How many refusals in a row before this resident stops being asked for a while, and how long
      * that while can grow to. This is a retry backoff, not a judgement about how often a person
      * reconsiders their day - the situation the question was asked in has to change before the same
@@ -2259,9 +2371,23 @@ public final class ResidentSimulation {
             event(w,now,"away","street",List.of(residentId),actor(w,residentId).name()+"出门去处理自己的事，暂时不在小街上。",target);
             return true;
         }
-        // The model still speaks of "home" generically; the resident's own home is what that resolves to.
-        String resolvedPlace="home".equals(place)?TownPlaces.homeOf(residentId):place;
-        if(!TownPlaces.contains(w,resolvedPlace)||TownPlaces.isHome(resolvedPlace)&&!resolvedPlace.equals(TownPlaces.homeOf(residentId)))return false;
+        // The model still speaks of "home" generically; the resident's own home is what that resolves
+        // to - except for visit_home, whose whole point is landing at somebody ELSE's home. That one
+        // exemption is carried in the boolean below rather than by loosening the generic isHome gate
+        // itself, so every other action keeps meaning exactly what it always meant: nobody can say
+        // "study" with place=home and land in a stranger's living room.
+        boolean visitingSomeoneElse=action.equals("visit_home");
+        String resolvedPlace=visitingSomeoneElse?(target==null?null:TownPlaces.homeOf(target)):("home".equals(place)?TownPlaces.homeOf(residentId):place);
+        if(resolvedPlace==null||!TownPlaces.contains(w,resolvedPlace))return false;
+        if(TownPlaces.isHome(resolvedPlace)&&!resolvedPlace.equals(TownPlaces.homeOf(residentId))&&!visitingSomeoneElse)return false;
+        // docs/01-requirements.md 第二版「世界」「进别人家由所有权和门决定……被邀请或门没锁就进得去」:
+        // the model is only ever shown visit_home as legal (see availableActions) when a live
+        // invitation already exists, but this is checked again here rather than trusted from the menu -
+        // the same defence-in-depth every other target (create/help/join) already gets. What actually
+        // happens at the door - does the invitation still hold, has somebody locked up since - is
+        // decided once more, for real, at the moment of arrival (see schedule()); this is only the gate
+        // on what the model may legally CHOOSE to attempt.
+        if(visitingSomeoneElse&&(target==null||target.equals(residentId)||!DoorService.isInvited(w,residentId,resolvedPlace,now)))return false;
         if("continue".equals(action)){
             if("cafe".equals(actor(w,residentId).place())&&!"open".equals(w.cafeStatus))return false;
             if(r.plan!=null){r.thought=reason;return appliedThought(w,r,residentId,reason,r.plan.targetId(),now);}
@@ -2292,6 +2418,29 @@ public final class ResidentSimulation {
         if("lock_door".equals(action)){
             if(!"cafe".equals(resolvedPlace)||!DoorService.lock(w,r,now))return false;
             return appliedThought(w,r,residentId,reason,null,now);
+        }
+        if("lock_home".equals(action)){
+            if(!resolvedPlace.equals(TownPlaces.homeOf(residentId))||!DoorService.setHomeLocked(w,r,true,now))return false;
+            return appliedThought(w,r,residentId,reason,null,now);
+        }
+        // Inviting a specific person into your own home (docs/01-requirements.md 第二版「世界」「进别
+        // 人家由所有权和门决定……被邀请……就进得去」). Unlike lend/gift, the model DOES name the target
+        // directly here - a person, not an object id - the same way "join" already lets it name exactly
+        // who to sit with; there is no crowd-of-recipients ambiguity to resolve deterministically the
+        // way Lending.soleOtherResidentHere has to. Offered only face to face (canTalkTo), so this is
+        // never a blind invitation to somebody not even present to hear it.
+        if("invite_home".equals(action)){
+            if(target==null||!canTalkTo(w,residentId,target))return false;
+            if(TownPlaces.homeOf(target).equals(TownPlaces.homeOf(residentId)))return false; // already lives there
+            if(DoorService.recentlyInvited(w,residentId,target,now))return false;
+            DoorService.invite(w,residentId,target,now);
+            memory(w,residentId,residentId,"observed",now,"home-invite",
+                "我请"+actor(w,target).name()+"来家里坐坐。",List.of(),5);
+            memory(w,target,residentId,"heard",now,"home-invite",
+                actor(w,residentId).name()+"请我去"+(residentId.equals("self")?"":"")+"家里坐坐。",List.of(),6);
+            event(w,now,"home_invited",actor(w,residentId).place(),List.of(residentId,target),
+                actor(w,residentId).name()+"请"+actor(w,target).name()+"来家里坐坐。",target);
+            return appliedThought(w,r,residentId,reason,target,now);
         }
         if("request_drink".equals(action)){
             if(!"cafe".equals(resolvedPlace)||!"cafe".equals(actor(w,residentId).place())||!availableActions(w,residentId,now).contains("request_drink"))return false;
@@ -2326,6 +2475,27 @@ public final class ResidentSimulation {
         }
         if(Set.of("offer_assist","offer_delegate","offer_takeover","accept_work").contains(action))return false;
         if(action.equals("change_work")){if(!changeOccupation(w,residentId,reason,speech,now))return false;return appliedThought(w,r,residentId,reason,null,now);}
+        // Ownership, borrowed and given away (docs/01-requirements.md 第二版「世界」「有所有权，可借可
+        // 赠，不引入货币」) - see Lending's own doc comment for the whole mechanism, and CompanionWorld
+        // .Loan's for the "no reason field, ever" boundary this batch treats as load-bearing. `target`
+        // is the item's WorldObject id for lend/gift and return_loan alike; the recipient of a lend or
+        // gift is never named by the model - it is resolved deterministically as whoever else is
+        // physically standing here (docs/04-decisions.md "模型永远不被问'能不能'，只被问'要不要'和'为什
+        // 么'": which door is legal is the rules' question, not the model's), and is left unresolved
+        // (a plain no-op) rather than guessed at when more than one other resident is present - see
+        // Lending.soleOtherResidentHere. A real second target field for "who" would need a schema
+        // change in adapters/QwenResidentMind.java, which this batch does not own - see this file's
+        // own report.
+        if(Set.of("lend","gift","return_loan").contains(action)){
+            if(target==null||!resolvedPlace.equals(actor(w,residentId).place()))return false;
+            boolean ok=switch(action){
+                case "return_loan"->Lending.returnItem(w,residentId,target,now);
+                case "gift"->{String to=Lending.soleOtherResidentHere(w,residentId,resolvedPlace);yield to!=null&&Lending.gift(w,residentId,to,target,now);}
+                default->{String to=Lending.soleOtherResidentHere(w,residentId,resolvedPlace);yield to!=null&&Lending.lend(w,residentId,to,target,now);}
+            };
+            if(!ok)return false;
+            return appliedThought(w,r,residentId,reason,target,now);
+        }
         // Model may enrich this resident's current speaking turn; never invent the other party's reply.
         Conversation c=activeConversation(w,residentId);
         if(c!=null) {
@@ -2361,6 +2531,12 @@ public final class ResidentSimulation {
                 case "study","read","work","make"->1800;
                 // Long enough to actually be a gathering rather than a gesture at one.
                 case "celebrate"->1800;
+                // A visit is a stretch of an afternoon, not a knock and a wave - the same order of
+                // magnitude as sitting down to read or work, which is exactly what two people who know
+                // each other might do once they are actually in the same room.
+                case "visit_home"->1800;
+                // A meal, not an afternoon - shorter than study/work/make on purpose.
+                case "cook"->1200;
                 default->60;
             };
             moveOrSchedule(w,r,action,resolvedPlace,target,reason,now,duration);
@@ -2401,6 +2577,30 @@ public final class ResidentSimulation {
      * bounds the standing footprint, which is the number that actually hurt - and it is a floor for
      * everything else rather than a ceiling for this, which is the honest way round: whatever else a
      * resident has lived through has somewhere to stay. */
+    /** How many memories one resident keeps. This used to be a single town-wide {@code
+     * w.memories.size()>200}, and the arithmetic hiding inside that is why it is now per owner and why
+     * the number went up rather than being split six ways.
+     *
+     * <p><b>Why per owner.</b> A shared pool means one busy resident's afternoon evicts everyone
+     * else's morning - how much you remember depends on how noisy your neighbours were. Worse, it does
+     * not survive the second version: 25 residents sharing 200 slots is ~8 memories each, so
+     * <b>growing the population would have made beliefs about other people strictly harder to form</b>,
+     * which is the opposite of why the population is growing (docs/01 「第二版：二十五个人的镇子」).
+     *
+     * <p><b>Why 200 and not 200/6.</b> Because this cap does not cost tokens. Nothing ever sends
+     * {@code w.memories} to a model: an ordinary decision retrieves 10 ({@code
+     * ResidentDirector.perspective}), a reflection browses {@link #REFLECTION_SOURCE_LIMIT} = 20, the
+     * promise question takes 8. The prompt is bounded by retrieval, not by the store, so a deeper store
+     * costs RAM and save size and nothing else. What it buys is evidence density: {@code
+     * WITNESS_MEMORY_SHARE} of 200 is ~80 surviving sightings per resident, which across 24 neighbours
+     * is ~3 per (observer, observed) pair - the threshold below which "某人总是坐在窗边" cannot be told
+     * from coincidence, and which the old town-wide cap left at ~2 for six residents and would have
+     * left at well under 1 for twenty-five.
+     *
+     * <p><b>What it does change, and must be measured.</b> Retrieval now ranks over a much deeper pool
+     * for the same 10 slots, so which memories reach a prompt can differ even though how many cannot.
+     * That is a real behavioural change and not a free one - see progress.md. */
+    static final int MEMORIES_PER_RESIDENT = 200;
     static final double WITNESS_MEMORY_SHARE = 0.4;
     /** Topic every sighting of another person is filed under - see {@link #witnessPeople}. Named
      * because {@link #needsReflection} has to be able to tell this material apart from events. */
@@ -2575,7 +2775,8 @@ public final class ResidentSimulation {
     static String memory(CompanionWorld w,String owner,String source,String type,Instant at,String topic,String text,List<String> evidence,int importance,String supersedesKey){
         if(type.equals("reflection")&&supersedesKey==null){Memory existing=w.memories.stream().filter(m->m.ownerId().equals(owner)&&m.sourceType().equals(type)&&m.text().equals(text)).findFirst().orElse(null);if(existing!=null)return existing.id();}
         if(supersedesKey!=null)supersedePrevious(w,owner,supersedesKey);
-        String id="m2-"+(++w.eventSequence);w.memories.add(new Memory(id,owner,source,type,at,text,topic,evidence,importance,supersedesKey,false));while(w.memories.size()>200) {
+        String id="m2-"+(++w.eventSequence);w.memories.add(new Memory(id,owner,source,type,at,text,topic,evidence,importance,supersedesKey,false));
+        while(w.memories.stream().filter(m->m.ownerId().equals(owner)).count()>MEMORIES_PER_RESIDENT) {
             Set<String> referenced=new HashSet<>();
             for(Memory m:w.memories)if(m.evidenceIds()!=null)referenced.addAll(m.evidenceIds());
             // CafeService.reflectOnDuty holds memory ids on the owner's own state
@@ -2596,8 +2797,8 @@ public final class ResidentSimulation {
             // WITNESS_MEMORY_SHARE). Without this they win the ordinary contest below on volume alone -
             // they are tier 0 and there are hundreds of them - and a town remembers who stood where
             // while forgetting everything anybody did or said.
-            long witnesses=w.memories.stream().filter(m->WITNESS_TOPIC.equals(m.topicId())).count();
-            boolean witnessesOverShare=witnesses>200*WITNESS_MEMORY_SHARE;
+            long witnesses=w.memories.stream().filter(m->m.ownerId().equals(owner)&&WITNESS_TOPIC.equals(m.topicId())).count();
+            boolean witnessesOverShare=witnesses>MEMORIES_PER_RESIDENT*WITNESS_MEMORY_SHARE;
             // Ranked cheapest to dearest. Sightings over their share go first; then ordinary raw
             // experience; then the resident's own backstory alongside their one-off reflections - the
             // eleven seeded memories are who each of them is before this town started, they cost almost
@@ -2608,7 +2809,7 @@ public final class ResidentSimulation {
                 :"seed".equals(m.sourceType())?2
                 :CompanionRecall.tier(m.sourceType())+1;
             Comparator<Memory> order=Comparator.comparingInt(rank).thenComparing(Memory::at);
-            Memory removable=w.memories.stream().filter(m->!m.id().equals(id)&&!referenced.contains(m.id()))
+            Memory removable=w.memories.stream().filter(m->m.ownerId().equals(owner)&&!m.id().equals(id)&&!referenced.contains(m.id()))
                 .min(order).orElse(null);
             if(removable==null)break;
             w.memories.remove(removable);
@@ -2736,7 +2937,11 @@ public final class ResidentSimulation {
     /** The place's name as anybody in town would say it. Public because retrieval needs it: a memory
      * is written in Chinese ("咖啡馆"), so querying with the raw place id ("cafe") matches nothing at
      * all - see ResidentDirector.perspective's situation query. */
-    public static String placeName(String place){if(TownPlaces.isHome(place))return"住处";return switch(place){case "cafe"->"咖啡馆";case "garden"->"花园";default->"小街";};}
+    // "default -> 小街" used to mean any place this switch had not been taught a name for silently
+    // read back as the street - harmless while every place really was one of these four, wrong the
+    // moment a fifth one existed (docs/01-requirements.md 第二版「世界」's shop, academy, gym, board).
+    // Falling back to the raw id instead is honest about what has and has not been given a name yet.
+    public static String placeName(String place){if(TownPlaces.isHome(place))return"住处";return switch(place){case "cafe"->"咖啡馆";case "garden"->"花园";case "street"->"小街";case "shop"->"商店";case "academy"->"学院";case "gym"->"健身房";case "board"->"公告板广场";default->place;};}
 
     /** The user's avatar is the fifth resident: it shares this same ResidentState/position model so
      * the four NPCs can perceive it and contend with it for a seat, but nothing here drives its

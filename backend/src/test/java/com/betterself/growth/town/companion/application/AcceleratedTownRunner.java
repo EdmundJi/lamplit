@@ -24,6 +24,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -38,35 +39,45 @@ import java.util.Set;
  * This class lives in the {@code application} test package (not a new {@code tools} package) for
  * one reason only: it needs to call {@link ResidentDirector#close()}, which is package-private.
  *
- * <h2>Why decisions are single-flight per world, and why this runner does not fight that</h2>
- * {@link ResidentDirector#consider} guards every dispatch with an {@code inFlight.add(userId)}
- * check: for one world (one userId, exactly what an accelerated run always is), at most one model
- * round trip is ever outstanding at a time, for the whole duration of that call including its
- * network I/O. That is production correctness, not an oversight - it is what keeps a shared,
- * mutable {@link CompanionWorld} from being written by two concurrent decisions at once, and this
- * package's boundary (see the task this class was built under) forbids touching
- * {@code application}/{@code domain} production code to work around it. So this runner does not
- * attempt to have several resident decisions in flight for the same world at once - that would
- * require either duplicating {@code ResidentDirector}'s own reservation logic here (which the
- * class-level javadoc above already rules out: only {@code CompanionService.advance}/{@code submit})
- * or weakening the single-flight guarantee, neither of which is safe.
+ * <h2>How many model calls may be in flight per world, and why this runner does not fight that</h2>
+ * {@link ResidentDirector#consider} used to guard every dispatch with a single {@code inFlight.add
+ * (userId)} check: for one world (one userId, exactly what an accelerated run always is), at most
+ * one model round trip was ever outstanding at a time. Per docs/04-decisions.md 「只并行"想"，写世界
+ * 仍串行」 - a network round trip is ~4s and a world write is microseconds, so 25 residents over 2
+ * simulated days (7500 calls x 4s, 8+ hours if run fully serial) is bottlenecked entirely on the
+ * model call, never the write - the director now dispatches up to {@code
+ * app.town.companion-mind-parallelism} model calls per world concurrently, one per resident: never
+ * two calls for the same resident at once, and every write to the world still happens inside exactly
+ * one short transaction, exactly as before. That per-resident exclusivity and per-write seriality
+ * are still production correctness this runner must not fight, and this package's boundary (see the
+ * task this class was built under) still forbids duplicating {@code ResidentDirector}'s own
+ * reservation logic here - so this runner does not try to schedule or bound anything itself; it only
+ * paces the tick loop below to give whatever the director actually dispatched real wall-clock room.
  *
  * <p>What IS safe, and what {@link #run} actually does: {@link ResidentDirector} already dispatches
- * the network call itself on its own background thread, independent of the tick loop below - the
- * loop's {@code service.advance()} call returns immediately whether or not a model call was just
- * queued. The old version of this loop then unconditionally slept {@code realPaceMillisPerTick}
- * after every single tick, regardless of whether a call was actually outstanding - re-serializing
- * the loop with a conservative worst case on every tick instead of only when a call might actually
- * need the wall-clock room. The loop below still sleeps at the exact same pace, for the exact same
- * reason (see {@link RunConfig#withModel}: the simulated-seconds-per-real-second ratio must stay
- * under {@code ConversationLifecycle.OPERATION_TIMEOUT_SECONDS}, 45 simulated seconds, so a real
- * network call has a real chance to land before its reservation goes stale) - but only for a bounded
- * window after a dispatch is actually observed (via {@link CompanionWorld#modelSequence} ticking
- * up), not for every tick unconditionally. Ticks where nothing was just dispatched - which is most
- * of them once a decision throttle or a quiet stretch of the day is in effect - advance at full
- * speed. This changes nothing about correctness or the staleness safety margin for any individual
- * call (a call that gets dispatched still receives the exact same protected real-time budget it
- * always did); it only stops paying that budget when there is nothing to protect.
+ * every network call on its own background threads, independent of the tick loop below - the loop's
+ * {@code service.advance()} call returns immediately whether or not a model call was just queued.
+ * The old version of this loop then unconditionally slept {@code realPaceMillisPerTick} after every
+ * single tick, regardless of whether a call was actually outstanding - re-serializing the loop with
+ * a conservative worst case on every tick instead of only when a call might actually need the
+ * wall-clock room. The loop below still sleeps at the exact same pace, for the exact same reason
+ * (see {@link RunConfig#withModel}: the simulated-seconds-per-real-second ratio must stay under
+ * {@code ConversationLifecycle.OPERATION_TIMEOUT_SECONDS}, 45 simulated seconds, so a real network
+ * call has a real chance to land before its reservation goes stale) - but only for a bounded window
+ * after a dispatch is actually observed (via {@link CompanionWorld#modelSequence} ticking up), not
+ * for every tick unconditionally. That signal is unaffected by the move to parallel dispatch:
+ * {@code modelSequence} still increments on every single reservation in {@link
+ * ResidentDirector#reserved} regardless of which (or how many) concurrent workers are reserving, so
+ * it remains a faithful "something was just dispatched" pacing signal even though several
+ * reservations - for different residents - can now land in quick succession instead of strictly one
+ * at a time. Ticks where nothing was just dispatched - which is most of them once a decision throttle
+ * or a quiet stretch of the day is in effect - advance at full speed. This changes nothing about
+ * correctness or the staleness safety margin for any individual call (a call that gets dispatched
+ * still receives the exact same protected real-time budget it always did); it only stops paying that
+ * budget when there is nothing to protect. What this pacing does NOT do: guarantee that every one of
+ * several concurrently-dispatched calls gets its own full protected window if they land staggered
+ * within it - the window is armed off the shared {@code modelSequence} signal, not tracked per call,
+ * which was already true before this change and is unrelated to it.
  */
 public final class AcceleratedTownRunner {
     private AcceleratedTownRunner() {}
@@ -153,7 +164,13 @@ public final class AcceleratedTownRunner {
         var clock = new MutableClock(runStart);
         LiveMind live = cfg.modelEnabled() ? liveMind(System.getenv()) : null;
         ResidentMind mind = live == null ? disabledMind() : live.mind();
-        var director = new ResidentDirector(store, mind, clock, Math.max(1, cfg.dailyModelBudget()), usage);
+        // How many residents may have a model call in flight at once (docs/04-decisions.md
+        // 「只并行"想"，写世界仍串行」). Read from the environment like every other knob of this runner,
+        // and recorded in manifest.json, because it is the one setting a before/after comparison of the
+        // move away from single-flight has to hold fixed: COMPANION_RUN_PARALLELISM=1 reproduces the
+        // old one-call-per-world behaviour exactly, on the same seed, so the two runs are comparable.
+        int parallelism = Integer.parseInt(System.getenv().getOrDefault("COMPANION_RUN_PARALLELISM", "6"));
+        var director = new ResidentDirector(store, mind, clock, Math.max(1, cfg.dailyModelBudget()), usage, 8, 64, 12, parallelism);
         var service = new CompanionService(store, clock, director, usage);
 
         store.seed(cfg.userId(), seed);
@@ -163,24 +180,35 @@ public final class AcceleratedTownRunner {
         collector.capturePersonalitySnapshot(seed); // a true t=0 baseline for THIS run, resumed or fresh
         // Exact, per-call outcome accounting (see ResidentDirector.OutcomeListener's own doc comment):
         // fired synchronously, right where ResidentDirector itself decides applied/rejected/failed/
-        // unsupported, for the exact same call RecordingMind.capture() just appended to live.calls() -
-        // single-flight (one world, one in-flight model call at a time) guarantees that row is still
-        // the last one in the list when this fires, so the outcome lands directly on its own call
-        // record instead of being reconstructed later from a diff of CompanionWorld#modelStatus text
-        // (the old mechanism this replaces: several call kinds - summary/dayplan/explain/reflect -
-        // never touch modelStatus on success at all, so a purely tick-sampled text diff silently
-        // under-counted their applied outcomes and could not report which call type or action a
-        // rejection even belonged to - exactly the gap this task was asked to close).
+        // unsupported. The row it belongs to is found by residentId, NOT by "whichever row was appended
+        // last": docs/04-decisions.md 「只并行"想"，写世界仍串行」 lets several residents think at once, so
+        // two RecordingMind.capture() calls on two worker threads can interleave with two outcome
+        // firings and arrival order stops being an identity. residentId IS an identity here, because a
+        // resident never has two calls outstanding (ResidentDirector#thinking) - so the newest row for
+        // this resident that has no outcome yet is exactly this call's row. Getting this wrong would not
+        // have thrown; it would have quietly mislabelled which decisions were applied, which is the one
+        // kind of wrong this project cannot afford (docs/05: a ruler that reports the wrong number is
+        // worse than no ruler). Still the reason this listener exists at all: several call kinds -
+        // summary/dayplan/explain/reflect - never touch modelStatus on success, so a purely
+        // tick-sampled text diff silently under-counted their applied outcomes and could not report
+        // which call type or action a rejection even belonged to.
         List<Map<String,Object>> applicationOutcomes=Collections.synchronizedList(new ArrayList<>());
         if (live != null) {
             List<Map<String,Object>> calls = live.calls();
-            director.setOutcomeListener((callType, action, outcome) -> {
+            director.setOutcomeListener((callType, residentId, action, outcome) -> {
                 synchronized (calls) {
-                    if (!calls.isEmpty()) calls.get(calls.size() - 1).put("outcome", outcome);
+                    for (int i = calls.size() - 1; i >= 0; i--) {
+                        Map<String,Object> candidate = calls.get(i);
+                        if (!candidate.containsKey("outcome") && Objects.equals(residentId, candidate.get("residentId"))) {
+                            candidate.put("outcome", outcome);
+                            break;
+                        }
+                    }
                 }
                 Map<String,Object> row = new LinkedHashMap<>();
                 row.put("at", clock.instant().toString());
                 row.put("callType", callType);
+                row.put("residentId", residentId);
                 row.put("action", action);
                 row.put("outcome", outcome);
                 applicationOutcomes.add(row);
@@ -241,7 +269,7 @@ public final class AcceleratedTownRunner {
         collector.detach();
         var sorted = TimelineExporter.sortedByTime(collector.entries());
         CompanionWorld finalWorld = store.read(cfg.userId());
-        export(cfg, sorted, usage, finalWorld, runStart, t, collector, live, applicationOutcomes);
+        export(cfg, sorted, usage, finalWorld, runStart, t, collector, live, applicationOutcomes, parallelism);
 
         Duration wall = Duration.ofNanos(System.nanoTime() - startNanos);
         return new RunResult(cfg.outDir(), runStart, t, ticks,
@@ -311,18 +339,18 @@ public final class AcceleratedTownRunner {
         RecordingMind(ResidentMind delegate,List<Map<String,Object>> calls){this.delegate=delegate;this.calls=calls;}
         public boolean enabled(){return delegate.enabled();}
         public Decision decide(Context context){return decideMetered(context).value();}
-        public Result<Decision> decideMetered(Context context){return capture("decision",context,()->delegate.decideMetered(context));}
+        public Result<Decision> decideMetered(Context context){return capture("decision",context.residentId(),context,()->delegate.decideMetered(context));}
         public com.betterself.growth.town.companion.domain.ConversationLifecycle.Utterance generateTurn(DialogueRequest request){return generateTurnMetered(request).value();}
         public Result<com.betterself.growth.town.companion.domain.ConversationLifecycle.Utterance> generateTurnMetered(DialogueRequest request){
             Map<String,Object> input=new LinkedHashMap<>();input.put("perspective",request.perspective());input.put("partnerName",request.partnerName());input.put("topicTitle",request.topicTitle());
-            return capture("turn",input,()->delegate.generateTurnMetered(request));
+            return capture("turn",request.perspective().residentId(),input,()->delegate.generateTurnMetered(request));
         }
         public ReactDraft react(ReactRequest request){return reactMetered(request).value();}
         public Result<ReactDraft> reactMetered(ReactRequest request){
             Map<String,Object> input=new LinkedHashMap<>();input.put("residentId",request.perspective().residentId());
             input.put("otherName",request.otherName());input.put("otherActivity",request.otherActivity());input.put("place",request.place());
             input.put("reactions",request.reactions());input.put("sharedThing",request.sharedThing());
-            return capture("react",input,()->delegate.reactMetered(request));
+            return capture("react",request.perspective().residentId(),input,()->delegate.reactMetered(request));
         }
         public ConsiderDraft consider(ConsiderRequest request){return considerMetered(request).value();}
         public Result<ConsiderDraft> considerMetered(ConsiderRequest request){
@@ -331,7 +359,7 @@ public final class AcceleratedTownRunner {
             // given action actually come round, as against how often we used to ask about it.
             Map<String,Object> input=new LinkedHashMap<>();input.put("residentId",request.perspective().residentId());
             input.put("key",request.key());input.put("fact",request.fact());input.put("place",request.place());
-            return capture("consider",input,()->delegate.considerMetered(request));
+            return capture("consider",request.perspective().residentId(),input,()->delegate.considerMetered(request));
         }
         public DayPlanDraft planDay(DayPlanRequest request){return planDayMetered(request).value();}
         public Result<DayPlanDraft> planDayMetered(DayPlanRequest request){
@@ -341,44 +369,49 @@ public final class AcceleratedTownRunner {
             // decorator forgot, and a whole measured day ran with every resident's day plan recorded
             // as "unavailable". Not one line of it looked wrong.
             Map<String,Object> input=new LinkedHashMap<>();input.put("residentId",request.perspective().residentId());
-            return capture("dayplan",input,()->delegate.planDayMetered(request));
+            return capture("dayplan",request.perspective().residentId(),input,()->delegate.planDayMetered(request));
         }
         public com.betterself.growth.town.companion.domain.ConversationLifecycle.Recollection summarizeConversation(SummaryRequest request){return summarizeConversationMetered(request).value();}
         public Result<com.betterself.growth.town.companion.domain.ConversationLifecycle.Recollection> summarizeConversationMetered(SummaryRequest request){
             Map<String,Object> input=new LinkedHashMap<>();input.put("perspective",request.perspective());input.put("partnerName",request.partnerName());input.put("transcript",ResidentMind.turnViews(request.transcript()));input.put("conversationMemories",request.conversationMemories());
-            return capture("summary",input,()->delegate.summarizeConversationMetered(request));
+            return capture("summary",request.perspective().residentId(),input,()->delegate.summarizeConversationMetered(request));
         }
         public PromiseOfferDraft promiseOffer(PromiseOfferRequest request){return promiseOfferMetered(request).value();}
         public Result<PromiseOfferDraft> promiseOfferMetered(PromiseOfferRequest request){
             Map<String,Object> input=new LinkedHashMap<>();input.put("residentId",request.perspective().residentId());
             input.put("peopleHere",request.peopleHere());
-            return capture("promise_offer",input,()->delegate.promiseOfferMetered(request));
+            return capture("promise_offer",request.perspective().residentId(),input,()->delegate.promiseOfferMetered(request));
         }
         public PromiseThought promiseSettled(PromiseSettledRequest request){return promiseSettledMetered(request).value();}
         public Result<PromiseThought> promiseSettledMetered(PromiseSettledRequest request){
             Map<String,Object> input=new LinkedHashMap<>();input.put("residentId",request.perspective().residentId());
             input.put("promise",request.promise());
-            return capture("promise",input,()->delegate.promiseSettledMetered(request));
+            return capture("promise",request.perspective().residentId(),input,()->delegate.promiseSettledMetered(request));
         }
         public ExplainDraft explain(ExplainRequest request){return explainMetered(request).value();}
         public Result<ExplainDraft> explainMetered(ExplainRequest request){
             // Forwarded for the same reason planDay's own comment above gives: a decorator that
             // forgets one method still compiles and silently disables that capability for good.
             Map<String,Object> input=new LinkedHashMap<>();input.put("residentId",request.perspective().residentId());input.put("deeds",request.deeds());
-            return capture("explain",input,()->delegate.explainMetered(request));
+            return capture("explain",request.perspective().residentId(),input,()->delegate.explainMetered(request));
         }
         public ReflectDraft reflect(ReflectRequest request){return reflectMetered(request).value();}
         public Result<ReflectDraft> reflectMetered(ReflectRequest request){
             Map<String,Object> input=new LinkedHashMap<>();input.put("residentId",request.perspective().residentId());input.put("source",request.source());
-            return capture("reflect",input,()->delegate.reflectMetered(request));
+            return capture("reflect",request.perspective().residentId(),input,()->delegate.reflectMetered(request));
         }
         public VentureDraft venture(VentureRequest request){return ventureMetered(request).value();}
         public Result<VentureDraft> ventureMetered(VentureRequest request){
             Map<String,Object> input=new LinkedHashMap<>();input.put("residentId",request.perspective().residentId());input.put("sharedThingsLeft",request.sharedThingsLeft());
-            return capture("venture",input,()->delegate.ventureMetered(request));
+            return capture("venture",request.perspective().residentId(),input,()->delegate.ventureMetered(request));
         }
-        private <T>Result<T> capture(String type,Object input,java.util.function.Supplier<Result<T>> call){
-            Map<String,Object> row=new LinkedHashMap<>();row.put("callType",type);row.put("input",input);
+        /** {@code residentId} is recorded at the TOP level of the row, not merely inside {@code input}:
+         * it is the key the outcome listener matches an applied/rejected verdict back onto now that
+         * several residents think at once (docs/04-decisions.md 「只并行"想"，写世界仍串行」 - see the
+         * listener's own comment above for why arrival order stopped being an identity). Every call kind
+         * must pass it; a kind that passed null would silently stop being attributable. */
+        private <T>Result<T> capture(String type,String residentId,Object input,java.util.function.Supplier<Result<T>> call){
+            Map<String,Object> row=new LinkedHashMap<>();row.put("callType",type);row.put("residentId",residentId);row.put("input",input);
             try{Result<T> result=call.get();row.put("status","generated");row.put("output",result.value());row.put("usage",result.usage());calls.add(row);return result;}
             catch(RuntimeException failure){row.put("status","failed");row.put("error",failure.getClass().getSimpleName());calls.add(row);throw failure;}
         }
@@ -501,7 +534,7 @@ public final class AcceleratedTownRunner {
     }
     private static void export(RunConfig cfg, List<Map<String, Object>> sorted, InMemoryModelUsage usage,
                                 CompanionWorld finalWorld, Instant runStart, Instant finalInstant, TimelineCollector collector,
-                                LiveMind live,List<Map<String,Object>> applicationOutcomes) throws IOException {
+                                LiveMind live,List<Map<String,Object>> applicationOutcomes,int parallelism) throws IOException {
         Map<String, Object> manifest = new LinkedHashMap<>();
         manifest.put("worldId", finalWorld == null ? cfg.worldId() : finalWorld.id);
         manifest.put("avatarName", finalWorld == null ? cfg.avatarName() : finalWorld.name);
@@ -512,6 +545,7 @@ public final class AcceleratedTownRunner {
         manifest.put("requestedDays", cfg.days());
         manifest.put("tickSeconds", cfg.tickSeconds());
         manifest.put("modelEnabled", cfg.modelEnabled());
+        manifest.put("parallelism", parallelism);
         manifest.put("modelProvider", live == null ? null : live.provider());
         manifest.put("model", live == null ? null : live.model());
         manifest.put("dailyModelBudget", cfg.dailyModelBudget());

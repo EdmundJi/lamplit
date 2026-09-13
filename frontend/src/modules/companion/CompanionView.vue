@@ -76,8 +76,17 @@ const focusVisible = computed(() => focusOpen.value || (!focusDismissed.value &&
 function toggleFocusPanel() { const next = !focusVisible.value; focusOpen.value = next; focusDismissed.value = !next; if (next) { selectedResident.value = null; selectedConversation.value = null; journalOpen.value = false; storiesOpen.value = false } }
 function closeFocusPanel() { focusOpen.value = false; focusDismissed.value = true }
 // TownPlaces hands out one home per resident ("home-owner", "home-student", "home-self", ...)
-// instead of a single shared "home", so this stays a prefix match rather than five literal keys -
-// a new resident's home just works without touching this dictionary.
+// instead of a single shared "home", so this stays a prefix match rather than a literal key per
+// resident - a new resident's home just works without touching this dictionary.
+//
+// Deliberately its own small table, not STAGE_PLACES: these labels are the colloquial names used
+// in-conversation and in intent text actually sent to the backend as what the avatar is thinking
+// ("我想去咖啡馆看看...") - see visitProject() below - while STAGE_PLACES's labels are the more
+// formal building signage the docked strip's nav reads ("慢慢咖啡"). Unifying the two would
+// quietly change user-facing wording sent as story content, not just deduplicate a lookup table -
+// CompanionView.test.ts locks in the exact phrase for this reason. board/academy/gym fall back to
+// their own raw place id here rather than silently borrowing a neighbour's label - honest, if
+// plain, until this table gets a warmer colloquial name for each.
 const places: Record<string, string> = { cafe: '咖啡馆', street: '门前小街', garden: '小花园' }
 function placeLabel(place?: string | null): string {
   if (!place) return ''

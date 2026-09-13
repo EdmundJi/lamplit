@@ -83,14 +83,16 @@ export function buildCompanionStage(scene: Phaser.Scene) {
     }
   }
   // Only four bed colours exist in the licensed set; fixer reuses ochre (already reused for self)
-  // rather than needing a fifth colour.
+  // rather than needing a fifth colour. Cycled with modulo (not a direct index) so HOME_ROOMS
+  // growing past six entries - the next home added for the 25-person roster - still gets a real
+  // bed colour instead of `beds[index]` running off the end of this list into undefined.
   const beds = ['home_bed_ochre', 'home_bed_blue', 'home_bed_lilac', 'home_bed_green', 'home_bed_blue', 'home_bed_ochre']
   Object.entries(HOME_ROOMS).forEach(([id, home], index) => {
     const { x, y, w, h, door } = home
     room(x, y, w, h, door.x, true)
     // Numbered doorsteps stay tied to stable places when residents change careers.
     label(x + w / 2, y - 15, `${index + 1} 号小屋`, true)
-    image(x + 32, y + 129, beds[index]!, .875, 'companion')
+    image(x + 32, y + 129, beds[index % beds.length]!, .875, 'companion')
     image(x + w - 35, y + 168, 'cafe_table', .75)
     image(x + w - 72, y + 168, 'chair_2', 1, 'interior', y + 167)?.setFlipX(true)
     image(x + 37, y + h - 19, 'rug_pattern_2', .85, 'interior', -75)?.setTint(0xc9bb9b)

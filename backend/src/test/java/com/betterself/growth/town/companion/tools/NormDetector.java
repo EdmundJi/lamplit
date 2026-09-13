@@ -43,14 +43,55 @@ import java.util.TreeMap;
 public final class NormDetector {
     private NormDetector() {}
 
-    /** Minimum evidence before a regularity is even considered. Four occurrences on two different days
-     * is low, and deliberately so: the gate is here to reject one-offs, and everything past it still has
-     * to beat its dimension's null baseline. Candidates that fail this are counted, never hidden. */
+    /** Minimum evidence before a regularity is even considered, calibrated at this value for
+     * {@link #MIN_SUPPORT_CALIBRATION_RESIDENTS} residents. Four occurrences on two different days is
+     * low, and deliberately so: the gate is here to reject one-offs, and everything past it still has
+     * to beat its dimension's null baseline. Candidates that fail this are counted, never hidden.
+     *
+     * <p><b>This is no longer the gate by itself</b> - see {@link #minSupportFor}. docs/04-decisions.md
+     * 「第二版定下来的」 says plainly that this "4" was calibrated for "a town of six" and does not survive
+     * the jump to 25: C(6,2)=15 candidate pairs become C(25,2)=300, twenty times as many simultaneous
+     * comparisons against the very same flat floor. A bigger town is not just more residents, it is
+     * every dimension here racking up more raw events per unit time from sheer population churn alone,
+     * with no new behaviour required - keeping this an absolute count would make the floor *relatively*
+     * easier to clear exactly as the town grows, the opposite of what a calibrated instrument should do
+     * when the thing it is calibrated against changes size. */
     public static final int MIN_SUPPORT = 4;
+    /** The population {@link #MIN_SUPPORT} was tuned against - the six residents of the first version
+     * (docs/01-requirements.md 第二版 "现有六人保留"). {@link #minSupportFor} is anchored here so it
+     * reproduces {@link #MIN_SUPPORT} exactly at this population and never below it - nothing about a
+     * run smaller than six loses the floor that history already validated. */
+    public static final int MIN_SUPPORT_CALIBRATION_RESIDENTS = 6;
     public static final int MIN_DAYS = 2;
     /** How far above its own null a regularity has to sit. 1.5x is the "half again as often as chance"
      * line; below it we would be reporting the shape of the world, not a choice anyone made. */
     public static final double MIN_STRENGTH = 1.5;
+
+    /**
+     * {@link #MIN_SUPPORT}, scaled linearly by how many residents this run actually shows acting -
+     * never a hand-fed town size, so a short diagnostic run with three residents present is judged by
+     * three residents' worth of chance, not by whatever the town's eventual headcount will be, and a
+     * run that quietly grew past six does not keep the old floor either (see {@link #countResidents}).
+     * Never goes below {@link #MIN_SUPPORT}: that floor rejects one-offs regardless of population, and
+     * shrinking it for a sparse run would make the gate easiest exactly where noise is worst.
+     *
+     * <p>Linear in residents, not in the C(6,2)=15 -&gt; C(25,2)=300 pair count docs/04 computes to
+     * justify the change. That ratio explains <em>why</em> a flat floor rots as the town grows - more
+     * residents means more simultaneous pairwise comparisons, so a fixed count gets relatively easier to
+     * clear by chance somewhere among them - it is not a claim that the count itself should grow 20x.
+     * Every dimension here except {@code pairAffinity} counts something that scales with population
+     * roughly once per resident (a join, an actor's own seatings, a place-hour's cast), not with the
+     * number of pairs; scaling the shared floor by C(n,2) would make those nearly unsatisfiable at 25
+     * residents while barely moving the one dimension the ratio was computed from. {@code pairAffinity}
+     * already carries its own defence against the pair-count explosion: its null baseline is the
+     * *average* overlap across every pair actually seen this run, which grows with the same population
+     * this method reads, so more candidate pairs raises the bar a specific pair must clear at the same
+     * time as it raises how many pairs are being tested.
+     */
+    private static int minSupportFor(int residents) {
+        return Math.max(MIN_SUPPORT,
+            (int) Math.ceil(residents * (double) MIN_SUPPORT / MIN_SUPPORT_CALIBRATION_RESIDENTS));
+    }
 
     /** The user's avatar. It has no {@link com.betterself.growth.town.companion.application.ResidentMind}
      * behind it - {@link com.betterself.growth.town.companion.domain.CompanionRules} drives it and nothing
@@ -87,9 +128,19 @@ public final class NormDetector {
      * A dimension that produced nothing appears as an explicit zero - same rule as {@link MetricsExporter}.
      * {@code beliefs} is the other half's raw material: every resident belief found in the run, as
      * {@code {ownerId, supersedesKey, text}}, verbatim and unjudged - see the class comment's
-     * "居民能自己说出来" bullet for why this class stops at handing it over rather than grading it. */
+     * "居民能自己说出来" bullet for why this class stops at handing it over rather than grading it.
+     *
+     * <p>{@code sharedBeliefAudit} and {@code changedMind} are analyst-facing, not blind-reader-facing -
+     * they never touch {@code beliefs}' verbatim material, which must stay unannotated so a blind reader
+     * is not handed our own conclusions alongside the quotes (see {@link #beliefs} javadoc). Each row of
+     * {@code sharedBeliefAudit} is one canonical key held by 2+ owners: which raw keys were folded
+     * together, why, and which owners cleared {@link #isIndependentlyGrounded} - the auditability
+     * docs/01 requires of the {@code sharedBeliefKeys} fix ("这个改法是被数据提示的，改完必须在一批新数据
+     * 上验"). {@code changedMind} is one row per (owner, canonical key) that owner wrote under with 2+
+     * distinct texts - see the class comment's "worth adding" metric. */
     public record Report(String label, List<Candidate> candidates, Map<String, Object> counts,
-                         List<Map<String, Object>> dropped, List<Map<String, Object>> beliefs) {}
+                         List<Map<String, Object>> dropped, List<Map<String, Object>> beliefs,
+                         List<Map<String, Object>> sharedBeliefAudit, List<Map<String, Object>> changedMind) {}
 
     // ---- the run, in the shape the dimensions want it ---------------------------------------
 
@@ -122,6 +173,25 @@ public final class NormDetector {
         }
         acts.sort(Comparator.comparing(Act::at));
         return new Run(acts, events, seatStates, zone);
+    }
+
+    /** How many distinct residents (never {@link #AVATAR}) this run actually shows doing something,
+     * across contributions, the narrative event stream, and the complete seat record. Feeds
+     * {@link #minSupportFor} - see that method's own doc comment for why this is measured from the run
+     * rather than taken as an external town-size parameter. */
+    private static int countResidents(Run run) {
+        Set<String> ids = new LinkedHashSet<>();
+        for (Act a : run.contributions()) ids.add(a.actorId());
+        for (Map<String, Object> e : run.events()) {
+            Object actorField = e.get("actorId");
+            if (actorField instanceof String s)
+                for (String part : s.split(",")) if (isResident(part.trim())) ids.add(part.trim());
+        }
+        for (Map<String, Object> e : run.seatStates()) {
+            Object actorField = e.get("actorId");
+            if (actorField instanceof String s && isResident(s)) ids.add(s);
+        }
+        return ids.size();
     }
 
     public static Report detect(String label, List<Map<String, Object>> entries, String timezone) {
@@ -179,9 +249,14 @@ public final class NormDetector {
         raw.addAll(spotRespect(run, positions, counts, dropped));
         raw.addAll(ownSpot(run, positions, counts));
 
+        int residents = countResidents(run);
+        int minSupport = minSupportFor(residents);
+        counts.put("residents", residents);
+        counts.put("minSupport", minSupport);
+
         List<Candidate> kept = new ArrayList<>();
         for (Candidate c : raw) {
-            String why = gate(c);
+            String why = gate(c, minSupport);
             if (why == null) kept.add(c);
             else dropped.add(new LinkedHashMap<>(Map.of("dimension", c.dimension(), "key", c.key(),
                     "statement", c.statement(), "reason", why, "support", c.support(),
@@ -191,8 +266,12 @@ public final class NormDetector {
         counts.put("candidates", kept.size());
         counts.put("dropped", dropped.size());
         counts.put("contributionEvents", run.contributions().size());
-        List<Map<String, Object>> beliefs = beliefs(memories, residentNamesFrom(entries), counts);
-        return new Report(label, List.copyOf(kept), counts, List.copyOf(dropped), beliefs);
+        List<Map<String, Object>> sharedBeliefAudit = new ArrayList<>();
+        List<Map<String, Object>> changedMind = new ArrayList<>();
+        List<Map<String, Object>> beliefs = beliefs(memories, residentNamesFrom(entries), counts,
+                sharedBeliefAudit, changedMind);
+        return new Report(label, List.copyOf(kept), counts, List.copyOf(dropped), beliefs,
+                List.copyOf(sharedBeliefAudit), List.copyOf(changedMind));
     }
 
     /** {@code actorId → actorName}, read off the run's own timeline instead of a hand-kept table - see
@@ -226,35 +305,92 @@ public final class NormDetector {
 
     // ---- 信念：材料，不是判决 -----------------------------------------------------------------
 
+    /** Recurrence markers paired with a small list of relational-role verbs - see
+     * {@link #mentionsRelationalRole}. */
+    private static final List<String> RECURRENCE_MARKERS = List.of(
+            "总是", "总要", "老是", "每次都", "每次", "从来", "一直都", "一直");
+    private static final List<String> RELATIONAL_ROLE_VERBS = List.of(
+            "配合", "迁就", "让着", "让步", "将就", "忍", "跟着", "陪着", "照顾", "带头", "出头",
+            "张罗", "收拾", "操心", "护着", "兜着", "顶着", "扛着", "接着", "等着");
+
     /**
      * A belief is a memory that superseded an earlier one on the same key - docs/01-requirements.md 的「怎么验收」's own
      * definition of a norm is the same belief, held independently by enough residents, so
      * {@code sharedBeliefKeys} is that definition measured directly. This function only counts and
      * carries the material; whether any of it actually names a statistic's candidate is for the blind
      * reader (see the class comment's "居民能自己说出来" bullet).
+     *
+     * <p>Three things changed here for the 25-person town (docs/01「这一版还欠着的」):
+     * <ul>
+     *   <li><b>{@code sharedBeliefKeys} used to compare whole key strings.</b> 周野 and 青叔 each wrote
+     *       {@code habit:fixer:lend_a_hand} / {@code habit:gardener:lend_a_hand} - identical but for
+     *       their own id, which every {@code habit:} key always carries in its middle segment (see
+     *       {@code ResidentSimulation}'s {@code habitBeliefDamping}/{@code validHabitKey}) - and 阿满
+     *       wrote {@code weaver配合者} and {@code weaver-配合者} from one sentence. Both are folded by
+     *       {@link #canonicalBeliefKey}, and every fold is dumped into {@link Report#sharedBeliefAudit()}
+     *       with which raw keys it merged and why - a ruler that silently reclassifies data is not one
+     *       anybody can check, and this fix is exactly the kind docs/01 says "必须在一批新数据上验".</li>
+     *   <li><b>Two apparent holders can be one person having told the other.</b> {@code evidenceIds}
+     *       chase back through each owner's own {@code reflection}/{@code belief} memories to whatever
+     *       raw memory grounds them, and {@link #isIndependentlyGrounded} asks whether that trail ever
+     *       reaches something this resident actually observed rather than only things they were told
+     *       ({@code sourceType} "heard"). {@code sharedBeliefKeysIndependent} counts only the canonical
+     *       keys where at least two <em>different</em> owners each clear that bar.</li>
+     *   <li><b>{@code beliefsAboutOthers} only ever matched another resident's name</b>, which misses
+     *       阿满's 「我好像总是那个配合的人」 - unnamed, and per docs/01 the most norm-like line measured
+     *       so far. {@code beliefsAboutSocialRole} is a second, explicitly separate count for that shape
+     *       (see {@link #mentionsRelationalRole}) rather than loosening the strict, unambiguous name
+     *       match that {@code beliefsAboutOthers} still is.</li>
+     * </ul>
      */
     private static List<Map<String, Object>> beliefs(List<Map<String, Object>> memories,
                                                        Map<String, String> residentNames,
-                                                       Map<String, Object> counts) {
-        record Belief(String ownerId, String supersedesKey, String text) {}
+                                                       Map<String, Object> counts,
+                                                       List<Map<String, Object>> sharedBeliefAudit,
+                                                       List<Map<String, Object>> changedMind) {
+        record Belief(String ownerId, String supersedesKey, String text, List<String> evidenceIds) {}
         List<Belief> beliefs = new ArrayList<>();
+        Map<String, Map<String, Object>> memoryById = new LinkedHashMap<>();
         for (Map<String, Object> m : memories) {
+            if (m.get("id") instanceof String id) memoryById.put(id, m);
             if (!(m.get("supersedesKey") instanceof String sk) || sk.isBlank()) continue;
-            beliefs.add(new Belief((String) m.get("ownerId"), sk, (String) m.get("text")));
+            List<String> evidenceIds = m.get("evidenceIds") instanceof List<?> evs
+                    ? evs.stream().filter(String.class::isInstance).map(String.class::cast).toList()
+                    : List.of();
+            beliefs.add(new Belief((String) m.get("ownerId"), sk, (String) m.get("text"), evidenceIds));
         }
         counts.put("beliefs", beliefs.size());
 
         Set<String> knownIds = new LinkedHashSet<>(residentNames.keySet());
         for (Belief b : beliefs) if (b.ownerId() != null) knownIds.add(b.ownerId());
 
-        int aboutOthers = 0;
+        int aboutOthers = 0, aboutSocialRole = 0, grounded = 0;
         Set<String> holders = new LinkedHashSet<>();
-        Map<String, Set<String>> ownersByKey = new LinkedHashMap<>();
+        // canonical key -> ownerId -> "was any instance of this owner's belief independently grounded".
+        Map<String, Map<String, Boolean>> groundedByCanonicalAndOwner = new LinkedHashMap<>();
+        Map<String, Set<String>> rawKeysByCanonical = new LinkedHashMap<>();
+        // ownerId -> canonical key -> raw keys / distinct texts seen under it, in write order - the
+        // material for "谁改主意了". Canonicalized (not raw-key) so 阿满's two spellings of one topic
+        // still land in the same bucket instead of hiding a real change of mind behind a typo.
+        Map<String, Map<String, Set<String>>> rawKeysByOwnerAndCanonical = new LinkedHashMap<>();
+        Map<String, Map<String, List<String>>> textsByOwnerAndCanonical = new LinkedHashMap<>();
         List<Map<String, Object>> material = new ArrayList<>();
         for (Belief b : beliefs) {
             if (b.ownerId() != null) holders.add(b.ownerId());
-            ownersByKey.computeIfAbsent(b.supersedesKey(), k -> new LinkedHashSet<>()).add(b.ownerId());
             if (mentionsSomeoneElse(b.ownerId(), b.supersedesKey(), b.text(), knownIds, residentNames)) aboutOthers++;
+            if (mentionsRelationalRole(b.text())) aboutSocialRole++;
+            boolean isGrounded = isIndependentlyGrounded(b.evidenceIds(), memoryById);
+            if (isGrounded) grounded++;
+            String canonical = canonicalBeliefKey(b.ownerId(), b.supersedesKey());
+            rawKeysByCanonical.computeIfAbsent(canonical, k -> new LinkedHashSet<>()).add(b.supersedesKey());
+            if (b.ownerId() != null) {
+                groundedByCanonicalAndOwner.computeIfAbsent(canonical, k -> new LinkedHashMap<>())
+                        .merge(b.ownerId(), isGrounded, Boolean::logicalOr);
+                rawKeysByOwnerAndCanonical.computeIfAbsent(b.ownerId(), k -> new LinkedHashMap<>())
+                        .computeIfAbsent(canonical, k -> new LinkedHashSet<>()).add(b.supersedesKey());
+                textsByOwnerAndCanonical.computeIfAbsent(b.ownerId(), k -> new LinkedHashMap<>())
+                        .computeIfAbsent(canonical, k -> new ArrayList<>()).add(b.text());
+            }
             Map<String, Object> item = new LinkedHashMap<>();
             item.put("ownerId", b.ownerId());
             item.put("supersedesKey", b.supersedesKey());
@@ -262,14 +398,50 @@ public final class NormDetector {
             material.add(item);
         }
         counts.put("beliefsAboutOthers", aboutOthers);
+        counts.put("beliefsAboutSocialRole", aboutSocialRole);
+        counts.put("beliefsGroundedInOwnExperience", grounded);
         counts.put("beliefHolders", holders.size());
-        long shared = ownersByKey.values().stream().filter(owners -> owners.size() >= 2).count();
-        counts.put("sharedBeliefKeys", (int) shared);
+
+        int shared = 0, sharedIndependent = 0;
+        for (var e : groundedByCanonicalAndOwner.entrySet()) {
+            Map<String, Boolean> owners = e.getValue();
+            if (owners.size() < 2) continue;
+            shared++;
+            long independentOwners = owners.values().stream().filter(Boolean::booleanValue).count();
+            boolean countsAsIndependent = independentOwners >= 2;
+            if (countsAsIndependent) sharedIndependent++;
+            Set<String> rawKeys = rawKeysByCanonical.get(e.getKey());
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("canonicalKey", e.getKey());
+            row.put("rawKeys", List.copyOf(rawKeys));
+            row.put("owners", owners);
+            row.put("independentOwners", independentOwners);
+            row.put("countsAsIndependentlyShared", countsAsIndependent);
+            row.put("whySameKey", rawKeys.size() == 1 ? "键完全相同"
+                    : "标准化后一致——habit 键去掉了所属人段，自由键去掉了标点/大小写差异");
+            sharedBeliefAudit.add(row);
+        }
+        counts.put("sharedBeliefKeys", shared);
+        counts.put("sharedBeliefKeysIndependent", sharedIndependent);
+
+        for (var ownerEntry : textsByOwnerAndCanonical.entrySet())
+            for (var keyEntry : ownerEntry.getValue().entrySet()) {
+                List<String> distinctTexts = new ArrayList<>(new LinkedHashSet<>(keyEntry.getValue()));
+                if (distinctTexts.size() < 2) continue;
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("ownerId", ownerEntry.getKey());
+                row.put("canonicalKey", keyEntry.getKey());
+                row.put("rawKeys", List.copyOf(rawKeysByOwnerAndCanonical.get(ownerEntry.getKey()).get(keyEntry.getKey())));
+                row.put("texts", distinctTexts);
+                changedMind.add(row);
+            }
+        counts.put("changedTheirMind", changedMind.size());
         return List.copyOf(material);
     }
 
     /** Someone-else-not-self, checked by name where a name is known and by bare id otherwise - the
-     * fallback the class comment on the {@code memories} overload describes. */
+     * fallback the class comment on the {@code memories} overload describes. Deliberately strict (a
+     * literal name/id match): see {@link #mentionsRelationalRole} for the separate, looser count. */
     private static boolean mentionsSomeoneElse(String selfId, String supersedesKey, String text,
                                                 Set<String> knownIds, Map<String, String> residentNames) {
         String haystack = (supersedesKey == null ? "" : supersedesKey) + " " + (text == null ? "" : text);
@@ -281,8 +453,112 @@ public final class NormDetector {
         return false;
     }
 
-    private static String gate(Candidate c) {
-        if (c.support() < MIN_SUPPORT) return "支持事件不足 " + MIN_SUPPORT;
+    /**
+     * A second, deliberately separate reading of "关于别人" for {@code beliefsAboutSocialRole}:
+     * {@link #mentionsSomeoneElse} requires a named other resident and misses the most norm-like line
+     * measured so far - 阿满's 「我好像总是那个配合的人」, which never names anyone. This looks instead for
+     * a recurrence marker ("总是"/"每次都"/...) next to a small, general list of relational-role verbs
+     * ("配合"/"迁就"/"带头"/...): a self-report of a <em>pattern in a relationship</em>, not merely a
+     * private habit ("我总是坐在窗边" has the marker and no role verb, and stays out of this count).
+     *
+     * <p>This is a small, hand-picked heuristic, not a semantic judge. docs/01 warns for
+     * {@code sharedBeliefKeys} that "这个改法是被数据提示的，改完必须在一批新数据上验"; the same caution
+     * applies here even more so, since a hand-picked verb list reads perfectly on the run that inspired
+     * it and may miss the next one entirely. Kept as a count next to, never merged into,
+     * {@link #mentionsSomeoneElse} so the precise measurement is never diluted by this looser one.
+     */
+    private static boolean mentionsRelationalRole(String text) {
+        if (text == null) return false;
+        boolean recurs = RECURRENCE_MARKERS.stream().anyMatch(text::contains);
+        boolean role = RELATIONAL_ROLE_VERBS.stream().anyMatch(text::contains);
+        return recurs && role;
+    }
+
+    /**
+     * Folds a raw {@code supersedesKey} down to the form {@code sharedBeliefKeys} should actually compare
+     * - see {@link #beliefs}' javadoc for the two measured cases this exists to fix. A {@code habit:}
+     * key is always {@code habit:<ownerId>:<habitId>} (every habit key names its own owner in the middle
+     * segment, never someone else's - see {@code ResidentSimulation.validHabitKey}), so that segment is
+     * replaced with a wildcard rather than compared; anything else is a free key straight from the model,
+     * normalized the same way as the habit id itself. If the middle segment does not actually match the
+     * owner passed in (data this method did not expect), it falls back to normalizing the whole string
+     * rather than guessing which segment to drop - conservative, so a malformed key merges with nothing
+     * rather than merging with the wrong thing.
+     */
+    private static String canonicalBeliefKey(String ownerId, String rawKey) {
+        if (rawKey == null) return "";
+        if (rawKey.startsWith("habit:")) {
+            String[] parts = rawKey.split(":", 3);
+            if (parts.length == 3 && (ownerId == null || parts[1].equals(ownerId)))
+                return "habit:*:" + normalizeFreeText(parts[2]);
+            return "habit:*:" + normalizeFreeText(rawKey.substring("habit:".length()));
+        }
+        return normalizeFreeText(rawKey);
+    }
+
+    /** Letters and digits only, case-folded - drops the hyphen that turned one of 阿满's keys
+     * ({@code weaver配合者} / {@code weaver-配合者}) into two, without needing to know in advance which
+     * punctuation mark would show up. Unicode-aware, so Chinese characters (which are not touched by
+     * {@link Character#toLowerCase(int)} in any way that changes them) pass through unchanged. */
+    private static String normalizeFreeText(String s) {
+        if (s == null) return "";
+        StringBuilder out = new StringBuilder();
+        s.codePoints().forEach(cp -> {
+            if (Character.isLetterOrDigit(cp)) out.appendCodePoint(Character.toLowerCase(cp));
+        });
+        return out.toString();
+    }
+
+    /**
+     * Whether at least one of this belief's own evidence memories traces back - through as many
+     * {@code reflection}/{@code belief} hops as it takes - to something this resident actually observed
+     * or experienced ({@code sourceType} anything but "heard") rather than only ever being told.
+     * docs/01-requirements.md's definition of a norm is a belief "各自独立持有"; with 25 residents and
+     * hearsay, four owners of one key can be one person's observation retold three times, and counting
+     * that as four independent holders is exactly the fake finding this project has been burned by five
+     * times (see the task brief this class's changes were made against).
+     *
+     * <p>Deliberately recursive rather than checking only the belief's immediate evidence: a resident
+     * could otherwise launder hearsay through their own earlier reflection (heard "X" -&gt; reflected
+     * into "我觉得 X" -&gt; cited as evidence for a new belief). A one-hop check would read that
+     * reflection's {@code sourceType} ("reflection", not "heard") and call it firsthand; this instead
+     * keeps following evidence chains down until it hits either a raw memory that is not hearsay
+     * (independent) or runs out of chain without ever finding one (not independent -
+     * {@code applyReflection} refuses to write a belief with no evidence at all, so reaching "not
+     * independent" here means every traceable root was hearsay, not that there was nothing to check).
+     *
+     * <p><b>How this can still be fooled</b> - it trusts this codebase's own "heard" vs everything-else
+     * tagging rather than tracing actual information flow, so any write site that logs something as
+     * "observed" when the resident only knows it secondhand would defeat it silently; it asks only
+     * "was there ANY firsthand root", not whether the belief's actual content came from that root, so one
+     * flimsy, unrelated observed memory sitting in an evidence list beside several heard ones is enough
+     * to mark the whole belief independent; and two residents who were both physically present at the
+     * same conversation and wrote near-identical conclusions both pass as independent even though they
+     * may simply be reporting the one shared moment rather than two minds converging on it separately -
+     * a case worth a blind reader's eye, not a statistic's.
+     */
+    private static boolean isIndependentlyGrounded(List<String> evidenceIds, Map<String, Map<String, Object>> memoryById) {
+        Set<String> visited = new LinkedHashSet<>();
+        for (String id : evidenceIds) if (groundedInOwnExperience(id, memoryById, visited)) return true;
+        return false;
+    }
+
+    private static boolean groundedInOwnExperience(String id, Map<String, Map<String, Object>> memoryById,
+                                                    Set<String> visited) {
+        if (id == null || !visited.add(id)) return false;
+        Map<String, Object> m = memoryById.get(id);
+        if (m == null) return false; // evidence not present in this export - cannot confirm, so it does not ground anything
+        String type = (String) m.get("sourceType");
+        if ("heard".equals(type)) return false; // told, not witnessed - a dead end, not a root
+        if (!"reflection".equals(type) && !"belief".equals(type)) return true; // a raw, non-hearsay root
+        if (m.get("evidenceIds") instanceof List<?> deeper)
+            for (Object next : deeper)
+                if (next instanceof String s && groundedInOwnExperience(s, memoryById, visited)) return true;
+        return false;
+    }
+
+    private static String gate(Candidate c, int minSupport) {
+        if (c.support() < minSupport) return "支持事件不足 " + minSupport;
         if (c.days() < MIN_DAYS) return "只发生在一天里";
         if (c.clockLike()) return "同一分钟同一批人——这是台钟，不是规矩";
         if (c.strength() < MIN_STRENGTH) return "没有比它自己的零假设高出 " + MIN_STRENGTH + " 倍";
@@ -353,7 +629,18 @@ public final class NormDetector {
 
     /** A join is a contribution to a project somebody else touched first. Nothing in the rules picks a
      * person to be the one who joins - habits are keyed to each resident's own place and own project -
-     * so a town where the same person keeps walking over to other people's work is saying something. */
+     * so a town where the same person keeps walking over to other people's work is saying something.
+     *
+     * <p><b>An undefended hazard, documented rather than fixed</b> - this dimension's {@code starter} map
+     * is exactly "who touched a project first", the same shape docs/01「这一版还欠着的」explicitly forbids
+     * turning into its own dimension ("『谁最先动手』也不能是写死的...环路跑通了，起点是我们放的"): in the
+     * rule-only control 阿满's own "first to act" count was 0 by construction, so every one of her
+     * contributions was a join by definition, which is part of how she came to write 「我好像总是那个配合
+     * 的人」. This dimension's null baseline (each actor's join count against the town's evenly-split
+     * average) does not model how project-creation opportunity itself was allocated, so a resident who
+     * structurally gets fewer chances to be first will read as an unusually devoted joiner even with no
+     * preference of their own. Left as-is on purpose - fixing it means modelling our own opportunity
+     * allocation, which is a rule-side change outside this file's scope, not a new statistic here. */
     private static List<Candidate> whoJoinsWhom(Run run, Map<String, Object> counts) {
         Map<String, String> starter = new LinkedHashMap<>();
         Map<String, List<Act>> joinsBy = new LinkedHashMap<>();
@@ -468,8 +755,14 @@ public final class NormDetector {
 
     /** The one metric docs/05-notes.md says to keep if we may only keep one, and the one that cannot be
      * written as a rule: we can write "A 帮了 B", we cannot write "B 后来自发地更愿意帮 A". At the event
-     * volumes this town currently reaches it will usually fail {@link #MIN_SUPPORT} and be dropped - that
-     * report is the true one, and is more useful than a ratio computed over three events. */
+     * volumes this town currently reaches it will usually fail {@link #minSupportFor} and be dropped -
+     * that report is the true one, and is more useful than a ratio computed over three events.
+     *
+     * <p>Shares {@link #whoJoinsWhom}'s undefended hazard: {@code helps} is built from the same
+     * "who touched this project first" {@code starter} map, so a resident with structurally fewer
+     * chances to start something will also show up "helping" more often here, independent of any choice
+     * of theirs. See that method's doc comment - documented, not fixed, per docs/01's explicit ban on
+     * turning "who acts first" into its own dimension. */
     private static List<Candidate> reciprocity(Run run, Map<String, Object> counts) {
         Map<String, String> starter = new LinkedHashMap<>();
         record Help(String from, String to, Instant at) {}
@@ -816,6 +1109,23 @@ public final class NormDetector {
         for (Map<String, Object> d : report.dropped())
             sb.append("- `").append(d.get("dimension")).append("` ").append(d.get("statement"))
               .append(" —— **").append(d.get("reason")).append("**\n");
+        sb.append("\n## 共享信念键是怎么折叠的\n\n");
+        sb.append("分析用的审计材料，不给盲读的人看——折的是键，不是判决。\n\n");
+        if (report.sharedBeliefAudit().isEmpty()) sb.append("没有任何 key 被两个以上的人各自持有。\n");
+        for (Map<String, Object> a : report.sharedBeliefAudit())
+            sb.append("- 键 `").append(a.get("canonicalKey")).append("`（原始：").append(a.get("rawKeys"))
+              .append("，").append(a.get("whySameKey")).append("）：持有者 ").append(a.get("owners"))
+              .append("，其中独立成立 ").append(a.get("independentOwners")).append(" 人，")
+              .append((Boolean) a.get("countsAsIndependentlyShared") ? "**算独立共享**" : "不算独立共享")
+              .append("\n");
+
+        sb.append("\n## 有没有人改主意了\n\n");
+        sb.append("这是全部数字里最想盯的一个——不是 beliefs，也不是 beliefsAboutOthers。任何规则都造不出它。\n\n");
+        if (report.changedMind().isEmpty()) sb.append("没有。**这是一个真实的 0**，不是没找。\n");
+        for (Map<String, Object> m : report.changedMind())
+            sb.append("- `").append(m.get("ownerId")).append("`（键 `").append(m.get("canonicalKey"))
+              .append("`）先后写过：").append(m.get("texts")).append("\n");
+
         sb.append("\n## 居民自己说出来的话\n\n");
         sb.append("这一节不判断，只是把材料递给盲读的人 —— 上面的统计从不读这里。\n\n");
         if (report.beliefs().isEmpty()) sb.append("没有。**这是一个真实的 0**，不是没找。\n");

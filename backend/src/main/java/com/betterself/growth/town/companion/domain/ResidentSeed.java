@@ -111,7 +111,15 @@ public final class ResidentSeed {
      * ResidentMind.Context} without CompanionWorld.java growing any persona fields - see this class's
      * {@link PersonalityNarrative} javadoc. Returns {@code null} for an id this batch did not author
      * text for (the avatar "self", or any future manually-added resident) rather than guessing. */
-    public static PersonalityNarrative narrative(String residentId){return NARRATIVES.get(residentId);}
+    public static PersonalityNarrative narrative(String residentId){
+        PersonalityNarrative six=NARRATIVES.get(residentId);
+        if(six!=null)return six;
+        // The nineteen live in their own file (frozen source, same record type) - resolved here so
+        // ResidentDirector.personaView keeps asking one question and never has to know which batch a
+        // resident came from.
+        var newcomer=ResidentPersonas.of(residentId);
+        return newcomer==null?null:newcomer.narrative();
+    }
     public static void initialize(CompanionWorld w,Instant now) {
         if(w.simulationVersion>=2)return;
         long initialRevision=w.revision;
@@ -160,6 +168,14 @@ public final class ResidentSeed {
         // so their mutual regard starts a little warmer than the flat "just met" 40 a newcomer gets
         // with everyone else - the brief did not specify a number, only that they are flat-mates.
         weaver.relationships.put("artist",55);state(w,"artist").relationships.put("weaver",55);
+        // The shop is docs/01-requirements.md 第二版「世界」's own pick for "所有权/借/赠最自然的来源
+        // 地", and these two owners are not arbitrary: 周野 used to run a repair shop (FIXER_OCCUPATION)
+        // and 阿满 does handicraft (WEAVER_OCCUPATION) - each owns exactly the kind of thing their own
+        // occupation would actually keep at hand. Decorative, free-text objects (docs/01's own split -
+        // "物件按会不会被争分两类"), lend/gift-eligible through Lending because they now carry an owner.
+        w.objects.add(new WorldObject("shop-toolkit","tool","shop","一套用了很久的工具箱","螺丝刀缺了一把",null,"fixer"));
+        w.objects.add(new WorldObject("shop-thread-box","tool","shop","一个装零碎线头和布片的木盒","盖子有点合不严",null,"weaver"));
+        populateTheTwentyFive(w,past);
         // Six people on one street, and every one of these is a thing somebody wants OTHER people
         // for - they are pinned on the board by the front door, not kept in a drawer.
         // Without this, "knows" (which reads a non-reflection memory carrying the topic) was true
@@ -216,9 +232,44 @@ public final class ResidentSeed {
      * TownPlaces#addFlatmate} for someone moving in with a resident already here - because those two
      * are not interchangeable (see TownPlaces) and this method has no way to guess which one is
      * right for a given id. */
+    /** The nineteen of docs/01 第二版「人」, brought into a world that already holds the original six.
+     * Their text, occupations, households and starting relationships are all frozen source in {@link
+     * ResidentPersonas} - docs/04: 「运行时生成的 persona 是一个我们没控住的变量」 - and this method only
+     * does the wiring.
+     *
+     * <p>Two things here are the whole point rather than plumbing. First, <b>homes come from
+     * households</b>: the host of each gets {@code addHome} and everybody else in it {@code
+     * addFlatmate}, so young residents genuinely share one flat (docs/01: 合住 is a free source of the
+     * repeated interaction norms need - 「你每天都得和同一个人分一个厨房」) rather than each getting a
+     * private box. Second, <b>nobody is acquainted by default</b>: {@code newcomer(..., false)} writes
+     * no relationships at all, and the only edges that exist afterwards are the ones
+     * {@link ResidentPersonas#initialRelationships()} authors from a shared household or a shared
+     * building. Everyone else is a stranger by omission. That is the difference between the measured
+     * 0.20 starting density and the 1.0 that mutual-40-with-everyone produces, and docs/04 names the
+     * latter as the reason asymmetry and diffusion would both have had nothing to measure. */
+    private static void populateTheTwentyFive(CompanionWorld w,Instant past){
+        ResidentPersonas.households().forEach((host,members)->{
+            TownPlaces.addHome(w,host);
+            for(String member:members)if(!member.equals(host))TownPlaces.addFlatmate(w,member,host);
+        });
+        for(ResidentPersonas.NewResident person:ResidentPersonas.all())
+            newcomer(w,person.id(),person.name(),person.role(),person.occupation(),past,false);
+        ResidentPersonas.initialRelationships().forEach((from,edges)->{
+            ResidentState r=state(w,from);
+            if(r!=null)edges.forEach(r.relationships::put);
+        });
+    }
     private static ResidentState newcomer(CompanionWorld w,String id,String name,String role,String occupation,Instant now){
+        return newcomer(w,id,name,role,occupation,now,true);
+    }
+    /** {@code acquaintEveryone=false} is what the nineteen of docs/01 第二版「人」 use. The blanket
+     * mutual 40 this helper hands out is fine for a town of six, and is precisely what docs/04 rules
+     * out at twenty-five: 「现在每对居民都以双向 40 开局，扩到 25 人就是 300 对全部相识——关系不对称率
+     * 会被稀释向 0，扩散也没有路径可言」. The nineteen instead get exactly the clustered graph
+     * {@link ResidentPersonas#initialRelationships()} authors, applied once after everybody exists. */
+    private static ResidentState newcomer(CompanionWorld w,String id,String name,String role,String occupation,Instant now,boolean acquaintEveryone){
         ResidentState r=new ResidentState();r.id=id;r.energy=65;r.social=55;r.curiosity=55;r.mood="刚搬来，还在认路";r.occupation=occupation;r.thought="先熟悉这里，也想找一件能长期做下去的事";r.lastSocialAt=now;r.lastReflectionAt=now;r.energyUpdatedAt=now;r.usualSleepMinute=23*60;r.usualWakeMinute=7*60;r.sleepScheduleSeeded=true;r.revision=1;r.lifeIntent=lifeIntent(w,r,null,occupation,"active",now);r.careerIntent=lifeIntent(w,r,null,occupation,"active",now);
-        for(ResidentState other:w.residentStates)if(!other.id.equals("self")){r.relationships.put(other.id,40);other.relationships.put(id,40);}
+        if(acquaintEveryone)for(ResidentState other:w.residentStates)if(!other.id.equals("self")){r.relationships.put(other.id,40);other.relationships.put(id,40);}
         w.residentStates.add(r);w.residents.add(new Actor(id,name,role,TownPlaces.homeOf(id),"rest","刚搬来，先在住处整理东西",180,260,now.plusSeconds(60)));
         memory(w,id,id,"seed",now,null,"我刚搬到这条街，想慢慢把“"+occupation+"”过成能维持生活的事，也先允许自己休息和认识邻居。",List.of(),7);
         schedule(w,r,"rest",TownPlaces.homeOf(id),null,"刚搬来，先在住处整理东西",now,1200);

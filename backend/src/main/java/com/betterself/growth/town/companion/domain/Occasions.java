@@ -78,6 +78,19 @@ public final class Occasions {
             "锁上：这段时间只有你自己进得来，别人会被关在外面",
             "不锁：门开着就走，这同样是正常的，不需要理由",
             MINUTES_5,Occasions::lastOneInTheCafe,Occasions::stillLastOneInTheCafe),
+        // The home equivalent of lock_door, same recipe exactly: the moment is leaving your own place
+        // with nobody else of the household still in it, not "every time you're home" - that shape is
+        // what turned lock_door into 470 offers for 7 real moments. docs/01-requirements.md 第二版
+        // 「世界」「进别人家由所有权和门决定……默认进不去，被邀请或门没锁就进得去」 - there is
+        // deliberately no separate "unlock" occasion: "不锁" on the way out already means the door
+        // stays open to anyone, which is the other half of that OR. A resident who wants ONE specific
+        // person let in without leaving the door open to everyone uses invite_home instead - a
+        // narrower, situational choice that belongs in the ordinary menu, not here.
+        new Definition("lock_home","occasion",
+            "要不要把家里的门锁上再走？",
+            "锁上：不在的时候别人进不来，除非你请了谁",
+            "不锁：门开着就走，谁都能进，这同样正常，不需要理由",
+            MINUTES_5,Occasions::lastOneAtHome,Occasions::stillLastOneAtHome),
         new Definition("close_cafe","occasion",
             "已经过了平常打烊的时间，今天就收店吗？",
             "收店：当面说一句，让还在店里的人知道",
@@ -185,6 +198,32 @@ public final class Occasions {
     private static boolean inTheCafeAwake(CompanionWorld w,ResidentState r){
         var a=ResidentSimulation.actor(w,r.id);
         return a!=null&&"cafe".equals(a.place())&&!"sleep".equals(a.activity());
+    }
+
+    /** {@link #lastOneInTheCafe}'s exact shape, for a home: alone in the household's own place, the
+     * door still unlocked, on the way out. No "alone in the cafe" scan needed the way the cafe's
+     * trigger does one across the whole town - a home only has to check its OWN household's other
+     * members, since a household is small and fixed rather than "whoever happens to be in the room". */
+    private static Moment lastOneAtHome(CompanionWorld w,ResidentState r,Instant at){
+        CompanionWorld.Actor a=ResidentSimulation.actor(w,r.id);
+        String home=TownPlaces.homeOf(r.id);
+        if(a==null||!home.equals(a.place())||"sleep".equals(a.activity()))return null;
+        if(DoorService.homeDoor(w,home).locked)return null;
+        if(w.residentStates.stream().anyMatch(o->!o.id.equals(r.id)&&home.equals(ResidentSimulation.actor(w,o.id).place())&&!"sleep".equals(ResidentSimulation.actor(w,o.id).activity())))return null;
+        boolean leaving=r.plan==null||Duration.between(at,r.plan.endsAt()).getSeconds()<=600;
+        if(!leaving)return null;
+        return new Moment("家里现在没别人，门还开着。",day(w,at)+"|home-alone|"+home,"home",null);
+    }
+    private static boolean stillLastOneAtHome(CompanionWorld w,PendingOccasion pending,Instant at){
+        ResidentState r=ResidentSimulation.state(w,pending.residentId);
+        if(r==null)return false;
+        String home=TownPlaces.homeOf(r.id);
+        if(DoorService.homeDoor(w,home).locked)return false;
+        // Answering from the street is fine (pulling the door shut behind you); answering from
+        // somewhere else entirely, after the moment has moved on, is not - same shape as the cafe.
+        String place=ResidentSimulation.actor(w,r.id).place();
+        if(!home.equals(place)&&!"street".equals(place))return false;
+        return w.residentStates.stream().noneMatch(o->!o.id.equals(r.id)&&home.equals(ResidentSimulation.actor(w,o.id).place())&&!"sleep".equals(ResidentSimulation.actor(w,o.id).activity()));
     }
 
     /** The clock has gone past the hour this shop usually stops. Asked once a day, of whoever is

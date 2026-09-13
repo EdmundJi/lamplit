@@ -10,11 +10,10 @@
  */
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { companionApi } from '../companion.api'
+import { STAGE_PLACES } from '../companion-art'
 import type { Memory } from '../companion.types'
 import type { DebugConversation, DebugResidentState, DebugWorld } from './companion-debug.types'
 import { backoffRemainingSeconds, memoriesByOwner, personalityDrift, relationshipMatrix, sharedMemoryTopics } from './companion-debug.presentation'
-
-const RESIDENT_ORDER = ['owner', 'student', 'artist', 'gardener', 'fixer', 'weaver']
 
 const world = ref<DebugWorld | null>(null)
 const loading = ref(false)
@@ -48,7 +47,12 @@ onMounted(() => {
 })
 onBeforeUnmount(() => { clearInterval(ticker); clearInterval(poller) })
 
-const residentIds = computed(() => RESIDENT_ORDER.filter(id => world.value?.residentStates?.some(state => state.id === id)))
+// Data-driven, not a hard-coded roster: this used to be a fixed six-name whitelist
+// (owner/student/artist/gardener/fixer/weaver), which would silently drop any resident the
+// backend adds beyond that list from every table on this page - no error, just a missing row.
+// `world.residents` is itself the backend's actual roster (whatever size it grows to), in its own
+// order; this just keeps only the ones this snapshot also carries a debug residentState for.
+const residentIds = computed(() => (world.value?.residents || []).map(actor => actor.id).filter(id => world.value?.residentStates?.some(state => state.id === id)))
 const allActorIds = computed(() => world.value ? [...residentIds.value, 'self'] : [])
 const statesById = computed(() => new Map((world.value?.residentStates || []).map(state => [state.id, state as DebugResidentState])))
 const nameOf = (id: string) => id === 'self' ? world.value?.avatar.name || '你的小人' : world.value?.residents.find(actor => actor.id === id)?.name || id
@@ -56,13 +60,21 @@ const roleOf = (id: string) => id === 'self' ? '你的小人 · 第五个居民'
 
 const locationsById = computed(() => new Map((world.value?.locations || []).map(loc => [loc.id, loc])))
 const positionsById = computed(() => new Map((world.value?.positions || []).map(pos => [pos.id, pos])))
-const placeNames: Record<string, string> = { street: '小街', cafe: '咖啡馆', garden: '花园' }
+const warnedPlaceKinds = new Set<string>()
+// Reuses STAGE_PLACES (companion-art.ts) instead of keeping a third, independent label table -
+// the old version here only listed street/cafe/garden and silently printed the raw kind string
+// for anything else (board/academy/gym included). Falling back to the raw kind is honest (it
+// never claims to be somewhere else), but a fixed table drifting out of sync with the real
+// registry is exactly the duplicated-knowledge problem this page should not add a fourth copy of.
 function placeLabel(placeId?: string | null): string {
   if (!placeId) return '—'
   const location = locationsById.value.get(placeId)
   if (!location) return placeId
   if (location.kind === 'home') return `${location.ownerId ? nameOf(location.ownerId) : '？'}的家`
-  return placeNames[location.kind] || location.kind
+  const known = STAGE_PLACES[location.kind]
+  if (known) return known.label
+  if (!warnedPlaceKinds.has(location.kind)) { warnedPlaceKinds.add(location.kind); console.warn(`[town/debug] 地点种类 "${location.kind}" 不在 STAGE_PLACES 登记表里`) }
+  return location.kind
 }
 function positionLabel(positionId?: string | null): string {
   if (!positionId) return '—'

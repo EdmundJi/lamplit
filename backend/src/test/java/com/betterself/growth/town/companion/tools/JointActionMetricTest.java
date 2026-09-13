@@ -82,6 +82,17 @@ class JointActionMetricTest {
         assertThat((Map<String, Integer>) joint.get("byKind")).containsEntry("satTogether", 1);
     }
 
+    /** Every reported episode whose participants are exactly these two, in either order - so an
+     * assertion can be about one pair instead of about however many people the town happens to hold. */
+    @SuppressWarnings("unchecked")
+    private static List<Map<String, Object>> episodesFor(Map<String, Object> joint, String a, String b) {
+        return ((List<Map<String, Object>>) joint.get("episodes")).stream()
+            .filter(e -> {
+                List<String> ids = (List<String>) e.get("residentIds");
+                return ids != null && ids.size() == 2 && ids.contains(a) && ids.contains(b);
+            }).toList();
+    }
+
     @SuppressWarnings("unchecked") @Test void twoPeopleReadingInTheSameRoomByCoincidenceIsNotCountedAsChosen() {
         // Every resident's place habit points at the cafe, so this happens constantly without anyone
         // having decided anything about anyone. It is reported, never added to the total.
@@ -91,7 +102,13 @@ class JointActionMetricTest {
 
         Map<String, Object> joint = joint(w, 10);
         assertThat(joint.get("chosenTotal")).as("coincidence must never inflate the headline").isEqualTo(0);
-        assertThat((Map<String, Integer>) joint.get("byKind")).containsEntry("sameActivity", 1);
+        // Reported, not counted - that is the whole claim. Asserted as "this pair is in there" rather
+        // than "there is exactly one in the whole town": docs/01 第二版 took the town to 25, and several
+        // other pairs now legitimately coincide in the cafe at the same moment. Pinning the town-wide
+        // total would make this test fail for a reason it is not about.
+        assertThat((Map<String, Integer>) joint.get("byKind")).extractingByKey("sameActivity")
+            .satisfies(count -> assertThat(count).isGreaterThanOrEqualTo(1));
+        assertThat(episodesFor(joint, "owner", "student")).as("这一对必须被报出来").isNotEmpty();
     }
 
     @Test void walkingPastSomebodyDoingWhatYouAreDoingIsNotDoingItWithThem() {
@@ -118,7 +135,10 @@ class JointActionMetricTest {
         @SuppressWarnings("unchecked")
         Map<String, Object> joint = (Map<String, Object>) MetricsExporter.compute(List.of(), collector, w).get("jointAction");
         assertThat(joint.get("chosenTotal")).as("counted once per episode, never once per tick").isEqualTo(1);
-        assertThat(((List<?>) joint.get("episodes"))).hasSize(1);
+        // One episode FOR THIS PAIR across 200 ticks - the de-duplication this test exists for. The
+        // town-wide episode count is no longer 1 simply because there are 25 residents and other pairs
+        // are also in the room; that is a different fact and not the one under test.
+        assertThat(episodesFor(joint, "owner", "student")).as("一个下午是一段，不是三百段").hasSize(1);
     }
 
     /** The looser reading, and the one the town is far likelier to reach first: two people put their

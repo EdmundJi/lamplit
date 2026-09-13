@@ -112,6 +112,22 @@ describe('companion debug view', () => {
     expect(view.text()).not.toContain('历史世界快照')
   })
 
+  it('shows a resident outside the old six-name roster - the page must follow whatever residents the backend actually sends, not a hard-coded whitelist', async () => {
+    api.get.mockImplementation((path: string) => Promise.resolve(path === '/town/companion' ? {
+      joined: true,
+      world: world({
+        residents: [
+          ...world().residents,
+          { id: 'archivist', name: '阿志', role: '公告板管理员', place: 'board', activity: 'sort', label: '在整理告示', x: 1, y: 1, until: '' },
+        ],
+        residentStates: [...world().residentStates, residentState({ id: 'archivist', extroversion: 50, conscientiousness: 50, sensitivity: 50, volatility: 50, relationships: {}, affectionExpressed: {} })],
+      }),
+    } : []))
+    const view = await render()
+    expect(view.text()).toContain('阿志')
+    expect(view.text()).toContain('公告板管理员')
+  })
+
   it('shows each resident\'s personality drift from their seed values, including a negative drift', async () => {
     const view = await render()
     const text = view.text()
