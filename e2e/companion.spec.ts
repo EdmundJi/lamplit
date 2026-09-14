@@ -20,7 +20,7 @@ test('moving in persists a private world and intentions never complete real Todo
   const initial = await page.request.get('/api/v1/town/companion')
   expect((await initial.json()).data).toEqual({ joined: false, world: null })
   const joined = await post('/town/companion/join', { name: '小街住客', timezone: 'Asia/Shanghai' })
-  expect(joined.world.residents).toHaveLength(4)
+  expect(joined.world.residents).toHaveLength(25)
   const again = await post('/town/companion/join', { name: '不会重建', timezone: 'UTC' })
   expect(again.world.id).toBe(joined.world.id)
 
