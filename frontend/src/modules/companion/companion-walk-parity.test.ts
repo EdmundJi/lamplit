@@ -30,7 +30,12 @@ const TOWN_DISTANCES_JAVA = resolve(HERE, '../../../../backend/src/main/java/com
 // ("the garden frame's bottom-center") and 12 of the 28 pairs silently disagreed by up to 23px -
 // which read as hand-measurement drift in the Java table and was nothing of the kind.
 const ANCHORS: Record<string, { x: number; y: number }> = Object.fromEntries(
-  ['home-owner', 'home-student', 'home-artist', 'home-gardener', 'home-self', 'home-fixer', 'cafe', 'garden', 'street']
+  [
+    'street', 'cafe', 'garden', 'academy', 'gym', 'board', 'shop',
+    'home-owner', 'home-student', 'home-artist', 'home-gardener', 'home-self', 'home-fixer',
+    'home-barista', 'home-botanist', 'home-messenger', 'home-baker', 'home-florist',
+    'home-scholar', 'home-tailor', 'home-masseur', 'home-broker', 'home-trader',
+  ]
     .map(place => [place, travelAnchor(place)]),
 )
 
@@ -82,6 +87,17 @@ function parseTownDistances(source: string): ParsedDistances {
 }
 
 describe('frontend/backend walk-speed and distance parity ("两边不许漂移")', () => {
+  if (process.env.TOWN_PRINT_DISTANCES === '1') {
+    it('prints the complete collision-aware Java distance table for map handoff', () => {
+      const names = Object.keys(ANCHORS).sort()
+      for (let i = 0; i < names.length; i++) for (let j = i + 1; j < names.length; j++) {
+        const a = names[i]!, b = names[j]!
+        const there = walkedDistance(ANCHORS[a]!, ANCHORS[b]!)
+        const back = walkedDistance(ANCHORS[b]!, ANCHORS[a]!)
+        console.log(`link("${a}", "${b}", ${Math.round((there + back) / 2)});`)
+      }
+    })
+  }
   it('has the backend TownDistances.java file to compare against', () => {
     expect(
       existsSync(TOWN_DISTANCES_JAVA),
@@ -117,6 +133,7 @@ describe('frontend/backend walk-speed and distance parity ("两边不许漂移")
         'parseTownDistances() looks for - update that parser to match the real shape before ' +
         'trusting this test\'s green/red result.',
     ).toBeGreaterThan(0)
+    expect(pairs.size, 'TownDistances must cover every pair of drawable places').toBe(Object.keys(ANCHORS).length * (Object.keys(ANCHORS).length - 1) / 2)
 
     const mismatches: string[] = []
     for (const [key, backendDistance] of pairs) {

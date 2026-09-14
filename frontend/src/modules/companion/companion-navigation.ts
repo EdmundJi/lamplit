@@ -1,10 +1,25 @@
 import type { CollisionWorld, Point, Rect } from '../../shared/scene/collision'
 import { canStand, nearestStandable } from '../../shared/scene/collision'
 import { findPath } from '../../shared/scene/pathfinding'
-import { CAFE_TABLES, CAFE_WINDOW_SEATS, CAFE_ROOM, CAFE_WINDOW_ROOM, HOME_ROOMS, GARDEN_OFFSET_X } from './companion-art'
+import { CAFE_TABLES, CAFE_WINDOW_SEATS, CAFE_ROOM, CAFE_WINDOW_ROOM, HOME_ROOMS, HOUSEHOLD_MEMBERS, GARDEN_OFFSET_X, ACADEMY_ROOM, GYM_ROOM, BOARD_AREA, SHOP_ROOM, type ScenePlaceId } from './companion-art'
 /** Feet navigation mirrors the cutaway floors, open doorways and actual furniture footprint. */
 const HOME_INTERIORS = Object.values(HOME_ROOMS).map(room => ({ x: room.x + 8, y: room.y + 32, width: room.w - 16, height: room.h - 32 }))
 const HOME_DOORS = Object.values(HOME_ROOMS).map(room => ({ x: room.door.x - 16, y: room.y + room.h, width: 32, height: 40 }))
+const SHARED_HOME_WALLS: Rect[] = Object.entries(HOUSEHOLD_MEMBERS).flatMap(([homeId, members]) => {
+  const room = HOME_ROOMS[homeId]!, bedroomWidth = (room.w - 16) / members.length
+  const walls: Rect[] = []
+  for (let split = 1; split < members.length; split++) walls.push({ x: room.x + 8 + bedroomWidth * split - 2, y: room.y + 38, width: 4, height: 136 })
+  members.forEach((_, index) => {
+    const left = room.x + 8 + bedroomWidth * index, center = left + bedroomWidth / 2
+    walls.push({ x: left, y: room.y + 174, width: Math.max(0, center - 16 - left), height: 4 })
+    walls.push({ x: center + 16, y: room.y + 174, width: Math.max(0, left + bedroomWidth - center - 16), height: 4 })
+  })
+  for (const x of [room.x + 106, room.x + 194]) {
+    walls.push({ x, y: room.y + 178, width: 3, height: 14 })
+    walls.push({ x, y: room.y + 211, width: 3, height: 9 })
+  }
+  return walls.filter(wall => wall.width > 0)
+})
 export const COMPANION_COLLISION: CollisionWorld = {
   walkable: [
     ...HOME_INTERIORS, ...HOME_DOORS,
@@ -12,6 +27,13 @@ export const COMPANION_COLLISION: CollisionWorld = {
     { x: CAFE_WINDOW_ROOM.x + 8, y: CAFE_WINDOW_ROOM.y + 32, width: CAFE_WINDOW_ROOM.w - 16, height: CAFE_WINDOW_ROOM.h - 32 },
     { x: 848, y: 44, width: 40, height: 284 }, // open connection between the main room and window wing
     { x: CAFE_ROOM.doorX - 16, y: 328, width: 32, height: 40 },
+    { x: ACADEMY_ROOM.x + 8, y: ACADEMY_ROOM.y + 32, width: ACADEMY_ROOM.w - 16, height: ACADEMY_ROOM.h - 32 },
+    { x: GYM_ROOM.x + 8, y: GYM_ROOM.y + 32, width: GYM_ROOM.w - 16, height: GYM_ROOM.h - 32 },
+    { x: SHOP_ROOM.x + 8, y: SHOP_ROOM.y + 32, width: SHOP_ROOM.w - 16, height: SHOP_ROOM.h - 32 },
+    { x: ACADEMY_ROOM.doorX - 16, y: ACADEMY_ROOM.y + ACADEMY_ROOM.h - 4, width: 32, height: 48 },
+    { x: GYM_ROOM.doorX - 16, y: GYM_ROOM.y + GYM_ROOM.h - 4, width: 32, height: 48 },
+    { x: SHOP_ROOM.doorX - 16, y: SHOP_ROOM.y + SHOP_ROOM.h - 4, width: 32, height: 48 },
+    { x: BOARD_AREA.x, y: BOARD_AREA.y, width: BOARD_AREA.w, height: BOARD_AREA.h },
     { x: 32, y: 364, width: 816, height: 96 }, { x: 746 + GARDEN_OFFSET_X, y: 230, width: 184, height: 240 },
     { x: 816, y: 424, width: 32, height: 168 }, { x: 816, y: 560, width: 256, height: 32 }, { x: 1040, y: 424, width: 32, height: 168 },
     // The lower houses are reachable through a modest side lane rather than teleporting through
@@ -22,9 +44,18 @@ export const COMPANION_COLLISION: CollisionWorld = {
     // matched pixel-for-pixel in companion-stage.ts's drawn path so the walkway and the collision
     // rect never disagree (the known "invisible wall" hazard).
     { x: 48, y: 416, width: 32, height: 320 }, { x: 48, y: 708, width: 1170, height: 32 }, { x: 656, y: 416, width: 32, height: 320 },
+    // Second-version town spine: the old lower lane continues through the shop, then turns south
+    // between the two five-house rows. Every new front door meets one of the two cross streets.
+    { x: 1218, y: 708, width: 782, height: 32 },
+    { x: 952, y: 708, width: 32, height: 672 },
+    { x: 32, y: 1052, width: 1556, height: 32 },
+    { x: 32, y: 1348, width: 1556, height: 32 },
+    { x: ACADEMY_ROOM.doorX - 16, y: 256, width: 32, height: 228 },
+    { x: GYM_ROOM.doorX - 16, y: 436, width: 32, height: 276 },
   ],
   obstacles: [
-    ...Object.values(HOME_ROOMS).flatMap(room => [
+    ...SHARED_HOME_WALLS,
+    ...Object.entries(HOME_ROOMS).filter(([id]) => !HOUSEHOLD_MEMBERS[id]).flatMap(([, room]) => [
       { x: room.x + 18, y: room.y + 46, width: 28, height: 83 },
       // Keep the tabletop solid while leaving the side chair as a destination rather than a wall;
       // otherwise bed + chair + table form an impassable strip across the narrow upper homes.
@@ -42,6 +73,10 @@ export const COMPANION_COLLISION: CollisionWorld = {
     { x: 976, y: 105, width: 45, height: 414 },
     ...CAFE_WINDOW_SEATS.map(seat => ({ x: seat.x - 12, y: seat.y - 24, width: 24, height: 18 })),
     ...[798, 859].flatMap(x => [248, 328].map(y => ({ x: x + GARDEN_OFFSET_X, y, width: 49, height: 40 }))),
+    // Public equipment clusters stay solid; their named position anchors sit next to the object.
+    { x: ACADEMY_ROOM.x + 112, y: ACADEMY_ROOM.y + 130, width: 76, height: 32 },
+    { x: GYM_ROOM.x + 32, y: GYM_ROOM.y + 66, width: 150, height: 34 },
+    { x: SHOP_ROOM.x + 330, y: SHOP_ROOM.y + 178, width: 70, height: 30 },
   ],
 }
 const STAFF_AISLE: Rect = { x: 622, y: 80, width: 224, height: 67 }
@@ -61,11 +96,15 @@ export function companionPath(from: Point, to: Point) {
  * (vs. the raw COMPANION_COLLISION walkable rects above) keep the search away from the outer
  * walls even where no obstacle rect happens to cover the last few pixels of floor.
  */
-const PLACE_STANDING_AREA: Record<'home' | 'cafe' | 'garden' | 'street', Rect> = {
+const PLACE_STANDING_AREA: Record<ScenePlaceId, Rect> = {
   home: { x: HOME_ROOMS.owner!.x + 18, y: HOME_ROOMS.owner!.y + HOME_ROOMS.owner!.h - 20, width: HOME_ROOMS.owner!.w - 36, height: 8 },
   cafe: { x: 554, y: 210, width: 222, height: 108 },
   garden: { x: 760 + GARDEN_OFFSET_X, y: 244, width: 156, height: 212 },
   street: { x: 54, y: 378, width: 776, height: 70 },
+  academy: { x: ACADEMY_ROOM.x + 22, y: ACADEMY_ROOM.y + 62, width: ACADEMY_ROOM.w - 44, height: ACADEMY_ROOM.h - 88 },
+  gym: { x: GYM_ROOM.x + 22, y: GYM_ROOM.y + 62, width: GYM_ROOM.w - 44, height: GYM_ROOM.h - 88 },
+  board: { x: BOARD_AREA.x + 18, y: BOARD_AREA.y + 24, width: BOARD_AREA.w - 36, height: BOARD_AREA.h - 42 },
+  shop: { x: SHOP_ROOM.x + 28, y: SHOP_ROOM.y + 64, width: SHOP_ROOM.w - 56, height: SHOP_ROOM.h - 92 },
 }
 
 function homeStandingArea(place: string): Rect | undefined {

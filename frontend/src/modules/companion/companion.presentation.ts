@@ -36,7 +36,7 @@ export function sceneProjection(world: () => World | null) {
     return [w.avatar, ...w.residents].map(actor => {
       const state = w.residentStates?.find(item => item.id === actor.id)
       const plan = state?.plan
-      return { id: actor.id, name: actor.name, role: actor.id === w.avatar.id ? 'user' : residentRoleFor(w, actor.id), location: actor.place, action: actor.label, activity: actor.activity, objectKind: w.projects?.find(project => project.id === plan?.targetId)?.objectKind, destination: plan?.action === 'travel' ? plan.place : undefined, positionId: state?.positionId }
+      return { id: actor.id, name: actor.name, role: actor.id === w.avatar.id ? 'user' : residentRoleFor(w, actor.id), location: actor.place, action: actor.label, activity: actor.activity, objectKind: w.projects?.find(project => project.id === plan?.targetId)?.objectKind, destination: plan?.action === 'travel' ? plan.place : undefined, positionId: state?.positionId, roomId: state?.roomId }
     })
   })
   const sceneProjects = stableProjection<SceneProject[]>(() => (world()?.projects || []).map(item => ({ id: item.id, title: item.title, place: item.place, status: item.status, progress: item.progress, objectKind: item.objectKind })))

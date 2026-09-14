@@ -4,6 +4,7 @@ import { companionApi } from './companion.api'
 import { clockText, focusRemaining, useCompanionWorld, useTownWorld } from './companion.store'
 import { notifyDataChanged } from '../../shared/data-sync'
 import type { Snapshot, World } from './companion.types'
+import { useAuthStore } from '../auth/auth.store'
 vi.mock('./companion.api', () => ({ companionApi: { load: vi.fn(), join: vi.fn(), advance: vi.fn(), intend: vi.fn(), cancel: vi.fn() } }))
 const snapshot = (revision = 1): Snapshot => ({ joined: true, world: { id: 'world-a', revision, intents: [], focus: null, residents: [], memories: [], diary: [] } as unknown as World })
 beforeEach(() => { vi.resetAllMocks(); setActivePinia(createPinia()) })
@@ -17,6 +18,15 @@ describe('authoritative companion world', () => {
     await town.intend('walk')
     finishRead(snapshot(2)); await read
     expect(town.world.value?.revision).toBe(4)
+  })
+  it('accepts a joined:false snapshot as authoritative and clears a previously loaded world', async () => {
+    vi.mocked(companionApi.load).mockResolvedValueOnce(snapshot(2)).mockResolvedValueOnce({ joined: false, world: null })
+    const town = useCompanionWorld()
+    await town.load()
+    expect(town.world.value?.id).toBe('world-a')
+    await town.load()
+    expect(town.world.value).toBeNull()
+    expect(town.loaded.value).toBe(true)
   })
   it('retries an unconfirmed thought with the same id', async () => {
     vi.mocked(companionApi.intend).mockRejectedValueOnce(new Error('断线')).mockResolvedValueOnce(snapshot())
@@ -90,6 +100,29 @@ describe('authoritative companion world', () => {
     // is that same one world too.
     expect(useTownWorld().world).toBe(streetStrip.world.value)
   })
+  it('clears the previous account world and ignores its in-flight response when accounts switch', async () => {
+    const auth = useAuthStore()
+    auth.user = { publicId: 'account-a', email: 'a@example.test', displayName: '甲', timezone: 'Asia/Shanghai', role: 'USER' }
+    const town = useCompanionWorld()
+    vi.mocked(companionApi.load).mockResolvedValueOnce(snapshot(3))
+    await town.load()
+    expect(town.world.value?.id).toBe('world-a')
+
+    let finishOld!: (value: Snapshot) => void
+    vi.mocked(companionApi.advance).mockImplementationOnce(() => new Promise(resolve => { finishOld = resolve }))
+    const oldRead = town.load(true)
+    auth.user = { publicId: 'account-b', email: 'b@example.test', displayName: '乙', timezone: 'Asia/Shanghai', role: 'USER' }
+    expect(town.world.value).toBeNull()
+    expect(town.loaded.value).toBe(false)
+    finishOld(snapshot(9))
+    await oldRead
+    expect(town.world.value).toBeNull()
+
+    vi.mocked(companionApi.load).mockResolvedValueOnce({ joined: false, world: null })
+    await town.load()
+    expect(town.loaded.value).toBe(true)
+    expect(town.world.value).toBeNull()
+  })
 })
 
 describe('shared world lifecycle: polling, visibility and data-sync', () => {
@@ -118,6 +151,19 @@ describe('shared world lifecycle: polling, visibility and data-sync', () => {
     town.stop()
     await vi.advanceTimersByTimeAsync(5000)
     expect(companionApi.advance).toHaveBeenCalledTimes(3)
+  })
+  it('forgets a world the server says was never joined, so the very next poll shows the join screen instead of erroring forever', async () => {
+    // A world this tab remembers can vanish server-side (dev reset, account deleted) - the
+    // previous behaviour kept retrying advance() against a world.value that was never coming
+    // back, showing "先搬进小街吧" every single poll until a manual page reload.
+    vi.mocked(companionApi.advance).mockRejectedValueOnce({ status: 409, code: 'COMPANION_NOT_JOINED', message: '先搬进小街吧' })
+    vi.mocked(companionApi.load).mockClear()
+    town.start({ intervalMs: 1000 })
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(town.world).toBeNull()
+    expect(town.error).toBe('')
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(companionApi.load).toHaveBeenCalledTimes(1)
   })
   it('start() is idempotent: several consumers share one timer, and only the last stop() ends it', async () => {
     town.start({ intervalMs: 1000 })

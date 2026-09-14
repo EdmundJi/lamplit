@@ -4,7 +4,7 @@ import { companionPath, COMPANION_COLLISION, freeStandPosition } from './compani
 import { residentPosition } from './companion-scene'
 import { canStand } from '../../shared/scene/collision'
 import { clearSegment } from '../../shared/scene/pathfinding'
-import { CAFE_SERVICE, CAFE_TABLES, CAFE_SEATS, CAFE_WINDOW_SEATS, CAFE_WINDOW_TABLES, POSITION_SLOTS } from './companion-art'
+import { CAFE_SERVICE, CAFE_TABLES, CAFE_SEATS, CAFE_WINDOW_SEATS, CAFE_WINDOW_TABLES, POSITION_SLOTS, HOME_ROOMS, HOUSEHOLD_MEMBERS } from './companion-art'
 
 it('every customer route connects entry, order, pickup and all ten seats without entering the staff aisle', () => {
   const stops = [CAFE_SERVICE.entry, CAFE_SERVICE.order, CAFE_SERVICE.pickup, ...CAFE_SERVICE.waiting, ...CAFE_SEATS].map(({ x, y }) => ({ x, y }))
@@ -107,6 +107,42 @@ it('every TownPlaces positionId (backend two-layer place model) lands on standab
       expect(path.at(-1), label).toEqual(destination)
     }
   }
+})
+
+it('all ten second-version households and all four new public places are reachable without a street fallback', () => {
+  const entrance = { x: 535, y: 396 }
+  for (const homeId of Object.keys(HOUSEHOLD_MEMBERS)) {
+    const room = HOME_ROOMS[homeId]!
+    const target = { x: room.door.x, y: room.door.y }
+    expect(companionPath(entrance, target).at(-1), homeId).toEqual(target)
+  }
+  for (const place of ['academy', 'gym', 'board', 'shop']) {
+    const destination = freeStandPosition(place, `visitor-${place}`)
+    expect(canStand(destination, COMPANION_COLLISION), place).toBe(true)
+    expect(companionPath(entrance, destination).at(-1), place).toEqual(destination)
+  }
+})
+
+it('gives every new resident a distinct bed and desk inside their household', () => {
+  const allBeds: string[] = [], allDesks: string[] = []
+  for (const [homeId, members] of Object.entries(HOUSEHOLD_MEMBERS)) {
+    const room = HOME_ROOMS[homeId]!
+    for (const residentId of members) {
+      for (const [kind, target] of [['bed', allBeds], ['desk', allDesks]] as const) {
+        const point = POSITION_SLOTS[`home-${residentId}-${kind}`]?.[0]
+        expect(point, `${residentId}/${kind}`).toBeDefined()
+        expect(point!.x).toBeGreaterThan(room.x)
+        expect(point!.x).toBeLessThan(room.x + room.w)
+        expect(point!.y).toBeGreaterThan(room.y)
+        expect(point!.y).toBeLessThan(room.y + room.h)
+        target.push(`${point!.x}:${point!.y}`)
+      }
+    }
+  }
+  expect(allBeds).toHaveLength(19)
+  expect(allDesks).toHaveLength(19)
+  expect(new Set(allBeds).size).toBe(19)
+  expect(new Set(allDesks).size).toBe(19)
 })
 
 it('each resident\'s own home position is a distinct spot, not the old shared bed - including fixer\'s new house and weaver\'s bed sharing artist\'s room', () => {

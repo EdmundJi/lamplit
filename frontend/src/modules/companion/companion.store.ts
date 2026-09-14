@@ -1,9 +1,10 @@
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { defineStore, storeToRefs } from 'pinia'
 import { companionApi } from './companion.api'
 import { randomUUID } from '../../shared/uuid'
 import { onDataChanged } from '../../shared/data-sync'
 import type { IntentInput, IntentKind, Snapshot, World, WorldEvent } from './companion.types'
+import { useAuthStore } from '../auth/auth.store'
 
 /**
  * The town's one authoritative world, shared by every consumer instead of each fetching and
@@ -11,6 +12,7 @@ import type { IntentInput, IntentKind, Snapshot, World, WorldEvent } from './com
  * the same Pinia singleton. Only the server decides actions, memories and outcomes.
  */
 export const useTownWorld = defineStore('town-world', () => {
+  const auth = useAuthStore()
   const world = ref<World | null>(null)
   const loaded = ref(false)
   const loading = ref(false)
@@ -18,13 +20,30 @@ export const useTownWorld = defineStore('town-world', () => {
   const error = ref('')
   const feedback = ref('')
   let refreshing = false
+  let refreshingEpoch = 0
+  let busyEpoch = 0
   let pendingIntent: IntentInput | null = null
   let lastIntentId: string | null = null
+  let accountEpoch = 0
 
   // Causal feedback for the street strip: fire once per world event the instant it first appears,
   // never replaying history on the initial load or after switching to a different world entirely.
   const eventHandlers = new Set<(event: WorldEvent) => void>()
   let seenEventIds: Set<string> | null = null
+  function resetForAccount() {
+    accountEpoch++
+    refreshing = false
+    world.value = null
+    loaded.value = false
+    loading.value = false
+    busy.value = false
+    error.value = ''
+    feedback.value = ''
+    pendingIntent = null
+    lastIntentId = null
+    seenEventIds = null
+  }
+  watch(() => auth.user?.publicId ?? null, resetForAccount, { flush: 'sync' })
   function emitNewEvents(nextWorld: World | null) {
     const events = nextWorld?.events ?? []
     const sameWorld = seenEventIds !== null && world.value?.id === nextWorld?.id
@@ -39,8 +58,14 @@ export const useTownWorld = defineStore('town-world', () => {
   }
 
   function accept(snapshot: Snapshot) {
+    if (!snapshot.joined || !snapshot.world) {
+      emitNewEvents(null)
+      world.value = null
+      loaded.value = true
+      return
+    }
     // Concurrent reads must never replace a newer authoritative revision.
-    if (!world.value || (snapshot.world && (world.value.id !== snapshot.world.id || snapshot.world.revision >= world.value.revision))) {
+    if (!world.value || world.value.id !== snapshot.world.id || snapshot.world.revision >= world.value.revision) {
       emitNewEvents(snapshot.world)
       world.value = snapshot.world
     }
@@ -50,18 +75,40 @@ export const useTownWorld = defineStore('town-world', () => {
   async function load(advance = false) {
     if (refreshing) return
     refreshing = true
+    const epoch = accountEpoch
+    refreshingEpoch = epoch
     if (!loaded.value) loading.value = true
-    try { accept(await (advance && world.value ? companionApi.advance() : companionApi.load())); error.value = '' }
-    catch (caught) { error.value = (caught as Error)?.message || '暂时没有连上小街。稍后可以重试。' }
-    finally { refreshing = false; loading.value = false }
+    try {
+      const snapshot = await (advance && world.value ? companionApi.advance() : companionApi.load())
+      if (epoch !== accountEpoch) return
+      accept(snapshot)
+      error.value = ''
+    }
+    catch (caught) {
+      if (epoch !== accountEpoch) return
+      const failure = caught as { code?: string; message?: string }
+      // The world this browser tab remembers was deleted server-side (dev reset, account wiped,
+      // etc.) - without this, every future poll keeps calling advance() on a world.value that is
+      // never coming back, so the same "先搬进小街吧" error repeats forever until a manual reload.
+      // Forgetting it here lets the very next poll fall back to load() and show the join screen.
+      if (failure?.code === 'COMPANION_NOT_JOINED') { world.value = null; error.value = '' }
+      else error.value = failure?.message || '暂时没有连上小街。稍后可以重试。'
+    }
+    finally { if (refreshingEpoch === epoch) { refreshing = false; loading.value = false } }
   }
   async function mutate(action: () => Promise<Snapshot>) {
     if (busy.value) return false
     busy.value = true
+    const epoch = accountEpoch
+    busyEpoch = epoch
     error.value = ''
-    try { accept(await action()); return true }
-    catch (caught) { error.value = (caught as Error)?.message || '这次安排还没有确认，请重试。'; return false }
-    finally { busy.value = false }
+    try {
+      const snapshot = await action()
+      if (epoch !== accountEpoch) return false
+      accept(snapshot); return true
+    }
+    catch (caught) { if (epoch === accountEpoch) error.value = (caught as Error)?.message || '这次安排还没有确认，请重试。'; return false }
+    finally { if (busyEpoch === epoch) busy.value = false }
   }
   async function join(name: string, timezone: string) { return mutate(() => companionApi.join(name, timezone)) }
   async function intend(kind: IntentKind, extra: { taskId?: string; durationMinutes?: number; text?: string; priority?: 'explicit' | 'passing' } = {}) {
@@ -118,7 +165,7 @@ export const useTownWorld = defineStore('town-world', () => {
 
   return {
     world, loaded, loading, busy, error, feedback, activeIntents, load, join, intend, cancel,
-    start, stop, setInterval: setInterval_, onWorldEvent,
+    start, stop, setInterval: setInterval_, onWorldEvent, resetForAccount,
     // The world is shared and outlives any single consumer; a caller unmounting no longer tears
     // down data the street strip (or another view) may still be showing.
     dispose: () => undefined,

@@ -1,4 +1,4 @@
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { useAuthStore } from '../auth/auth.store'
 
@@ -44,6 +44,19 @@ export const useTownUi = defineStore('town-ui', () => {
     if (textBubbles.value) quiet.value = false
     try { localStorage.setItem(bubbleKey(), textBubbles.value ? 'on' : 'off') } catch { /* Keep the preference for this visit. */ }
   }
+
+  watch(() => auth.user?.publicId ?? null, () => {
+    overview.value = false
+    quiet.value = false
+    soundEnabled.value = false
+    selectedResident.value = null
+    selectedConversation.value = null
+    selectedPlace.value = ''
+    selectedProject.value = null
+    hoverSuppressed.value = false
+    fullscreenHandlers.value = {}
+    try { textBubbles.value = localStorage.getItem(bubbleKey()) === 'on' } catch { textBubbles.value = false }
+  }, { flush: 'sync' })
 
   return {
     overview, quiet, soundEnabled, textBubbles, selectedResident, selectedConversation,

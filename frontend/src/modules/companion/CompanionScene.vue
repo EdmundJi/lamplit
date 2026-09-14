@@ -48,7 +48,7 @@ function updateSound() {
   const self = props.residents.find(resident => resident.role === 'user' || resident.id === 'self' || resident.id === 'user')
   const selected = props.residents.find(resident => resident.id === props.selectedResidentId)
   const viewedPlace = props.overview ? 'street' : props.selectedPlace || selected?.location || self?.location || 'street'
-  sound.setSpace(/^cafe([./]|$)/.test(viewedPlace) ? 'cafe' : /^home([./-]|$)/.test(viewedPlace) ? 'home' : 'outdoor')
+  sound.setSpace(/^cafe([./]|$)/.test(viewedPlace) ? 'cafe' : /^(home([./-]|$)|academy$|gym$|shop$)/.test(viewedPlace) ? 'home' : 'outdoor')
   sound.refresh()
 }
 function visibility() {
@@ -80,7 +80,7 @@ onMounted(async () => {
 onBeforeUnmount(() => { disposed = true; document.removeEventListener('visibilitychange', visibility); resizeObserver?.disconnect(); sound.destroy(); game?.destroy(true) })
 </script>
 <template>
-  <div class="companion-scene" aria-label="陪伴小街：归家小屋、咖啡馆、门前小街和花园">
+  <div class="companion-scene" aria-label="陪伴小镇：住处、咖啡馆、花园、学院、健身房、公告板广场和商店">
     <div ref="host" class="companion-scene__canvas" :aria-hidden="!failed" />
     <div v-if="chrome" class="companion-scene__labels" aria-label="小街居民">
       <template v-for="label in labels" :key="label.id">
@@ -95,9 +95,9 @@ onBeforeUnmount(() => { disposed = true; document.removeEventListener('visibilit
         </button>
       </template>
     </div>
-    <p v-if="failed" class="companion-scene__fallback">画面暂时没有加载成功，居民的生活仍会保存。刷新页面再看看。</p>
+    <p v-if="failed" class="companion-scene__fallback" role="alert" data-testid="town-scene-error">画面暂时没有加载成功，居民的生活仍会保存。刷新页面再看看。</p>
     <div v-if="chrome" class="companion-scene__roster" aria-label="小街居民位置">
-      <button v-for="resident in residents" :key="resident.id" type="button" @click="emit('select-resident', resident.id)">{{ resident.name }} · {{ resident.action }}</button>
+      <button v-for="resident in residents" :key="resident.id" type="button" :data-resident-id="resident.id" @click="emit('select-resident', resident.id)">{{ resident.name }} · {{ resident.action }}</button>
     </div>
     <span class="companion-scene__credit">人物素材 · LimeZu</span>
   </div>

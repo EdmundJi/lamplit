@@ -19,14 +19,13 @@ export const ACTION_FRAME = { width: 96, height: 96, originX: 32 / 96, originY: 
 // `for i in range(1, 21)`). That is fine: sync() already guards every action-sheet animation
 // behind `this.textures.exists(`${sheet}-actions`)`, so anyone whose index lands past those five
 // simply falls back to the native idle/read/sit poses instead of a missing/floating action frame.
-// docs/01's 25-avatar plan is 20 ready-made identities + 5 synthesised from layered parts (see
-// scripts/build-companion-character.py) - this list holds the first half of that today. Every
-// number 1-20 exists once assets are built, so `RESIDENT_ART[index % RESIDENT_ART.length]`
-// (companion-scene.ts) now gives up to 20 residents a genuinely distinct sprite instead of
-// repeating after 7; past 20 it cycles, same as it always has past its own length. The first seven
-// entries keep their original order (1, 3, 6, 9, 12, 4, 7) so today's six residents + avatar keep
-// exactly the sprite they always had - only indices 7+ (new residents) are new territory.
-export const RESIDENT_ART = [1, 3, 6, 9, 12, 4, 7, 2, 5, 8, 10, 11, 13, 14, 15, 16, 17, 18, 19, 20] as const
+// docs/01's plan is 20 ready-made identities + 5 synthesised from layered parts (see
+// scripts/build-companion-character.py). The licensed postman add-on covers the player when the
+// backend returns 25 residents plus that avatar. The first seven entries keep their original order
+// so the original residents retain their established appearance.
+// 25 resident identities use c01..c25; the avatar at index 25 uses the licensed postman add-on,
+// so a fully populated 25-person town plus its player has no repeated silhouette.
+export const RESIDENT_ART = [1, 3, 6, 9, 12, 4, 7, 2, 5, 8, 10, 11, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 'postman'] as const
 export type CafeSeat = { x: number; y: number; facing: 'left' | 'right' }
 /** Compact two-tops with real opposing seats. All coordinates are residents' foot anchors. */
 export const CAFE_TABLES = [
@@ -58,7 +57,7 @@ export function cafeSeatAt(point: { x: number; y: number }) {
 // CAFE_SEATS, POSITION_SLOTS, RAIN_SHELTERS) keeps its exact old coordinates; the three new
 // buildings below live entirely past the old x=1248 right edge, in the newly added strip, so
 // nothing already drawn had to shift.
-export const COMPANION_WORLD_SIZE = { width: 1548, height: 768 } as const
+export const COMPANION_WORLD_SIZE = { width: 2048, height: 1408 } as const
 export interface HomeRoom {
   x: number; y: number; w: number; h: number
   /** An open standing point, the front doorstep, and the owned bed's foot anchor. */
@@ -86,6 +85,13 @@ export const HOME_ROOMS: Record<string, HomeRoom> = {
   owner: homeRoom(80, 108, 128, 224), student: homeRoom(216, 108, 128, 224),
   artist: homeRoom(96, 492, 160, 208), gardener: homeRoom(288, 492, 160, 208),
   self: homeRoom(480, 492, 160, 208), fixer: homeRoom(1080, 480, 160, 224),
+  // 南巷的十户组成第二版居住区。年轻人的房子会容纳三到四个独立卧室角，年长居民
+  // 独居或两人同住；位置 id 仍属于后端，这里只给每张床和桌子一个稳定像素。
+  barista: homeRoom(48, 816, 280, 220), botanist: homeRoom(360, 816, 280, 220),
+  messenger: homeRoom(672, 816, 280, 220), baker: homeRoom(984, 816, 280, 220),
+  florist: homeRoom(1296, 816, 280, 220), scholar: homeRoom(48, 1112, 280, 220),
+  tailor: homeRoom(360, 1112, 280, 220), masseur: homeRoom(672, 1112, 280, 220),
+  broker: homeRoom(984, 1112, 280, 220), trader: homeRoom(1296, 1112, 280, 220),
 }
 /**
  * Three new buildings east of the original 1248-wide canvas (the new strip runs x=1248..1548).
@@ -100,13 +106,17 @@ export const HOME_ROOMS: Record<string, HomeRoom> = {
 export const ACADEMY_ROOM = { x: 1268, y: 40, w: 260, h: 220, doorX: 1398 } as const
 export const GYM_ROOM = { x: 1268, y: 480, w: 260, h: 220, doorX: 1398 } as const
 export const BOARD_AREA = { x: 1268, y: 300, w: 200, h: 140 } as const
+export const SHOP_ROOM = { x: 1580, y: 448, w: 420, h: 260, doorX: 1790 } as const
 export const PLACE_FRAMES = {
-  home: { x: 72, y: 96, w: 576, h: 628 }, cafe: { x: 372, y: 0, w: 664, h: 576 },
+  home: { x: 36, y: 96, w: 1552, h: 1260 }, cafe: { x: 372, y: 0, w: 664, h: 576 },
   garden: { x: 1036, y: 192, w: 184, h: 274 }, street: { x: 32, y: 344, w: 816, h: 132 },
   academy: { x: ACADEMY_ROOM.x, y: ACADEMY_ROOM.y, w: ACADEMY_ROOM.w, h: ACADEMY_ROOM.h },
   gym: { x: GYM_ROOM.x, y: GYM_ROOM.y, w: GYM_ROOM.w, h: GYM_ROOM.h },
   board: { x: BOARD_AREA.x, y: BOARD_AREA.y, w: BOARD_AREA.w, h: BOARD_AREA.h },
+  shop: { x: SHOP_ROOM.x, y: SHOP_ROOM.y, w: SHOP_ROOM.w, h: SHOP_ROOM.h },
 } as const
+
+export type ScenePlaceId = 'home' | 'cafe' | 'garden' | 'street' | 'academy' | 'gym' | 'board' | 'shop'
 
 /**
  * The single registry every "place" concept in the shell reads from: the docked street strip's
@@ -123,7 +133,7 @@ export type StagePlace = {
   /** World-pixel camera target for the docked strip (see CompanionScene's cameraMode='docked'). */
   target: { x: number; y: number }
   frame?: { x: number; y: number; w: number; h: number }
-  scenePlace: 'home' | 'cafe' | 'garden' | 'street'
+  scenePlace: ScenePlaceId
   status: 'ready' | 'placeholder'
 }
 export const STAGE_PLACES: Record<string, StagePlace> = {
@@ -135,12 +145,13 @@ export const STAGE_PLACES: Record<string, StagePlace> = {
   garden: { id: 'garden', label: '门前花园', target: { x: 1128, y: 329 }, frame: PLACE_FRAMES.garden, scenePlace: 'garden', status: 'ready' },
   // The board is an open-air plaza (BOARD_AREA), not a room - target points at the two mounted
   // boards themselves, not the plaza's geometric centre (which would frame mostly empty paving).
-  board: { id: 'board', label: '公告板', target: { x: 1373, y: 360 }, frame: PLACE_FRAMES.board, scenePlace: 'street', status: 'ready' },
+  board: { id: 'board', label: '公告板广场', target: { x: 1373, y: 360 }, frame: PLACE_FRAMES.board, scenePlace: 'board', status: 'ready' },
   // Target points at the study desk/blackboard corner (ACADEMY_ROOM), the part of the room that
   // actually has content, rather than the room's own geometric centre.
-  academy: { id: 'academy', label: '学院', target: { x: 1398, y: 180 }, frame: PLACE_FRAMES.academy, scenePlace: 'street', status: 'ready' },
+  academy: { id: 'academy', label: '梧桐学院', target: { x: 1398, y: 180 }, frame: PLACE_FRAMES.academy, scenePlace: 'academy', status: 'ready' },
   // Target points at the mirror/rack equipment cluster (GYM_ROOM), same reasoning as academy.
-  gym: { id: 'gym', label: '健身房', target: { x: 1358, y: 620 }, frame: PLACE_FRAMES.gym, scenePlace: 'street', status: 'ready' },
+  gym: { id: 'gym', label: '河岸健身房', target: { x: 1358, y: 620 }, frame: PLACE_FRAMES.gym, scenePlace: 'gym', status: 'ready' },
+  shop: { id: 'shop', label: '南巷商店', target: { x: 1790, y: 590 }, frame: PLACE_FRAMES.shop, scenePlace: 'shop', status: 'ready' },
   // A virtual place, not a building: "wherever the avatar currently is". /today binds here instead
   // of a fixed 'street' target, because the street itself is usually empty (everyone is inside a
   // home or the cafe) - TownStage.vue overrides both `target` and `label` every render from the
@@ -197,6 +208,11 @@ export const POSITION_SLOTS: Record<string, { x: number; y: number }[]> = {
   'garden-bench': [{ x: 1109, y: 439 }, { x: 1137, y: 439 }, { x: 1165, y: 439 }],
   // The gardener's own tended plot (capacity 1) - a specific bed of soil, not the shared bench.
   'garden-plot': [{ x: 1137, y: 356 }],
+  'academy-desk-1': [{ x: 1330, y: 220 }],
+  'academy-desk-2': [{ x: 1398, y: 220 }],
+  'academy-desk-3': [{ x: 1466, y: 220 }],
+  'gym-bench': [{ x: 1320, y: 672 }, { x: 1370, y: 672 }, { x: 1420, y: 672 }],
+  'shop-workbench': [{ x: 1897, y: 666 }],
   // Each resident's own bed, in their own home - the fix for "everyone sleeps in the same bed":
   // every id below is now a distinct, non-overlapping spot.
   'home-owner-bed': [HOME_ROOMS.owner!.bed],
@@ -223,6 +239,44 @@ export const POSITION_SLOTS: Record<string, { x: number; y: number }[]> = {
   // Weaver's own desk, likewise inside the shared artist room, clear of her own bed above and of
   // the artist's furniture (matched to the chair pixel drawn in companion-stage.ts).
   'home-weaver-desk': [{ x: HOME_ROOMS.artist!.x + 22, y: HOME_ROOMS.artist!.y + 178 }],
+}
+
+/** The authored household layout mirrors ResidentPersonas.households(). It exists here only to
+ * place each resident's owned bed/desk and the shared stove; the backend remains authoritative
+ * for membership, capacity and occupancy. */
+export const HOUSEHOLD_MEMBERS: Record<string, readonly string[]> = {
+  barista: ['barista', 'waiter', 'tutor'], botanist: ['botanist', 'trainer', 'boxer', 'yogi'],
+  messenger: ['messenger', 'clerk', 'librarian'], baker: ['baker', 'beekeeper'],
+  florist: ['florist', 'scribe'], scholar: ['scholar'], tailor: ['tailor'], masseur: ['masseur'],
+  broker: ['broker'], trader: ['trader'],
+}
+
+for (const [homeId, members] of Object.entries(HOUSEHOLD_MEMBERS)) {
+  const room = HOME_ROOMS[homeId]!
+  const usableWidth = room.w - 16
+  const bedroomWidth = usableWidth / members.length
+  members.forEach((residentId, index) => {
+    const center = room.x + 8 + bedroomWidth * (index + .5)
+    POSITION_SLOTS[`home-${residentId}-bed`] = [{ x: center, y: room.y + 102 }]
+    POSITION_SLOTS[`home-${residentId}-desk`] = [{ x: center, y: room.y + 160 }]
+  })
+  POSITION_SLOTS[`home-${homeId}-table`] = [
+    { x: room.x + 22, y: room.y + 214 }, { x: room.x + 86, y: room.y + 214 },
+    { x: room.x + 42, y: room.y + 190 }, { x: room.x + 70, y: room.y + 190 },
+  ]
+  POSITION_SLOTS[`home-${homeId}-bathroom`] = [{ x: room.x + 151, y: room.y + 211 }]
+  if (members.length > 1) POSITION_SLOTS[`home-${homeId}-stove`] = [{ x: room.x + 212, y: room.y + 211 }]
+}
+
+// Older compact homes still receive the room/position ids backfilled by TownPlaces. Their common
+// table reuses the already drawn writing table, while the bathroom anchor occupies the open lower
+// corner; larger south-lane houses above get visibly separate rooms.
+for (const [homeId, room] of Object.entries(HOME_ROOMS)) {
+  POSITION_SLOTS[`home-${homeId}-table`] ??= [
+    { x: room.x + 20, y: room.y + room.h - 18 }, { x: room.x + room.w * .38, y: room.y + room.h - 18 },
+    { x: room.x + room.w * .64, y: room.y + room.h - 18 }, { x: room.x + room.w - 20, y: room.y + room.h - 18 },
+  ]
+  POSITION_SLOTS[`home-${homeId}-bathroom`] ??= [{ x: room.x + room.w / 2, y: room.y + room.h - 16 }]
 }
 
 export const RESIDENT_ACTIONS = {

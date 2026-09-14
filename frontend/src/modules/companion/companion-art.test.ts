@@ -1,13 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { COMPANION_WORLD_SIZE, STAGE_PLACES, resolveStagePlace } from './companion-art'
+import { COMPANION_WORLD_SIZE, RESIDENT_ART, STAGE_PLACES, resolveStagePlace } from './companion-art'
 
 describe('stage place registry', () => {
+  it('provides one distinct appearance for 25 residents and the player avatar', () => {
+    expect(RESIDENT_ART).toHaveLength(26)
+    expect(new Set(RESIDENT_ART).size).toBe(26)
+    expect(RESIDENT_ART).toEqual(expect.arrayContaining([21, 22, 23, 24, 25, 'postman']))
+  })
   it('resolves a ready place to its own registered target', () => {
     expect(resolveStagePlace('cafe')).toEqual(STAGE_PLACES.cafe)
     expect(resolveStagePlace('garden')).toEqual(STAGE_PLACES.garden)
   })
-  it('resolves the three east-wing places (board/academy/gym) to their own real geometry, not a street fallback', () => {
-    for (const id of ['board', 'academy', 'gym']) {
+  it('resolves every new public place to its own real geometry, not a street fallback', () => {
+    for (const id of ['board', 'academy', 'gym', 'shop']) {
       const resolved = resolveStagePlace(id)
       expect(resolved.status).toBe('ready')
       expect(resolved).toEqual(STAGE_PLACES[id])

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('phaser', () => ({ default: { Scene: class {} } }))
-import { residentPosition, scenePlace, visibleActivity, conversationPosition, rainFallsOutside, isSpeaking } from './companion-scene'
+import { residentPosition, scenePlace, visibleActivity, conversationPosition, conversationPositionInRoom, rainFallsOutside, isSpeaking, visibleSceneLabels } from './companion-scene'
+import type { SceneLabel } from './companion-scene'
 
 describe('authoritative activity presentation', () => {
   it('keeps rain outdoors while retaining it on the street and in the garden', () => {
@@ -113,6 +114,29 @@ describe('positionId-authoritative placement (TownPlaces two-layer place model)'
   })
 })
 
+describe('room-aware home placement', () => {
+  it('keeps flatmates in their server-described rooms even before either holds a named position', () => {
+    const artist = residentPosition('home-artist', 0, 'observe', '', undefined, 0, 'artist', [], 'home-artist-room-artist')
+    const weaver = residentPosition('home-artist', 0, 'observe', '', undefined, 0, 'weaver', [], 'home-artist-room-weaver')
+    const common = residentPosition('home-artist', 0, 'observe', '', undefined, 0, 'artist', [], 'home-artist-common')
+    expect(artist).not.toEqual(weaver)
+    expect(common).not.toEqual(artist)
+    expect(common).not.toEqual(weaver)
+  })
+  it('keeps a room-level home conversation in its own house instead of the generic home centre', () => {
+    const artistHome = conversationPositionInRoom('home-artist', 0, 'home-artist-common')
+    const fixerHome = conversationPositionInRoom('home-fixer', 0, 'home-fixer-room-fixer')
+    expect(artistHome).not.toEqual(fixerHome)
+    expect(artistHome.x).toBeLessThan(300)
+    expect(fixerHome.x).toBeGreaterThan(1000)
+  })
+  it('spreads non-positioned residents in one common room across its real table slots', () => {
+    const first = residentPosition('home-artist', 0, 'observe', '', undefined, 0, 'artist', [], 'home-artist-common')
+    const second = residentPosition('home-artist', 1, 'observe', '', undefined, 0, 'weaver', [first], 'home-artist-common')
+    expect(first).not.toEqual(second)
+  })
+})
+
 describe('a speech bubble is gated on its own speaker only', () => {
   // Regression for: giving one conversation participant a backend positionId sends them on a
   // short walk to their newly authoritative seat (their place+index guess no longer matches the
@@ -128,5 +152,13 @@ describe('a speech bubble is gated on its own speaker only', () => {
   })
   it('never shows a bubble for a resident whose turn it is not', () => {
     expect(isSpeaking('ahe', 'achuan', true)).toBe(false)
+  })
+})
+
+describe('populated-town scene labels', () => {
+  it('keeps only one unselected offscreen representative per edge while retaining the selected resident', () => {
+    const label = (id: string, direction: SceneLabel['direction'], selected = false): SceneLabel => ({ id, name: id, x: 0, y: 0, selected, speechOffset: 0, action: '', role: '', emoji: '', bodyX: 0, bodyY: 0, bodyHeight: 0, offscreen: true, direction })
+    const shown = visibleSceneLabels([label('a', '‹'), label('b', '‹'), label('c', '›'), label('d', '⌃'), label('e', '⌄'), label('selected', '‹', true)])
+    expect(shown.map(item => item.id)).toEqual(['a', 'c', 'd', 'e', 'selected'])
   })
 })

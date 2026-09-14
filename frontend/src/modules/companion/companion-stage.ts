@@ -1,5 +1,5 @@
 import type Phaser from 'phaser'
-import { CAFE_TABLES, CAFE_WINDOW_SEATS, CAFE_WINDOW_TABLES, CAFE_ROOM, CAFE_WINDOW_ROOM, CAFE_SERVICE, COMPANION_WORLD_SIZE, HOME_ROOMS, GARDEN_OFFSET_X, ACADEMY_ROOM, GYM_ROOM, BOARD_AREA } from './companion-art'
+import { CAFE_TABLES, CAFE_WINDOW_SEATS, CAFE_WINDOW_TABLES, CAFE_ROOM, CAFE_WINDOW_ROOM, CAFE_SERVICE, COMPANION_WORLD_SIZE, HOME_ROOMS, HOUSEHOLD_MEMBERS, GARDEN_OFFSET_X, ACADEMY_ROOM, GYM_ROOM, BOARD_AREA, SHOP_ROOM, POSITION_SLOTS } from './companion-art'
 
 /** A small cutaway street, using the locally licensed LimeZu furniture at one human scale. */
 export function buildCompanionStage(scene: Phaser.Scene) {
@@ -35,7 +35,7 @@ export function buildCompanionStage(scene: Phaser.Scene) {
   }
   rect(0, 0, COMPANION_WORLD_SIZE.width, COMPANION_WORLD_SIZE.height, 0x96a486)
   // Sparse ground texture and grouped planting leave people as the highest contrast detail.
-  for (let i = 0; i < 430; i++) rect(i * 137 % COMPANION_WORLD_SIZE.width, i * 97 % 768, 2, 1, i % 3 ? 0xc2c8a7 : 0x788e71, .3)
+  for (let i = 0; i < 760; i++) rect(i * 137 % COMPANION_WORLD_SIZE.width, i * 97 % COMPANION_WORLD_SIZE.height, 2, 1, i % 3 ? 0xc2c8a7 : 0x788e71, .3)
   path(32, 364, 816, 96)
   path(816, 424, 32, 168)
   path(816, 560, 256, 32)
@@ -60,6 +60,13 @@ export function buildCompanionStage(scene: Phaser.Scene) {
   path(BOARD_AREA.x, BOARD_AREA.y, BOARD_AREA.w, BOARD_AREA.h)
   path(GYM_ROOM.doorX - 16, BOARD_AREA.y + BOARD_AREA.h, 32, GYM_ROOM.y - (BOARD_AREA.y + BOARD_AREA.h))
   path(GYM_ROOM.doorX - 16, GYM_ROOM.y + GYM_ROOM.h, 32, 24)
+  // 南巷把新增十户接回旧街区。两条横巷经过每扇门，中间的窄路负责把两个街区连起来；
+  // 与 companion-navigation.ts 的 walkable 矩形逐项一致。
+  path(1218, 708, 782, 32)
+  path(952, 708, 32, 672)
+  path(32, 1052, 1556, 32)
+  path(32, 1348, 1556, 32)
+  path(SHOP_ROOM.doorX - 16, SHOP_ROOM.y + SHOP_ROOM.h, 32, 32)
 
   function room(x: number, y: number, w: number, h: number, doorX: number | undefined, warm = false, openRight = false, openLeftUntil = y) {
     rect(x + 8, y + 12, w + 2, h + 1, 0x52634d, .23)
@@ -89,19 +96,22 @@ export function buildCompanionStage(scene: Phaser.Scene) {
   const beds = ['home_bed_ochre', 'home_bed_blue', 'home_bed_lilac', 'home_bed_green', 'home_bed_blue', 'home_bed_ochre']
   Object.entries(HOME_ROOMS).forEach(([id, home], index) => {
     const { x, y, w, h, door } = home
+    const members = HOUSEHOLD_MEMBERS[id]
     room(x, y, w, h, door.x, true)
     // Numbered doorsteps stay tied to stable places when residents change careers.
-    label(x + w / 2, y - 15, `${index + 1} 号小屋`, true)
-    image(x + 32, y + 129, beds[index % beds.length]!, .875, 'companion')
-    image(x + w - 35, y + 168, 'cafe_table', .75)
-    image(x + w - 72, y + 168, 'chair_2', 1, 'interior', y + 167)?.setFlipX(true)
-    image(x + 37, y + h - 19, 'rug_pattern_2', .85, 'interior', -75)?.setTint(0xc9bb9b)
-    if (id === 'owner') {
+    label(x + w / 2, y - 15, index < 6 ? `${index + 1} 号小屋` : `南巷 ${index - 5} 号`, true)
+    if (!members) {
+      image(x + 32, y + 129, beds[index % beds.length]!, .875, 'companion')
+      image(x + w - 35, y + 168, 'cafe_table', .75)
+      image(x + w - 72, y + 168, 'chair_2', 1, 'interior', y + 167)?.setFlipX(true)
+      image(x + 37, y + h - 19, 'rug_pattern_2', .85, 'interior', -75)?.setTint(0xc9bb9b)
+    }
+    if (!members && id === 'owner') {
       image(x + w - 31, y + 149, 'coffee_cup', .7, 'interior', y + 169)
       image(x + 30, y + 181, 'plant_1', .5)
-    } else if (id === 'student') {
+    } else if (!members && id === 'student') {
       image(x + w - 20, y + 147, 'office_lamp', .65, 'companion', y + 169)
-    } else if (id === 'artist') {
+    } else if (!members && id === 'artist') {
       image(x + w - 31, y + 138, 'project_poster', .55, 'companion')
       // Moved from (x+32,y+182) into the open gap between the two beds, which weaver's own bed
       // and desk/chair below would otherwise have crowded it into.
@@ -118,17 +128,56 @@ export function buildCompanionStage(scene: Phaser.Scene) {
       image(x + 104, y + 118, 'home_bed_green', .65, 'companion')
       image(x + 22, y + 178, 'chair_2', .5, 'interior', y + 177)?.setFlipX(true)
       image(x + 42, y + 178, 'desk_1', .5, 'interior', y + 178)
-    } else if (id === 'gardener') {
+    } else if (!members && id === 'gardener') {
       image(x + w - 36, y + 145, 'plant_1', .5, 'interior', y + 169)
       image(x + 41, y + 181, 'plant_3', .6)
-    } else if (id === 'fixer') {
+    } else if (!members && id === 'fixer') {
       // 周野 repairs things - bicycles, furniture, lamps - so his room gets a wall cabinet for
       // tools instead of the generic decorative plant/lamp/poster the other homes use.
       image(x + w - 24, y + 148, 'wall_cabinet_1', .6, 'interior', y + 169)
       image(x + 30, y + 181, 'plant_1', .5)
-    } else {
+    } else if (!members) {
       image(x + w - 41, y + 150, 'coffee_cup', .65, 'interior', y + 169)
       image(x + 33, y + 182, 'plant_1', .5)
+    }
+    if (members) {
+      // Shared flats read as several private corners around one common kitchen. These props are
+      // decorative mirrors of backend-owned position ids; occupancy still comes entirely from it.
+      const divider = graphics(y + 80)
+      const bedroomWidth = (w - 16) / members.length
+      for (let split = 1; split < members.length; split++) rect(x + 8 + bedroomWidth * split - 2, y + 38, 4, 138, 0x8f8a73, .9, divider)
+      // Bedroom doors open into the common strip; the wall is intentionally segmented, never a
+      // decorative line residents have to ghost through.
+      members.forEach((_, memberIndex) => {
+        const left = x + 8 + bedroomWidth * memberIndex
+        const center = left + bedroomWidth / 2
+        rect(left, y + 174, Math.max(0, center - 16 - left), 4, 0x8f8a73, .9, divider)
+        rect(center + 16, y + 174, Math.max(0, left + bedroomWidth - center - 16), 4, 0x8f8a73, .9, divider)
+      })
+      for (const split of [x + 106, x + 194]) {
+        rect(split, y + 178, 3, 14, 0x8f8a73, .86, divider)
+        rect(split, y + 211, 3, 9, 0x8f8a73, .86, divider)
+      }
+      image(x + 54, y + 214, 'cafe_table', .52, 'interior', y + 211)
+      image(x + 23, y + 214, 'chair_2', .46, 'interior', y + 212)?.setFlipX(true)
+      image(x + 84, y + 214, 'chair_2', .46, 'interior', y + 212)
+      image(x + 238, y + 212, 'stove_1', .62, 'interior', y + 211)
+      image(x + 151, y + 210, 'sink_1', .58, 'interior', y + 211)
+      image(x + 151, y + 218, 'doormat_1', .7, 'interior', -74)?.setTint(0xb9c8bc)
+      label(x + 54, y + 190, '共用起居', true)
+      label(x + 151, y + 190, '浴室', true)
+      label(x + 237, y + 190, '厨房', true)
+      members.forEach((residentId, memberIndex) => {
+        const bed = POSITION_SLOTS[`home-${residentId}-bed`]?.[0]
+        const desk = POSITION_SLOTS[`home-${residentId}-desk`]?.[0]
+        if (bed) image(bed.x, bed.y - 4, beds[(index + memberIndex) % beds.length]!, .68, 'companion', bed.y - 1)
+        if (desk) {
+          image(desk.x + 11, desk.y, 'desk_1', .55, 'interior', desk.y - 1)
+          image(desk.x - 13, desk.y, 'chair_2', .56, 'interior', desk.y)?.setFlipX(true)
+        }
+        label(x + 8 + bedroomWidth * (memberIndex + .5), y + 50, `${memberIndex + 1} 室`, true)
+      })
+      image(x + w / 2, y + 217, 'rug_pattern_1', .48, 'interior', -75)?.setTint(0xc9bb9b)
     }
   })
 
@@ -231,6 +280,23 @@ export function buildCompanionStage(scene: Phaser.Scene) {
   image(BOARD_AREA.x + 136, BOARD_AREA.y + 55, 'notice_1', .8)
   image(BOARD_AREA.x + 100, BOARD_AREA.y + 120, 'bench_1', .9)
   image(BOARD_AREA.x + 180, BOARD_AREA.y + 40, 'lamp_5', .7, 'town')
+
+  // 商店是所有权、借用与归还真正发生的地方。工作台的位置与 `shop-workbench` 对齐，
+  // 两侧留出站人和排队的空间，让后端的互斥占用在画面里可见。
+  room(SHOP_ROOM.x, SHOP_ROOM.y, SHOP_ROOM.w, SHOP_ROOM.h, SHOP_ROOM.doorX, true)
+  label(SHOP_ROOM.x + SHOP_ROOM.w / 2, SHOP_ROOM.y - 15, '南巷商店')
+  image(SHOP_ROOM.x + 105, SHOP_ROOM.y + 115, 'bookshelf_home_1', .9)
+  image(SHOP_ROOM.x + 305, SHOP_ROOM.y + 115, 'bookshelf_home_1', .9)
+  image(SHOP_ROOM.x + 55, SHOP_ROOM.y + 187, 'fridge_1', .78)
+  image(SHOP_ROOM.x + 115, SHOP_ROOM.y + 190, 'bookshelf_3', 1.1)
+  image(SHOP_ROOM.x + 195, SHOP_ROOM.y + 208, 'cafe_counter', 1.05)
+  image(SHOP_ROOM.x + 185, SHOP_ROOM.y + 191, 'office_books', .55, 'companion', SHOP_ROOM.y + 209)
+  image(SHOP_ROOM.x + 334, SHOP_ROOM.y + 170, 'wall_cabinet_1', 1)
+  image(SHOP_ROOM.x + 350, SHOP_ROOM.y + 218, 'desk_1', 1.1)
+  image(SHOP_ROOM.x + 382, SHOP_ROOM.y + 222, 'chair_2', .95)?.setFlipX(true)
+  image(SHOP_ROOM.x + 93, SHOP_ROOM.y + 236, 'rug_pattern_1', .72, 'interior', -75)?.setTint(0xc9bb9b)
+  label(SHOP_ROOM.x + 350, SHOP_ROOM.y + 145, '工具台', true)
+  label(SHOP_ROOM.x + 200, SHOP_ROOM.y + 54, '杂货 · 修补 · 借还', true)
 
   // A small amount of non-resident ambient life on the street (docs/01: "少量生活动作，让它适合放
   // 在旁边长时间陪伴"). Purely decorative - nothing here is ever a target for pathfinding or a

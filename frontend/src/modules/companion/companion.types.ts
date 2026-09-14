@@ -5,9 +5,10 @@ export type Actor = { id: string; name: string; role: string; place: string; act
 /** A place a resident can be: the three shared places (street/cafe/garden), or one resident's own
  * home. `ownerId` is null for a shared place. Mirrors CompanionWorld.Location on the backend. */
 export type Location = { id: string; kind: string; ownerId: string | null }
+export type Room = { id: string; buildingId: string; kind: string; residentIds: string[] }
 /** A specific spot inside a location - a bed, a window seat, a shared table. `ownerId` null means
  * anyone can sit; `occupantIds.length` is capped by `capacity`. Mirrors CompanionWorld.Position. */
-export type Position = { id: string; place: string; kind: string; ownerId: string | null; capacity: number; occupantIds: string[] }
+export type Position = { id: string; place: string; roomId?: string | null; kind: string; ownerId: string | null; capacity: number; occupantIds: string[]; waitingIds?: string[]; condition?: 'usable' | 'broken' | string }
 export type Intent = { id: string; kind: IntentKind; priority: 'explicit' | 'passing'; status: 'pending' | 'active' | 'done' | 'cancelled'; feedback: string; createdAt: string; taskId?: string | null; text?: string; resolvedKind?: string }
 export type Memory = { id: string; ownerId: string; sourceId: string; sourceType: 'seed' | 'observed' | 'heard' | 'reflection'; topicId?: string; evidenceIds?: string[]; importance?: number; at: string; text: string }
 export type World = {
@@ -18,13 +19,16 @@ export type World = {
   cafeOpenMinute?: number; cafeCloseMinute?: number; cafeStatus?: 'open' | 'closing' | 'closed'; cafeStatusChangedAt?: string | null
   // Structure/ownership only, from TownPlaces; may be absent on a save the backend hasn't repaired
   // yet (seeded lazily on the next advance()), so the frontend must keep working without them.
-  locations?: Location[]; positions?: Position[]
+  locations?: Location[]; rooms?: Room[]; positions?: Position[]
   memories: Memory[]; focus: { taskId: string; startedAt: string; endsAt: string } | null; offlineSummary: string | null
 }
 export type Snapshot = { joined: boolean; world: World | null }
 export type IntentInput = { id: string; kind: IntentKind; priority: 'explicit' | 'passing'; taskId?: string; durationMinutes?: number; text?: string }
 export type ResidentState = {
   id: string; energy: number; social: number; curiosity: number; mood: string; goal: string; thought: string
+  /** The backend's current room within the actor's location. It matters when flatmates share one
+   * visible house but are in different bedroom/common-room state. */
+  roomId?: string | null
   /** A resident's own, longer-lived direction. It is intentionally separate from the short plan
    * displayed in the street: an interruption should not make a whole day look like a new life. */
   lifeIntent?: { id: string; goalId?: string | null; purpose?: string | null; status?: string | null; formedAt?: string | null; updatedAt?: string | null } | null
@@ -44,5 +48,5 @@ export type ResidentState = {
 }
 export type Project = { id: string; title: string; kind: string; place: string; ownerId: string; status: 'idea' | 'active' | 'ready' | 'celebrating'; progress: number; needed: number; contributors: string[]; objectKind: 'poster' | 'flowers' | 'books' | 'tea'; description: string }
 export type Conversation = { id: string; place: string; participantIds: string[]; topicId: string; startedAt: string; updatedAt: string; status: 'active' | 'ended'; turns: { speakerId: string; text: string; at: string; emoji?: string | null }[] }
-export type WorldEvent = { id: string; at: string; type: string; place: string; actorIds: string[]; text: string; projectId: string | null }
-export type WorldObject = { id: string; kind: string; place: string; label: string; state: string; projectId: string | null }
+export type WorldEvent = { id: string; at: string; type: string; place: string; actorIds: string[]; text: string; projectId: string | null; positionId?: string | null }
+export type WorldObject = { id: string; kind: string; place: string; roomId?: string | null; label: string; state: string; projectId: string | null; ownerId?: string | null; holderId?: string | null }

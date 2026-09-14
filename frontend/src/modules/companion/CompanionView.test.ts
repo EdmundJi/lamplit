@@ -10,6 +10,10 @@ function snapshot() {
   return { joined: true, world: { id: 'world', name: '梧桐小街', timezone: 'Asia/Shanghai', revision: 1, joinedAt: '2026-09-08T00:00:00Z', updatedAt: '2026-09-08T00:00:00Z', weather: 'sunny', period: 'morning', avatar: actor,
     residents: [{ ...actor, id: 'owner', name: '阿禾', role: '店主' }], intents: [{ id: 'focus-1', taskId: 'todo-1', kind: 'focus', priority: 'explicit', status: 'active', feedback: '开始了', createdAt: '2026-09-08T00:00:00Z' }],
     memories: [{ id: 'memory', ownerId: 'owner', sourceId: 'student', sourceType: 'heard', text: '听说海报快画好了。', at: '2026-09-08T00:00:00Z' }], diary: [], offlineSummary: null,
+    locations: [{ id: 'cafe', kind: 'cafe', ownerId: null }, { id: 'shop', kind: 'shop', ownerId: null }, { id: 'home-owner', kind: 'home', ownerId: 'owner' }],
+    rooms: [{ id: 'home-owner-room-owner', buildingId: 'home-owner', kind: 'bedroom', residentIds: ['owner'] }],
+    positions: [{ id: 'shop-workbench', place: 'shop', kind: 'workbench', ownerId: null, capacity: 1, occupantIds: [], waitingIds: [], condition: 'usable' }],
+    objects: [{ id: 'shop-toolkit', kind: 'tool', place: 'shop', label: '旧工具箱', state: '少了一把螺丝刀', projectId: null, ownerId: 'owner', holderId: null }],
     focus: { taskId: 'todo-1', startedAt: '2026-09-08T00:00:00Z', endsAt: '2026-09-08T00:00:01Z' } } }
 }
 let wrapper: ReturnType<typeof mount> | undefined
@@ -70,6 +74,18 @@ describe('companion page task boundary', () => {
     expect(localStorage.getItem('better-self:town-text-bubbles:guest')).toBe('on')
     expect(api.post.mock.calls.some(call => call[0].includes('/intents'))).toBe(false)
     expect(view.find('.neighbors').exists()).toBe(false)
+  })
+
+  it('browses real public places, rooms and residents without writing a life command', async () => {
+    const view = await render()
+    await view.get('button[aria-label="查看地点与居民"]').trigger('click')
+    expect(view.get('[data-testid="place-browser"]').isVisible()).toBe(true)
+    const shop = view.get('button[data-place-id="shop"]')
+    await shop.trigger('click')
+    expect(useTownUi().selectedPlace).toBe('shop')
+    expect(view.get('.place-now').text()).toContain('工具台')
+    expect(view.get('.place-now').text()).toContain('旧工具箱')
+    expect(api.post.mock.calls.some(call => call[0].includes('/intents'))).toBe(false)
   })
 
   it('opens the whole conversation directly and keeps the control panels mutually exclusive', async () => {

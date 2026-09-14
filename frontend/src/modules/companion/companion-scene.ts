@@ -5,20 +5,32 @@ import { dominantDirection, stepTowardPoint, type Direction4 } from '../../share
 import { conversationEmoji, residentStatus } from './companion-presentation'
 import { motionAllowed } from '../../shared/ui/interaction/motion'
 import { buildCompanionStage } from './companion-stage'
-import { ACTION_FRAME, RESIDENT_ART, RESIDENT_ACTIONS, isArtAction, COMPANION_WORLD_SIZE, HOME_ROOMS, CAFE_ROOM, CAFE_WINDOW_ROOM, CAFE_SERVICE, CAFE_SEATS, cafeSeatAt, GARDEN_OFFSET_X, POSITION_SLOTS, WALK_PIXELS_PER_SECOND } from './companion-art'
+import { ACTION_FRAME, RESIDENT_ART, RESIDENT_ACTIONS, isArtAction, COMPANION_WORLD_SIZE, HOME_ROOMS, CAFE_ROOM, CAFE_WINDOW_ROOM, CAFE_SERVICE, CAFE_SEATS, cafeSeatAt, GARDEN_OFFSET_X, POSITION_SLOTS, WALK_PIXELS_PER_SECOND, ACADEMY_ROOM, GYM_ROOM, SHOP_ROOM } from './companion-art'
 // scenePlace/residentPosition/residentTarget/etc. live in companion-geometry.ts, which has no
 // Phaser import - see that file's own header comment for why. companion-scene.ts (this file, the
 // real Phaser.Scene) re-exports them below so every existing import of './companion-scene' -
 // TownStage.vue's old value import included - keeps working; TownStage.vue itself has since moved
 // to importing straight from companion-geometry so mounting it never pulls Phaser in.
-import { scenePlace, placeFrame, placeCenter, homeRoom, homeId, visibleActivity, isSpeaking, conversationPosition, residentPosition, residentTarget, rainFallsOutside } from './companion-geometry'
-export { scenePlace, visibleActivity, isSpeaking, conversationPosition, residentPosition, residentTarget, rainFallsOutside }
+import { scenePlace, placeFrame, placeCenter, homeRoom, homeId, visibleActivity, isSpeaking, conversationPosition, conversationPositionInRoom, residentPosition, residentTarget, rainFallsOutside, travelAnchor } from './companion-geometry'
+export { scenePlace, visibleActivity, isSpeaking, conversationPosition, conversationPositionInRoom, residentPosition, residentTarget, rainFallsOutside }
 
-export interface SceneResident { id: string; name: string; role?: string; location: string; action: string; activity?: string; destination?: string; objectKind?: string; positionId?: string | null }
+export interface SceneResident { id: string; name: string; role?: string; location: string; action: string; activity?: string; destination?: string; objectKind?: string; positionId?: string | null; roomId?: string | null }
 export interface SceneProject { id: string; title: string; place: string; status: string; progress: number; objectKind: string }
 export interface SceneConversation { id: string; place: string; status: string; topicId?: string; participantIds?: string[]; turns: { speakerId: string; text: string; at: string; emoji?: string | null }[] }
 export interface SceneObject { id: string; kind: string; place: string; label: string; state: string; projectId: string | null }
 export interface SceneLabel { worldX?: number; worldY?: number; facing?: Direction4; id: string; name: string; x: number; y: number; selected: boolean; speechOffset: number; speech?: string; action: string; role: string; emoji: string; hovered?: boolean; bodyX: number; bodyY: number; bodyHeight: number; conversationId?: string; dialogue?: { name: string; text: string }[]; offscreen?: boolean; direction?: string }
+/** Keep the canvas edge legible in a populated town. The resident roster remains the complete,
+ * accessible index; on the map, retain a selected resident plus one representative per edge. */
+export function visibleSceneLabels(labels: SceneLabel[]) {
+  const represented = new Set<string>()
+  return labels.filter(label => {
+    if (!label.offscreen || label.selected) return true
+    const edge = label.direction ?? ''
+    if (represented.has(edge)) return false
+    represented.add(edge)
+    return true
+  })
+}
 // cafeOpen mirrors CompanionScene.vue's own prop of the same name: authoritative world.cafeStatus,
 // never inferred from the client's clock - see the night window lighting in sync().
 // 'docked' is the always-on street strip: a short, wide window that pans/zooms to a fixed world
@@ -46,6 +58,7 @@ export class CompanionStreetScene extends Phaser.Scene {
   // The cafe's own light is gated on the authoritative cafeStatus the caller already computes for
   // the soundscape (world.cafeStatus, never the client's own clock guess) - see CompanionScene.vue.
   private cafeLights: (Phaser.GameObjects.Rectangle | Phaser.GameObjects.Ellipse)[] = []
+  private publicLights: Phaser.GameObjects.Rectangle[] = []
   private selection!: Phaser.GameObjects.Ellipse
   private projectLayer!: Phaser.GameObjects.Container
   private projectSignature = ''
@@ -146,9 +159,9 @@ export class CompanionStreetScene extends Phaser.Scene {
     this.load.atlas('companion', '/assets/town/companion-atlas.png', '/assets/town/companion-atlas.json')
     this.load.atlas('interior', '/assets/town/interior-atlas.png', '/assets/town/interior-atlas.json')
     for (const n of RESIDENT_ART) {
-      const base = `/assets/town/characters/c${String(n).padStart(2, '0')}`
+      const base = `/assets/town/characters/${typeof n === 'number' ? `c${String(n).padStart(2, '0')}` : n}`
       this.load.spritesheet(`companion-${n}`, `${base}.png`, { frameWidth: 32, frameHeight: 64 })
-      this.load.spritesheet(`companion-${n}-actions`, `${base}-actions.png`, { frameWidth: ACTION_FRAME.width, frameHeight: ACTION_FRAME.height })
+      if (typeof n === 'number' && [1, 3, 6, 9, 12].includes(n)) this.load.spritesheet(`companion-${n}-actions`, `${base}-actions.png`, { frameWidth: ACTION_FRAME.width, frameHeight: ACTION_FRAME.height })
     }
   }
   create() {
@@ -176,6 +189,8 @@ export class CompanionStreetScene extends Phaser.Scene {
       this.add.rectangle(CAFE_WINDOW_ROOM.x + 8 + (CAFE_WINDOW_ROOM.w - 16) / 2, CAFE_WINDOW_ROOM.y + 32 + (CAFE_WINDOW_ROOM.h - 32) / 2, CAFE_WINDOW_ROOM.w - 16, CAFE_WINDOW_ROOM.h - 32, 0xffcf7a, .38).setDepth(805).setVisible(false),
       this.add.ellipse(480, 226, 180, 185, 0xffd89a, .13).setDepth(805).setVisible(false),
     ]
+    this.publicLights = [ACADEMY_ROOM, GYM_ROOM, SHOP_ROOM].map(room =>
+      this.add.rectangle(room.x + 8 + (room.w - 16) / 2, room.y + 32 + (room.h - 32) / 2, room.w - 16, room.h - 32, 0xffcf7a, .26).setDepth(805).setVisible(false))
     this.rain = this.add.graphics().setDepth(950)
     this.projectLayer = this.add.container(0, 0).setDepth(290)
     this.ready = true
@@ -256,22 +271,22 @@ export class CompanionStreetScene extends Phaser.Scene {
         // its slots by first-come order, kept stable frame to frame like the old seatIndex below.
         const usedSlots = new Set([...this.actors.entries()].filter(([id, other]) => id !== resident.id && other.positionId === knownPositionId).map(([, other]) => other.slot).filter(value => value !== undefined))
         slot = actor?.positionId === knownPositionId && actor?.slot !== undefined ? actor.slot : ([...Array(capacity).keys()].find(seat => !usedSlots.has(seat)) ?? 0)
-        target = residentPosition(location, index, resident.activity, resident.action, knownPositionId, slot)
+        target = residentPosition(location, index, resident.activity, resident.action, knownPositionId, slot, resident.id, [], resident.roomId)
       } else {
-        const peersHere = [...this.actors.entries()].filter(([id, other]) => id !== resident.id && scenePlace(other.location) === scenePlace(location))
+        const peersHere = [...this.actors.entries()].filter(([id, other]) => id !== resident.id && other.location === location)
         const usedSeats = new Set(peersHere.map(([, other]) => other.seatIndex).filter(value => value !== undefined))
         seatIndex = atDesk ? (actor?.seatIndex !== undefined && scenePlace(actor.location) === scenePlace(location) ? actor.seatIndex : CAFE_SEATS.map((_, index) => index).find(seat => !usedSeats.has(seat)) ?? index) : undefined
         // Free-standing (no seat matched): spread away from wherever every other resident
         // already visible in this place has settled, whatever put them there - another
         // free-standing pick, a bed, a desk seat, a garden plot.
         const occupied = peersHere.map(([, other]) => other.target)
-        target = residentPosition(location, seatIndex ?? index, resident.activity, resident.action, undefined, 0, resident.id, occupied)
+        target = residentPosition(location, seatIndex ?? index, resident.activity, resident.action, undefined, 0, resident.id, occupied, resident.roomId)
       }
-      if (travelling) target = homeRoom(location)?.door ?? (scenePlace(location) === 'cafe' ? CAFE_SERVICE.entry : placeCenter(location))
-      const conversation = !travelling ? state.conversations?.find(c => c.status === 'active' && scenePlace(c.place) === scenePlace(location) && (c.participantIds?.includes(resident.id) || c.turns.some(t => t.speakerId === resident.id))) : undefined
+      if (travelling) target = travelAnchor(location)
+      const conversation = !travelling ? state.conversations?.find(c => c.status === 'active' && c.place === location && (c.participantIds?.includes(resident.id) || c.turns.some(t => t.speakerId === resident.id))) : undefined
       const participants = conversation?.participantIds ?? [...new Set(conversation?.turns.map(t => t.speakerId) ?? [])]
       // A conversation does not uproot people from an occupied chair or the coffee machine.
-      if (conversation && !knownPositionId && seatIndex === undefined) target = conversationPosition(location, participants.indexOf(resident.id))
+      if (conversation && !knownPositionId && seatIndex === undefined) target = conversationPositionInRoom(location, participants.indexOf(resident.id), resident.roomId)
       if (!actor) {
         const root = this.add.container(target.x, target.y)
         root.add(this.add.ellipse(0, -1, 29, 9, 0x4c5444, .2))
@@ -334,6 +349,7 @@ export class CompanionStreetScene extends Phaser.Scene {
     // cafeOpen prop) - never on a guess about whether "now" falls inside opening hours.
     const cafeLit = night && (state.cafeOpen ?? true)
     for (const light of this.cafeLights) light.setVisible(cafeLit)
+    for (const light of this.publicLights) light.setVisible(night)
     this.updateProjects(state)
     this.frameCamera()
   }
@@ -410,7 +426,10 @@ export class CompanionStreetScene extends Phaser.Scene {
         const bodyOffset = actor.sleeping ? -68 : 0
         const bodyHeight = actor.sleeping ? 31 : 60
         const y = (actor.root.y + bodyOffset - cameraCenter.y) * zoom + this.viewport.height / 2 - bodyHeight * zoom - 20
-        const offscreen = x < 18 || x > this.viewport.width - 18 || y < 38 || y > this.viewport.height - 27
+        // Overview always fits the complete world into the viewport. Do not turn residents into
+        // edge arrows there because their DOM label's head-offset may cross an edge while the body
+        // itself is still plainly visible on the map (the old "画面内却说在画面外" bug).
+        const offscreen = !state.overview && (x < 18 || x > this.viewport.width - 18 || y < 38 || y > this.viewport.height - 27)
         const direction = x < 18 ? '‹' : x > this.viewport.width - 18 ? '›' : y < 38 ? '⌃' : '⌄'
         const resident = state.residents.find(r => r.id === id)
         const speech = isSpeaking(id, turn?.speakerId, !actor.path.length) ? turn!.text.slice(0, 23) + (turn!.text.length > 23 ? '…' : '') : undefined
@@ -431,7 +450,7 @@ export class CompanionStreetScene extends Phaser.Scene {
           if (vertical) pin.y = next; else pin.x = next
         })
       }
-      this.onLabels(labels)
+      this.onLabels(visibleSceneLabels(labels))
     }
     if (!this.rain) return
     this.rain.clear()

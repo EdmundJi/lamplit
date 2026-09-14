@@ -10,7 +10,7 @@
 import type { Point } from '../../shared/scene/collision'
 import { nearestStandable } from '../../shared/scene/collision'
 import { COMPANION_COLLISION, freeStandPosition } from './companion-navigation'
-import { POSITION_SLOTS, CAFE_SERVICE, CAFE_SEATS, GARDEN_OFFSET_X, HOME_ROOMS, CAFE_ROOM, CAFE_WINDOW_ROOM, ACADEMY_ROOM, GYM_ROOM, PLACE_FRAMES, STAGE_PLACES } from './companion-art'
+import { POSITION_SLOTS, CAFE_SERVICE, CAFE_SEATS, GARDEN_OFFSET_X, HOME_ROOMS, CAFE_ROOM, CAFE_WINDOW_ROOM, ACADEMY_ROOM, GYM_ROOM, SHOP_ROOM, PLACE_FRAMES, STAGE_PLACES } from './companion-art'
 import type { SceneResident } from './companion-scene'
 
 type RainShelter = { x: number; y: number; width: number; height: number }
@@ -24,6 +24,7 @@ const RAIN_SHELTERS: RainShelter[] = [
   // way as every other room above so rain does not fall through their walls.
   { x: ACADEMY_ROOM.x - 6, y: ACADEMY_ROOM.y - 5, width: ACADEMY_ROOM.w + 12, height: ACADEMY_ROOM.h + 12 },
   { x: GYM_ROOM.x - 6, y: GYM_ROOM.y - 5, width: GYM_ROOM.w + 12, height: GYM_ROOM.h + 12 },
+  { x: SHOP_ROOM.x - 6, y: SHOP_ROOM.y - 5, width: SHOP_ROOM.w + 12, height: SHOP_ROOM.h + 12 },
 ]
 function inside(rect: RainShelter, x: number, y: number) { return x >= rect.x && x <= rect.x + rect.width && y >= rect.y && y <= rect.y + rect.height }
 /** A rain streak is omitted when any of its short diagonal would land inside a roofed room. */
@@ -36,9 +37,9 @@ export function rainFallsOutside(x: number, y: number) {
 const SCENE_PLACE_IDS = Object.keys(STAGE_PLACES).filter(id => id !== 'avatar')
 const warnedScenePlaceIds = new Set<string>()
 /**
- * Resolve any server-given `location` string down to the four coarse render buckets
- * companion-scene.ts actually branches on (bed logic only for 'home', seating only for 'cafe',
- * plots only for 'garden', everyone else free-stands as 'street'). Reads STAGE_PLACES - the same
+ * Resolve any server-given `location` string to its real visual place. Public buildings keep their
+ * own bucket so a resident at the academy, gym, board or shop actually appears inside it rather
+ * than being folded onto the old street strip. Reads STAGE_PLACES - the same
  * registry TownStage's nav/camera already uses - instead of keeping a second, independent list of
  * known place ids: adding a building means adding one STAGE_PLACES entry, not editing this
  * function too. A truly unrecognised id (a building the backend grew that this table has never
@@ -130,6 +131,16 @@ export function isSpeaking(residentId: string, turnSpeakerId: string | undefined
   return turnSpeakerId === residentId && hasArrived
 }
 export function conversationPosition(place: string, index: number) {
+  return conversationPositionInRoom(place, index)
+}
+/** Keep a home conversation inside the server-described room. Public places still use their
+ * shared conversation anchor; a house is not one such anchor just because all homes render with
+ * the scenePlace value `home`. */
+export function conversationPositionInRoom(place: string, index: number, roomId?: string | null) {
+  if (scenePlace(place) === 'home' && roomId) {
+    const anchor = residentPosition(place, index, 'observe', '', undefined, 0, undefined, [], roomId)
+    return { x: anchor.x + (index % 2 ? 16 : -16), y: anchor.y }
+  }
   const center = scenePlace(place) === 'cafe' ? CAFE_SERVICE.conversation : placeCenter(place)
   return { x: center.x + (index % 2 ? 21 : -21), y: center.y + Math.floor(index / 2) * 32 }
 }
@@ -145,7 +156,7 @@ export function conversationPosition(place: string, index: number) {
  * there). Callers that omit `residentId` (unit tests, or an old caller) still get a valid,
  * reachable point - just keyed off `location`+`index` instead of a real resident identity.
  */
-export function residentPosition(location: string, index: number, activity = '', action = '', positionId?: string | null, occupantIndex = 0, residentId?: string, occupied: Point[] = []) {
+export function residentPosition(location: string, index: number, activity = '', action = '', positionId?: string | null, occupantIndex = 0, residentId?: string, occupied: Point[] = [], roomId?: string | null) {
   if (positionId) {
     const slots = POSITION_SLOTS[positionId]
     if (slots?.length) return slots[Math.min(Math.max(0, occupantIndex), slots.length - 1)]!
@@ -162,6 +173,24 @@ export function residentPosition(location: string, index: number, activity = '',
   // legacyHomeRoom's dev warning for every cafe/garden/street call too, even though its result is
   // never used outside the two 'home' branches below.
   const room = place === 'home' ? (homeRoom(location) ?? legacyHomeRoom(index, location)) : undefined
+  // A shared house is one building in `location`, but the server's room id distinguishes each
+  // bedroom from the common room and bathroom. When no scarce position is occupied, retain that
+  // distinction visually with the already-authored furniture anchors instead of spreading every
+  // flatmate across the whole house as if their room did not exist.
+  if (room && roomId) {
+    const residentRoom = roomId.match(/^home-[^/]+-room-(.+)$/)?.[1]
+    if (residentRoom) {
+      if (visibleActivity(activity, action) === 'sleep') return POSITION_SLOTS[`home-${residentRoom}-bed`]?.[0] ?? room.bed
+      return POSITION_SLOTS[`home-${residentRoom}-desk`]?.[0] ?? room.anchor
+    }
+    if (roomId.endsWith('-common')) {
+      const slots = POSITION_SLOTS[`${location}-table`]
+      if (!slots?.length) return room.anchor
+      const available = slots.find(slot => !occupied.some(point => point.x === slot.x && point.y === slot.y))
+      return available ?? slots[index % slots.length]!
+    }
+    if (roomId.endsWith('-bathroom')) return POSITION_SLOTS[`${location}-bathroom`]?.[0] ?? room.anchor
+  }
   if (room && visibleActivity(activity, action) === 'sleep') return room.bed
   if (room && visibleActivity(activity, action) === 'rest') return room.anchor
   if (place === 'cafe' && activity === 'wait') return CAFE_SERVICE.waiting[index % CAFE_SERVICE.waiting.length]!
@@ -204,12 +233,18 @@ export function residentPosition(location: string, index: number, activity = '',
  * the cafe name a real doorway already and are left exactly as they are.
  */
 export function travelAnchor(location: string) {
-  const door = homeRoom(location)?.door ?? (scenePlace(location) === 'cafe' ? CAFE_SERVICE.entry : undefined)
+  const place = scenePlace(location)
+  const publicDoor = place === 'cafe' ? CAFE_SERVICE.entry
+    : place === 'academy' ? { x: ACADEMY_ROOM.doorX, y: ACADEMY_ROOM.y + ACADEMY_ROOM.h + 16 }
+      : place === 'gym' ? { x: GYM_ROOM.doorX, y: GYM_ROOM.y + GYM_ROOM.h + 16 }
+        : place === 'shop' ? { x: SHOP_ROOM.doorX, y: SHOP_ROOM.y + SHOP_ROOM.h + 16 }
+          : undefined
+  const door = homeRoom(location)?.door ?? publicDoor
   return door ?? nearestStandable(placeCenter(location), COMPANION_COLLISION)
 }
 export function residentTarget(actor: SceneResident, positionId?: string | null, occupantIndex = 0) {
   const travelling = Boolean(actor.destination) && (actor.activity === 'walk' || actor.activity === 'travel')
   const location = travelling ? actor.destination! : actor.location
   if (travelling) return travelAnchor(location)
-  return residentPosition(location, 0, actor.activity, actor.action, positionId, occupantIndex, actor.id, [])
+  return residentPosition(location, 0, actor.activity, actor.action, positionId, occupantIndex, actor.id, [], actor.roomId)
 }
