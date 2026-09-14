@@ -30,6 +30,9 @@ public class CompanionWorld {
     public List<Conversation> conversations = new ArrayList<>();
     public List<WorldEvent> events = new ArrayList<>();
     public List<WorldObject> objects = new ArrayList<>();
+    /** Rule timestamps for free-text object states that also evolve with elapsed world time. Kept
+     * beside immutable WorldObject records so their display text stays simple and old saves heal. */
+    public Map<String,Instant> objectStateChangedAt = new LinkedHashMap<>();
     /** The town's first stateful physical object with real consequences (see docs/05-notes.md "物件
      * 要有自己的类"): a door, currently only at the cafe. A flat, concrete class rather than a
      * polymorphic Doorable/Lockable hierarchy on purpose - {@code CompanionWorld} is serialized whole
@@ -248,6 +251,15 @@ public class CompanionWorld {
     }
     public static class ResidentState {
         public String id, mood, goal, thought, desiredAction, positionId;
+        /** Current room inside Actor.place. Null only while travelling/away or in a legacy save before
+         * the next repair pass. Kept on resident state so Actor's stable wire shape need not change. */
+        public String roomId, desiredRoomId;
+        /** Where the current travel plan set out from, or null when that is not a named place (a trip
+         * re-routed mid-walk, a legacy save). Read only while walking - see ResidentSimulation.sameRoom. */
+        public String travelFrom;
+        /** Structural knowledge, kept separate from global map existence: a resident may name every
+         * building from the street without knowing which rooms or scarce things are inside it. */
+        public List<String> knownRoomIds = new ArrayList<>(), knownPositionIds = new ArrayList<>();
         /** Things this resident has already done that no model chose and nobody has yet accounted
          * for. The architecture behind it: rules are the reflex, the model is the explanation, and
          * people mostly act first and explain afterwards - Gazzaniga's interpreter, Libet's readiness
@@ -288,6 +300,14 @@ public class CompanionWorld {
         /** Hand-authored daily custom. It becomes a model-visible time cue, never an automatic sleep
          * command; the seeded flag allows midnight (0) to remain a valid configured minute. */
         public boolean sleepScheduleSeeded;
+        /** The usual shape of this resident's working day, planted once from {@link ResidentDuties}
+         * (Smallville's seed description, in structured form so a day plan can name real places).
+         * What they believe their days tend to look like - never a quota, never enforced by a rule;
+         * the morning day plan reads it and may follow, bend or ignore it. Cleared when the resident
+         * changes occupation, because the old routine no longer describes the life they chose. */
+        public List<Duty> duties = new ArrayList<>();
+        public boolean dutiesSeeded;
+        public int dutiesVersion;
         public int usualSleepMinute, usualWakeMinute;
         /** This resident's own personality: writable, per-instance state, exactly like energy/social/
          * curiosity above - not a lookup by id. {@code personalitySeeded} is an explicit flag, not a
@@ -420,8 +440,8 @@ public class CompanionWorld {
          * must be silently abandoned rather than completed against a reality it no longer describes.
          * Unused for the four NPCs, whose Actor only ResidentSimulation ever writes. */
         public String selfActivitySignature;
-        /** This resident's own coarse plan for today (see ResidentSimulation.applyDayPlan): three or
-         * four qualitative segments, not a schedule. Left null until their first morning decision. */
+        /** This resident's own plan for today (see ResidentSimulation.applyDayPlan): a few stretches
+         * with a rough time and place, formed by their own model soon after waking. */
         public DayPlan dayPlan;
         /** Last simulated instant each of this resident's own habitual reflexes (see
          * ResidentSimulation's "maybeHabit" family) actually fired, keyed by that habit's own short
@@ -455,6 +475,14 @@ public class CompanionWorld {
     public static class DaySegment {
         public String label;
         public String status = "pending";
+        /** Local minutes of day and the place the resident meant to be in; null on a legacy plan. */
+        public Integer startMinute, endMinute;
+        public String place, action;
+    }
+    /** One usual stretch of a resident's day: roughly when, where, doing what, and for whom. */
+    public static class Duty {
+        public int startMinute, endMinute;
+        public String place, action, what, toId;
     }
     /** A sparse resident-owned purpose, separate from the timer-backed action currently underway. */
     public static class LifeIntent {
@@ -511,6 +539,16 @@ public class CompanionWorld {
         public String roomId;
         public int capacity;
         public List<String> occupantIds = new ArrayList<>();
+        /** Operational state for genuinely scarce things. "usable" and "broken" are rule-owned;
+         * ordinary seats keep the same default and never wear out. Old saves heal this field in
+         * TownPlaces.seed rather than making null a third, accidental state. */
+        public String condition = "usable";
+        /** People who chose this exact scarce thing while it was occupied, in FIFO order. This is a
+         * physical queue, not a judgement about who deserves it; the resident already chose the
+         * action before the rules put their id here. */
+        public List<String> waitingIds = new ArrayList<>();
+        public int usesSinceRepair, maintenanceEveryUses;
+        public Instant conditionChangedAt;
     }
     public record ProjectKnowledge(String id,String place,String status,int progress,Instant at,String sourceId) {}
     public record Plan(String id,String action,String place,String targetId,String reason,Instant startedAt,Instant endsAt) {}
@@ -572,12 +610,20 @@ public class CompanionWorld {
      * borrower is while {@code ownerId} stays with the lender, exactly like a real object does not
      * stop belonging to you just because a neighbour is holding it.
      */
-    public record WorldObject(String id,String kind,String place,String label,String state,String projectId,String ownerId) {
+    public record WorldObject(String id,String kind,String place,String roomId,String label,String state,String projectId,String ownerId,String holderId) {
         /** Back-compat for every call site written before {@code ownerId} existed (kept out of this
          * batch's edit scope) - defaults it to null, i.e. "nobody in particular owns this", exactly
          * what every such object already meant. */
         public WorldObject(String id,String kind,String place,String label,String state,String projectId){
-            this(id,kind,place,label,state,projectId,null);
+            this(id,kind,place,null,label,state,projectId,null,null);
+        }
+        /** Back-compat for the first ownership-aware shape. A newly authored owned object starts in
+         * its owner's hands; migration repairs older serialized null holders from open loans. */
+        public WorldObject(String id,String kind,String place,String label,String state,String projectId,String ownerId){
+            this(id,kind,place,null,label,state,projectId,ownerId,ownerId);
+        }
+        public WorldObject(String id,String kind,String place,String roomId,String label,String state,String projectId,String ownerId){
+            this(id,kind,place,roomId,label,state,projectId,ownerId,ownerId);
         }
     }
     /**

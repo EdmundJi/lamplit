@@ -267,6 +267,13 @@ final class CafeService {
         if (req != null && "waiting".equals(req.status)) { req.status = "preparing"; req.preparingAt = at; }
     }
 
+    /** A counter may break while its operator is walking back to it. That is a failed attempt to
+     * start, not a silently completed drink and not a permanently stranded "preparing" request. */
+    static void returnToWaiting(CompanionWorld w, String requestId) {
+        ServiceRequest req = find(w, requestId);
+        if (req != null && "preparing".equals(req.status)) { req.status = "waiting"; req.preparingAt = null; }
+    }
+
     /** The owner's "tend" plan has run its course: hand the request its drink, unless the customer has
      * already left - in which case the link breaks quietly (a memory, no WorldEvent), not a shout. */
     static void finishTending(CompanionWorld w, ResidentState owner, String requestId, Instant at) {

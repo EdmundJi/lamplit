@@ -75,12 +75,12 @@ app:
     access-key: ${OBJECT_STORAGE_ACCESS_KEY:}
     secret-key: ${OBJECT_STORAGE_SECRET_KEY:}
   ai:
-    # Qwen3.8-Flash is the app-wide primary model. QWEN3_* remains a compatibility source for local
-    # environments created while Qwen was a town-only second provider; new configuration uses QWEN_*.
+    # Pinned to a dated snapshot, never a floating alias (docs/04): every experiment compares runs, and a
+    # model the provider silently repoints is an uncontrolled variable. QWEN3_* remains a compatibility source.
     provider: ${QWEN_PROVIDER:mock}
     base-url: ${QWEN_BASE_URL:${QWEN3_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}}
     api-key: ${QWEN_API_KEY:${QWEN3_API_KEY:}}
-    model: ${QWEN_MODEL:${QWEN3_MODEL:qwen3.8-flash}}
+    model: ${QWEN_MODEL:${QWEN3_MODEL:qwen3.7-flash-2026-07-15}}
     timeout: ${QWEN_TIMEOUT:${QWEN3_TIMEOUT:PT60S}}
     stream-timeout: ${QWEN_STREAM_TIMEOUT:${QWEN3_STREAM_TIMEOUT:PT70S}}
     json-mode: ${QWEN_JSON_MODE:${QWEN3_JSON_MODE:true}}
@@ -110,10 +110,10 @@ app:
         turn: ${COMPANION_MODEL_THINKING_TURN:false}
         summary: ${COMPANION_MODEL_THINKING_SUMMARY:false}
       # Which provider answers each call type, in try-order (first entry tried first, later entries are
-      # the failover path if an earlier one throws - see RoutingResidentMind). Qwen3.8-Flash is the
-      # primary for the resident's decisions, dialogue, and recollections. DeepSeek stays available as
-      # an explicit production failure fallback; Qwen-only evaluations set a one-entry qwen route.
+      # the failover path if an earlier one throws - see RoutingResidentMind). Qwen only by default: a
+      # silent fall-over to another model mid-run changes the variable every experiment holds fixed
+      # (2026-09-14: four turns went to DeepSeek after a Qwen parse failure). A failed call now fails.
       routes:
-        decision: ${COMPANION_MODEL_ROUTE_DECISION:qwen,deepseek}
-        turn: ${COMPANION_MODEL_ROUTE_TURN:qwen,deepseek}
-        summary: ${COMPANION_MODEL_ROUTE_SUMMARY:qwen,deepseek}
+        decision: ${COMPANION_MODEL_ROUTE_DECISION:qwen}
+        turn: ${COMPANION_MODEL_ROUTE_TURN:qwen}
+        summary: ${COMPANION_MODEL_ROUTE_SUMMARY:qwen}

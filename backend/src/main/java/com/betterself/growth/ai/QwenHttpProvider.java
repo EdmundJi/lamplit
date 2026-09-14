@@ -15,8 +15,10 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
@@ -42,6 +44,73 @@ public class QwenHttpProvider implements QwenProvider {
     private final boolean jsonMode;
     private final String thinkingStyle;
     private final Boolean defaultThinking;
+    private final WireRequestBudget wireRequestBudget;
+
+    /**
+     * A budget at the only boundary that can make the promise exact: immediately before
+     * {@link HttpClient#send}. One instance may be shared by several providers when a caller retries
+     * through a differently configured client (for example without {@code response_format}).
+     */
+    public static final class WireRequestBudget {
+        private static final WireRequestBudget UNLIMITED = new WireRequestBudget(Integer.MAX_VALUE, false);
+        private final int maximum;
+        private final boolean tracked;
+        private final AtomicInteger started = new AtomicInteger();
+        private final List<WireRequest> requests = new ArrayList<>();
+        private volatile boolean sealed;
+
+        public WireRequestBudget(int maximum) {
+            if (maximum < 1) throw new IllegalArgumentException("maximum must be positive");
+            this.maximum = maximum;
+            this.tracked = true;
+        }
+
+        private WireRequestBudget(int maximum, boolean tracked) {
+            this.maximum = maximum;
+            this.tracked = tracked;
+        }
+
+        private static WireRequestBudget unlimited() {
+            return UNLIMITED;
+        }
+
+        private synchronized void reserve(String kind) {
+            if (!tracked) return;
+            if (sealed) {
+                throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "AI_WIRE_REQUEST_BUDGET_CLOSED",
+                    "AI wire request budget closed");
+            }
+            if (started.get() >= maximum) {
+                throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "AI_WIRE_REQUEST_BUDGET_REACHED",
+                    "AI wire request budget reached");
+            }
+            int ordinal = started.incrementAndGet();
+            requests.add(new WireRequest(ordinal, kind));
+        }
+
+        public int maximum() {
+            return maximum;
+        }
+
+        public int started() {
+            return started.get();
+        }
+
+        public boolean hasRemaining() {
+            return !tracked || !sealed && started.get() < maximum;
+        }
+
+        /** Prevents a runner that is already exporting from admitting a late repair dispatch. */
+        public void seal() {
+            if (tracked) sealed = true;
+        }
+
+        public synchronized List<WireRequest> requests() {
+            return List.copyOf(requests);
+        }
+    }
+
+    public record WireRequest(int ordinal, String kind) {}
 
     public QwenHttpProvider(
         ObjectMapper objectMapper,
@@ -50,12 +119,14 @@ public class QwenHttpProvider implements QwenProvider {
         String model,
         Duration timeout
     ) {
-        this(objectMapper, baseUrl, apiKey, model, timeout, timeout, true, null, null);
+        this(objectMapper, baseUrl, apiKey, model, timeout, timeout, true, null, null,
+            WireRequestBudget.unlimited());
     }
 
     public QwenHttpProvider(ObjectMapper objectMapper,String baseUrl,String apiKey,String model,Duration timeout,
                             Duration streamTimeout,boolean jsonMode,String thinkingStyle) {
-        this(objectMapper,baseUrl,apiKey,model,timeout,streamTimeout,jsonMode,thinkingStyle,null);
+        this(objectMapper,baseUrl,apiKey,model,timeout,streamTimeout,jsonMode,thinkingStyle,null,
+            WireRequestBudget.unlimited());
     }
 
     @Autowired
@@ -80,6 +151,22 @@ public class QwenHttpProvider implements QwenProvider {
         // The primary Qwen runs without reasoning unless a call explicitly opts in. Nullable keeps
         // manually constructed compatibility clients free to leave the vendor default untouched.
         @Value("${app.ai.thinking-enabled:false}") Boolean defaultThinking
+    ) {
+        this(objectMapper, baseUrl, apiKey, model, timeout, streamTimeout, jsonMode, thinkingStyle,
+            defaultThinking, WireRequestBudget.unlimited());
+    }
+
+    public QwenHttpProvider(
+        ObjectMapper objectMapper,
+        String baseUrl,
+        String apiKey,
+        String model,
+        Duration timeout,
+        Duration streamTimeout,
+        boolean jsonMode,
+        String thinkingStyle,
+        Boolean defaultThinking,
+        WireRequestBudget wireRequestBudget
     ) {
         String normalizedApiKey = apiKey == null ? "" : apiKey.trim();
         if (normalizedApiKey.isBlank() || isPlaceholder(normalizedApiKey)) {
@@ -108,6 +195,7 @@ public class QwenHttpProvider implements QwenProvider {
         this.jsonMode = jsonMode;
         this.thinkingStyle = thinkingStyle;
         this.defaultThinking = defaultThinking;
+        this.wireRequestBudget = java.util.Objects.requireNonNull(wireRequestBudget, "wireRequestBudget");
     }
 
     @Override
@@ -116,13 +204,21 @@ public class QwenHttpProvider implements QwenProvider {
         JsonNode root = call(List.of(
             Map.of("role", "system", "content", "Return only JSON matching this schema: " + prompt.schemaJson()),
             Map.of("role", "user", "content", prompt.instruction())
-        ), true, prompt.thinkingEnabled());
+        ), true, prompt.thinkingEnabled(), "structured");
+        int inputTokens = inputTokens(root);
+        int outputTokens = outputTokens(root);
+        int reasoningTokens = reasoningTokens(root);
+        boolean reasoningContentPresent = hasReasoningContent(root);
         String content = stripCodeFence(root.path("choices").path(0).path("message").path("content").asText());
         if (!validJson(content)) {
             root = call(List.of(
                 Map.of("role", "system", "content", "Repair the following value into JSON only. Schema: " + prompt.schemaJson()),
                 Map.of("role", "user", "content", content)
-            ), true, prompt.thinkingEnabled());
+            ), true, prompt.thinkingEnabled(), "structured-json-repair");
+            inputTokens += inputTokens(root);
+            outputTokens += outputTokens(root);
+            reasoningTokens += reasoningTokens(root);
+            reasoningContentPresent |= hasReasoningContent(root);
             content = stripCodeFence(root.path("choices").path(0).path("message").path("content").asText());
             if (!validJson(content)) {
                 throw unavailable("AI_INVALID_JSON");
@@ -131,11 +227,26 @@ public class QwenHttpProvider implements QwenProvider {
         return new StructuredResult(
             content,
             root.path("model").asText(model), root.path("id").asText(),
-            root.path("usage").path("prompt_tokens").asInt(), root.path("usage").path("completion_tokens").asInt(),
+            inputTokens, outputTokens,
             Duration.ofNanos(System.nanoTime() - started).toMillis(),
-            root.path("choices").path(0).path("message").has("reasoning_content"),
-            root.path("usage").path("completion_tokens_details").path("reasoning_tokens").asInt()
+            reasoningContentPresent, reasoningTokens
         );
+    }
+
+    private int inputTokens(JsonNode root) {
+        return root.path("usage").path("prompt_tokens").asInt();
+    }
+
+    private int outputTokens(JsonNode root) {
+        return root.path("usage").path("completion_tokens").asInt();
+    }
+
+    private int reasoningTokens(JsonNode root) {
+        return root.path("usage").path("completion_tokens_details").path("reasoning_tokens").asInt();
+    }
+
+    private boolean hasReasoningContent(JsonNode root) {
+        return root.path("choices").path(0).path("message").has("reasoning_content");
     }
 
     private String stripCodeFence(String value) {
@@ -176,6 +287,7 @@ public class QwenHttpProvider implements QwenProvider {
             null
         );
         try {
+            wireRequestBudget.reserve("stream");
             HttpResponse<Stream<String>> response = client.send(request, HttpResponse.BodyHandlers.ofLines());
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
                 throw providerFailure(response.statusCode());
@@ -216,9 +328,10 @@ public class QwenHttpProvider implements QwenProvider {
         }
     }
 
-    private JsonNode call(List<Map<String, String>> messages, boolean jsonMode, Boolean thinkingEnabled) {
+    private JsonNode call(List<Map<String, String>> messages, boolean jsonMode, Boolean thinkingEnabled, String requestKind) {
         try {
             HttpRequest request = request(messages, jsonMode, false, thinkingEnabled);
+            wireRequestBudget.reserve(requestKind);
             HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
                 throw providerFailure(response.statusCode());

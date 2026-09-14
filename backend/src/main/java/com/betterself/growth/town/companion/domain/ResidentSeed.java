@@ -35,6 +35,7 @@ public final class ResidentSeed {
      * possible thread, but seed a resident-owned purpose so private work, rest and a change of life
      * have somewhere durable to live. */
     static void reconcileLife(CompanionWorld w,Instant at){
+        reconcileSecondVersion(w,at);
         if(w.cafeOperatorId==null||state(w,w.cafeOperatorId)==null)w.cafeOperatorId="owner";
         for(ResidentState r:w.residentStates){
             if(r.id.equals("self"))continue;
@@ -43,6 +44,7 @@ public final class ResidentSeed {
             if(r.careerIntent==null)r.careerIntent=lifeIntent(w,r,null,r.occupation+"。我知道总得找到能长期做下去的事，但也允许自己先歇一歇、慢慢想。","active",at);
             if(r.lifeIntent.status==null)r.lifeIntent.status="active";
             if(!r.sleepScheduleSeeded){r.usualSleepMinute=23*60;r.usualWakeMinute=7*60;r.sleepScheduleSeeded=true;}
+            ResidentDuties.plant(w,r,at);ResidentDuties.settleIn(w,r,at);
         }
         passersBy(w,at);
     }
@@ -123,7 +125,7 @@ public final class ResidentSeed {
     public static void initialize(CompanionWorld w,Instant now) {
         if(w.simulationVersion>=2)return;
         long initialRevision=w.revision;
-        w.simulationVersion=4; w.residentStates.clear();w.projects.clear();w.objects.clear();w.conversations.clear();
+        w.simulationVersion=5; w.residentStates.clear();w.projects.clear();w.objects.clear();w.conversations.clear();
         CafeService.reconcileSchedule(w,now);
         TownPlaces.seed(w);ensureAvatarState(w);
         boolean modelMode=w.modelConversationsEnabled;w.modelConversationsEnabled=false;
@@ -155,7 +157,7 @@ public final class ResidentSeed {
         state(w,"artist").knownProjects.put("reading-night",new ProjectKnowledge("reading-night","cafe","idea",0,past,"owner"));
         w.objects.add(new WorldObject("worktable","table","cafe","一张可共用的长桌","available",null));
         w.objects.add(new WorldObject("noticeboard","board","street","门前留言板","empty",null));
-        w.objects.add(new WorldObject("flowerbed","flowers","garden","等待移栽的新芽","growing","seed-exchange"));
+        w.objects.add(new WorldObject("flowerbed","flowers","garden","等待移栽的新芽","growing",null));
         // Two hand-authored newcomers (docs/04-decisions.md: 新增居民由我们手动设计, never the
         // simulation itself). 周野 gets a new home of his own, next to 青叔's garden; 阿满 shares 知夏's
         // home as a flat-mate - her own bed and her own desk inside home-artist, not a new building
@@ -217,7 +219,28 @@ public final class ResidentSeed {
             startConversation(w,owner,artist,w.projects.get(0),now);
             event(w,now,"arrival","street",List.of(),"小街的日子早就开始了。咖啡馆里，一张招贴还没有定稿。",null);
         } else event(w,now,"arrival","street",List.of(),"小街安静下来。咖啡馆已经打烊，居民们各自在家。",null);
+        TownPlaces.seed(w);
         w.revision=initialRevision;
+    }
+
+    /** Additive migration for worlds created before the 25-resident map. It never clears lists,
+     * replaces evolved relationships, or rewinds plans; only missing authored residents, homes,
+     * furniture and starter objects are added. This is deliberately domain migration rather than a
+     * SQL rewrite because the whole save is one JSON document and TownPlaces already uses the same
+     * self-healing pattern. */
+    private static void reconcileSecondVersion(CompanionWorld w,Instant at){
+        if(w.simulationVersion>=5)return;
+        TownPlaces.seed(w);
+        if(state(w,"fixer")==null){TownPlaces.addHome(w,"fixer");newcomer(w,"fixer","周野","修东西的人",FIXER_OCCUPATION,at);}
+        if(state(w,"weaver")==null){TownPlaces.addFlatmate(w,"weaver","artist");newcomer(w,"weaver","阿满","做手工的人",WEAVER_OCCUPATION,at);}
+        populateTheTwentyFive(w,at);
+        ensureOwnedObject(w,new WorldObject("shop-toolkit","tool","shop","shop-workroom","一套用了很久的工具箱","螺丝刀缺了一把",null,"fixer"));
+        ensureOwnedObject(w,new WorldObject("shop-thread-box","tool","shop","shop-workroom","一个装零碎线头和布片的木盒","盖子有点合不严",null,"weaver"));
+        TownPlaces.seed(w);
+        w.simulationVersion=Math.max(w.simulationVersion,5);
+    }
+    private static void ensureOwnedObject(CompanionWorld w,WorldObject object){
+        if(w.objects.stream().noneMatch(o->o.id().equals(object.id())))w.objects.add(object);
     }
     public static boolean addResident(CompanionWorld w,String id,String name,String role,String occupation,Instant now){
         if(id==null||!id.matches("[a-z][a-z0-9-]{1,30}")||name==null||name.isBlank()||role==null||role.isBlank()||occupation==null||occupation.isBlank()||state(w,id)!=null||w.residents.stream().anyMatch(a->a.id().equals(id)))return false;
@@ -253,10 +276,10 @@ public final class ResidentSeed {
             for(String member:members)if(!member.equals(host))TownPlaces.addFlatmate(w,member,host);
         });
         for(ResidentPersonas.NewResident person:ResidentPersonas.all())
-            newcomer(w,person.id(),person.name(),person.role(),person.occupation(),past,false);
+            if(state(w,person.id())==null)newcomer(w,person.id(),person.name(),person.role(),person.occupation(),past,false);
         ResidentPersonas.initialRelationships().forEach((from,edges)->{
             ResidentState r=state(w,from);
-            if(r!=null)edges.forEach(r.relationships::put);
+            if(r!=null)edges.forEach(r.relationships::putIfAbsent);
         });
     }
     private static ResidentState newcomer(CompanionWorld w,String id,String name,String role,String occupation,Instant now){

@@ -61,7 +61,7 @@ final class Lending {
         for (ResidentState other : w.residentStates) {
             if (other.id.equals(residentId)) continue;
             Actor a = ResidentSimulation.actor(w, other.id);
-            if (a == null || !place.equals(a.place())) continue;
+            if (a == null || !place.equals(a.place()) || !ResidentSimulation.sameRoom(w,residentId,other.id)) continue;
             if (only != null) return null;
             only = other.id;
         }
@@ -77,9 +77,9 @@ final class Lending {
         if (item == null || lenderId.equals(borrowerId) || !lenderId.equals(item.ownerId()) || isOnLoan(w, itemId)) return false;
         String place = ResidentSimulation.actor(w, lenderId).place();
         Actor borrower = ResidentSimulation.actor(w, borrowerId);
-        if (borrower == null || !place.equals(borrower.place())) return false;
+        if (borrower == null || !ResidentSimulation.sameRoom(w,lenderId,borrowerId)) return false;
         w.loans.add(new Loan("loan-" + (++w.eventSequence), itemId, lenderId, borrowerId, at, null, false));
-        replace(w, new WorldObject(item.id(), item.kind(), place, item.label(), item.state(), item.projectId(), item.ownerId()));
+        replace(w, new WorldObject(item.id(), item.kind(), place, TownPlaces.roomForResident(w,borrowerId,place), item.label(), item.state(), item.projectId(), item.ownerId(), borrowerId));
         witnessExchange(w, "lend", lenderId, borrowerId, item, place, at);
         return true;
     }
@@ -91,9 +91,9 @@ final class Lending {
         if (item == null || giverId.equals(recipientId) || !giverId.equals(item.ownerId()) || isOnLoan(w, itemId)) return false;
         String place = ResidentSimulation.actor(w, giverId).place();
         Actor recipient = ResidentSimulation.actor(w, recipientId);
-        if (recipient == null || !place.equals(recipient.place())) return false;
+        if (recipient == null || !ResidentSimulation.sameRoom(w,giverId,recipientId)) return false;
         w.loans.add(new Loan("loan-" + (++w.eventSequence), itemId, giverId, recipientId, at, at, true));
-        replace(w, new WorldObject(item.id(), item.kind(), place, item.label(), item.state(), item.projectId(), recipientId));
+        replace(w, new WorldObject(item.id(), item.kind(), place, TownPlaces.roomForResident(w,recipientId,place), item.label(), item.state(), item.projectId(), recipientId, recipientId));
         witnessExchange(w, "gift", giverId, recipientId, item, place, at);
         return true;
     }
@@ -109,13 +109,24 @@ final class Lending {
             .findFirst().orElse(null);
         if (open == null) return false;
         Actor lender = ResidentSimulation.actor(w, open.lenderId()), borrower = ResidentSimulation.actor(w, open.borrowerId());
-        if (lender == null || borrower == null || !lender.place().equals(borrower.place())) return false;
+        if (lender == null || borrower == null || !ResidentSimulation.sameRoom(w,open.lenderId(),open.borrowerId())) return false;
         String place = lender.place();
         replaceLoan(w, new Loan(open.id(), open.itemId(), open.lenderId(), open.borrowerId(), open.lentAt(), at, false));
         WorldObject item = find(w, itemId);
-        if (item != null) replace(w, new WorldObject(item.id(), item.kind(), place, item.label(), item.state(), item.projectId(), item.ownerId()));
+        if (item != null) replace(w, new WorldObject(item.id(), item.kind(), place, TownPlaces.roomForResident(w,open.lenderId(),place), item.label(), item.state(), item.projectId(), item.ownerId(), open.lenderId()));
         witnessExchange(w, "return", open.borrowerId(), open.lenderId(), item, place, at);
         return true;
+    }
+
+    /** Owned portable things follow their current holder. The open Loan remains the authority for
+     * why holder differs from owner; this merely keeps visibility and the four-level address honest
+     * while that person walks around. */
+    static void followHolder(CompanionWorld w,String residentId,String place){
+        for(int i=0;i<w.objects.size();i++){
+            WorldObject item=w.objects.get(i);
+            if(!residentId.equals(item.holderId()))continue;
+            w.objects.set(i,new WorldObject(item.id(),item.kind(),place,TownPlaces.roomForResident(w,residentId,place),item.label(),item.state(),item.projectId(),item.ownerId(),item.holderId()));
+        }
     }
 
     private static final String TOPIC = "lending";
@@ -137,7 +148,7 @@ final class Lending {
         for (ResidentState other : w.residentStates) {
             if (other.id.equals(fromId) || other.id.equals(toId)) continue;
             Actor oa = ResidentSimulation.actor(w, other.id);
-            if (oa == null || !place.equals(oa.place()) || "sleep".equals(oa.activity()) || "walk".equals(oa.activity())) continue;
+            if (oa == null || !place.equals(oa.place()) || !ResidentSimulation.sameRoom(w,fromId,other.id) || "sleep".equals(oa.activity()) || "walk".equals(oa.activity())) continue;
             ResidentSimulation.memory(w, other.id, fromId, "observed", at, TOPIC, "看见" + text, List.of(), 4);
             actorIds.add(other.id);
         }

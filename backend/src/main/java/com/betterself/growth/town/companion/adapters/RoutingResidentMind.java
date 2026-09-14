@@ -89,7 +89,7 @@ public class RoutingResidentMind implements ResidentMind {
     }
 
     private static List<String> parseRoute(String csv) {
-        List<String> order = Arrays.stream(csv.split(",")).map(String::trim).filter(s -> !s.isBlank()).toList();
+        List<String> order = Arrays.stream(csv.split(",")).map(String::trim).filter(s -> !s.isBlank()).distinct().toList();
         return order.isEmpty() ? List.of("qwen") : order;
     }
 
@@ -120,6 +120,7 @@ public class RoutingResidentMind implements ResidentMind {
         return attempt("consider", mind -> mind.considerMetered(request));
     }
 
+    @Override public boolean plansDays() { return mindsByProvider.values().stream().anyMatch(QwenResidentMind::plansDays); }
     @Override public DayPlanDraft planDay(DayPlanRequest request) { return planDayMetered(request).value(); }
     @Override public Result<DayPlanDraft> planDayMetered(DayPlanRequest request) {
         return attempt("dayplan", mind -> mind.planDayMetered(request));

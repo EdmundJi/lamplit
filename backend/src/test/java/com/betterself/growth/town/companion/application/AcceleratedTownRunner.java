@@ -91,7 +91,7 @@ public final class AcceleratedTownRunner {
 
     public record RunConfig(
         String worldId, String avatarName, String timezone, Instant start,
-        double days, int tickSeconds, boolean modelEnabled, int dailyModelBudget,
+        double days, int tickSeconds, boolean modelEnabled, int dailyModelBudget,int totalModelBudget,long inputTokenStop,
         long userId, Path outDir, long realPaceMillisPerTick, int drainTicks,
         long blindTestSeed, int blindTestSize, boolean scriptedAvatarIntents,
         Path resumeFrom
@@ -100,7 +100,7 @@ public final class AcceleratedTownRunner {
          * the whole run is deterministic and fast - safe for a smoke test that must not spend tokens. */
         public static RunConfig ruleOnly(Path outDir, double days) {
             return new RunConfig("accelerated-rule-run", "我", "Asia/Shanghai",
-                Instant.parse("2026-01-01T00:00:00Z"), days, 60, false, 0,
+                Instant.parse("2026-01-01T00:00:00Z"), days, 60, false, 0,0,0,
                 1, outDir, 0, 0, 42, 20, true, null);
         }
 
@@ -118,7 +118,7 @@ public final class AcceleratedTownRunner {
          * adaptively (only while a call is plausibly outstanding) rather than every tick regardless. */
         public static RunConfig withModel(Path outDir, double days) {
             return new RunConfig("accelerated-model-run", "我", "Asia/Shanghai",
-                Instant.parse("2026-01-01T00:00:00Z"), days, 8, true, 100000,
+                Instant.parse("2026-01-01T00:00:00Z"), days, 8, true, 100000,100000,Long.MAX_VALUE,
                 1, outDir, 600, 25, 42, 20, true, null);
         }
 
@@ -128,7 +128,7 @@ public final class AcceleratedTownRunner {
          * effective start, not {@code start}, so what {@code start} is set to no longer matters. */
         public RunConfig withResumeFrom(Path snapshot) {
             return new RunConfig(worldId, avatarName, timezone, start, days, tickSeconds, modelEnabled,
-                dailyModelBudget, userId, outDir, realPaceMillisPerTick, drainTicks, blindTestSeed,
+                dailyModelBudget,totalModelBudget,inputTokenStop,userId, outDir, realPaceMillisPerTick, drainTicks, blindTestSeed,
                 blindTestSize, scriptedAvatarIntents, snapshot);
         }
     }
@@ -136,7 +136,8 @@ public final class AcceleratedTownRunner {
     public record RunResult(
         Path outDir, Instant simulatedFrom, Instant simulatedTo, long ticks,
         int diaryCount, int eventCount, int memoryCount, int dialogueTurnCount, int relationshipChangeCount,
-        long totalModelCalls, long totalInputTokens, long totalOutputTokens, Duration wallTime,
+        long totalModelCalls,long logicalModelCallsStarted,long wireModelRequestsStarted,
+        long totalInputTokens,long totalOutputTokens,Duration wallTime,
         long pacedTicks, long fastTicks
     ) {}
 
@@ -159,10 +160,14 @@ public final class AcceleratedTownRunner {
         CompanionWorld seed = resuming
             ? loadSnapshot(cfg.resumeFrom())
             : CompanionRules.join(cfg.worldId(), cfg.avatarName(), cfg.timezone(), cfg.start(), cfg.modelEnabled());
+        // The invocation owns whether this continuation uses a model. A rule-only snapshot resumed
+        // for a paid probe must not silently keep fallback conversations, and the inverse is equally
+        // important for a neutral control resumed from a model run.
+        if(resuming)seed.modelConversationsEnabled=cfg.modelEnabled();
         Instant runStart = resuming ? seed.updatedAt : cfg.start();
 
         var clock = new MutableClock(runStart);
-        LiveMind live = cfg.modelEnabled() ? liveMind(System.getenv()) : null;
+        LiveMind live = cfg.modelEnabled() ? liveMind(System.getenv(),cfg.totalModelBudget(),cfg.inputTokenStop()) : null;
         ResidentMind mind = live == null ? disabledMind() : live.mind();
         // How many residents may have a model call in flight at once (docs/04-decisions.md
         // 「只并行"想"，写世界仍串行」). Read from the environment like every other knob of this runner,
@@ -262,6 +267,7 @@ public final class AcceleratedTownRunner {
                 }
             }
         } finally {
+            if (live != null) live.wireBudget().seal(); // freezes the auditable request list before export
             if (cfg.modelEnabled()) director.close(); // shuts down the daemon worker pool; harmless if one last call is mid-flight
         }
 
@@ -278,7 +284,8 @@ public final class AcceleratedTownRunner {
             (int) sorted.stream().filter(e -> "memory".equals(e.get("kind"))).count(),
             (int) sorted.stream().filter(e -> "dialogue".equals(e.get("kind"))).count(),
             (int) sorted.stream().filter(e -> "relationship".equals(e.get("kind"))).count(),
-            usage.totalCalls(), usage.totalInputTokens(), usage.totalOutputTokens(), wall,
+            usage.totalCalls(),live==null?0:live.mind().logicalCallsStarted(),
+            live==null?0:live.wireBudget().started(),usage.totalInputTokens(), usage.totalOutputTokens(), wall,
             pacedTicks, fastTicks);
     }
 
@@ -314,9 +321,10 @@ public final class AcceleratedTownRunner {
     /** One explicitly selected provider per accelerated run. There is intentionally no fallback in
      * this harness: a Qwen evaluation must fail visibly if Qwen fails, rather than producing a
      * plausible-looking report whose dialogue was silently generated by DeepSeek. */
-    private record LiveMind(ResidentMind mind,String provider,String model,List<Map<String,Object>> calls) {}
+    private record LiveMind(RecordingMind mind,String provider,String model,List<Map<String,Object>> calls,
+                            QwenHttpProvider.WireRequestBudget wireBudget) {}
 
-    private static LiveMind liveMind(Map<String,String> env) {
+    private static LiveMind liveMind(Map<String,String> env,int totalModelBudget,long inputTokenStop) {
         String selected=modelProvider(env);
         String baseUrl=requireProviderEnv(env,selected,"BASE_URL");
         String apiKey=requireProviderEnv(env,selected,"API_KEY");
@@ -326,18 +334,25 @@ public final class AcceleratedTownRunner {
         String jsonModeValue=providerEnv(env,selected,"JSON_MODE");
         boolean jsonMode=jsonModeValue==null||jsonModeValue.isBlank()||Boolean.parseBoolean(jsonModeValue);
         ObjectMapper json = new ObjectMapper().findAndRegisterModules();
-        var provider = new QwenHttpProvider(json,baseUrl,apiKey,model,timeout,streamTimeout,jsonMode,selected);
+        var wireBudget = new QwenHttpProvider.WireRequestBudget(Math.max(1,totalModelBudget));
+        var provider = new QwenHttpProvider(json,baseUrl,apiKey,model,timeout,streamTimeout,jsonMode,selected,null,wireBudget);
         var delegate = new QwenResidentMind(provider,json,"qwen",true,selected,false,false,false);
         List<Map<String,Object>> calls=Collections.synchronizedList(new ArrayList<>());
-        return new LiveMind(new RecordingMind(delegate,calls),selected,model,calls);
+        return new LiveMind(new RecordingMind(delegate,calls,wireBudget,Math.max(1,inputTokenStop)),selected,model,calls,wireBudget);
     }
 
     /** Captures the canonical input and structured result only. Credentials and HTTP headers stay
      * inside QwenHttpProvider and cannot enter the exported audit file. */
-    private static final class RecordingMind implements ResidentMind {
+    static final class RecordingMind implements ResidentMind {
         private final ResidentMind delegate;private final List<Map<String,Object>> calls;
-        RecordingMind(ResidentMind delegate,List<Map<String,Object>> calls){this.delegate=delegate;this.calls=calls;}
-        public boolean enabled(){return delegate.enabled();}
+        private final QwenHttpProvider.WireRequestBudget wireBudget;private final long inputTokenStop;
+        private final java.util.concurrent.atomic.AtomicInteger logicalCallsStarted=new java.util.concurrent.atomic.AtomicInteger();
+        private final java.util.concurrent.atomic.AtomicLong observedInputTokens=new java.util.concurrent.atomic.AtomicLong();
+        RecordingMind(ResidentMind delegate,List<Map<String,Object>> calls,QwenHttpProvider.WireRequestBudget wireBudget,long inputTokenStop){
+            this.delegate=delegate;this.calls=calls;this.wireBudget=wireBudget;this.inputTokenStop=inputTokenStop;
+        }
+        public boolean enabled(){return delegate.enabled()&&wireBudget.hasRemaining()&&observedInputTokens.get()<inputTokenStop;}
+        int logicalCallsStarted(){return logicalCallsStarted.get();}
         public Decision decide(Context context){return decideMetered(context).value();}
         public Result<Decision> decideMetered(Context context){return capture("decision",context.residentId(),context,()->delegate.decideMetered(context));}
         public com.betterself.growth.town.companion.domain.ConversationLifecycle.Utterance generateTurn(DialogueRequest request){return generateTurnMetered(request).value();}
@@ -361,6 +376,7 @@ public final class AcceleratedTownRunner {
             input.put("key",request.key());input.put("fact",request.fact());input.put("place",request.place());
             return capture("consider",request.perspective().residentId(),input,()->delegate.considerMetered(request));
         }
+        public boolean plansDays(){return delegate.plansDays();}
         public DayPlanDraft planDay(DayPlanRequest request){return planDayMetered(request).value();}
         public Result<DayPlanDraft> planDayMetered(DayPlanRequest request){
             // Forwarded like every other call, and for a specific reason: ResidentMind.planDay has a
@@ -411,11 +427,14 @@ public final class AcceleratedTownRunner {
          * listener's own comment above for why arrival order stopped being an identity). Every call kind
          * must pass it; a kind that passed null would silently stop being attributable. */
         private <T>Result<T> capture(String type,String residentId,Object input,java.util.function.Supplier<Result<T>> call){
+            if(observedInputTokens.get()>=inputTokenStop)throw new RunInputStopReached();
+            logicalCallsStarted.incrementAndGet();
             Map<String,Object> row=new LinkedHashMap<>();row.put("callType",type);row.put("residentId",residentId);row.put("input",input);
-            try{Result<T> result=call.get();row.put("status","generated");row.put("output",result.value());row.put("usage",result.usage());calls.add(row);return result;}
+            try{Result<T> result=call.get();if(result.usage()!=null)observedInputTokens.addAndGet(Math.max(0,result.usage().inputTokens()));row.put("status","generated");row.put("output",result.value());row.put("usage",result.usage());calls.add(row);return result;}
             catch(RuntimeException failure){row.put("status","failed");row.put("error",failure.getClass().getSimpleName());calls.add(row);throw failure;}
         }
     }
+    private static final class RunInputStopReached extends RuntimeException {}
 
     static String modelProvider(Map<String,String> env) {
         String selected=env.getOrDefault("COMPANION_RUN_MODEL_PROVIDER","qwen").trim().toLowerCase(java.util.Locale.ROOT);
@@ -495,7 +514,11 @@ public final class AcceleratedTownRunner {
             Object output=call.get("output");
             if("decision".equals(kind)&&input instanceof ResidentMind.Context context){
                 for(String offeredAction:context.availableActions())bumpOffered(actions,offeredAction);
-                if(output instanceof ResidentMind.Decision decision&&decision.action()!=null)bumpOutcome(actions,decision.action(),outcome);
+                if(output instanceof ResidentMind.Decision decision){
+                    var selected=ResidentMind.selectedOption(context,decision);
+                    String action=selected==null?decision.action():selected.action();
+                    if(action!=null)bumpOutcome(actions,action,outcome);
+                }
             } else if("react".equals(kind)){
                 for(String offeredReaction:reactionsOf(input))bumpOffered(actions,offeredReaction);
                 if(output instanceof ResidentMind.ReactDraft draft&&draft.reaction()!=null)bumpOutcome(actions,draft.reaction(),outcome);
@@ -549,6 +572,12 @@ public final class AcceleratedTownRunner {
         manifest.put("modelProvider", live == null ? null : live.provider());
         manifest.put("model", live == null ? null : live.model());
         manifest.put("dailyModelBudget", cfg.dailyModelBudget());
+        manifest.put("wireModelRequestBudget",cfg.totalModelBudget());
+        manifest.put("inputTokenStop",cfg.inputTokenStop());
+        manifest.put("inputTokenStopSemantics","post_usage_threshold_not_a_preflight_hard_limit");
+        manifest.put("logicalModelCallsCompleted",usage.totalCalls());
+        manifest.put("logicalModelCallsStarted",live==null?0:live.mind().logicalCallsStarted());
+        manifest.put("wireModelRequestsStarted",live==null?0:live.wireBudget().started());
         manifest.put("userId", cfg.userId());
         manifest.put("scriptedAvatarIntents", cfg.scriptedAvatarIntents());
         manifest.put("blindTestSeed", cfg.blindTestSeed());
@@ -569,6 +598,8 @@ public final class AcceleratedTownRunner {
         usageReport.put("totalOutputTokens", usage.totalOutputTokens());
         TimelineExporter.writeJson(cfg.outDir().resolve("usage.json"), usageReport);
         TimelineExporter.writeJson(cfg.outDir().resolve("model-calls.json"),live==null?List.of():List.copyOf(live.calls()));
+        TimelineExporter.writeJson(cfg.outDir().resolve("model-wire-requests.json"),
+            live==null?List.of():live.wireBudget().requests());
         TimelineExporter.writeJson(cfg.outDir().resolve("model-application-outcomes.json"),applicationOutcomes);
         // Per-action offered/selected/applied/rejected/failed/unsupported accounting (see this class's
         // own outcomeListener wiring above). This is the diagnostic the four repeats of the same bug

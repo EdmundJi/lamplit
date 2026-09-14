@@ -15,6 +15,10 @@ public interface ResidentMind {
      * is one call per resident per morning; see ResidentDirector's own gating for exactly when this is
      * offered. Additive default like the two methods above: any existing ResidentMind that predates
      * day planning keeps compiling and simply has no opinion until it opts in. */
+    /** Whether this mind plans days. Asked before a day plan is reserved, because a day plan now
+     * comes ahead of every ordinary decision: a mind that cannot plan must not spend each resident's
+     * first reservation of the day finding that out. Decorators forward it. */
+    default boolean plansDays(){return false;}
     default DayPlanDraft planDay(DayPlanRequest request){throw new UnsupportedOperationException("Day planning unavailable");}
     default Result<DayPlanDraft> planDayMetered(DayPlanRequest request){return new Result<>(planDay(request),null);}
     /** "Someone is standing in front of you - do you do anything about it?" Generative Agents asks
@@ -169,7 +173,12 @@ public interface ResidentMind {
 
     record DialogueRequest(Context perspective,String conversationId,long turnVersion,String operationId,String partnerName,String topicTitle) {}
     record SummaryRequest(Context perspective,String conversationId,String partnerName,List<Turn> transcript,List<MemoryView> conversationMemories) {}
-    record DayPlanRequest(Context perspective) {}
+    /** {@code duties} is what this resident believes their usual day looks like (ResidentDuties) -
+     * text for the model to plan from, never a quota. */
+    record DayPlanRequest(Context perspective,List<DutyView> duties,String usualWake,String usualSleep) {
+        public DayPlanRequest(Context perspective){this(perspective,List.of(),null,null);}
+    }
+    record DutyView(String from,String to,String place,String action,String what,String handTo) {}
     /** One face-to-face fact put to the resident it happened to. {@code reactions} is what the rules
      * can see is actually possible at this instant, and it is data rather than a constant because of
      * {@code invite}: asking somebody to come and do a thing with you is only a question worth asking
@@ -277,14 +286,30 @@ public interface ResidentMind {
      * model output already follows. Never a time-slotted schedule: ResidentSimulation never checks
      * elapsed real time against these segments, only whether one is still "pending" when the day rolls
      * over. */
-    record DayPlanDraft(List<String> segments,List<String> evidenceIds) {}
+    record DayPlanDraft(List<SegmentDraft> segments,List<String> evidenceIds) {}
+    /** start/end are local "HH:mm"; place is a knownPlaces id ("home" for one's own). */
+    record SegmentDraft(String start,String end,String place,String action,String label) {}
     record Context(String residentId,String localTime,String weather,ActorView self,String goal,
                    List<String> salientPerceptions,List<String> routineCues,List<MemoryView> memories,
                    List<com.betterself.growth.town.companion.domain.ResidentSimulation.TodayDoing> todaySoFar,List<ActorView> nearby,
                    List<WorldObjectView> visibleObjects,List<PersonHereView> peopleHere,List<KnownPlaceView> knownPlaces,List<KnownProject> knownProjects,List<TurnView> conversation,
                    LifeIntentView lifeIntent,LifeIntentView careerIntent,PlanView currentPlan,List<WorkArrangementView> workArrangements,
-                   String occupation,PersonaView persona,List<String> availableActions,String cafeOperatorId,List<String> cafeRoleFacts,boolean canTend,List<ServiceRequestView> visibleServiceRequests,
-                   String cafeStatus,String cafeScheduleCue,String cafeNotice,PausedActionView pausedAction,PortableActionView portableAction) {
+                   String occupation,PersonaView persona,List<String> availableActions,List<DecisionOptionView> decisionOptions,String cafeOperatorId,List<String> cafeRoleFacts,boolean canTend,List<ServiceRequestView> visibleServiceRequests,
+                   String cafeStatus,String cafeScheduleCue,String cafeNotice,PausedActionView pausedAction,PortableActionView portableAction,String currentRoomId) {
+        /** Compatibility shape for hand-built contexts that predate exact four-level decision
+         * options. Production contexts always use the canonical constructor above. */
+        public Context(String residentId,String localTime,String weather,ActorView self,String goal,
+                       List<String> salientPerceptions,List<String> routineCues,List<MemoryView> memories,
+                       List<com.betterself.growth.town.companion.domain.ResidentSimulation.TodayDoing> todaySoFar,List<ActorView> nearby,
+                       List<WorldObjectView> visibleObjects,List<PersonHereView> peopleHere,List<KnownPlaceView> knownPlaces,List<KnownProject> knownProjects,List<TurnView> conversation,
+                       LifeIntentView lifeIntent,LifeIntentView careerIntent,PlanView currentPlan,List<WorkArrangementView> workArrangements,
+                       String occupation,PersonaView persona,List<String> availableActions,String cafeOperatorId,List<String> cafeRoleFacts,boolean canTend,List<ServiceRequestView> visibleServiceRequests,
+                       String cafeStatus,String cafeScheduleCue,String cafeNotice,PausedActionView pausedAction,PortableActionView portableAction){
+            this(residentId,localTime,weather,self,goal,salientPerceptions,routineCues,memories,todaySoFar,nearby,
+                visibleObjects,peopleHere,knownPlaces,knownProjects,conversation,lifeIntent,careerIntent,currentPlan,
+                workArrangements,occupation,persona,availableActions,List.of(),cafeOperatorId,cafeRoleFacts,canTend,
+                visibleServiceRequests,cafeStatus,cafeScheduleCue,cafeNotice,pausedAction,portableAction,null);
+        }
         /** Source-compatible constructor for existing model fixtures.  New runtime contexts always
          * use the qualitative canonical shape above; legacy numeric arguments are intentionally
          * ignored so they cannot reappear in serialized model input. */
@@ -294,7 +319,7 @@ public interface ResidentMind {
                        List<WorldObject> visibleObjects,List<KnownProject> knownProjects,List<Turn> conversation){
             this(residentId,localTime,weather,actorView(self),goal,List.of(),List.of(),memoryViews(memories),List.of(),actorViews(nearby),
                 objectViews(visibleObjects),List.of(),List.of(),knownProjects,turnViews(conversation),null,null,null,List.of(),null,null,
-                List.of("none","observe","rest","study","work","read","make","sleep","propose"),null,List.of(),false,List.of(),null,null,null,null,null);
+                List.of("none","observe","rest","study","work","read","make","sleep","propose"),List.of(),null,List.of(),false,List.of(),null,null,null,null,null,null);
         }
     }
     /**
@@ -324,8 +349,11 @@ public interface ResidentMind {
     record ActorView(String id,String name,String role,String place,String activity,String label) {}
     record MemoryView(String id,String ownerId,String sourceId,String sourceType,String at,String text,String topicId,List<String> evidenceIds) {}
     record TurnView(String speakerId,String text,String at,String source,String emoji) {}
-    record WorldObjectView(String id,String kind,String place,String label,String state,String projectId) {}
+    record WorldObjectView(String id,String kind,String place,String roomId,String label,String state,String projectId) {}
     record KnownPlaceView(String id,String description,List<String> possibleActivities) {}
+    /** One complete choice already proven legal by the rules: building, room and exact leaf target
+     * stay together so the model never receives their invalid Cartesian product. */
+    record DecisionOptionView(String id,String action,String place,String roomId,String targetId) {}
     record PlanView(String id,String action,String place,String targetId,String reason,String startedAt,String endsAt,long remainingSeconds) {}
     record LifeIntentView(String id,String goalId,String purpose,String status,String formedAt,String updatedAt,String lastActedAt) {}
     record WorkArrangementView(String id,String kind,String place,String proposerId,String workerId,String status,String note,
@@ -341,7 +369,24 @@ public interface ResidentMind {
     record KnownProject(String id,String title,String place,String stage,String startedBy) {
         public KnownProject(String id,String title,String place){this(id,title,place,"刚开始",null);}
     }
-    record Decision(String action,String place,String targetId,String reason,String speech,List<String> evidenceIds,String projectTitle,String objectKind) {}
+    record Decision(String choiceId,String action,String place,String roomId,String targetId,String reason,String speech,List<String> evidenceIds,String projectTitle,String objectKind) {
+        static final String LEGACY_ROOM="\u0000legacy-room";
+        public Decision(String action,String place,String targetId,String reason,String speech,List<String> evidenceIds,String projectTitle,String objectKind){
+            this(null,action,place,LEGACY_ROOM,targetId,reason,speech,evidenceIds,projectTitle,objectKind);
+        }
+        public Decision(String action,String place,String roomId,String targetId,String reason,String speech,List<String> evidenceIds,String projectTitle,String objectKind){
+            this(null,action,place,roomId,targetId,reason,speech,evidenceIds,projectTitle,objectKind);
+        }
+    }
+
+    static DecisionOptionView selectedOption(Context context,Decision decision){
+        if(context==null||decision==null||context.decisionOptions()==null)return null;
+        if(decision.choiceId()!=null)return context.decisionOptions().stream()
+            .filter(option->decision.choiceId().equals(option.id())).findFirst().orElse(null);
+        if(!Decision.LEGACY_ROOM.equals(decision.roomId()))return null;
+        return context.decisionOptions().stream().filter(option->java.util.Objects.equals(option.action(),decision.action())
+            &&java.util.Objects.equals(option.place(),decision.place())).findFirst().orElse(null);
+    }
 
     static ActorView actorView(Actor actor){return actor==null?null:new ActorView(actor.id(),actor.name(),actor.role(),modelPlace(actor.place()),actor.activity(),actor.label());}
     static List<ActorView> actorViews(List<Actor> actors){return actors==null?List.of():actors.stream().map(ResidentMind::actorView).toList();}
@@ -351,7 +396,7 @@ public interface ResidentMind {
     static List<DeedView> deedViews(List<Deed> deeds){return deeds==null?List.of():deeds.stream().map(ResidentMind::deedView).toList();}
     static TurnView turnView(Turn turn){return turn==null?null:new TurnView(turn.speakerId(),turn.text(),instant(turn.at()),turn.source(),turn.emoji());}
     static List<TurnView> turnViews(List<Turn> turns){return turns==null?List.of():turns.stream().map(ResidentMind::turnView).toList();}
-    static WorldObjectView objectView(WorldObject object){return object==null?null:new WorldObjectView(object.id(),object.kind(),modelPlace(object.place()),object.label(),observedState(object.state()),object.projectId());}
+    static WorldObjectView objectView(WorldObject object){return object==null?null:new WorldObjectView(object.id(),object.kind(),modelPlace(object.place()),object.roomId(),object.label(),observedState(object.state()),object.projectId());}
     static List<WorldObjectView> objectViews(List<WorldObject> objects){return objects==null?List.of():objects.stream().map(ResidentMind::objectView).toList();}
     static PlanView planView(Plan plan,Instant now){return plan==null?null:new PlanView(plan.id(),plan.action(),modelPlace(plan.place()),plan.targetId(),plan.reason(),instant(plan.startedAt()),instant(plan.endsAt()),now==null||plan.endsAt()==null?0:Math.max(0,java.time.Duration.between(now,plan.endsAt()).getSeconds()));}
     private static String modelPlace(String place){return com.betterself.growth.town.companion.domain.TownPlaces.isHome(place)?"home":place;}

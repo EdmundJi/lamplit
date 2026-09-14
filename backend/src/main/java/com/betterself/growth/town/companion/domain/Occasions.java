@@ -140,7 +140,7 @@ public final class Occasions {
                 pending.place=moment.place();pending.target=moment.target();pending.fact=moment.fact();
                 pending.situation=moment.situation();pending.at=at;pending.residentRevision=r.revision;
                 w.pendingOccasions.add(pending);
-                while(w.pendingOccasions.size()>12)w.pendingOccasions.removeFirst();
+                while(w.pendingOccasions.size()>ResidentSimulation.populationCap(w,12))w.pendingOccasions.removeFirst();
                 ResidentSimulation.recordDecisionTrigger(w,r.id,"occasion:"+d.key(),at);
             }
         }
@@ -161,12 +161,16 @@ public final class Occasions {
         }
     }
 
+    /** Removes an occasion whose question has been asked and answered, whatever came of the answer. */
+    public static void discard(CompanionWorld w,String id){
+        w.pendingOccasions.removeIf(p->p.id.equals(id));
+    }
     public static PendingOccasion pending(CompanionWorld w,String id){
         return w.pendingOccasions.stream().filter(p->p.id.equals(id)).findFirst().orElse(null);
     }
     private static void asked(CompanionWorld w,String residentId,String key,String situation){
         w.askedOccasions.put(residentId+"|"+key,situation);
-        while(w.askedOccasions.size()>32)w.askedOccasions.remove(w.askedOccasions.keySet().iterator().next());
+        while(w.askedOccasions.size()>Math.max(32,ALL.size()*w.residentStates.size()))w.askedOccasions.remove(w.askedOccasions.keySet().iterator().next());
     }
 
     // ---- the triggers ------------------------------------------------------------------------

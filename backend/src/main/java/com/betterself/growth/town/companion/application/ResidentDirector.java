@@ -14,6 +14,10 @@ import java.util.concurrent.*;
 @Service
 public class ResidentDirector {
     private static final org.slf4j.Logger log=org.slf4j.LoggerFactory.getLogger(ResidentDirector.class);
+    /** A provider may have a longer socket timeout, but an answer built from an old town snapshot is
+     * no longer a resident's answer to the scene now in front of them. Decisions already had this
+     * guard; keeping it here makes the same expiry rule cover every model call kind. */
+    private static final long MODEL_RESULT_MAX_AGE_SECONDS=90;
     private final WorldStore store;
     private final ResidentMind mind;
     private final Clock clock;
@@ -122,8 +126,15 @@ public class ResidentDirector {
      * cap within a few milliseconds, which is nothing beside the ~4s model call it is climbing for. */
     private void dispatch(long userId){
         java.util.concurrent.atomic.AtomicInteger workers=workersByUser.computeIfAbsent(userId,id->new java.util.concurrent.atomic.AtomicInteger());
-        if(workers.incrementAndGet()>parallelism){workers.decrementAndGet();return;}
-        try{executor.execute(()->run(userId));}catch(RejectedExecutionException e){workers.decrementAndGet();}
+        int slot=workers.incrementAndGet();
+        if(slot>parallelism){workers.decrementAndGet();return;}
+        // When a world is busy enough to fill every lane, reserve the last lane for bounded
+        // cognition work (day plan / due promise / reflection). Otherwise 25 residents with a
+        // steady supply of ordinary decisions can keep that work below the queue forever. Passing
+        // events still outrank this lane inside reserve(); this only prevents background cognition
+        // from having to wait for the entire town to become idle at once.
+        boolean backgroundPreferred=parallelism>1&&slot==parallelism;
+        try{executor.execute(()->run(userId,backgroundPreferred));}catch(RejectedExecutionException e){workers.decrementAndGet();}
     }
     /** @param sequence diagnostic-only record of which reservation (of {@code w.modelSequence}, which
      * ticks on every reservation in town) this dispatch was - it no longer gates whether the reply may
@@ -156,13 +167,14 @@ public class ResidentDirector {
      * on every tick of its whole TTL. Unlike react there is deliberately no rule-authored fallback -
      * nobody locks the door on a resident's behalf. */
     private final java.util.concurrent.atomic.AtomicBoolean considerUnavailable=new java.util.concurrent.atomic.AtomicBoolean(false);
+    private final java.util.concurrent.atomic.AtomicBoolean dayPlanUnavailable=new java.util.concurrent.atomic.AtomicBoolean(false);
     private final java.util.concurrent.atomic.AtomicBoolean reflectUnavailable=new java.util.concurrent.atomic.AtomicBoolean(false);
     private final java.util.concurrent.atomic.AtomicBoolean ventureUnavailable=new java.util.concurrent.atomic.AtomicBoolean(false);
     private final java.util.concurrent.atomic.AtomicBoolean promiseUnavailable=new java.util.concurrent.atomic.AtomicBoolean(false);
-    private void run(long userId){
+    private void run(long userId,boolean backgroundPreferred){
         final Work[] job={null};
         try {
-            store.update(userId,null,w->{job[0]=reserve(w,clock.instant());return w;});
+            store.update(userId,null,w->{job[0]=reserve(w,clock.instant(),backgroundPreferred);return w;});
             Work work=job[0];if(work==null)return;
             // This reservation found real work, so another resident may have work too - hand out the
             // next worker now, before this one spends ~4s on the network (docs/04 「只并行"想"，写世界仍
@@ -192,7 +204,14 @@ public class ResidentDirector {
                 w.modelConsecutiveFailures=0;w.modelRetryAfter=null;
                 boolean applied;
                 String outcomeAction=null;
-                if(work.kind().equals("turn")) {
+                if(resultExpired(work,clock.instant())) {
+                    // Conversation reservations have their own operation state which must be released;
+                    // the other call kinds are optimistic and leave their still-valid cue available
+                    // for a fresh question on a later tick.
+                    if(work.kind().equals("turn"))ConversationLifecycle.failTurn(w,work.operation(),clock.instant());
+                    if(work.kind().equals("summary"))ConversationLifecycle.failSummary(w,work.operation(),clock.instant());
+                    applied=false;
+                } else if(work.kind().equals("turn")) {
                     var utterance=(ConversationLifecycle.Utterance)result;
                     outcomeAction=utterance==null?null:utterance.stance();
                     applied=utterance!=null&&evidenceWithin(utterance.evidenceIds(),work.context().memories())&&ConversationLifecycle.applyTurn(w,work.operation(),utterance,clock.instant());
@@ -207,16 +226,27 @@ public class ResidentDirector {
                     applied=draft!=null&&evidenceWithin(draft.evidenceIds()==null?List.of():draft.evidenceIds(),work.context().memories())
                         &&ResidentSimulation.applyReaction(w,work.react().pendingId(),work.residentRevision(),draft.reaction(),draft.reason(),
                             draft.evidenceIds()==null?List.of():draft.evidenceIds(),clock.instant());
+                    // Same as an occasion: an answer we could not use still spends the moment. Left
+                    // queued, the pair was asked again every tick of its 90-second life.
+                    ResidentSimulation.consumeEncounterWithoutDecision(w,work.react().pendingId());
                 } else if(work.kind().equals("consider")) {
                     var draft=(ResidentMind.ConsiderDraft)result;
                     outcomeAction=draft==null?null:draft.choice();
                     applied=draft!=null&&evidenceWithin(draft.evidenceIds()==null?List.of():draft.evidenceIds(),work.context().memories())
                         &&Occasions.apply(w,work.consider().pendingId(),work.residentRevision(),draft.choice(),draft.reason(),
                             draft.speech(),draft.evidenceIds()==null?List.of():draft.evidenceIds(),clock.instant());
+                    // The question has been put and answered; an answer we could not use is still this
+                    // moment's answer. Left queued, the same resident is re-asked on the very next tick.
+                    Occasions.discard(w,work.consider().pendingId());
                 } else if(work.kind().equals("dayplan")) {
                     var draft=(ResidentMind.DayPlanDraft)result;
                     applied=draft!=null&&evidenceWithin(draft.evidenceIds()==null?List.of():draft.evidenceIds(),work.context().memories())
-                        &&ResidentSimulation.applyDayPlan(w,work.context().residentId(),work.residentRevision(),draft.segments(),draft.evidenceIds(),clock.instant());
+                        &&ResidentSimulation.applyDayPlan(w,work.context().residentId(),work.residentRevision(),plannedSegments(draft),draft.evidenceIds(),clock.instant());
+                    // Asked once a day, like an occasion: a plan we could not use still leaves the
+                    // morning's question answered, or the same resident is re-asked every tick.
+                    // A stale revision is not an answer - that resident is simply asked again.
+                    ResidentState planner=ResidentSimulation.state(w,work.context().residentId());
+                    if(!applied&&planner!=null&&planner.revision==work.residentRevision())ResidentSimulation.markDayPlanUnavailableForToday(w,planner.id,clock.instant());
                 } else if(work.kind().equals("explain")) {
                     var draft=(ResidentMind.ExplainDraft)result;
                     applied=draft!=null&&evidenceWithin(draft.evidenceIds()==null?List.of():draft.evidenceIds(),work.context().memories())
@@ -237,7 +267,11 @@ public class ResidentDirector {
                     // a time for" is a real answer, and coming back an hour later to ask again would be
                     // badgering somebody into an obligation rather than listening to them.
                     ResidentSimulation.markPromiseAsked(w,work.context().residentId(),clock.instant());
-                    applied=draft!=null&&draft.what()!=null&&!draft.what().isBlank()&&draft.inHours()!=null
+                    ResidentState current=ResidentSimulation.state(w,work.context().residentId());
+                    applied=draft!=null&&current!=null&&current.revision==work.residentRevision()
+                        &&draft.evidenceIds()!=null&&evidenceWithin(draft.evidenceIds(),work.context().memories())
+                        &&draft.toId()!=null&&work.promiseOffer().peopleHere().stream().anyMatch(person->draft.toId().equals(person.id()))
+                        &&draft.what()!=null&&!draft.what().isBlank()&&draft.inHours()!=null&&Double.isFinite(draft.inHours())
                         &&ResidentSimulation.promise(w,work.context().residentId(),draft.toId(),draft.what(),draft.place(),
                             clock.instant().plusSeconds((long)(draft.inHours()*3600)),clock.instant());
                 } else if(work.kind().equals("promise_settled")) {
@@ -261,14 +295,20 @@ public class ResidentDirector {
                         &&ResidentSimulation.applyReflection(w,work.context().residentId(),work.residentRevision(),draft.text(),draft.evidenceIds(),draft.supersedesKey(),clock.instant());
                 } else {
                     var decision=(ResidentMind.Decision)result;
-                    outcomeAction=decision==null?null:decision.action();
+                    var selected=ResidentMind.selectedOption(work.context(),decision);
+                    outcomeAction=selected==null?(decision==null?null:decision.action()):selected.action();
                     applied=applyDecision(w,work,decision);if(applied)rememberDecisionSignal(w,work.context().residentId(),clock.instant());
                 }
                 if(work.kind().equals("decision")){
                     ResidentState decider=ResidentSimulation.state(w,work.context().residentId());
                     if(decider!=null)ResidentSimulation.recordDecisionOutcome(decider,applied,clock.instant());
                 }
-                if(!applied){w.modelStatus="刚才的念头已经过时，继续眼前的生活";w.revision++;}
+                if(!applied)w.modelStatus="刚才的念头已经过时，继续眼前的生活";
+                // Always: JdbcWorldStore writes a world back only when its revision moved, and an
+                // accepted answer can change nothing but bookkeeping - a "none" to an occasion just
+                // drops the pending question. Without this that drop was never saved and the same
+                // residents were re-asked every tick (live: 1,083 consider calls in 17 minutes).
+                w.revision++;
                 outcomeListener.onOutcome(work.kind(),work.context().residentId(),outcomeAction,applied?"applied":"rejected");
                 return w;
             });
@@ -276,23 +316,29 @@ public class ResidentDirector {
             log.warn("Companion resident model fallback: {}",safeFailure(e));
             if(job[0]!=null)try{store.update(userId,null,w->{
                 if(!w.id.equals(job[0].worldId()))return w;
+                // Every branch below changes the world (a refund, a consumed encounter); see the
+                // success path on why an unmoved revision would silently drop that change.
+                w.revision++;
                 // A ResidentMind that simply does not implement day planning (the interface's own
                 // default throws UnsupportedOperationException - see RoutingResidentMind, which does
                 // not yet route "dayplan" calls to either provider) is a missing capability, not a
                 // real failure: it must never consume the shared model-failure backoff budget, or one
                 // resident's unsupported morning day-plan request would silently starve every other
                 // resident's ordinary decisions and every conversation turn for the whole retry window.
-                // A mind with no opinion about encounters must not make the town silent: fall back to
-                // the sociable answer, the same one a rule-only world uses, rather than dropping the
-                // moment. Not a real failure, so it never touches the backoff budget.
+                // A mind with no reaction capability is not a network failure, and the rules cannot
+                // turn that absence into a greeting on the resident's behalf. Consume the moment
+                // neutrally and leave the shared failure budget untouched.
                 if(job[0].kind().equals("react")&&e instanceof UnsupportedOperationException){
-                    w.modelCallsToday=Math.max(0,w.modelCallsToday-1);
-                    ResidentSimulation.greetWithoutDeciding(w,job[0].react().pendingId(),clock.instant());
+                    refundCurrentBudgetDay(w,job[0]);
+                    // Missing cognition cannot become a rule-authored social intention. Consume the
+                    // passing encounter neutrally: no greeting, dialogue, memory or invented reason.
+                    ResidentSimulation.consumeEncounterWithoutDecision(w,job[0].react().pendingId());
                     outcomeListener.onOutcome("react",job[0].context().residentId(),null,"unsupported");
                     return w;
                 }
                 if(job[0].kind().equals("dayplan")&&e instanceof UnsupportedOperationException){
-                    w.modelCallsToday=Math.max(0,w.modelCallsToday-1);
+                    refundCurrentBudgetDay(w,job[0]);
+                    dayPlanUnavailable.set(true);
                     ResidentSimulation.markDayPlanUnavailableForToday(w,job[0].context().residentId(),clock.instant());
                     outcomeListener.onOutcome("dayplan",job[0].context().residentId(),null,"unsupported");
                     return w;
@@ -303,40 +349,45 @@ public class ResidentDirector {
                 // own doc comment above) rather than left to lose the exact same priority race on every
                 // future tick - neither touches the shared failure backoff either way.
                 if(job[0].kind().equals("consider")&&e instanceof UnsupportedOperationException){
-                    w.modelCallsToday=Math.max(0,w.modelCallsToday-1);
+                    refundCurrentBudgetDay(w,job[0]);
                     considerUnavailable.set(true);
                     outcomeListener.onOutcome("consider",job[0].context().residentId(),null,"unsupported");
                     return w;
                 }
                 if(job[0].kind().equals("explain")&&e instanceof UnsupportedOperationException){
-                    w.modelCallsToday=Math.max(0,w.modelCallsToday-1);
+                    refundCurrentBudgetDay(w,job[0]);
                     explainUnavailable.set(true);
                     outcomeListener.onOutcome("explain",job[0].context().residentId(),null,"unsupported");
                     return w;
                 }
                 if(job[0].kind().equals("reflect")&&e instanceof UnsupportedOperationException){
-                    w.modelCallsToday=Math.max(0,w.modelCallsToday-1);
+                    refundCurrentBudgetDay(w,job[0]);
                     reflectUnavailable.set(true);
                     outcomeListener.onOutcome("reflect",job[0].context().residentId(),null,"unsupported");
                     return w;
                 }
                 if(job[0].kind().equals("venture")&&e instanceof UnsupportedOperationException){
-                    w.modelCallsToday=Math.max(0,w.modelCallsToday-1);
+                    refundCurrentBudgetDay(w,job[0]);
                     ventureUnavailable.set(true);
                     outcomeListener.onOutcome("venture",job[0].context().residentId(),null,"unsupported");
                     return w;
                 }
                 if(job[0].kind().startsWith("promise")&&e instanceof UnsupportedOperationException){
-                    w.modelCallsToday=Math.max(0,w.modelCallsToday-1);
+                    refundCurrentBudgetDay(w,job[0]);
                     promiseUnavailable.set(true);
                     outcomeListener.onOutcome(job[0].kind(),job[0].context().residentId(),null,"unsupported");
                     return w;
                 }
                 if(job[0].kind().equals("turn"))ConversationLifecycle.failTurn(w,job[0].operation(),clock.instant());
                 if(job[0].kind().equals("summary"))ConversationLifecycle.failSummary(w,job[0].operation(),clock.instant());
-                w.modelCallsToday=Math.max(0,w.modelCallsToday-1);w.modelFailuresToday++;w.modelConsecutiveFailures++;
+                // The request may have crossed local midnight while it was in flight. Never refund
+                // yesterday's failed reservation out of today's fresh allowance, and never charge
+                // today's failure cap for a request reserved on another day.
+                boolean currentBudgetDay=Objects.equals(w.modelBudgetDay,job[0].day());
+                if(currentBudgetDay){w.modelCallsToday=Math.max(0,w.modelCallsToday-1);w.modelFailuresToday++;}
+                w.modelConsecutiveFailures++;
                 long delay=Math.min(600,75L*(1L<<Math.min(3,w.modelConsecutiveFailures-1)));
-                w.modelRetryAfter=clock.instant().plusSeconds(delay);w.modelStatus="暂时按自己的习惯生活，稍后再想新主意";w.revision++;
+                w.modelRetryAfter=clock.instant().plusSeconds(delay);w.modelStatus="暂时按自己的习惯生活，稍后再想新主意";
                 outcomeListener.onOutcome(job[0].kind(),job[0].context().residentId(),null,"failed");
                 return w;
             });}catch(Exception ignored){/* A deleted world is never recreated by a late result. */}
@@ -363,7 +414,7 @@ public class ResidentDirector {
      * dialogue turn, a summary, a pending encounter/occasion, an explain/dayplan/reflect/promise pass,
      * and both ordinary-decision candidate lists all have to skip a resident who is already thinking. */
     private boolean thinking(CompanionWorld w,String residentId){return thinking.contains(thinkingKey(w.id,residentId));}
-    private Work reserve(CompanionWorld w,Instant now) {
+    private Work reserve(CompanionWorld w,Instant now,boolean backgroundPreferred) {
         if(w.modelRetryAfter!=null&&now.isBefore(w.modelRetryAfter))return null;
         String day=now.atZone(ZoneId.of(w.timezone)).toLocalDate().toString();
         if(!Objects.equals(w.modelBudgetDay,day)){w.modelBudgetDay=day;w.modelCallsToday=0;w.modelFailuresToday=0;w.modelConsecutiveFailures=0;}
@@ -428,6 +479,28 @@ public class ResidentDirector {
                 definition.question(),definition.yes(),definition.no(),pending.place);
             return reserved(w,now,new Work("consider",w.id,r.revision,w.intentRevision,now,context,null,null,null,w.modelSequence+1,day,null,null,null,null,null,null,null,request));
         }
+        // Smallville's engine of movement: soon after waking, before anything else is decided, a
+        // resident thinks through the day. Every later decision is shown what they meant to be doing
+        // (see perspective's plan cues), so the plan has to exist before the first of them.
+        ResidentState dayPlanner=!mind.plansDays()||dayPlanUnavailable.get()?null:w.residentStates.stream()
+            .filter(r->!thinking(w,r.id)&&(!r.id.equals("self")||ResidentSimulation.selfIsFree(w))
+                &&ResidentSimulation.activeConversation(w,r.id)==null&&needsDayPlan(w,r,now))
+            .min(fairResidentOrder(w,r->r.lastAskedAt)).orElse(null);
+        if(dayPlanner!=null){
+            var context=perspective(w,dayPlanner.id,now,List.of());
+            return reserved(w,now,new Work("dayplan",w.id,dayPlanner.revision,w.intentRevision,now,context,null,null,null,
+                w.modelSequence+1,day,dayPlanRequest(w,dayPlanner,context),null,null,null,null,null,null,null));
+        }
+        // A saturated 25-person town should not have to become globally idle before anybody can
+        // consolidate experience. Passing facts above still win; this reserved lane only competes
+        // with explanations and the ordinary "what next?" pool below. A single-flight evaluation
+        // gets the same guarantee every sixth reservation so parallelism=1 remains a valid control
+        // rather than a mode in which reflection is structurally impossible.
+        boolean cognitionTurn=backgroundPreferred||(parallelism==1&&Math.floorMod(w.modelSequence,6)==5);
+        if(cognitionTurn){
+            Work cognition=reserveCognition(w,now,day);
+            if(cognition!=null)return cognition;
+        }
         // Accounting for one's own recent unaccounted-for behaviour (explain): a person who is about
         // to re-decide what to do next should first know what they have just been doing - the account
         // is what argues for the next choice, not the other way round. Placed above ordinary decision
@@ -435,13 +508,16 @@ public class ResidentDirector {
         // face-to-face encounter, none of which this should ever delay. Skipped entirely once this
         // mind has already shown (via UnsupportedOperationException) that it does not implement
         // explain - see explainUnavailable's own doc comment on why that guard exists at all.
-        if(!explainUnavailable.get())for(ResidentState r:w.residentStates){
-            if(thinking(w,r.id))continue;
-            if(!ResidentSimulation.needsExplanation(w,r.id,now))continue;
+        if(!explainUnavailable.get()){
+            ResidentState r=w.residentStates.stream()
+                .filter(candidate->!thinking(w,candidate.id)&&ResidentSimulation.needsExplanation(w,candidate.id,now))
+                .min(fairResidentOrder(w,candidate->candidate.lastAskedAt)).orElse(null);
+            if(r!=null){
             var context=perspective(w,r.id,now,List.of());
             var deeds=ResidentSimulation.unexplainedDeeds(w,r.id);
             var request=new ResidentMind.ExplainRequest(context,ResidentMind.deedViews(deeds));
             return reserved(w,now,new Work("explain",w.id,r.revision,w.intentRevision,now,context,null,null,null,w.modelSequence+1,day,null,null,request,null,null,null,null,null));
+            }
         }
         // Per-resident decision throttling (item 1): replaces the old world-global modelRequestedAt
         // gate below candidates so each resident thinks on their own clock. Decision throughput across
@@ -470,83 +546,15 @@ public class ResidentDirector {
             // way. Sorting by each resident's own last-asked time is stable under a changing pool: the
             // one who has gone longest without thinking is by definition not the one who just thought.
             ResidentState r=candidates.stream()
-                .min(Comparator.comparing((ResidentState c)->c.lastDecisionRequestedAt,Comparator.nullsFirst(Comparator.naturalOrder())))
+                .min(fairResidentOrder(w,c->c.lastDecisionRequestedAt))
                 .orElseThrow();
             var conversation=ResidentSimulation.activeConversation(w,r.id);
             var context=perspective(w,r.id,now,conversation==null?List.of():conversation.turns);
             ResidentSimulation.recordDecisionTrigger(w,r.id,classifyTrigger(w,r,now),now);
             return reserved(w,now,new Work("decision",w.id,r.revision,w.intentRevision,now,context,null,null,null,w.modelSequence+1,day,null,null,null,null,null,null,null,null));
         }
-        // Recursive day plan (item 4): one call per resident per local morning. Checked only once no
-        // ordinary decision is needed anywhere in town - a ResidentMind that does not implement day
-        // planning (the interface default throws UnsupportedOperationException; see run()'s catch
-        // handling for exactly that case) must never be able to starve ordinary life by winning this
-        // race every time. Gated the same way self's own decision candidacy is (see
-        // ResidentSimulation.selfIsFree) so this never reaches into the avatar while the user is
-        // explicitly directing it. No longer the lowest priority - see reflect below, which reasons
-        // about a resident's own past rather than anything that changes what they do today or next.
-        for(ResidentState r:w.residentStates){
-            if(thinking(w,r.id))continue;
-            if(r.id.equals("self")&&!ResidentSimulation.selfIsFree(w))continue;
-            if(ResidentSimulation.activeConversation(w,r.id)!=null)continue;
-            if(!needsDayPlan(w,r,now))continue;
-            var context=perspective(w,r.id,now,List.of());
-            return reserved(w,now,new Work("dayplan",w.id,r.revision,w.intentRevision,now,context,null,null,null,w.modelSequence+1,day,new ResidentMind.DayPlanRequest(context),null,null,null,null,null,null,null));
-        }
-        // Reflection: genuinely the LOWEST priority of everything in reserve(). Generalizing about the
-        // past must never come ahead of anything that changes what a resident does next - not a
-        // conversation, not an encounter, not an ordinary decision, not even the coarse morning day
-        // plan - so it is checked dead last, only once nothing else in the whole town needs the model
-        // at all. Skipped once this mind has already shown it does not implement reflect, for the same
-        // starvation reason explainUnavailable exists (see its own doc comment) - though because this
-        // tier is already the lowest, the risk here is smaller than explain's.
-        if(!reflectUnavailable.get())for(ResidentState r:w.residentStates){
-            if(thinking(w,r.id))continue;
-            if(ResidentSimulation.activeConversation(w,r.id)!=null)continue;
-            if(!ResidentSimulation.needsReflection(w,r.id,now))continue;
-            var context=perspective(w,r.id,now,List.of());
-            var source=ResidentSimulation.reflectionSource(w,r.id,now);
-            // What this resident already holds, handed back so a reflection about the same thing can
-            // replace it rather than mint a second label for one topic - see StandingBeliefView. Read
-            // purely by structure (owner, sourceType, superseded); the rules never look at what the
-            // text says, exactly as habitTraits one line below is a key list and not an opinion.
-            var standingBeliefs=w.memories.stream()
-                .filter(m->m.ownerId().equals(r.id)&&"belief".equals(m.sourceType())&&!m.superseded()&&m.supersedesKey()!=null)
-                .sorted(Comparator.comparing(CompanionWorld.Memory::at).reversed())
-                .map(m->new ResidentMind.StandingBeliefView(m.supersedesKey(),m.text()))
-                .limit(STANDING_BELIEFS_OFFERED).toList();
-            var request=new ResidentMind.ReflectRequest(context,ResidentMind.memoryViews(source),
-                ResidentSimulation.habitTraits(r.id).stream()
-                    .map(t->new ResidentMind.HabitTraitView(t.key(),t.description())).toList(),
-                standingBeliefs);
-            return reserved(w,now,new Work("reflect",w.id,r.revision,w.intentRevision,now,context,null,null,null,w.modelSequence+1,day,null,null,null,request,null,null,null,null));
-        }
-        // A promise that just came due, put to whoever was waiting for it or standing there when it was
-        // made. Above venture because the fact is fresh and stops being worth a thought quickly (the
-        // domain's own six-hour window says the same), below everything a resident is doing right now.
-        if(!promiseUnavailable.get()){
-            for(ResidentState r:w.residentStates){
-                if("self".equals(r.id))continue;
-                if(thinking(w,r.id))continue;
-                var due=ResidentSimulation.promisesAwaitingThought(w,r.id,now);
-                if(due.isEmpty())continue;
-                var promise=due.getFirst();
-                var context=perspective(w,r.id,now,List.of());
-                String role=promise.byId.equals(r.id)?"made_it":promise.toId.equals(r.id)?"promised_to":"witnessed";
-                var view=new ResidentMind.PromiseView(promise.id,promise.byId,
-                    ResidentSimulation.actor(w,promise.byId).name(),promise.what,promise.place,
-                    promise.dueAt==null?null:promise.dueAt.toString(),promise.outcome,role);
-                // What this resident already carries about the person who made it - the material a
-                // standing view of them would have to be built out of, and nothing else.
-                var aboutThem=ResidentMind.memoryViews(w.memories.stream()
-                    .filter(m->m.ownerId().equals(r.id)&&(promise.byId.equals(m.sourceId())
-                        ||(m.text()!=null&&m.text().contains(ResidentSimulation.actor(w,promise.byId).name()))))
-                    .sorted(Comparator.comparing(CompanionWorld.Memory::at).reversed()).limit(8).toList());
-                return reserved(w,now,new Work("promise_settled",w.id,r.revision,w.intentRevision,now,context,null,null,null,
-                    w.modelSequence+1,day,null,null,null,null,null,null,
-                    new ResidentMind.PromiseSettledRequest(context,view,aboutThem),null));
-            }
-        }
+        Work cognition=reserveCognition(w,now,day);
+        if(cognition!=null)return cognition;
         // Dead last, below even reflection: this is only ever asked when the town has run out of
         // things to do together, so nothing else can ever be starved by it.        // Dead last, below even reflection: this is only ever asked when the town has run out of
         // things to do together, so nothing else can ever be starved by it.
@@ -556,7 +564,7 @@ public class ResidentDirector {
             // five never are. Same fairness the ordinary decision candidate already gets.
             ResidentState r=w.residentStates.stream()
                 .filter(candidate->!thinking(w,candidate.id)&&ResidentSimulation.needsVenture(w,candidate.id,now))
-                .min(Comparator.comparing((ResidentState candidate)->candidate.lastVentureAt,Comparator.nullsFirst(Comparator.naturalOrder())))
+                .min(fairResidentOrder(w,candidate->candidate.lastVentureAt))
                 .orElse(null);
             if(r!=null){
             var context=perspective(w,r.id,now,List.of());
@@ -573,7 +581,7 @@ public class ResidentDirector {
         if(!promiseUnavailable.get()){
             ResidentState r=w.residentStates.stream()
                 .filter(candidate->!thinking(w,candidate.id)&&ResidentSimulation.needsPromiseAsk(w,candidate.id,now))
-                .min(Comparator.comparing((ResidentState candidate)->candidate.lastPromiseAskedAt,Comparator.nullsFirst(Comparator.naturalOrder())))
+                .min(fairResidentOrder(w,candidate->candidate.lastPromiseAskedAt))
                 .orElse(null);
             if(r!=null){
                 var context=perspective(w,r.id,now,List.of());
@@ -594,16 +602,117 @@ public class ResidentDirector {
         }
         return null;
     }
+
+    /** Bounded cognition work that is allowed to use one reserved lane in a saturated town. A due
+     * promise comes first because its six-hour window closes; a morning outline comes next; reflection
+     * remains last within the group. Every selection uses the resident's own last-asked watermark and
+     * a rotating tie-break, so 25 residents reserved at the same simulated instant do not collapse
+     * back to source-list order. */
+    private Work reserveCognition(CompanionWorld w,Instant now,String day){
+        if(!promiseUnavailable.get()){
+            ResidentState r=w.residentStates.stream()
+                .filter(candidate->!"self".equals(candidate.id)&&!thinking(w,candidate.id)
+                    &&!ResidentSimulation.promisesAwaitingThought(w,candidate.id,now).isEmpty())
+                .min(fairResidentOrder(w,candidate->candidate.lastAskedAt)).orElse(null);
+            if(r!=null){
+                var promise=ResidentSimulation.promisesAwaitingThought(w,r.id,now).getFirst();
+                var context=perspective(w,r.id,now,List.of());
+                String role=promise.byId.equals(r.id)?"made_it":promise.toId.equals(r.id)?"promised_to":"witnessed";
+                var view=new ResidentMind.PromiseView(promise.id,promise.byId,
+                    ResidentSimulation.actor(w,promise.byId).name(),promise.what,promise.place,
+                    promise.dueAt==null?null:promise.dueAt.toString(),promise.outcome,role);
+                var aboutThem=ResidentMind.memoryViews(w.memories.stream()
+                    .filter(m->m.ownerId().equals(r.id)&&(promise.byId.equals(m.sourceId())
+                        ||(m.text()!=null&&m.text().contains(ResidentSimulation.actor(w,promise.byId).name()))))
+                    .sorted(Comparator.comparing(CompanionWorld.Memory::at).reversed()).limit(8).toList());
+                return reserved(w,now,new Work("promise_settled",w.id,r.revision,w.intentRevision,now,context,null,null,null,
+                    w.modelSequence+1,day,null,null,null,null,null,null,
+                    new ResidentMind.PromiseSettledRequest(context,view,aboutThem),null));
+            }
+        }
+        if(!reflectUnavailable.get()){
+            ResidentState r=w.residentStates.stream()
+                .filter(candidate->!thinking(w,candidate.id)&&ResidentSimulation.activeConversation(w,candidate.id)==null
+                    &&ResidentSimulation.needsReflection(w,candidate.id,now))
+                .min(fairResidentOrder(w,candidate->candidate.lastAskedAt)).orElse(null);
+            if(r!=null){
+                var context=perspective(w,r.id,now,List.of());
+                var source=ResidentSimulation.reflectionSource(w,r.id,now);
+                var standingBeliefs=w.memories.stream()
+                    .filter(m->m.ownerId().equals(r.id)&&"belief".equals(m.sourceType())&&!m.superseded()&&m.supersedesKey()!=null)
+                    .sorted(Comparator.comparing(CompanionWorld.Memory::at).reversed())
+                    .map(m->new ResidentMind.StandingBeliefView(m.supersedesKey(),m.text()))
+                    .limit(STANDING_BELIEFS_OFFERED).toList();
+                var request=new ResidentMind.ReflectRequest(context,ResidentMind.memoryViews(source),
+                    ResidentSimulation.habitTraits(r.id).stream()
+                        .map(t->new ResidentMind.HabitTraitView(t.key(),t.description())).toList(),standingBeliefs);
+                return reserved(w,now,new Work("reflect",w.id,r.revision,w.intentRevision,now,context,null,null,null,
+                    w.modelSequence+1,day,null,null,null,request,null,null,null,null));
+            }
+        }
+        return null;
+    }
+
+    private static Comparator<ResidentState> fairResidentOrder(CompanionWorld w,java.util.function.Function<ResidentState,Instant> lastAsked){
+        int size=Math.max(1,w.residentStates.size());int start=Math.floorMod((int)w.modelSequence,size);
+        return Comparator.comparing(lastAsked,Comparator.nullsFirst(Comparator.naturalOrder()))
+            .thenComparingInt(r->{int index=w.residentStates.indexOf(r);return Math.floorMod(index-start,size);});
+    }
     /** How many of a resident's own standing views are offered back to them when they reflect. Kept
      * short on purpose: a long list turns into a checklist to be worked through, which is the failure
      * mode the habit list already had to be warned against in the prompt. Most recent first, because
      * an old view nobody has touched in days is the least likely thing this afternoon is about. */
     private static final int STANDING_BELIEFS_OFFERED=5;
+    /** Awake, outside their own usual sleeping hours, and no plan yet for today. */
     private boolean needsDayPlan(CompanionWorld w,ResidentState r,Instant now){
-        ZonedDateTime local=now.atZone(ZoneId.of(w.timezone));
-        if(local.getHour()<5||local.getHour()>=11)return false;
-        String today=local.toLocalDate().toString();
+        if("sleep".equals(ResidentSimulation.actor(w,r.id).activity())||ResidentSimulation.withinUsualSleepWindow(w,r.id,now))return false;
+        String today=now.atZone(ZoneId.of(w.timezone)).toLocalDate().toString();
         return r.dayPlan==null||!today.equals(r.dayPlan.day);
+    }
+    private static ResidentMind.DayPlanRequest dayPlanRequest(CompanionWorld w,ResidentState r,ResidentMind.Context context){
+        var duties=r.duties.stream().map(d->new ResidentMind.DutyView(ResidentDuties.clock(d.startMinute),ResidentDuties.clock(d.endMinute),
+            TownPlaces.homeOf(r.id).equals(d.place)?"home":d.place,d.action,d.what,
+            d.toId==null||ResidentSimulation.state(w,d.toId)==null?null:ResidentSimulation.actor(w,d.toId).name())).toList();
+        return new ResidentMind.DayPlanRequest(context,duties,
+            r.sleepScheduleSeeded?ResidentDuties.clock(r.usualWakeMinute):null,r.sleepScheduleSeeded?ResidentDuties.clock(r.usualSleepMinute):null);
+    }
+    private static String restNote(CompanionWorld.DaySegment segment){
+        return "rest".equals(segment.action)&&TownPlaces.isHome(segment.place)?"（歇一会儿，不是睡整觉）":"";
+    }
+    private static List<String> planAware(List<String> routine,List<String> plan){
+        if(plan.isEmpty())return routine;var out=new ArrayList<String>(routine);out.addAll(plan);return List.copyOf(out);
+    }
+    private static List<ResidentSimulation.PlannedSegment> plannedSegments(ResidentMind.DayPlanDraft draft){
+        if(draft.segments()==null)return null;
+        return draft.segments().stream().map(s->s==null?null:new ResidentSimulation.PlannedSegment(
+            ResidentDuties.parseClock(s.start()),ResidentDuties.parseClock(s.end()),s.place(),s.action(),s.label())).toList();
+    }
+    /** What this resident themselves planned for now and next, stated as their own intention, with
+     * the option that carries it named so following the plan is one choice rather than a search. */
+    private static List<String> planCues(CompanionWorld w,ResidentState r,Instant now,List<ResidentMind.DecisionOptionView> options){
+        var cues=new ArrayList<String>();
+        var current=ResidentDuties.currentSegment(w,r,now);
+        if(current!=null){
+            String modelPlace=TownPlaces.homeOf(r.id).equals(current.place)?"home":current.place;
+            var option=options.stream().filter(o->Objects.equals(o.place(),modelPlace)&&Objects.equals(o.action(),current.action)).findFirst().orElse(null);
+            boolean alreadyThere=current.place.equals(ResidentSimulation.actor(w,r.id).place())&&r.plan!=null&&Objects.equals(r.plan.action(),current.action);
+            if(!alreadyThere)cues.add("今天这会儿的打算（早上自己排的）："+ResidentDuties.clock(current.startMinute)+"–"+ResidentDuties.clock(current.endMinute)
+                +"在"+ResidentSimulation.placeName(current.place)+"，"+current.label+restNote(current)+(option==null?"":"——选项"+option.id()+"就是这件事"));
+        }
+        var next=current==null?ResidentDuties.nextSegment(w,r,now,60):null;
+        if(next!=null){
+            // Without the walk and the minutes left, "12:30 去咖啡馆" at 12:21 was read as "wait at home".
+            String here=ResidentSimulation.actor(w,r.id).place();
+            int walk=here.equals(next.place)?0:ResidentDuties.walkMinutes(here,next.place);
+            int minutesLeft=next.startMinute-ResidentDuties.localMinuteOf(w,now);
+            String modelPlace=TownPlaces.homeOf(r.id).equals(next.place)?"home":next.place;
+            var option=options.stream().filter(o->Objects.equals(o.place(),modelPlace)&&Objects.equals(o.action(),next.action)).findFirst().orElse(null);
+            boolean setOut=minutesLeft<=walk+10;
+            cues.add("接下来的打算："+ResidentDuties.clock(next.startMinute)+"去"+ResidentSimulation.placeName(next.place)+"，"+next.label+restNote(next)
+                +(walk==0?"（就在这里）":"（从这儿走过去约"+walk+"分钟）")
+                +(setOut&&option!=null?"——现在动身正好，选项"+option.id()+"就是这件事":"——还有"+minutesLeft+"分钟，不必先回住处等"));
+        }
+        return cues;
     }
     /** Diagnostic-only classification of why this decision is actually being dispatched (item 6),
      * checked in the same precedence order a person would reason about the cause: an ended/never-
@@ -699,7 +808,7 @@ public class ResidentDirector {
         // place (and not mid-walk), it shows up here too. Its label/name only ever carry the fixed,
         // pre-written phrases from CompanionRules - never anything the user typed.
         var visible=new ArrayList<Actor>(w.residents);if(w.avatar!=null)visible.add(w.avatar);
-        var nearby=visible.stream().filter(a->!a.id().equals(r.id)&&a.place().equals(self.place())&&!a.activity().equals("walk")).toList();
+        var nearby=visible.stream().filter(a->!a.id().equals(r.id)&&ResidentSimulation.sameRoom(w,r.id,a.id())&&!a.activity().equals("walk")).toList();
         // Two layers, not one situation-ranked retrieval window (docs/01 「心智」, docs/04 「记忆改成两
         // 层」). This used to query retrieval with the resident's own situation - where they are, what
         // they are aimed at, who is nearby - which sounds like the right fix for the echo it replaced
@@ -741,6 +850,11 @@ public class ResidentDirector {
                 projectStage(view==null?null:view.status(),view==null?0:view.progress(),ResidentSimulation.takesMoreThanOnePerson(p)),startedBy);
         }).toList();
         var knownPlaces=knownPlaces(w,r.id);var cafeRoleFacts=cafeRoleFacts(w,r.id);
+        var decisionOptions=new ArrayList<ResidentMind.DecisionOptionView>();
+        for(var option:ResidentSimulation.availableDecisionOptions(w,r.id,now)){
+            if(option.targetIds().isEmpty())decisionOptions.add(new ResidentMind.DecisionOptionView("d"+decisionOptions.size(),option.action(),option.place(),option.roomId(),null));
+            else for(String target:option.targetIds())decisionOptions.add(new ResidentMind.DecisionOptionView("d"+decisionOptions.size(),option.action(),option.place(),option.roomId(),target));
+        }
         var arrangements=w.workArrangements.stream().filter(a->Set.of("proposed","active").contains(a.status))
             .filter(a->r.id.equals(a.proposerId)||r.id.equals(a.workerId)||r.id.equals(w.cafeOperatorId))
             .map(a->new ResidentMind.WorkArrangementView(a.id,a.kind,a.place,a.proposerId,a.workerId,a.status,a.note,instant(a.proposedAt),instant(a.acceptedAt),instant(a.endedAt))).toList();
@@ -752,7 +866,8 @@ public class ResidentDirector {
         var peopleHere=nearby.stream().filter(person->!person.id().equals("self")||ResidentSimulation.selfIsFree(w))
             .map(person->new ResidentMind.PersonHereView(person.id(),person.name(),closeness(r.relationships.getOrDefault(person.id(),40)),
                 memories.stream().filter(m->m.text()!=null&&m.text().contains(person.name())||person.id().equals(m.sourceId())).map(Memory::id).toList())).toList();
-        return new ResidentMind.Context(r.id,now.atZone(ZoneId.of(w.timezone)).toLocalTime().toString(),w.weather,ResidentMind.actorView(self),r.goal,List.copyOf(perceptions),ResidentSimulation.routineCues(w,r.id,now),ResidentMind.memoryViews(memories),ResidentSimulation.todaySoFar(w,r.id,now),ResidentMind.actorViews(nearby),ResidentMind.objectViews(w.objects.stream().filter(o->o.place().equals(self.place())).toList()),peopleHere,knownPlaces,known,ResidentMind.turnViews(transcript),intentView(r.lifeIntent),intentView(r.careerIntent),ResidentMind.planView(r.plan,now),arrangements,r.occupation,personaView(r.id),ResidentSimulation.availableActions(w,r.id,now),ResidentSimulation.cafeOperatorId(w),cafeRoleFacts,ResidentSimulation.mayTend(w,r.id),requests,w.cafeStatus,ResidentSimulation.cafeScheduleCue(w,r.id,now),ResidentSimulation.cafeNotice(w,r.id),paused==null?null:new ResidentMind.PausedActionView(paused.action(),TownPlaces.isHome(paused.place())?"home":paused.place(),paused.reason(),paused.remainingSeconds()),portable==null?null:new ResidentMind.PortableActionView(portable.action(),portable.reason(),portable.remainingSeconds()));
+        String currentRoomId=ResidentSimulation.roomOf(w,r.id);
+        return new ResidentMind.Context(r.id,now.atZone(ZoneId.of(w.timezone)).toLocalTime().toString(),w.weather,ResidentMind.actorView(self),r.goal,List.copyOf(perceptions),planAware(ResidentSimulation.routineCues(w,r.id,now),planCues(w,r,now,decisionOptions)),ResidentMind.memoryViews(memories),ResidentSimulation.todaySoFar(w,r.id,now),ResidentMind.actorViews(nearby),ResidentMind.objectViews(w.objects.stream().filter(o->Objects.equals(o.roomId(),currentRoomId)).toList()),peopleHere,knownPlaces,known,ResidentMind.turnViews(transcript),intentView(r.lifeIntent),intentView(r.careerIntent),ResidentMind.planView(r.plan,now),arrangements,r.occupation,personaView(r.id),ResidentSimulation.availableActions(w,r.id,now),decisionOptions,ResidentSimulation.cafeOperatorId(w),cafeRoleFacts,ResidentSimulation.mayTend(w,r.id),requests,w.cafeStatus,ResidentSimulation.cafeScheduleCue(w,r.id,now),ResidentSimulation.cafeNotice(w,r.id),paused==null?null:new ResidentMind.PausedActionView(paused.action(),TownPlaces.isHome(paused.place())?"home":paused.place(),paused.reason(),paused.remainingSeconds()),portable==null?null:new ResidentMind.PortableActionView(portable.action(),portable.reason(),portable.remainingSeconds()),currentRoomId);
     }
     /** Copies {@link ResidentSeed#narrative} straight into {@code ResidentMind.Context} - text only,
      * never a gate: {@code null} for the avatar ("self") and any resident this batch never authored
@@ -844,7 +959,11 @@ public class ResidentDirector {
         // choose it for that.
         "cafe",new ResidentMind.KnownPlaceView("cafe","营业时可进入的公共室内空间：可以点杯喝的坐一会儿，可以约人在这里碰面、拼个桌一起聊，也可以安静读书、学习、写作、制作。共享讨论桌上摆着还没做完的共同的事，谁都可以坐下添一笔，不必是起头的那个人。有六个独立窗边座位和一张共享讨论桌。吧台设备需要经营或帮工权限。",List.of("observe","rest","study","read","work","make","create","help","request_drink","invite","join")),
         "street",new ResidentMind.KnownPlaceView("street","连接住处、咖啡馆和花园的小街，适合散步、观察和偶遇。",List.of("observe")),
-        "garden",new ResidentMind.KnownPlaceView("garden","公共花园，适合观察植物、照料花草或做与植物有关的事，也可以动手做在这里落地的共同的事。",List.of("observe","work","create","help")));
+        "garden",new ResidentMind.KnownPlaceView("garden","公共花园，适合观察植物、照料花草或做与植物有关的事，也可以动手做在这里落地的共同的事。",List.of("observe","work","create","help","tend_plants")),
+        "academy",new ResidentMind.KnownPlaceView("academy","学院有阅读室和教室，可以读书、复习、教人或安静做一段自己的事。",List.of("observe","rest","study","read","work")),
+        "gym",new ResidentMind.KnownPlaceView("gym","健身房有训练区和休息区；器械一次只能给一个人用，用久了也可能要修。",List.of("observe","rest","exercise","repair")),
+        "board",new ResidentMind.KnownPlaceView("board","公告板广场是看告示、留消息和路过碰见人的地方；板上的内容要走近才看得清。",List.of("observe","read_notice","rest")),
+        "shop",new ResidentMind.KnownPlaceView("shop","商店有货架和一张公用工作台，可以缝补、制作或修东西；别人的物件要经过真实的借或赠送才会换手。",List.of("observe","work","make","repair","lend","gift")));
     /** A place that exists in the world but has no authored description yet. Deliberately plain and
      * deliberately not empty: the alternative - leaving it out - is the bug this whole method was
      * written to remove. It says what kind of place it is and nothing about what happens there, because
@@ -869,11 +988,25 @@ public class ResidentDirector {
         // own per-resident optimistic-concurrency checks (r.revision!=residentRevision,
         // w.intentRevision!=intentRevision), which is exactly what「冲突 = 版本过期 = 丢弃这次结果」means -
         // a stale reply is discarded, not locked out in advance.
-        var c=work.context();if(Duration.between(work.at(),clock.instant()).getSeconds()>90)return false;
-        boolean valid=decision!=null&&decision.action()!=null&&c.availableActions().contains(decision.action())&&decision.place()!=null&&decision.evidenceIds()!=null&&evidenceWithin(decision.evidenceIds(),c.memories())&&(!"propose".equals(decision.action())||!decision.evidenceIds().isEmpty());
-        return valid&&(decision.action().equals("propose")
-            ?ResidentSimulation.proposeDecision(w,c.residentId(),work.residentRevision(),work.intentRevision(),decision.place(),decision.projectTitle(),decision.objectKind(),decision.reason(),decision.evidenceIds(),clock.instant())
-            :ResidentSimulation.applyDecision(w,c.residentId(),work.residentRevision(),work.intentRevision(),decision.place(),decision.action(),decision.targetId(),decision.reason(),decision.speech(),decision.evidenceIds(),clock.instant()));
+        var c=work.context();if(resultExpired(work,clock.instant()))return false;
+        ResidentMind.DecisionOptionView selected=ResidentMind.selectedOption(c,decision);
+        boolean exactOptions=c.decisionOptions()!=null&&!c.decisionOptions().isEmpty();
+        String action=selected==null?decision==null?null:decision.action():selected.action();
+        String place=selected==null?decision==null?null:decision.place():selected.place();
+        String roomId=selected==null?decision==null?null:decision.roomId():selected.roomId();
+        String targetId=selected==null?decision==null?null:decision.targetId():selected.targetId();
+        boolean valid=decision!=null&&action!=null&&c.availableActions().contains(action)&&place!=null
+            &&(!exactOptions||selected!=null)&&decision.evidenceIds()!=null&&evidenceWithin(decision.evidenceIds(),c.memories())
+            &&(!"propose".equals(action)||!decision.evidenceIds().isEmpty());
+        return valid&&(action.equals("propose")
+            ?ResidentSimulation.proposeDecision(w,c.residentId(),work.residentRevision(),work.intentRevision(),place,decision.projectTitle(),decision.objectKind(),decision.reason(),decision.evidenceIds(),clock.instant())
+            :ResidentSimulation.applyDecision(w,c.residentId(),work.residentRevision(),work.intentRevision(),place,roomId,action,targetId,decision.reason(),decision.speech(),decision.evidenceIds(),clock.instant()));
+    }
+    private static boolean resultExpired(Work work,Instant now){
+        return work==null||now==null||work.at()==null||Duration.between(work.at(),now).getSeconds()>MODEL_RESULT_MAX_AGE_SECONDS;
+    }
+    private static void refundCurrentBudgetDay(CompanionWorld w,Work work){
+        if(Objects.equals(w.modelBudgetDay,work.day()))w.modelCallsToday=Math.max(0,w.modelCallsToday-1);
     }
     // Tags usage with which provider actually served the call (see ResidentMind.Usage/ModelUsageRecorder's
     // provider-aware overload) so spend can be broken down per supplier, not just per call type. A null

@@ -138,7 +138,8 @@ final class DoorService {
         for (ResidentState other : w.residentStates) {
             if (other.id.equals(resident.id)) continue;
             Actor oa = ResidentSimulation.actor(w, other.id);
-            if (oa == null || !place.equals(oa.place()) || "sleep".equals(oa.activity()) || "walk".equals(oa.activity())) continue;
+            if (oa == null || !place.equals(oa.place()) || !ResidentSimulation.sameRoom(w, resident.id, other.id)
+                || "sleep".equals(oa.activity()) || "walk".equals(oa.activity())) continue;
             ResidentSimulation.memory(w, other.id, resident.id, "observed", at, topic, witnessText, List.of(), 6);
             witnessIds.add(other.id);
         }

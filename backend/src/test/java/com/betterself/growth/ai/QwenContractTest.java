@@ -13,6 +13,9 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -38,14 +41,16 @@ class QwenContractTest {
         start(exchange -> {
             authorization.set(exchange.getRequestHeaders().getFirst("Authorization"));
             bodies.add(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
-            String content = calls.incrementAndGet() == 1 ? "not-json" : "{\"items\":[]}";
+            int call = calls.incrementAndGet();
+            String content = call == 1 ? "not-json" : "{\"items\":[]}";
             json(exchange, """
-                {"id":"provider-request","model":"qwen-contract","choices":[{"message":{"content":"%s"}}],"usage":{"prompt_tokens":12,"completion_tokens":7}}
-                """.formatted(content.replace("\"", "\\\"")));
+                {"id":"provider-request","model":"qwen-contract","choices":[{"message":{"content":"%s"}}],"usage":{"prompt_tokens":%d,"completion_tokens":%d}}
+                """.formatted(content.replace("\"", "\\\""), call == 1 ? 12 : 5, call == 1 ? 7 : 3));
         });
         String url="http://127.0.0.1:"+server.getAddress().getPort()+"/v1";
+        var budget = new QwenHttpProvider.WireRequestBudget(2);
         QwenHttpProvider provider = new QwenHttpProvider(new ObjectMapper(),url,"unit-test-provider-key","qwen-contract",
-            Duration.ofSeconds(2),Duration.ofSeconds(2),true,"qwen",false);
+            Duration.ofSeconds(2),Duration.ofSeconds(2),true,"qwen",false,budget);
 
         QwenProvider.StructuredResult result = provider.generateStructured(
             new QwenProvider.StructuredPrompt("STUDY", "create tasks", "{\"type\":\"object\"}")
@@ -54,8 +59,108 @@ class QwenContractTest {
         assertThat(authorization.get()).isEqualTo("Bearer unit-test-provider-key");
         assertThat(bodies).hasSize(2).allMatch(body -> body.contains("\"model\":\"qwen-contract\""));
         assertThat(result.json()).isEqualTo("{\"items\":[]}");
-        assertThat(result.inputTokens()).isEqualTo(12);
-        assertThat(result.outputTokens()).isEqualTo(7);
+        assertThat(result.inputTokens()).isEqualTo(17);
+        assertThat(result.outputTokens()).isEqualTo(10);
+        assertThat(budget.requests()).extracting(QwenHttpProvider.WireRequest::kind)
+            .containsExactly("structured", "structured-json-repair");
+    }
+
+    @Test
+    void invalidJsonRepairCannotDispatchPastTheWireBudget() throws Exception {
+        AtomicInteger calls = new AtomicInteger();
+        start(exchange -> {
+            calls.incrementAndGet();
+            json(exchange, "{\"choices\":[{\"message\":{\"content\":\"not-json\"}}]}");
+        });
+        var budget = new QwenHttpProvider.WireRequestBudget(1);
+        var provider = budgetedProvider(budget, true);
+
+        assertThatThrownBy(() -> provider.generateStructured(
+            new QwenProvider.StructuredPrompt("STUDY", "create tasks", "{}")
+        )).isInstanceOf(ApiException.class)
+            .extracting(error -> ((ApiException) error).code())
+            .isEqualTo("AI_WIRE_REQUEST_BUDGET_REACHED");
+
+        assertThat(calls).hasValue(1);
+        assertThat(budget.started()).isEqualTo(1);
+        assertThat(budget.requests()).extracting(QwenHttpProvider.WireRequest::kind)
+            .containsExactly("structured");
+    }
+
+    @Test
+    void aResponseFormatFallbackClientCannotBypassTheSharedWireBudget() throws Exception {
+        AtomicInteger calls = new AtomicInteger();
+        List<String> bodies = new ArrayList<>();
+        start(exchange -> {
+            calls.incrementAndGet();
+            bodies.add(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+            exchange.sendResponseHeaders(400, -1);
+            exchange.close();
+        });
+        var budget = new QwenHttpProvider.WireRequestBudget(1);
+        var withResponseFormat = budgetedProvider(budget, true);
+        var withoutResponseFormat = budgetedProvider(budget, false);
+        var prompt = new QwenProvider.StructuredPrompt("STUDY", "create tasks", "{}");
+
+        assertThatThrownBy(() -> {
+            try {
+                withResponseFormat.generateStructured(prompt);
+            } catch (ApiException rejected) {
+                assertThat(rejected.code()).isEqualTo("AI_PROVIDER_REQUEST_REJECTED");
+                withoutResponseFormat.generateStructured(prompt);
+            }
+        }).isInstanceOf(ApiException.class)
+            .extracting(error -> ((ApiException) error).code())
+            .isEqualTo("AI_WIRE_REQUEST_BUDGET_REACHED");
+
+        assertThat(calls).hasValue(1);
+        assertThat(bodies).singleElement().asString().contains("response_format");
+        assertThat(budget.started()).isEqualTo(1);
+    }
+
+    @Test
+    void concurrentCallsCannotReserveMoreWireRequestsThanTheBudget() throws Exception {
+        AtomicInteger calls = new AtomicInteger();
+        start(exchange -> {
+            calls.incrementAndGet();
+            json(exchange, "{\"choices\":[{\"message\":{\"content\":\"{}\"}}]}");
+        });
+        int maximum = 4;
+        int contenders = 16;
+        var budget = new QwenHttpProvider.WireRequestBudget(maximum);
+        var provider = budgetedProvider(budget, true);
+        var gate = new CountDownLatch(1);
+        var successful = new AtomicInteger();
+        var budgetRejected = new AtomicInteger();
+        var executor = Executors.newFixedThreadPool(contenders);
+        List<Future<?>> futures = new ArrayList<>();
+        try {
+            for (int i = 0; i < contenders; i++) {
+                futures.add(executor.submit(() -> {
+                    try {
+                        gate.await();
+                        provider.generateStructured(new QwenProvider.StructuredPrompt("STUDY", "create tasks", "{}"));
+                        successful.incrementAndGet();
+                    } catch (ApiException error) {
+                        if ("AI_WIRE_REQUEST_BUDGET_REACHED".equals(error.code())) budgetRejected.incrementAndGet();
+                        else throw error;
+                    } catch (InterruptedException error) {
+                        Thread.currentThread().interrupt();
+                        throw new IllegalStateException(error);
+                    }
+                }));
+            }
+            gate.countDown();
+            for (Future<?> future : futures) future.get();
+        } finally {
+            executor.shutdownNow();
+        }
+
+        assertThat(successful).hasValue(maximum);
+        assertThat(budgetRejected).hasValue(contenders - maximum);
+        assertThat(calls).hasValue(maximum);
+        assertThat(budget.started()).isEqualTo(maximum);
+        assertThat(budget.requests()).hasSize(maximum);
     }
 
     @Test
@@ -236,6 +341,14 @@ class QwenContractTest {
         return new QwenHttpProvider(
             new ObjectMapper(), "http://127.0.0.1:" + server.getAddress().getPort() + "/v1",
             "unit-test-provider-key", "qwen-contract", Duration.ofSeconds(2)
+        );
+    }
+
+    private QwenHttpProvider budgetedProvider(QwenHttpProvider.WireRequestBudget budget, boolean jsonMode) {
+        return new QwenHttpProvider(
+            new ObjectMapper(), "http://127.0.0.1:" + server.getAddress().getPort() + "/v1",
+            "unit-test-provider-key", "qwen-contract", Duration.ofSeconds(2), Duration.ofSeconds(2),
+            jsonMode, null, null, budget
         );
     }
 

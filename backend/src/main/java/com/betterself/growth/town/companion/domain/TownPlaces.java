@@ -149,7 +149,12 @@ public final class TownPlaces {
      * never calls {@link #addFlatmate}, so it never calls this either. */
     private static void ensureCommonRoom(CompanionWorld w,String home,String hostId,String flatmateId){
         String roomId=home+"-common";
-        if(w.rooms.stream().noneMatch(rm->rm.id().equals(roomId)))w.rooms.add(new Room(roomId,home,"common",List.of(hostId,flatmateId)));
+        Room existing=room(w,roomId);
+        if(existing==null)w.rooms.add(new Room(roomId,home,"common",List.of(hostId,flatmateId)));
+        else if(!existing.residentIds().contains(flatmateId)||!existing.residentIds().contains(hostId)){
+            LinkedHashSet<String> members=new LinkedHashSet<>(existing.residentIds());members.add(hostId);members.add(flatmateId);
+            int index=w.rooms.indexOf(existing);w.rooms.set(index,new Room(roomId,home,"common",List.copyOf(members)));
+        }
         String stove=home+"-stove";
         if(position(w,stove)==null){
             Position p=position(stove,home,"stove",null,1);
@@ -167,6 +172,12 @@ public final class TownPlaces {
      * {@code ensureCounter} runs unconditionally afterward so a save from before the cafe counter
      * existed still self-heals it, exactly like this method self-heals the rest of the catalog. */
     public static void seed(CompanionWorld w) {
+        if(w.locations==null)w.locations=new ArrayList<>();
+        if(w.rooms==null)w.rooms=new ArrayList<>();
+        if(w.positions==null)w.positions=new ArrayList<>();
+        if(w.objects==null)w.objects=new ArrayList<>();
+        if(w.loans==null)w.loans=new ArrayList<>();
+        if(w.objectStateChangedAt==null)w.objectStateChangedAt=new LinkedHashMap<>();
         if (w.locations.isEmpty()) {
             w.locations.add(new Location("street", "street", null));
             w.locations.add(new Location("cafe", "cafe", null));
@@ -189,9 +200,13 @@ public final class TownPlaces {
         // A flat-mate owns no Location of their own, so the repair loop above never notices them;
         // self-heal their furniture explicitly the same way, for the same reason.
         for (Map.Entry<String, String> flatmate : HOME_SHARED_WITH.entrySet()) addFlatmate(w, flatmate.getKey(), flatmate.getValue());
+        ensureBathrooms(w);
         ensureQuietCafeSeats(w);
         ensureCounter(w);
         ensurePublicBuildings(w);
+        ensurePublicRooms(w);
+        reconcileObjects(w);
+        reconcileKnowledge(w);
     }
     /** The three remaining public buildings this version's 「六栋公共建筑」 calls for, beyond the cafe
      * and garden this town already had - 学院 (academy) and 健身房 (gym), which the frontend already
@@ -220,6 +235,8 @@ public final class TownPlaces {
         // already has through claim()/release(), not a new mechanism invented for this one spot. Named
         // after docs/01's own example list ("工具台") rather than after the shop that houses it.
         if(position(w,"shop-workbench")==null)w.positions.add(position("shop-workbench","shop","workbench",null,1));
+        if(position(w,"gym-equipment")==null)w.positions.add(position("gym-equipment","gym","equipment",null,1));
+        if(position(w,"board-noticeboard")==null)w.positions.add(position("board-noticeboard","board","noticeboard",null,2));
     }
     private static void ensureBuilding(CompanionWorld w,String id){
         if(w.locations.stream().noneMatch(l->l.id().equals(id)))w.locations.add(new Location(id,id,null));
@@ -237,6 +254,130 @@ public final class TownPlaces {
     }
     private static Position position(String id, String place, String kind, String owner, int capacity) {
         Position p = new Position(); p.id = id; p.place = place; p.kind = kind; p.ownerId = owner; p.capacity = capacity; return p;
+    }
+
+    private static void ensurePublicRooms(CompanionWorld w){
+        ensureRoom(w,"street-outdoors","street","outdoors");
+        ensureRoom(w,"cafe-main","cafe","main");
+        ensureRoom(w,"cafe-counter-room","cafe","service");
+        ensureRoom(w,"garden-main","garden","garden");
+        ensureRoom(w,"academy-reading-room","academy","reading");
+        ensureRoom(w,"gym-training-room","gym","training");
+        ensureRoom(w,"board-square","board","plaza");
+        ensureRoom(w,"shop-workroom","shop","workroom");
+        for(Position p:w.positions){
+            if(p.occupantIds==null)p.occupantIds=new ArrayList<>();
+            if(p.waitingIds==null)p.waitingIds=new ArrayList<>();
+            if(p.condition==null||p.condition.isBlank())p.condition="usable";
+            if(p.capacity<1)p.capacity=1;
+            if(p.roomId==null)p.roomId=roomForPosition(p);
+        }
+        configureScarcity(w,"cafe-counter",30);
+        configureScarcity(w,"shop-workbench",18);
+        configureScarcity(w,"gym-equipment",24);
+        for(Position p:w.positions){
+            if("stove".equals(p.kind))configureScarcity(w,p.id,20);
+            if("bed".equals(p.kind))configureScarcity(w,p.id,80);
+        }
+    }
+    private static void ensureRoom(CompanionWorld w,String id,String building,String kind){
+        if(room(w,id)==null)w.rooms.add(new Room(id,building,kind,List.of()));
+    }
+    private static void ensureBathrooms(CompanionWorld w){
+        for(Location location:new ArrayList<>(w.locations)){
+            if(!"home".equals(location.kind()))continue;
+            String home=location.id(),roomId=home+"-bathroom";
+            List<String> residents=w.residentStates.stream().filter(r->home.equals(homeOf(r.id))).map(r->r.id).toList();
+            String commonId=home+"-common";Room common=room(w,commonId);
+            if(common==null)w.rooms.add(new Room(commonId,home,"common",residents));
+            else if(!common.residentIds().equals(residents))w.rooms.set(w.rooms.indexOf(common),new Room(commonId,home,"common",residents));
+            String tableId=home+"-table";Position table=position(w,tableId);
+            if(table==null){table=position(tableId,home,"table",null,4);table.roomId=commonId;w.positions.add(table);}
+            else if(table.roomId==null)table.roomId=commonId;
+            Room existing=room(w,roomId);
+            if(existing==null)w.rooms.add(new Room(roomId,home,"bathroom",residents));
+            else if(!existing.residentIds().equals(residents))w.rooms.set(w.rooms.indexOf(existing),new Room(roomId,home,"bathroom",residents));
+            String positionId=home+"-bathroom";
+            Position bathroom=position(w,positionId);
+            if(bathroom==null){bathroom=position(positionId,home,"bathroom",null,1);bathroom.roomId=roomId;w.positions.add(bathroom);}
+            else if(bathroom.roomId==null)bathroom.roomId=roomId;
+            configureScarcity(w,positionId,35);
+        }
+    }
+    private static String roomForPosition(Position p){
+        if(isHome(p.place)){
+            if("stove".equals(p.kind))return p.place+"-common";
+            if(p.ownerId!=null)return p.place+"-room-"+p.ownerId;
+            return null;
+        }
+        return switch(p.place){case "street"->"street-outdoors";case "cafe"->"cafe-counter".equals(p.id)?"cafe-counter-room":"cafe-main";
+            case "garden"->"garden-main";case "academy"->"academy-reading-room";case "gym"->"gym-training-room";
+            case "board"->"board-square";case "shop"->"shop-workroom";default->null;};
+    }
+    static String roomForPlace(String place){
+        if(place==null||isHome(place))return null;
+        return switch(place){case "street"->"street-outdoors";case "cafe"->"cafe-main";case "garden"->"garden-main";
+            case "academy"->"academy-reading-room";case "gym"->"gym-training-room";case "board"->"board-square";
+            case "shop"->"shop-workroom";default->null;};
+    }
+    static String roomForResident(CompanionWorld w,String residentId,String place){
+        if(!isHome(place))return roomForPlace(place);
+        ResidentState r=ResidentSimulation.state(w,residentId);
+        Position held=r==null?null:position(w,r.positionId);
+        if(held!=null&&place.equals(held.place)&&held.roomId!=null)return held.roomId;
+        String bedroom=place+"-room-"+residentId;
+        if(room(w,bedroom)!=null)return bedroom;
+        String common=place+"-common";return room(w,common)!=null?common:place+"-bathroom";
+    }
+    private static void configureScarcity(CompanionWorld w,String id,int every){Position p=position(w,id);if(p!=null&&p.maintenanceEveryUses<=0)p.maintenanceEveryUses=every;}
+    /** Backfills room/current-holder data and moves the old door-side noticeboard into its real
+     * public square. No history or user-authored object state is discarded. */
+    private static void reconcileObjects(CompanionWorld w){
+        for(int i=0;i<w.objects.size();i++){
+            WorldObject o=w.objects.get(i);String place="noticeboard".equals(o.id())?"board":o.place();
+            Loan open=w.loans.stream().filter(l->o.id().equals(l.itemId())&&!l.gift()&&l.returnedAt()==null).findFirst().orElse(null);
+            String holder=open==null?(o.holderId()!=null?o.holderId():o.ownerId()):open.borrowerId();
+            Actor heldBy=actorOrNull(w,holder);
+            if(heldBy!=null)place=heldBy.place();
+            String room=o.roomId()!=null?o.roomId():roomForPlace(place);
+            if(heldBy!=null)room=roomForResident(w,holder,place);
+            String projectId="flowerbed".equals(o.id())?null:o.projectId();
+            if(!Objects.equals(place,o.place())||!Objects.equals(room,o.roomId())||!Objects.equals(holder,o.holderId())||!Objects.equals(projectId,o.projectId()))
+                w.objects.set(i,new WorldObject(o.id(),o.kind(),place,room,o.label(),o.state(),projectId,o.ownerId(),holder));
+        }
+    }
+    private static Actor actorOrNull(CompanionWorld w,String id){
+        if(id==null)return null;if("self".equals(id))return w.avatar;
+        return w.residents.stream().filter(a->id.equals(a.id())).findFirst().orElse(null);
+    }
+    private static void reconcileKnowledge(CompanionWorld w){
+        for(ResidentState r:w.residentStates){
+            if(r.knownRoomIds==null)r.knownRoomIds=new ArrayList<>();
+            if(r.knownPositionIds==null)r.knownPositionIds=new ArrayList<>();
+            String home=homeOf(r.id);
+            for(Room room:roomsAt(w,home))if(room.residentIds().isEmpty()||room.residentIds().contains(r.id))discoverRoom(w,r,room.id());
+            Actor actor=actorOrNull(w,r.id);if(actor!=null&&contains(w,actor.place())){
+                Room current=room(w,r.roomId);
+                String room=current!=null&&actor.place().equals(current.buildingId())?r.roomId:roomForResident(w,r.id,actor.place());
+                r.roomId=room;
+                if(room!=null)discoverRoom(w,r,room);
+            }
+            for(var cluster:ResidentPersonas.occupationClusters().entrySet())if(cluster.getValue().contains(r.id)){
+                String entry=roomForPlace(cluster.getKey());if(entry!=null)discoverRoom(w,r,entry);
+            }
+            if(Objects.equals(r.id,CafeService.operatorId(w)))discoverRoom(w,r,"cafe-counter-room");
+        }
+    }
+    static void discoverRoom(CompanionWorld w,ResidentState resident,String roomId){
+        if(room(w,roomId)==null)return;knowRoom(w,resident,roomId);
+        for(Position p:w.positions)if(roomId.equals(p.roomId)&&!resident.knownPositionIds.contains(p.id))resident.knownPositionIds.add(p.id);
+    }
+    private static void knowRoom(CompanionWorld w,ResidentState resident,String roomId){if(!resident.knownRoomIds.contains(roomId))resident.knownRoomIds.add(roomId);}
+    static boolean knowsPosition(ResidentState resident,String positionId){return resident.knownPositionIds!=null&&resident.knownPositionIds.contains(positionId);}
+    static List<Room> knownOrEntryRooms(CompanionWorld w,ResidentState resident,String place){
+        List<Room> known=roomsAt(w,place).stream().filter(room->resident.knownRoomIds!=null&&resident.knownRoomIds.contains(room.id())).toList();
+        if(!known.isEmpty())return known;
+        String entry=roomForPlace(place);Room room=room(w,entry);return room==null?List.of():List.of(room);
     }
 
     /** A stable, per-resident ordering over spots - the same person keeps landing on the same one when
@@ -261,9 +402,17 @@ public final class TownPlaces {
      * internal first step, which must not announce an intermediate clearing that the same call is
      * about to immediately supersede with a real seat or a genuine wait. */
     public static void release(CompanionWorld w, String residentId) {
-        for (Position p : w.positions) p.occupantIds.remove(residentId);
+        for (Position p : w.positions) {
+            if(p.occupantIds!=null)p.occupantIds.remove(residentId);
+            if(p.waitingIds!=null)p.waitingIds.remove(residentId);
+        }
         ResidentState r = ResidentSimulation.state(w, residentId);
         if (r != null) r.positionId = null;
+    }
+    /** Gives up a FIFO turn without moving the resident. Used when a decision supersedes a wait but
+     * intentionally leaves an already-running plan and its physical position intact. */
+    static void cancelWaiting(CompanionWorld w,String residentId){
+        for(Position p:w.positions)if(p.waitingIds!=null)p.waitingIds.remove(residentId);
     }
     /** Same release, but when this resident actually held a position, records the moment as a
      * "left_spot" world event (see {@link #writeSeatEvent}) - the occupancy half of the town's
@@ -290,12 +439,12 @@ public final class TownPlaces {
     public static Outcome claim(CompanionWorld w, String residentId, String place, String kind, Instant now) {
         ResidentState self = ResidentSimulation.state(w, residentId);
         String previousPositionId = self != null ? self.positionId : null;
-        release(w, residentId);
+        releaseOccupancy(w, residentId);
         List<Position> here = at(w, place);
         // Matched by kind too (when the caller asked for one): an owner reclaims a specific spot of
         // theirs - the counter when they mean to work it, a shared table when they don't - rather than
         // always landing on whichever position they happen to own first at this place.
-        Position mine = here.stream().filter(p -> (residentId.equals(p.ownerId) || (EQUIPMENT.equals(p.kind) && CafeService.mayTend(w,residentId))) && (kind == null || kind.equals(p.kind))).findFirst().orElse(null);
+        Position mine = here.stream().filter(TownPlaces::usable).filter(p -> (residentId.equals(p.ownerId) || (EQUIPMENT.equals(p.kind) && CafeService.mayTend(w,residentId))) && (kind == null || kind.equals(p.kind))).findFirst().orElse(null);
         if (mine != null) {
             boolean displaced = !mine.occupantIds.isEmpty();
             List<String> displacedIds = new ArrayList<>(mine.occupantIds);
@@ -333,7 +482,8 @@ public final class TownPlaces {
             .<Position>comparingInt(p -> kind != null && kind.equals(p.kind) ? 0 : 1)
             .thenComparingInt(p -> seatPick(w.id, residentId, p.id))
             .thenComparing(p -> p.id);
-        Position choice = here.stream().filter(p -> p.occupantIds.size() < p.capacity)
+        Position choice = here.stream().filter(TownPlaces::usable).filter(p -> p.occupantIds.size() < p.capacity)
+            .filter(p->p.waitingIds.isEmpty()||residentId.equals(p.waitingIds.getFirst()))
             // An owned seat can be borrowed when nothing shared is free; an owned piece of equipment
             // (the coffee machine, the counter) cannot - falling back onto someone else's tools is not
             // the same thing as falling back onto their chair.
@@ -342,6 +492,7 @@ public final class TownPlaces {
         if (choice != null) { seat(w, residentId, choice); recordSeatTransition(w, residentId, previousPositionId, choice.id, now); return Outcome.SEATED; }
         // Nowhere to sit: whatever this resident held a moment ago (release() above already cleared
         // it) is genuinely given up now, not merely re-confirmed.
+        queueFor(w,residentId,here,kind);
         recordSeatTransition(w, residentId, previousPositionId, null, now);
         return Outcome.WAITING;
     }
@@ -459,16 +610,72 @@ public final class TownPlaces {
      * "cook". Used by {@code ResidentSimulation.schedule}'s "cook" branch only; every other action
      * keeps using {@link #claim}, unmodified. */
     public static Outcome claimExact(CompanionWorld w, String residentId, String positionId, Instant now) {
-        release(w, residentId);
+        ResidentState self=ResidentSimulation.state(w,residentId);
+        String previous=self==null?null:self.positionId;
+        releaseOccupancy(w, residentId);
         Position p = position(w, positionId);
-        if (p == null || p.occupantIds.size() >= p.capacity) return Outcome.WAITING;
+        if (p == null || !usable(p)) {clearQueuesExcept(w,residentId,null);recordSeatTransition(w,residentId,previous,null,now);return Outcome.WAITING;}
+        clearQueuesExcept(w,residentId,p.id);
+        if(residentId.equals(p.ownerId)&&!p.occupantIds.isEmpty()){
+            for(String other:new ArrayList<>(p.occupantIds)){
+                ResidentState r=ResidentSimulation.state(w,other);if(r!=null)r.positionId=null;
+                if(!other.equals(residentId))recordSeatTransition(w,other,p.id,null,now);
+            }
+            p.occupantIds.clear();
+        }
+        boolean turn=p.waitingIds.isEmpty()||residentId.equals(p.waitingIds.getFirst());
+        if (p.occupantIds.size() >= p.capacity||!turn) {
+            if(!p.waitingIds.contains(residentId))p.waitingIds.add(residentId);
+            recordSeatTransition(w,residentId,previous,null,now);
+            return Outcome.WAITING;
+        }
+        p.waitingIds.remove(residentId);
         seat(w, residentId, p);
+        recordSeatTransition(w,residentId,previous,p.id,now);
         return Outcome.SEATED;
     }
     private static void seat(CompanionWorld w, String residentId, Position p) {
+        if(p.occupantIds==null)p.occupantIds=new ArrayList<>();
+        if(p.waitingIds==null)p.waitingIds=new ArrayList<>();
+        clearQueuesExcept(w,residentId,null);
         p.occupantIds.add(residentId);
         ResidentState r = ResidentSimulation.state(w, residentId);
         if (r != null) r.positionId = p.id;
+    }
+    private static boolean usable(Position p){return !"broken".equals(p.condition);}
+    static boolean isBroken(CompanionWorld w,String id){Position p=position(w,id);return p!=null&&!usable(p);}
+    private static void queueFor(CompanionWorld w,String residentId,List<Position> positions,String kind){
+        positions.stream().filter(p->kind==null||kind.equals(p.kind)).min(Comparator.comparing(p->p.id)).ifPresent(p->{
+            if(p.waitingIds==null)p.waitingIds=new ArrayList<>();
+            clearQueuesExcept(w,residentId,p.id);
+            if(!p.waitingIds.contains(residentId))p.waitingIds.add(residentId);
+        });
+    }
+    private static void releaseOccupancy(CompanionWorld w,String residentId){
+        for(Position p:w.positions)if(p.occupantIds!=null)p.occupantIds.remove(residentId);
+        ResidentState r=ResidentSimulation.state(w,residentId);if(r!=null)r.positionId=null;
+    }
+    private static void clearQueuesExcept(CompanionWorld w,String residentId,String keep){clearQueuesExceptFrom(w.positions,residentId,keep);}
+    private static void clearQueuesExceptFrom(List<Position> positions,String residentId,String keep){
+        for(Position p:positions)if(p.waitingIds!=null&&!p.id.equals(keep))p.waitingIds.remove(residentId);
+    }
+    static boolean finishUse(CompanionWorld w,String positionId,Instant at){
+        Position p=position(w,positionId);
+        if(p==null||p.maintenanceEveryUses<=0||"broken".equals(p.condition))return false;
+        p.usesSinceRepair++;
+        if(p.usesSinceRepair<p.maintenanceEveryUses)return false;
+        p.condition="broken";p.conditionChangedAt=at;
+        for(String id:new ArrayList<>(p.occupantIds)){ResidentState r=ResidentSimulation.state(w,id);if(r!=null)r.positionId=null;}
+        p.occupantIds.clear();
+        ResidentSimulation.event(w,at,"resource_broken",p.place,List.of(),p.id+"坏了，暂时不能再用。",null,p.id);
+        return true;
+    }
+    static boolean repair(CompanionWorld w,String residentId,String positionId,Instant at){
+        Position p=position(w,positionId);
+        if(p==null||!"broken".equals(p.condition)||!p.place.equals(ResidentSimulation.actor(w,residentId).place()))return false;
+        p.condition="usable";p.usesSinceRepair=0;p.conditionChangedAt=at;
+        ResidentSimulation.event(w,at,"resource_repaired",p.place,List.of(residentId),ResidentSimulation.actor(w,residentId).name()+"把"+p.id+"修好了。",null,p.id);
+        return true;
     }
     /** A completed takeover changes the actual equipment owner; an assist/delegation only grants
      * temporary use through CafeService.mayTend and therefore does not silently transfer property. */
