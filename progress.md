@@ -1,7 +1,160 @@
 # 当前进展
 
-分支 `town-alive`。这一页只记两件事：**量出来的现状**，和**知道但还没做的**。
+当前分支 `master`。这一页只记两件事：**量出来的现状**，和**知道但还没做的**。
 定过的原则在 [docs/04](docs/04-decisions.md)，测法和教训在 [docs/05](docs/05-notes.md)。
+
+## 午饭、午休与计划提示（2026-09-14 夜）
+
+**线上看到的：** 12:26 有 11 人在家、5 人在睡。7 人是模型自己排的"在家补觉/午休"——种子里中午是空档；
+苏晚、顾雁是新人出生时"刚搬来，还在认路"被读成"倒时差"，11:17 就去睡；小吉、陆敏、老白把
+"接下来的打算：12:30 去咖啡馆"读成"先在家等"。
+
+**改了：** 职责表升到 v2，23 人加午饭（咖啡馆 6、花园 8、广场 4、学堂 3，老宋在家歇），旧世界按版本补上、
+换过职业的人不补、种子记忆不重复；"刚搬来"满 6 小时后回到"如常"；"接下来的打算"写明步行分钟与还剩几分钟，
+快到点时点名选项；在家歇的段写明"歇一会儿，不是睡整觉"。白天小睡的人醒来后照常先补排日计划（加了测试）。
+companion 547 tests 全绿。**没量：** 真模型改完后中午的实际分布。
+
+## 初始基因：职责种子 + 自己排的日计划（2026-09-14 晚）
+
+决定和理由在 [04「初始基因」](docs/04-decisions.md)。这里只记做了什么、量到什么。
+
+**做了：** `ResidentDuties` 给 25 人各种 2–3 条带时段、地点、交给谁的职责和各自作息（草稿由 agent 起、按规则审过：
+咖啡馆 09:00 前进不去，所以老宋天没亮在家烤、开门后送到店；`tend` 改 `work`），第一次推进时种成 `seed` 记忆，旧存档自愈。
+日计划改成结构化 3–6 段（HH:mm、knownPlaces 里的地点、动作、一句话），醒来后先于普通决策排；
+决策上下文加"今天这会儿的打算……选项 dX 就是这件事"与"接下来的打算"；在那个地点待过这段就记 `done`，没做的第二天成"没顾上"。
+`ResidentDutiesTest` 断言每条职责在自己时段里真能被选到——第一次跑就抓出阿禾 `tend` 排不进计划。
+
+**量到（桩模型，规则层，不是真模型行为）：** 凌晨 4 点起跑一天，桩模型照职责排计划、照提示选。
+05:00 全员在家睡；10:00–18:00 **23–25 人在外**，分布在咖啡馆 5–6、花园 4–5、健身房 4、公告板 4、商店 3–4、学堂 2–4；
+**25/25 人有计划，75 段完成 64 段**（未完成的是桩补的 21:00 回家段）。
+
+**顺带量出并修掉的两处：** 人一聚起来，react 一天被问 **3,170 次**（一对人 223 次）——被拒的回答没消费待处理相遇，
+90 秒寿命里每拍重问；修后回答合法时一天 **315 次 / 66 对 / 单对最多 18**。另外计划回答碰上版本过期时，
+会被误判成"今天不排"（阿满一整天没计划），现在过期只重问。
+
+**没做到的：** 真模型会不会照着自己的计划过、会不会偏离得有意思，没有跑——需要 token 授权。
+按桩模型的节奏，一天约 1,500 次决策 + 25 次日计划 + 数百次 react，用真模型前应先估一次预算。
+live 世界在用户 12:18 打开时已经种下职责、23 人排出了日计划（真模型），中午的问题见上一节。
+
+## 线上两个 bug：隔空对话、没人出门（2026-09-14 下午）
+
+**没人出门是一个死循环，不是居民不想动。** 世界离线约 7 小时后追帧，所有人的睡眠计划在同一 tick 结束，
+全镇同时收到 `change_work`。模型答 `none` 算“采用”，`Occasions.apply` 在内存里删了待问事件，
+但 `w.revision` 没动，而 `JdbcWorldStore` 只在 revision 变了时写库，所以删除从没落盘，下一 tick 同一批人又被问。
+线上 17 分钟 **1,083 次 consider、336 万 input token**，6 个并发位被 6 个人占满，其余 19 人一次决策都没拿到。
+测试用的 store 握着活对象，所以一直没暴露。用卡住那一刻的真实快照 + 桩模型回放 20 模拟分钟对照：
+修复前 consider 2,956 / 决策 0 / 出门 0；修复后 consider 12 / 决策 85 / 25 人都拿到决策。
+修法：结果和失败两个写回 lambda 一律 bump revision；回答过的待问事件不管采用与否都消费掉。
+同时 `pendingOccasions`（12）、`askedOccasions`（32）、`pendingEncounters`（12）按人口放宽——
+之前 21 人被记“已问”、只剩 12 条问题，另外 9 人当天再也不会被问；`objects` 超 20 时不再先挤掉公告板/花圃/长桌这些固定物件。
+
+**隔空对话。** 走路的人 `place` 整程都是 `street`，而整条街只有一个房间 `street-outdoors`，
+所以青叔、阿禾各自刚出家门（两家相距 737px）就在同一 tick 被判“面对面”。现在行人记下 `travelFrom`，
+用已走/剩余路程和 `TownDistances` 的三角不等式求两人距离下界，下界超过 96px 就不算同处；站在街上的人照旧。
+
+回归：`ConsiderAnswerPersistsTest`（模拟按 revision 写库的 store，修前 40 次轮询问 38 次）、
+`StreetEncounterDistanceTest`、`OccasionPopulationTest`；`OccasionsTest` 里钉死的 12 改为按人口。
+companion 包 clean 跑 **538 tests 全绿**。**没做的：** 真模型下居民会不会选择出门没有重新量；
+前端气泡仍按各自精灵位置画、不检查同处（后端不再产生这种对话后不会出现，但前端本身没有兜底）；
+`events`(80)、`serviceRequests`(60)、`conversations`(24) 的 FIFO 上限在 25 人下余量变小，未改。
+
+## 第二版地图与系统收尾（2026-09-14，工程验收完成）
+
+本轮按 [01 的第二版](docs/01-requirements.md#第二版二十五个人的镇子)继续完成 25 人小镇。
+对标 Smallville 的空间与生活复杂度：六处公共地点、分房间的住所、可操作且有后果的物件、
+有限知识和真实相遇；不照搬 2023 年模型所需的逐层多次定位、小时级反复规划与非法输出静默替换。
+规则仍只拥有物理事实和合法性，居民的选择、解释与社会规范仍由各自模型产生。
+
+**开始时的现状。** 25 人种子、家庭门锁、借赠、两层记忆和按人并发已经存在，
+但这些地基不等于地图和生活系统已经完整。此次继续检查新增公共地点的动作落地、老存档扩建、
+前后端地点与行走距离一致、25 人地图导航与外观，以及调度和验收工具在扩人口后的可靠性。
+本段之后的旧测量保留其原始人口、模型与时间范围，不能当作本次第二版的结果。
+
+**基线已重新量过。** 本机默认 Node 26 的原生 `localStorage` 会干扰 jsdom，
+所以前端固定用本机已有的 Node 22 验收：**417 个测试全绿**。后端在可访问
+Docker/本机端口的权限下跑 `clean test`：**606 tests，0 failure，0 error，9 skipped**。
+这两个数是本轮改动前的有效基线，后面只能与它们比。
+
+**已实现。** 世界侧已把公共建筑、房间、可争用位置和物件动作接成
+四层候选；它自身的聚焦检查已报 **23 个地点 / 253 组距离与前端常量一致**，
+已通过下述最终全量和两天规则验收。心智编排已修正全类型过期结果、跨日预算退回、
+模型未作答时保持沉默，不再由规则代为问候，并加了 25 人公平轮转与饱和时的认知车道；
+接入四层 `decisionOptions` 后主代码、schema、应用复核和聚焦回归已经接通。
+
+**地图可视化已有一次人眼检查。** 五张新角色 sprite 已产出；主代理在 Chrome 里看过
+小镇全图和合租房，之后又在真实 HTTP 响应上看过 desktop/mobile 四个场景。
+合租房的门洞与共享起居室、浴室、厨房现在都能分辨；独立 browser E2E **4/4 通过**。
+共享开发栈的 backend/frontend 容器仍在运行，`/actuator/health` 返回 `UP`，
+`http://localhost:5173/town` 返回 200；本轮没有为验收重启它、改配置或登录写真实世界。
+
+**结构验收已经能重跑。** 心智侧不再把 `action × place × room × target` 四张表交给模型自由拼接；
+每个 `choiceId` 对应一条规则先算好的完整合法候选，应用时再对同一快照复核。
+房间内的人与物也按 `roomId` 隔开；自己家、职业场所、亲眼进入的房间逐步记入已知，
+未知公共建筑只暴露可进入的入口，不先把里面的位置和物件透给每个人。
+三名代表居民一次决策的实测展开量为 **62–98 个完整候选**，context **9,345–14,171 字符**，
+instruction（含 context）**13,235–18,103 字符**，schema **681–897 字符**；schema 只重复短 id，没有再展开一份四层矩阵。
+
+**25 人 × 2 天的纯规则验收已通过。** 最终冻结源码又独立重跑 `AcceleratedTownRunnerIT`，
+产物在本机 `/tmp/town-v2-accepted-rules`。它跑了 **2,880 ticks**，
+终态是 25 NPC + avatar、23 locations、66 rooms、108 positions、9 objects、16 doors，
+26 个 state、所有 position/object 的 `roomId` 都能解析到实际房间；435 条记忆、333 条累计事件，
+**0 模型调用 / 0 token**。这只证明世界结构能稳定跑过两天，不是社会涌现证据。
+
+**当前分项回归。** companion domain **348 个测试全绿**；最后将 application/adapters/
+runner、本机 HTTP contract 与相关 domain 合在同一个 Maven 进程里重跑：**154 tests，0 failure/error**。
+真实 TCP + auth + MySQL 31 迁移的 `CompanionV2HttpIT` 独立跑了两次，join / advance / reload /
+idempotent join 与四层断言都通过。前端在 Node 22、`maxWorkers=2` 下 **71 files / 429 tests 全绿**；
+默认并发时唯一一个 5s 寻路超时在限制 worker 后消失，是与后端并行验收时的 CPU 竞争，没有业务断言失败。
+
+**人设预置已做真正的独立盲扫。** 执行者只读了导出的 25 人原始人格文本，没读仓库和现有结论；
+结果冻结在 [docs/05 的「固定人设的独立盲扫冻结」](docs/05-notes.md#固定人设的独立盲扫冻结2026-09-14)。
+它列出的是我们预先写进人设的社会预期，后续验收命中这份清单的规矩一律不算涌现。
+
+**最终全量已通过。** 所有代理停止编译后，单一 Maven 进程跑 `clean test`：
+**119 suites / 641 tests / 0 failures / 0 errors / 9 skipped**。日志中没有 `AssertionError` 或 `NoClassDefFoundError`。
+Surefire 在 `System.exit(0)` 30 秒后结束一个仍有 Hikari shutdown 消息的残留 JVM，这和本轮前的基线一样，
+本次 Maven 进程实际退出码是 0。
+
+**真模型短探针已执行（2026-09-14）。** 在用户对本次向官方 DashScope/Qwen 发送纯虚构、隔离快照的明确授权下，
+从 `/tmp/town-v2-accepted-rules/world-snapshot.json` 继续跑到
+`/tmp/town-v2-choice-probe`；Maven exit 0，`AcceleratedTownRunnerIT` 1 test 通过。配置为 Qwen
+`qwen3.7-flash-2026-07-15`、4 并发、请求 0.02 天；实际模拟从 `2026-01-03T00:00:00Z` 到
+`00:32:08Z`，241 ticks、wall time 23.28 秒。导出记录 **24 次逻辑模型调用**，返回 usage 合计
+**121,096 input / 2,040 output tokens**；其中 dayplan 8、turn 7、react 5、summary 2、explain 2，
+20 次应用、4 次拒绝（3 条 `react/greet`、1 条 `summary`）；导出的 outcome 行没有拒绝原因，
+不能把它们归因于某一条复核规则。623 条 timeline entries（11 diary、99 event、476 memory、7 dialogue），
+规范检测为 0 candidates / 0 beliefs；这是这段 32 分钟短跑的实际结果，不是长期社会结论。
+
+**这次探针没有验证 `choiceId`。** 导出的 `model-calls.json` 有 **0 条 `decision`**，所以真实网关只贯通了上述
+五类结构化调用；不能据此声称决策候选或 `choiceId` 的端到端路径已经由真模型验证。
+
+**调用上限的记录口径有漏洞，且本次无法回溯核实。** runner 的 24 是 `RecordingMind` 开始的**逻辑调用**数；
+`QwenHttpProvider.generateStructured()` 在首答不是合法 JSON 时会额外发一次 JSON repair HTTP 请求，
+该内部请求不单独进入这份计数或导出。因此本次实际 wire 请求数不能从产物核实，理论上可高于 24；
+121,096 / 2,040 也仅是最终服务商响应回报的 usage，不能作为所有 wire 请求的完整账本。
+此前自动审批两次拒绝过同类操作：即使快照来自纯源码生成的 InMemory 合成小镇，向
+`dashscope.aliyuncs.com` 发送虚构测试数据仍需用户具体授权；本次是在该授权后执行，并没有绕过它。
+input token 阈值同样只能在服务商回报后阻止下一次逻辑调用，不是调用前 token 硬限。
+
+**后续保障已修复（不回溯本次）。** `WireRequestBudget` 现在在每次 `HttpClient.send` 前原子占用额度，
+JSON repair 也计入，4 并发下不会越过 wire 上限；成功 repair 的 usage 会把首答和 repair 相加。
+生产默认仍使用无界 no-op budget，不保存调用记录或引入生命周期限制；probe 才显式注入有限 budget。
+后续产物的 manifest 会分列 logical/wire 调用数和预算，并导出 `model-wire-requests.json`（ordinal/kind）；
+runner 结束前 seal budget，避免迟到 repair 漏记。Sol 的本地 127.0.0.1 stub/离线验证为
+`QwenContractTest` 13 + `AcceleratedTownRunnerBudgetTest` 3 + `AcceleratedTownRunnerAutonomyIT` 9，
+共 **25 tests / 0 failure / 0 error / 0 skipped**；随后独立验收
+`QwenContractTest` + `AcceleratedTownRunnerBudgetTest` + `ResidentMindJsonContractTest` 为
+**20 tests / 0 failure / 0 error / 0 skipped**（日志 `/tmp/town-v2-wire-budget-acceptance.log`）。
+这项修复没有新增任何外部模型调用，不能回溯本次 wire 数未知，也不改变本次 `choiceId` 未经真模型覆盖的事实。
+第一次合并后全仓运行不作数：它在 Surefire 运行时又有另一个 Maven 进程重编同一份
+`target/classes`，产生 `NoClassDefFoundError`和连带 HTTP 500。那一轮同时暴露的真回归（旧提示词断言、
+测试物件缺 `roomId`、六人时代的测试隔离、帮工不知道吧台）已在上面的 154 项联合回归里修复并复验；
+后续已在完全无竞争的单一进程里重跑 `clean test`，最终数字以上面 641 项那次为准。
+
+**工程收尾不等于长期社会验收。** 记忆的三组对比（原始流 / 纯自述文档 / 文档+工作集）、
+同种子的真模型双跑与纯规则减法、跨多天的信念与规范形成仍然没有验。
+它们需要新的真实 token 预算和明确授权，不能用本次 24 条逻辑调用的短探针、单元、HTTP、浏览器或纯规则通过来替代。
+没有把纯规则跑或本次短探针当作社会涌现证据；真实模型双跑与记忆三组对比也不能由编译和单元测试代替。
 
 ## 小镇活起来了
 
@@ -407,4 +560,37 @@ Graphiti 给整数下标，Mem0 给伪装成 "0".."9" 的 id，AGA 直接打印�
 
 开发环境跑在 docker compose 上。后端曾经因为**容器是配置更新之前起的、之后只被
 `restart` 过**而整天起不来——`docker compose restart` 不重读 compose 配置。
+
+## 早前版本的历史记录：第一次真模型小规模探针（2026-09-14）
+
+这节是工程收尾前的代码、时间和预算下的历史运行；其 120 次记录与本次收尾后的 24 次逻辑调用不能直接比较。
+“第一次”仅指当时版本语境下的首次探针。
+
+没有碰共享的 docker 开发栈——用仓库自己现成的 `AcceleratedTownRunnerIT`（`COMPANION_RUN=true
+COMPANION_RUN_MODEL=true COMPANION_RUN_MODEL_BUDGET=60 ./mvnw test -Dtest=AcceleratedTownRunnerIT`，
+默认关闭、走真实凭据、和 Spring 应用完全分开的一次性跑法），预算硬顶在 60 次调用。
+实际跑到 120 次——**用例自己的断言假设一次跑不跨日**，而这次 `days=1` 从
+`2026-01-01T00:00` 跑到了 `2026-01-02T00:03`，跨了一次日历日边界，`modelCallsToday` 清零重算了一遍，
+于是变成两个 60 顶格。断言失败了（`AcceleratedTownRunnerIT` 本身，不是应用代码），但产出物在断言
+之前就已经写完，探针本身没受影响；这是我这次选参数选出来的边界情况，没有去改这条测试。
+
+真实花费：120 次调用，输入 344,612 token + 输出 9,485 token，钱包时间 6 分 9 秒（其中真正等网络
+的 67 个 tick，其余 10,758 个 tick 是规则时间，飞速跑过）——**新架构落地后第一次有真实数字**，可以
+拿来估更大规模跑的成本量级（对比 [01](docs/01-requirements.md) 估的 25 人×2天 ≈3300 万 token，
+这次 25 人×1天只有约 34 万输入 token，量级差了两个数量级，因为这次预算硬顶很紧、大部分居民一天
+只轮到一两次决策，根本没攒够时间触发 reflect）。
+
+信念产出：72 条记忆带着「反思层」的 `sourceType=reflection` 标记，其中真正走到
+`ResidentSimulation.applyReflection`、能带 `supersedesKey` 的 `reflect` 调用只有 5 次——
+其余的 67 条是决策理由、"一天过去了没顾上"这类别的写入点（[01](docs/01-requirements.md)583
+行已经指出这 8 个写入点不能混着当分母）。这 5 次里 1 次真的落成了 `belief`：
+知夏（artist）"一闲下来就回头去弄自己那件没做完的事，没跟谁说"，覆盖了 `habit:artist:own_thing`——
+**还是关于自己习惯的自我描述，和改造前 run A/run B 的老毛病同一个形状**。
+
+**诚实的结论：机制端到端跑通了（自述文档 + 工作集 + 对称提示词，真实模型下没有崩、没有 JSON
+不合规），但样本太小（n=5 个 reflect 调用）说明不了产出率有没有真的变——25 人平摊 120 次调用，
+没有一个人攒够跨过三小时反思间隔所需的时间和决策量。要看到"信念是否开始关于别人"这个真问题，
+下一次要么把预算集中砸给 2-3 个人（像 `HomeVisitingTest` 那样把其余人晾在一边），要么真的批
+[01](docs/01-requirements.md) 552 行提到的那次没跑的探针。这次只回答了"方向对不对"的最低要求：
+没有跑崩，产出了一条形状眼熟但确实存在的信念。**
 `scripts/dev-server.sh` 的 restart 已经改成 `up -d`。

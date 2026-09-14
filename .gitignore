@@ -17,6 +17,7 @@ frontend/node_modules/
 frontend/dist/
 frontend/.vite/
 output/town-life-review
+output/town-v2/
 
 # Browser test artifacts
 frontend/playwright-report/
@@ -40,3 +41,6 @@ tmp/
 
 # Claude Code 的会话目录与临时 worktree，不属于仓库
 .claude/
+
+# Experiment raw outputs are large third-party model output; READMEs and results/ are tracked.
+experiments/*/data/

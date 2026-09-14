@@ -6,10 +6,11 @@ A web town you can leave open all day. You move onto a small street that already
 residents and a past, share part of your schedule with one autonomous figure, and shape
 its life through explicit arrangements or the occasional passing thought.
 
-The entry point is `/town`: move onto a street with four residents already living on it,
-pick a real to-do to focus alongside, or let the figure live by its own rhythm. The world
-is stored on the server and survives a refresh. **Finishing a focus session never completes
-your real task for you** — that stays your call.
+The entry point is `/town`: move into a 25-resident town with six public destinations,
+multi-room homes, and physical objects that can be occupied, worn down, repaired, lent or
+given away. Pick a real to-do to focus alongside, or let the figure live by its own rhythm.
+The world is stored on the server and survives a refresh. **Finishing a focus session never
+completes your real task for you** — that stays your call.
 
 Residents keep their own needs, plans, relationships and source-backed memories. Real
 encounters lead to negotiation, collaboration and new small wishes. The model may adjust
@@ -21,7 +22,7 @@ a canned sentence gets remembered as something they actually said.
 - [01 · The town we want](docs/01-requirements.md) · [02 · How the code is organised](docs/02-modules.md)
 - [Doc index](docs/README.md) — everything by number. [agent.md](agent.md) holds the short development conventions.
 - [References](references/README.md) — the two research papers and links to their official implementations.
-- [06 · How a society grows, and how we would know](docs/06-society.md) — the lab notebook for the emergent-norms work, including the hypotheses that got falsified.
+- [How a society grows, and how we would know](docs/01-requirements.md#社会怎么长出来以及怎么知道它长出来) — the current criteria for emergent norms; measurements and falsified hypotheses live in [docs/05](docs/05-notes.md).
 
 Built as a modular monolith on Vue and Spring Boot. MySQL is the system of record, Redis is
 a discardable accelerator, MinIO provides local S3-compatible object storage.
