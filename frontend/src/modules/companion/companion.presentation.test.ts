@@ -1,6 +1,23 @@
 import { describe, expect, it } from 'vitest'
 import { ref } from 'vue'
-import { sceneProjection, stableProjection } from './companion.presentation'
+import { activityDurationLabel, sceneProjection, stableProjection } from './companion.presentation'
+
+describe('activityDurationLabel: "已经 N 分钟" from the backend\'s activitySince', () => {
+  const now = Date.parse('2026-09-14T09:00:00Z')
+  it('floors whole minutes since the current activity started', () => {
+    expect(activityDurationLabel('2026-09-14T08:47:30Z', now)).toBe('已经 12 分钟')
+    expect(activityDurationLabel('2026-09-14T08:59:59Z', now)).toBe('已经 0 分钟')
+    expect(activityDurationLabel('2026-09-14T09:00:00Z', now)).toBe('已经 0 分钟')
+  })
+  it('shows nothing without a real activitySince - null, undefined, or an unparseable value', () => {
+    expect(activityDurationLabel(null, now)).toBeUndefined()
+    expect(activityDurationLabel(undefined, now)).toBeUndefined()
+    expect(activityDurationLabel('not-a-date', now)).toBeUndefined()
+  })
+  it('never shows a negative duration if the local clock briefly runs ahead of the server', () => {
+    expect(activityDurationLabel('2026-09-14T09:05:00Z', now)).toBe('已经 0 分钟')
+  })
+})
 
 describe('saved-world drawing projections', () => {
   it('keeps the same scene input when only server revision or memories change', () => {

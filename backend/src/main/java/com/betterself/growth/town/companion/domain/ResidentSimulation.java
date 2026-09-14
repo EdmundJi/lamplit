@@ -249,7 +249,7 @@ public final class ResidentSimulation {
     private static void awaitDecision(CompanionWorld w,ResidentState r,Instant at){
         Actor current=actor(w,r.id);
         if(!"idle".equals(current.activity())||!at.isBefore(current.until()))
-            replaceActor(w,r.id,current.place(),"idle",w.modelConversationsEnabled?"停下来想下一步":"暂时没有新的安排",at.plusSeconds(300));
+            replaceActor(w,r.id,current.place(),"idle",w.modelConversationsEnabled?"停下来想下一步":"暂时没有新的安排",at.plusSeconds(300),at);
     }
 
     /** Energy follows simulated elapsed time, not the number of service calls or completed actions.
@@ -306,7 +306,7 @@ public final class ResidentSimulation {
         if("tend_plants".equals(p.action()))tendPlants(w,r,at);
         if(p.action().equals("away")){
             String home=TownPlaces.homeOf(r.id);
-            replaceActor(w,r.id,home,"idle","刚从外面回来",at.plusSeconds(60));
+            replaceActor(w,r.id,home,"idle","刚从外面回来",at.plusSeconds(60),at);
             TownPlaces.claim(w,r.id,home,null,at);
             memory(w,r.id,r.id,"observed",at,p.targetId(),"我出门处理了自己的事："+p.reason()+"，现在回来了。",List.of(),6);
             event(w,at,"return",home,List.of(r.id),actor(w,r.id).name()+"从外面回来了。",null);
@@ -421,7 +421,7 @@ public final class ResidentSimulation {
             r.desiredAction=paused.desiredAction;r.desiredDurationSeconds=paused.desiredDurationSeconds;
             r.travelFrom=travelOrigin(w,r.id);
             r.plan=new Plan("p-"+(++w.eventSequence),"travel",p.place(),p.targetId(),p.reason(),at,at.plusSeconds(remaining));
-            r.revision++;r.thought="继续"+p.reason();replaceActor(w,r.id,"street","walk","继续去"+placeName(p.place()),r.plan.endsAt());
+            r.revision++;r.thought="继续"+p.reason();replaceActor(w,r.id,"street","walk","继续去"+placeName(p.place()),r.plan.endsAt(),at);
         } else moveOrSchedule(w,r,p.action(),p.place(),p.targetId(),p.reason(),at,remaining);
     }
     /** The same contribution is witnessed by everyone present, but what each observer actually
@@ -459,7 +459,7 @@ public final class ResidentSimulation {
             r.plan=new Plan("p-"+(++w.eventSequence),"travel",place,target,reason,at,at.plusSeconds(travel));
             r.revision++;r.thought=reason;r.travelFrom=travelOrigin(w,r.id);
             TownPlaces.release(w,r.id,at); // stepping away frees up the spot right away, not 12 seconds from now
-            replaceActor(w,r.id,"street","walk","准备去"+placeName(place)+"："+reason,r.plan.endsAt());
+            replaceActor(w,r.id,"street","walk","准备去"+placeName(place)+"："+reason,r.plan.endsAt(),at);
         } else schedule(w,r,action,place,roomId,target,reason,at,duration);
     }
     static void schedule(CompanionWorld w,ResidentState r,String action,String place,String target,String reason,Instant at,int duration) {
@@ -482,7 +482,7 @@ public final class ResidentSimulation {
             // simply gone, which is exactly the condition ResidentDirector.needsDecision reads as
             // "ask this resident what they want next" - a genuinely fresh decision next time, never an
             // automatic re-attempt of the same walk this method itself would schedule.
-            replaceActor(w,r.id,"street","idle","咖啡馆的门锁着，进不去",at.plusSeconds(300));
+            replaceActor(w,r.id,"street","idle","咖啡馆的门锁着，进不去",at.plusSeconds(300),at);
             return;
         }
         // Home doors (docs/01-requirements.md 第二版「世界」「进别人家由所有权和门决定」): the exact
@@ -494,7 +494,7 @@ public final class ResidentSimulation {
             r.plan=null;r.desiredAction=null;r.desiredDurationSeconds=0;r.revision++;
             r.thought="那扇门锁着，进不去";
             TownPlaces.release(w,r.id,at);
-            replaceActor(w,r.id,"street","idle","那扇门锁着，进不去",at.plusSeconds(300));
+            replaceActor(w,r.id,"street","idle","那扇门锁着，进不去",at.plusSeconds(300),at);
             return;
         }
         if(arrivingElsewheresHome)arriveAsGuest(w,r,place,at);
@@ -510,7 +510,7 @@ public final class ResidentSimulation {
         // inherit the "this was their own choice" mark from a decision made an hour ago.
         r.planFromDecision=false;
         String label=switch(action){case "create","help"->"动手准备"+(project(w,target)==null?"手上的小事":"「"+project(w,target).title+"」");case "study"->"在窗边复习，想守住一点安静";case "invite"->reason;case "join"->"过去和"+(target==null?"邻居":actor(w,target).name())+"坐一起";case "sleep"->"睡着了，给明天留一点精神";case "rest"->"捧着杯子歇一会儿";case "celebrate"->"想请大家看看一起做出来的东西";case "wait"->reason;case "tend"->r.id.equals(CafeService.operatorId(w))?"回到吧台，照应一下柜台前的人":"替"+actor(w,CafeService.operatorId(w)).name()+"照看吧台";case "away"->"出门去处理自己的事："+reason;default->reason;};
-        replaceActor(w,r.id,place,action,label,r.plan.endsAt());
+        replaceActor(w,r.id,place,action,label,r.plan.endsAt(),at);
         // "能站的地方都能去" (04-decisions.md): a named position is only claimed for the handful of
         // things that are genuinely owned and capacity-limited - a bed, the owner's coffee machine,
         // the student's window seat. Standing, chatting, observing, creating at the shared table,
@@ -536,7 +536,7 @@ public final class ResidentSimulation {
             if("tend".equals(action))CafeService.returnToWaiting(w,target);
             r.plan=null;r.desiredAction=null;r.desiredRoomId=null;r.desiredDurationSeconds=0;r.revision++;
             r.thought="到了才发现这里的东西坏了，暂时用不了";
-            replaceActor(w,r.id,place,"idle",r.thought,at.plusSeconds(300));
+            replaceActor(w,r.id,place,"idle",r.thought,at.plusSeconds(300),at);
             memory(w,r.id,"environment","observed",at,"resource",r.thought+"（"+exact+"）。",List.of(),4);
             return;
         }
@@ -552,7 +552,7 @@ public final class ResidentSimulation {
             // common area so room-scoped sight, speech and witnessing cannot pass through the wall.
             if("bathe".equals(action)&&TownPlaces.isHome(place)&&TownPlaces.room(w,place+"-common")!=null)
                 r.roomId=place+"-common";
-            replaceActor(w,r.id,place,"wait",waitReason,r.plan.endsAt());
+            replaceActor(w,r.id,place,"wait",waitReason,r.plan.endsAt(),at);
         } else if(r.positionId!=null){Position occupied=TownPlaces.position(w,r.positionId);if(occupied!=null)r.roomId=occupied.roomId;}
     }
     private static String specificPosition(CompanionWorld w,String action,String place,String target){
@@ -730,8 +730,8 @@ public final class ResidentSimulation {
         // model is unavailable; only explicit rule-only historical runs use the template below.
         if(w.modelConversationsEnabled){
             c.mode="model";c.nextSpeakerId=a.id;w.conversations.add(c);a.lastSocialAt=at;b.lastSocialAt=at;
-            replaceActor(w,a.id,c.place,"talk","想和"+actor(w,b.id).name()+"聊聊，正在组织语言",at.plusSeconds(45));
-            replaceActor(w,b.id,c.place,"talk","停下手里的事，等对方开口",at.plusSeconds(45));
+            replaceActor(w,a.id,c.place,"talk","想和"+actor(w,b.id).name()+"聊聊，正在组织语言",at.plusSeconds(45),at);
+            replaceActor(w,b.id,c.place,"talk","停下手里的事，等对方开口",at.plusSeconds(45),at);
             event(w,at,"conversation",c.place,List.of(a.id,b.id),actor(w,a.id).name()+"叫住了"+actor(w,b.id).name()+"。",p.id);
             while(w.conversations.size()>24)w.conversations.removeFirst();return;
         }
@@ -745,7 +745,7 @@ public final class ResidentSimulation {
         String opener=fond&&!alreadyShown?"你上次说的，我还记着。":"";
         c.turns.add(new Turn(a.id,opener+invitation,at));
         w.conversations.add(c);a.lastSocialAt=at;b.lastSocialAt=at;
-        replaceActor(w,a.id,c.place,"talk",c.turns.getFirst().text(),at.plusSeconds(36));replaceActor(w,b.id,c.place,"talk","停下手里的事，听听对方",at.plusSeconds(36));
+        replaceActor(w,a.id,c.place,"talk",c.turns.getFirst().text(),at.plusSeconds(36),at);replaceActor(w,b.id,c.place,"talk","停下手里的事，听听对方",at.plusSeconds(36),at);
         var shared=a.knownProjects.get(p.id);if(shared!=null)b.knownProjects.put(p.id,new ProjectKnowledge(shared.id(),shared.place(),shared.status(),shared.progress(),at,a.id));
         memory(w,b.id,a.id,"heard",at,p.id,actor(w,a.id).name()+"当面告诉我，正在准备「"+p.title+"」。",ownEvidence(w,a.id,p.id),7);
         event(w,at,"conversation",c.place,List.of(a.id,b.id),actor(w,a.id).name()+"叫住了"+actor(w,b.id).name()+"，聊起「"+p.title+"」。",p.id);
@@ -755,7 +755,7 @@ public final class ResidentSimulation {
      * it does not need a public project to be a legitimate encounter. */
     private static void startLifeConversation(CompanionWorld w,ResidentState a,ResidentState b,Instant at){
         suspendForConversation(w,a,at);suspendForConversation(w,b,at);Conversation c=new Conversation();c.id="c-"+(++w.eventSequence);c.place=actor(w,a.id).place();c.topicId="life";c.status="active";c.participantIds.add(a.id);c.participantIds.add(b.id);c.startedAt=at;c.updatedAt=at;c.mode=w.modelConversationsEnabled?"model":"fallback";c.nextSpeakerId=a.id;w.conversations.add(c);a.lastSocialAt=at;b.lastSocialAt=at;
-        replaceActor(w,a.id,c.place,"talk","想聊聊手头的生活安排",at.plusSeconds(45));replaceActor(w,b.id,c.place,"talk","停下来听听对方的打算",at.plusSeconds(45));event(w,at,"conversation",c.place,List.of(a.id,b.id),actor(w,a.id).name()+"和"+actor(w,b.id).name()+"聊起最近的生活安排。",null);
+        replaceActor(w,a.id,c.place,"talk","想聊聊手头的生活安排",at.plusSeconds(45),at);replaceActor(w,b.id,c.place,"talk","停下来听听对方的打算",at.plusSeconds(45),at);event(w,at,"conversation",c.place,List.of(a.id,b.id),actor(w,a.id).name()+"和"+actor(w,b.id).name()+"聊起最近的生活安排。",null);
     }
     private static void continueConversation(CompanionWorld w,Conversation c,Instant at) {
         if(ConversationLifecycle.tick(w,c,at))return;
@@ -793,7 +793,7 @@ public final class ResidentSimulation {
                 // A genuine, repeated rejection is real experience, not mood - see driftPersonality's
                 // own doc comment for the bound that keeps this from ever becoming a visible swing.
                 driftPersonality(w,a,"extroversion",-PERSONALITY_DRIFT_STEP,"declined",at);
-                replaceActor(w,speaker,c.place,"talk",text,at.plusSeconds(12));return;
+                replaceActor(w,speaker,c.place,"talk",text,at.plusSeconds(12),at);return;
             }
             text=switch(b.id){case "student"->"行。等我把这页看完。";case "artist"->"行，留一块给我。";case "gardener"->"行，我晚点把苗拿来。";default->"行，我收完台面就来。";};
             if(!p.members.contains(b.id))p.members.add(b.id);b.goal=p.id;b.thought="听过对方的安排后，我愿意试着一起做一点。";
@@ -805,7 +805,7 @@ public final class ResidentSimulation {
         } else {
             ConversationLifecycle.finish(w,c,at,"各自继续手上的事");return;
         }
-        c.turns.add(new Turn(speaker,text,at));c.stage++;c.updatedAt=at;a.revision++;b.revision++;replaceActor(w,speaker,c.place,"talk",text,at.plusSeconds(24));
+        c.turns.add(new Turn(speaker,text,at));c.stage++;c.updatedAt=at;a.revision++;b.revision++;replaceActor(w,speaker,c.place,"talk",text,at.plusSeconds(24),at);
     }
     // reflect() and newWish() used to live here. Both were already unreachable - nothing called
     // either one - and they are removed rather than moved so the next batch builds reflection from
@@ -1306,7 +1306,7 @@ public final class ResidentSimulation {
     private static void fireHabit(CompanionWorld w,ResidentState r,String habitId,String action,String label,String note,Instant at){
         r.lastHabitAt.put(habitId,at);
         Actor a=actor(w,r.id);
-        replaceActor(w,r.id,a.place(),a.activity(),label,a.until());
+        replaceActor(w,r.id,a.place(),a.activity(),label,a.until(),at);
         recordDeed(w,r.id,action,a.place(),note,at);
     }
     // ---- what this resident has already done today ------------------------------------------------
@@ -2596,7 +2596,7 @@ public final class ResidentSimulation {
             // must never be re-scheduled by the reflex layer as though it were a plan.
             r.planFromDecision=false;r.reflexExtensions=0;
             r.decisionRetryAfter=now.plusSeconds(quiet);
-            if(r.plan==null)replaceActor(w,residentId,actor(w,residentId).place(),"idle",reason,now.plusSeconds(quiet));
+            if(r.plan==null)replaceActor(w,residentId,actor(w,residentId).place(),"idle",reason,now.plusSeconds(quiet),now);
             w.revision++;
             return true;
         }
@@ -2609,7 +2609,7 @@ public final class ResidentSimulation {
             int duration=Math.max(600,Math.min(2700,600+Math.floorMod(reason.hashCode()+(int)now.getEpochSecond(),2100)));
             r.plan=new Plan("p-"+(++w.eventSequence),"away","away",target,reason,now,now.plusSeconds(duration));
             r.revision++;r.thought=reason;
-            replaceActor(w,residentId,"away","away",reason,r.plan.endsAt());
+            replaceActor(w,residentId,"away","away",reason,r.plan.endsAt(),now);
             if(!evidence.isEmpty())memory(w,r.id,r.id,"reflection",now,r.goal,reason,evidence,DECISION_REASON_IMPORTANCE);
             w.modelStatus="模型刚让"+actor(w,residentId).name()+"暂时出门了";w.revision++;
             event(w,now,"away","street",List.of(residentId),actor(w,residentId).name()+"出门去处理自己的事，暂时不在小街上。",target);
@@ -2760,7 +2760,7 @@ public final class ResidentSimulation {
             c.turns.add(new Turn(r.id,speech,now));c.updatedAt=now;
             for(String listener:c.participantIds)if(!listener.equals(r.id)&&sameRoom(w,r.id,listener))
                 memory(w,listener,r.id,"heard",now,c.topicId,actor(w,r.id).name()+"当面说：“"+speech+"”",evidence,6);
-            replaceActor(w,r.id,c.place,"talk",speech,now.plusSeconds(24));
+            replaceActor(w,r.id,c.place,"talk",speech,now.plusSeconds(24),now);
         } else {
             if(Set.of("rest","sleep").contains(action)&&r.plan!=null){
                 suspend(r,now);
@@ -2939,11 +2939,61 @@ public final class ResidentSimulation {
     static String seatPhrase(CompanionWorld w,String positionId){
         Position p=TownPlaces.position(w,positionId);
         if(p==null)return "某处";
-        String kind=switch(p.kind){
+        return placeName(p.place)+positionKindLabel(p.kind);
+    }
+    /** The bare "what kind of spot this is" half of {@link #seatPhrase}, split out so {@link
+     * #positionUses} can name a position without repeating the place it is already known to share with
+     * the resident asking (see that method's own doc comment). */
+    private static String positionKindLabel(String kind){
+        return switch(kind){
             case "seat"->"窗边的位子";case "table"->"那张长桌";case "bench"->"长椅";
             case "plot"->"苗圃";case "desk"->"书桌";case "bed"->"床";case "equipment"->"吧台";default->"那儿";
         };
-        return placeName(p.place)+kind;
+    }
+    /** Attention-bandwidth cap on {@link #positionUses} - Stanford Smallville's own term for the same
+     * idea (its agents cannot perceive more than a handful of nearby tiles at once). Sized well above
+     * anything one room in this town can actually hold today (the largest, the cafe's shared table,
+     * seats four), so it never trims a real room; it exists so a future room built for a larger crowd
+     * cannot flood every prompt in it once the population grows past six. */
+    static final int POSITION_USE_CAP = 8;
+    /** "谁在用什么" - the object-use half of docs/04-decisions.md's 2026-09-14 「对话出口与物品使用状态」.
+     * Wholly derived, never a second copy of state that could drift out of step with it: reads straight
+     * off {@link Position#occupantIds}, {@link ResidentState#activitySince} and {@link
+     * WorldObject#holderId} - the same facts {@code TownPlaces}/{@link #replaceActor} already keep for
+     * their own reasons, never a free-text state string written onto the position itself. Contrast
+     * Stanford's Generative Agents, which writes "(object, is being used for X)" as a sentence onto the
+     * tile the object sits on; its own paper (§7.2) reports exactly the failure a second, unstructured
+     * copy invites - multiple people the tile's own text called "occupied" doing it anyway, someone
+     * walking into a store the text called closed. This town already carries occupancy and capacity as
+     * real structure ({@link Position#occupantIds}/{@link Position#capacity}), so nothing here writes a
+     * second copy of it, structured or not - it only reads the structure that already exists.
+     * <p>Every occupied position the resident asking could actually notice: their own use, plus anyone
+     * sharing a room with them - {@link #sameRoom} decides that, which already folds in the street's own
+     * earshot rule, so a position on the far side of a big outdoor place correctly drops out the same
+     * way a person there already does. Capped at {@link #POSITION_USE_CAP}, self's own use always kept,
+     * the rest ordered by position id for a stable, non-random pick (docs/04-decisions.md: never
+     * Math.random) rather than by any per-run detail that would make the same world print two different
+     * prompts.
+     * @param activity the same natural-language doing-phrase {@code witnessPeople} already writes into
+     * a bystander's own memory ({@link #doingPhrase}), not the raw action code {@code ActorView} sends
+     * elsewhere (e.g. "read", "study") - this view exists to be read as a plain perceived fact, never to
+     * be matched against a decision option the way a raw action code would be. */
+    public record PositionUseView(String positionId,String label,String occupantId,String occupantName,String activity,int minutesSoFar,String heldObjectLabel) {}
+    public static List<PositionUseView> positionUses(CompanionWorld w,String residentId,Instant now){
+        List<PositionUseView> out=new ArrayList<>();
+        for(Position p:w.positions){
+            if(p.occupantIds==null||p.occupantIds.isEmpty())continue;
+            for(String occupantId:p.occupantIds){
+                if(!occupantId.equals(residentId)&&!sameRoom(w,residentId,occupantId))continue;
+                ResidentState occupant=state(w,occupantId);Actor a=actor(w,occupantId);
+                Instant since=occupant==null?null:occupant.activitySince;
+                int minutes=since==null?0:(int)Math.max(0,Duration.between(since,now).toSeconds()/60);
+                String held=w.objects.stream().filter(o->occupantId.equals(o.holderId())).map(WorldObject::label).findFirst().orElse(null);
+                out.add(new PositionUseView(p.id,positionKindLabel(p.kind),occupantId,a.name(),doingPhrase(a.activity()),minutes,held));
+            }
+        }
+        out.sort(Comparator.<PositionUseView,Integer>comparing(v->v.occupantId().equals(residentId)?0:1).thenComparing(PositionUseView::positionId));
+        return out.size()>POSITION_USE_CAP?List.copyOf(out.subList(0,POSITION_USE_CAP)):List.copyOf(out);
     }
     private static String knownStatus(ResidentState r,String id){ProjectKnowledge p=r.knownProjects.get(id);return p==null?"idea":p.status();}
     /** How far a project can get on one person's repeated work before it simply stops. A measured day
@@ -3053,8 +3103,22 @@ public final class ResidentSimulation {
     }
     private static void bump(ResidentState owner,String otherId,int delta){owner.relationships.compute(otherId,(k,v)->Math.max(0,Math.min(100,(v==null?40:v)+delta)));}
     private static int scaledDelta(ResidentState owner,int delta){return (int)Math.round(delta*Personality.of(owner).intensity());}
+    /** Legacy convenience for call sites (almost entirely this package's own tests) that do not care
+     * when the current activity began. A null {@code now} below simply leaves {@link
+     * ResidentState#activitySince} exactly as it already reads - never a guess at a time nobody
+     * actually supplied - so every existing fixture keeps compiling and behaving unchanged. Every real
+     * simulation call site uses the timed overload below instead. */
     static void replaceActor(CompanionWorld w,String id,String place,String activity,String label,Instant until){
+        replaceActor(w,id,place,activity,label,until,null);
+    }
+    /** {@code now} is only ever used to stamp {@link ResidentState#activitySince} the moment {@code
+     * activity} actually differs from what it was a moment ago - see that field's own doc comment.
+     * Every real call site already had a clock reading in scope for {@code until}, so this adds no new
+     * time source, only a second read of the same one. A null {@code now} (see the convenience overload
+     * above) skips the stamp entirely rather than writing a guess. */
+    static void replaceActor(CompanionWorld w,String id,String place,String activity,String label,Instant until,Instant now){
         Lending.followHolder(w,id,place);
+        ResidentState r=state(w,id);
         // The avatar is not in w.residents (see ResidentSeed's note on that list staying exactly the
         // four NPCs the frontend already renders) - "self" resolves through w.avatar instead, exactly
         // like the read side (actor()) already does. Without this, ResidentSimulation could compute a
@@ -3062,11 +3126,15 @@ public final class ResidentSimulation {
         // against a list "self" was never in.
         if("self".equals(id)) {
             if(w.avatar==null)return;
+            if(now!=null&&r!=null&&(r.activitySince==null||!Objects.equals(activity,w.avatar.activity())))r.activitySince=now;
             w.avatar=new Actor(id,w.avatar.name(),w.avatar.role(),place,activity,label,w.avatar.x(),w.avatar.y(),until);
-            ResidentState r=state(w,id);if(r!=null)r.selfActivitySignature=place+"|"+activity+"|"+until;
+            if(r!=null)r.selfActivitySignature=place+"|"+activity+"|"+until;
             return;
         }
-        for(int i=0;i<w.residents.size();i++){Actor a=w.residents.get(i);if(a.id().equals(id))w.residents.set(i,new Actor(id,a.name(),a.role(),place,activity,label,a.x(),a.y(),until));}
+        for(int i=0;i<w.residents.size();i++){Actor a=w.residents.get(i);if(a.id().equals(id)){
+            if(now!=null&&r!=null&&(r.activitySince==null||!Objects.equals(activity,a.activity())))r.activitySince=now;
+            w.residents.set(i,new Actor(id,a.name(),a.role(),place,activity,label,a.x(),a.y(),until));
+        }}
     }
     static void replaceRole(CompanionWorld w,String id,String role){
         if("self".equals(id)) {
@@ -3284,7 +3352,7 @@ public final class ResidentSimulation {
             if(r.id.equals("self"))continue;
             Actor a=actor(w,r.id);
             if(a.place().equals("home")){
-                String home=TownPlaces.homeOf(r.id);replaceActor(w,r.id,home,a.activity(),a.label(),a.until());
+                String home=TownPlaces.homeOf(r.id);replaceActor(w,r.id,home,a.activity(),a.label(),a.until(),now);
                 // A pre-place save can say "sleeping at home" while its old flat plan still points
                 // at the shared cafe.  The visible, concrete old action wins during repair; without
                 // this it immediately walks the resident back out of their newly repaired home.

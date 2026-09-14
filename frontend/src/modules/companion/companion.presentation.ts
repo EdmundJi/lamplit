@@ -46,6 +46,22 @@ export function sceneProjection(world: () => World | null) {
 }
 
 /**
+ * "已经 N 分钟" for the resident detail panel's current-action line, from the backend's
+ * `ResidentState.activitySince` (an ISO instant stamped the moment the current plan.action started
+ * - never a client-side guess). `null`/`undefined` (no plan, or an old save from before this field
+ * existed) and an unparseable instant both render nothing, so an absent value never turns into
+ * "already 0 minutes" or a NaN. Minutes are floored and clamped at 0 so a clock a few seconds
+ * ahead of the server never reads as a negative duration.
+ */
+export function activityDurationLabel(activitySince: string | null | undefined, nowMs: number): string | undefined {
+  if (!activitySince) return undefined
+  const since = Date.parse(activitySince)
+  if (Number.isNaN(since)) return undefined
+  const minutes = Math.max(0, Math.floor((nowMs - since) / 60000))
+  return `已经 ${minutes} 分钟`
+}
+
+/**
  * A shared 1s clock: `minutes` (local time-of-day in the world's own timezone) drives the scene's
  * day/night lighting and rain/shade, in both the docked strip and /town, without either owning the
  * other's ticker. `worldTimezone` reads the current world's saved timezone; falls back to the

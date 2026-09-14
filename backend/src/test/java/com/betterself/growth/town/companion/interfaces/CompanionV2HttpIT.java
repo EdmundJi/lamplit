@@ -73,6 +73,12 @@ class CompanionV2HttpIT {
             assertThat(position.path("condition").asText()).isIn("usable", "broken");
         });
         world.path("residentStates").forEach(state -> assertThat(roomIds).contains(state.path("roomId").asText()));
+        // "谁在用什么" (docs/04-decisions.md 2026-09-14 「对话出口与物品使用状态」): activitySince is a
+        // plain field on the same wire shape already sent whole, so the frontend can derive how long a
+        // resident has been at their current activity without a second DTO - present (though possibly
+        // still null right after join, before anyone's activity has actually changed) rather than
+        // silently missing.
+        world.path("residentStates").forEach(state -> assertThat(state.has("activitySince")).isTrue());
         world.path("objects").forEach(object -> {
             assertThat(locations).contains(object.path("place").asText());
             assertThat(roomIds).contains(object.path("roomId").asText());

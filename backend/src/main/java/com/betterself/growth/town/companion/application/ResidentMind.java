@@ -295,7 +295,8 @@ public interface ResidentMind {
                    List<WorldObjectView> visibleObjects,List<PersonHereView> peopleHere,List<KnownPlaceView> knownPlaces,List<KnownProject> knownProjects,List<TurnView> conversation,
                    LifeIntentView lifeIntent,LifeIntentView careerIntent,PlanView currentPlan,List<WorkArrangementView> workArrangements,
                    String occupation,PersonaView persona,List<String> availableActions,List<DecisionOptionView> decisionOptions,String cafeOperatorId,List<String> cafeRoleFacts,boolean canTend,List<ServiceRequestView> visibleServiceRequests,
-                   String cafeStatus,String cafeScheduleCue,String cafeNotice,PausedActionView pausedAction,PortableActionView portableAction,String currentRoomId) {
+                   String cafeStatus,String cafeScheduleCue,String cafeNotice,PausedActionView pausedAction,PortableActionView portableAction,String currentRoomId,
+                   List<com.betterself.growth.town.companion.domain.ResidentSimulation.PositionUseView> positionUses) {
         /** Compatibility shape for hand-built contexts that predate exact four-level decision
          * options. Production contexts always use the canonical constructor above. */
         public Context(String residentId,String localTime,String weather,ActorView self,String goal,
@@ -308,7 +309,7 @@ public interface ResidentMind {
             this(residentId,localTime,weather,self,goal,salientPerceptions,routineCues,memories,todaySoFar,nearby,
                 visibleObjects,peopleHere,knownPlaces,knownProjects,conversation,lifeIntent,careerIntent,currentPlan,
                 workArrangements,occupation,persona,availableActions,List.of(),cafeOperatorId,cafeRoleFacts,canTend,
-                visibleServiceRequests,cafeStatus,cafeScheduleCue,cafeNotice,pausedAction,portableAction,null);
+                visibleServiceRequests,cafeStatus,cafeScheduleCue,cafeNotice,pausedAction,portableAction,null,List.of());
         }
         /** Source-compatible constructor for existing model fixtures.  New runtime contexts always
          * use the qualitative canonical shape above; legacy numeric arguments are intentionally
@@ -319,7 +320,7 @@ public interface ResidentMind {
                        List<WorldObject> visibleObjects,List<KnownProject> knownProjects,List<Turn> conversation){
             this(residentId,localTime,weather,actorView(self),goal,List.of(),List.of(),memoryViews(memories),List.of(),actorViews(nearby),
                 objectViews(visibleObjects),List.of(),List.of(),knownProjects,turnViews(conversation),null,null,null,List.of(),null,null,
-                List.of("none","observe","rest","study","work","read","make","sleep","propose"),List.of(),null,List.of(),false,List.of(),null,null,null,null,null,null);
+                List.of("none","observe","rest","study","work","read","make","sleep","propose"),List.of(),null,List.of(),false,List.of(),null,null,null,null,null,null,List.of());
         }
     }
     /**

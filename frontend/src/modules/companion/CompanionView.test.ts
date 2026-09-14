@@ -183,6 +183,26 @@ describe('companion page task boundary', () => {
     expect(view.find('.life-thread').exists()).toBe(false)
   })
 
+  it('shows how long the resident has been at their current activity when the backend supplies activitySince', async () => {
+    const base = snapshot()
+    const saved = { ...base, world: { ...base.world, residentStates: [{ id: 'owner', goal: null, thought: '', relationships: {}, plan: null, activitySince: '2026-09-07T23:48:00Z' }] } }
+    api.get.mockImplementation((path: string) => Promise.resolve(path === '/town/companion' ? saved : []))
+    api.post.mockResolvedValue(saved)
+    const view = await render()
+    await selectResident('owner')
+    // System time is 2026-09-08T00:00:00Z (beforeEach) - 12 minutes after activitySince.
+    expect(view.get('.activity-duration').text()).toBe('已经 12 分钟')
+  })
+  it('shows nothing extra when the backend has not stamped an activitySince (old save, or no current plan)', async () => {
+    const base = snapshot()
+    const saved = { ...base, world: { ...base.world, residentStates: [{ id: 'owner', goal: null, thought: '', relationships: {}, plan: null }] } }
+    api.get.mockImplementation((path: string) => Promise.resolve(path === '/town/companion' ? saved : []))
+    api.post.mockResolvedValue(saved)
+    const view = await render()
+    await selectResident('owner')
+    expect(view.find('.activity-duration').exists()).toBe(false)
+  })
+
   it('exposes memory provenance and allows quiet mode to hide the detail', async () => {
     const view = await render()
     await selectResident('owner')

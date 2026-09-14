@@ -156,6 +156,85 @@ class ConversationLifecycleTest {
     }
 
 
+    // ---- rule-level exit: a speaker stuck on placeholder replies (docs/04-decisions.md 2026-09-14) --
+
+    /** The exact live transcript that reported this bug: 顾雁 asks something real, 时安 (reading) only
+     * ever answers with a token grunt, and the model kept the exchange going because ending it used to
+     * rely solely on leave=true. isTokenAcknowledgement is the rule that would have caught this without
+     * the model's cooperation - tested here against every line from that transcript, not a paraphrase. */
+    @Test void isTokenAcknowledgementMatchesTheExactLiveTranscript(){
+        assertThat(isTokenAcknowledgement("嗯。")).as("bare filler").isTrue();
+        assertThat(isTokenAcknowledgement("（翻过一页，没抬头）嗯。")).as("stage direction plus filler").isTrue();
+        assertThat(isTokenAcknowledgement("（低头翻书，没抬头）嗯。")).as("different stage direction, same filler").isTrue();
+        assertThat(isTokenAcknowledgement("行")).as("bare word, no punctuation at all").isTrue();
+        assertThat(isTokenAcknowledgement("好的")).as("two-character bare word").isTrue();
+        assertThat(isTokenAcknowledgement("老谭那书……是讲哪方面的？")).as("a real question, never a token ack").isFalse();
+        assertThat(isTokenAcknowledgement("好，那我先安静待会儿。")).as("a full sentence, not a placeholder").isFalse();
+        // ASCII parentheses must strip exactly like full-width （）.
+        assertThat(isTokenAcknowledgement("(翻过一页，没抬头)嗯。")).as("ASCII stage direction").isTrue();
+        assertThat(isTokenAcknowledgement(null)).isFalse();
+        // A short reply that still asks something is never a token ack, however few characters remain.
+        assertThat(isTokenAcknowledgement("行？")).as("short but a real question").isFalse();
+    }
+
+    @Test void isNearDuplicateCatchesTheSameLineRepeatedAcrossStageDirections(){
+        assertThat(isNearDuplicate("（翻过一页，没抬头）嗯。","（翻过一页，没抬头）嗯。")).as("literally repeated").isTrue();
+        assertThat(isNearDuplicate("（翻过一页，没抬头）嗯。","（低头翻书，没抬头）嗯。")).as("same filler under a different stage direction").isTrue();
+        assertThat(isNearDuplicate("好，那我先安静待会儿。","老谭那书……是讲哪方面的？")).as("genuinely different content").isFalse();
+        assertThat(isNearDuplicate("嗯。",null)).isFalse();
+    }
+
+    /** The live transcript reproduced turn by turn through the real applyTurn pipeline, with a fake mind
+     * that never sets leave=true - so the only thing that can end this conversation is the rule itself.
+     * 时安's own last two turns (turn 2 and turn 4) are both token acknowledgements, so the conversation
+     * must end right there, exactly like a leave=true would have, before 顾雁's turn 5 ("老谭那书……是讲哪
+     * 方面的？") is ever reached. */
+    @Test void aSpeakerStuckOnTwoTokenAcknowledgementsEndsTheConversationLikeLeaveTrueWould(){
+        var w=world();var c=active(w);
+        var turn1=reserveTurn(w,c,now);
+        assertThat(applyTurn(w,turn1,say("好，那我先安静待会儿。",false,"none"),now.plusSeconds(1))).isTrue();
+        var turn2=reserveTurn(w,c,now.plusSeconds(7));
+        assertThat(applyTurn(w,turn2,say("（翻过一页，没抬头）嗯。",false,"none"),now.plusSeconds(8))).isTrue();
+        assertThat(c.status).as("one placeholder reply alone does not end anything").isEqualTo("active");
+        var turn3=reserveTurn(w,c,now.plusSeconds(14));
+        // The other speaker's own second turn is also a token ack, but it is not the SAME speaker's
+        // last two - the rule must not fire on turn3 here.
+        assertThat(applyTurn(w,turn3,say("（低头翻书，没抬头）嗯。",false,"none"),now.plusSeconds(15))).isTrue();
+        assertThat(c.status).as("a different speaker's placeholder reply does not end it either").isEqualTo("active");
+        var turn4=reserveTurn(w,c,now.plusSeconds(21));
+        assertThat(applyTurn(w,turn4,say("（翻过一页，没抬头）嗯。",false,"none"),now.plusSeconds(22))).isTrue();
+        assertThat(c.status).as("this speaker's own last two turns are both token acks").isEqualTo("ended");
+        assertThat(c.endReason).as("distinguishable from an ordinary leave=true goodbye").isEqualTo("对方接连只是应一声，不再多问，各自去忙");
+        assertThat(c.turns).hasSize(4);
+        // Turn 5 (the real question the live transcript still asked) must never be reachable: the
+        // conversation is over, so a fifth reservation cannot be made.
+        assertThat(reserveTurn(w,c,now.plusSeconds(30))).isNull();
+        // Same guarantee any other ending already carries (ResidentLifeTest.someoneWhoJustTalkedIsLeftAloneForAWhile):
+        // finish() stamps lastSocialAt for both participants, so ResidentSimulation.greetable blocks an
+        // immediate re-pairing of this exact pair for SOCIAL_RECOVERY_SECONDS regardless of how the
+        // conversation ended - a rule-ended chat gets no less cooldown than a leave=true one.
+        for(String id:c.participantIds)assertThat(ResidentSimulation.state(w,id).lastSocialAt).isEqualTo(now.plusSeconds(22));
+    }
+
+    /** Two turns that are near-duplicates but each individually longer than the four-CJK-character
+     * token-ack threshold must still end the conversation - isNearDuplicate is not redundant with
+     * isTokenAcknowledgement. */
+    @Test void repeatingTheSameLongerLineTwiceAlsoEndsTheConversation(){
+        var w=world();var c=active(w);
+        var turn1=reserveTurn(w,c,now);
+        assertThat(applyTurn(w,turn1,say("今天天气不错，适合出门走走看看。",false,"none"),now.plusSeconds(1))).isTrue();
+        var turn2=reserveTurn(w,c,now.plusSeconds(7));
+        assertThat(applyTurn(w,turn2,say("（想着别的事）今天天气不错，适合出门走走看看。",false,"none"),now.plusSeconds(8))).isTrue();
+        assertThat(c.status).isEqualTo("active");
+        var turn3=reserveTurn(w,c,now.plusSeconds(14));
+        assertThat(applyTurn(w,turn3,say("是啊，确实挺好的。",false,"none"),now.plusSeconds(15))).isTrue();
+        assertThat(c.status).isEqualTo("active");
+        var turn4=reserveTurn(w,c,now.plusSeconds(21));
+        assertThat(applyTurn(w,turn4,say("今天天气不错，适合出门走走看看。",false,"none"),now.plusSeconds(22))).isTrue();
+        assertThat(c.status).as("this speaker repeated their own earlier line verbatim").isEqualTo("ended");
+        assertThat(c.endReason).isEqualTo("对方接连只是应一声，不再多问，各自去忙");
+    }
+
     @Test void whenNobodyEverSpokeTheRulesDoNotSpeakForThem(){
         // The guarantee this file exists to protect, and the one that was quietly missing until
         // 2026-09-11: a conversation nobody managed to say anything in leaves *nothing* behind.

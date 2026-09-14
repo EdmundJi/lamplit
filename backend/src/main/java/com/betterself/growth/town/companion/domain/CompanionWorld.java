@@ -257,6 +257,16 @@ public class CompanionWorld {
         /** Where the current travel plan set out from, or null when that is not a named place (a trip
          * re-routed mid-walk, a legacy save). Read only while walking - see ResidentSimulation.sameRoom. */
         public String travelFrom;
+        /** When this resident's current {@code Actor.activity} last actually changed - stamped at the
+         * one choke point every activity change already passes through, {@code
+         * ResidentSimulation.replaceActor}, whenever the new activity string differs from the old one.
+         * The object-use half of docs/04-decisions.md's 2026-09-14 「对话出口与物品使用状态」: lets a
+         * neighbour who shares a room see not just what someone is doing but how long they have been at
+         * it (see {@code ResidentSimulation.positionUses}), without a second, free-text "in use since"
+         * field anywhere that could drift out of step with the activity it describes. Null for a
+         * resident whose activity has never yet been set through that method (freshly seeded, or an old
+         * save from before this field existed) - read as zero elapsed minutes, never a guess. */
+        public Instant activitySince;
         /** Structural knowledge, kept separate from global map existence: a resident may name every
          * building from the street without knowing which rooms or scarce things are inside it. */
         public List<String> knownRoomIds = new ArrayList<>(), knownPositionIds = new ArrayList<>();

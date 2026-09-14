@@ -20,6 +20,52 @@ public final class ConversationLifecycle {
     }
     public record Recollection(String text,String feeling,List<String> evidenceIds) {}
 
+    // ---- deterministic exit: a speaker reduced to placeholder replies (docs/04-decisions.md 2026-09-14
+    // 「对话出口」) --------------------------------------------------------------------------------------
+    /** A parenthesised stage direction, either full-width （…） or ASCII (…) - Chinese dialogue in this
+     * town writes both. Assumed non-nested: a stage direction describes one beat of physical business
+     * ("翻过一页，没抬头"), never another line of dialogue inside it. */
+    private static final java.util.regex.Pattern STAGE_DIRECTION=java.util.regex.Pattern.compile("（[^（）]*）|\\([^()]*\\)");
+    /** Unicode punctuation (covers full-width ，。！？、…—～ as well as ASCII) plus whitespace - what is
+     * left over after stripping this and stage directions is the turn's actual content, if any. */
+    private static final java.util.regex.Pattern PUNCTUATION_OR_SPACE=java.util.regex.Pattern.compile("[\\p{IsPunctuation}\\s]+");
+    private static String coreText(String text){return PUNCTUATION_OR_SPACE.matcher(STAGE_DIRECTION.matcher(text).replaceAll("")).replaceAll("");}
+    /** A reply that carries no content of its own once its stage direction and punctuation are
+     * stripped away - "嗯。", "（翻过一页，没抬头）嗯。", "行", "好的". This is the live bug's actual shape: one
+     * party is genuinely busy (reading, working) and keeps technically answering, one placeholder grunt
+     * at a time, while the other keeps asking real questions and - because ending a conversation used
+     * to rely solely on the model choosing leave=true - the exchange never naturally stopped. A question
+     * mark anywhere in the ORIGINAL text (before stripping) is never a token acknowledgement, however
+     * short the rest is: "行？" is someone checking something, not brushing you off, and must still be
+     * able to trigger the ordinary reply it deserves. See {@link #applyTurn}, which is the one place
+     * this and {@link #isNearDuplicate} are read to end a conversation - the same {@link #finish} path
+     * {@code leave=true} already takes, never a second one. */
+    public static boolean isTokenAcknowledgement(String text){
+        if(text==null)return false;
+        if(text.indexOf('?')>=0||text.indexOf('？')>=0)return false;
+        String core=coreText(text);
+        return core.codePointCount(0,core.length())<=4;
+    }
+    /** Two turns that say the exact same thing once stage directions and punctuation are stripped -
+     * "（翻过一页，没抬头）嗯。" is not a different token acknowledgement each time it is said, it is the same
+     * one repeated. Catches a stalled exchange even when the repeated line runs longer than four
+     * characters, which {@link #isTokenAcknowledgement} alone would miss. */
+    public static boolean isNearDuplicate(String a,String b){
+        if(a==null||b==null)return false;
+        String ca=coreText(a),cb=coreText(b);
+        return !ca.isEmpty()&&ca.equals(cb);
+    }
+    /** True once THIS speaker's own last two turns in the conversation (not the conversation's last two
+     * turns overall, which strictly alternate speakers) are both placeholder replies, or are near-
+     * duplicates of each other - the two ways a busy party's side of the exchange goes visibly stale.
+     * Reads only turns already committed by {@link #appendSpeech}, so the turn just spoken is included. */
+    private static boolean speakerHasStalled(Conversation c,String speaker){
+        List<String> own=c.turns.stream().filter(t->t.speakerId().equals(speaker)).map(Turn::text).toList();
+        if(own.size()<2)return false;
+        String last=own.getLast(),previous=own.get(own.size()-2);
+        return (isTokenAcknowledgement(last)&&isTokenAcknowledgement(previous))||isNearDuplicate(last,previous);
+    }
+
     public static boolean tick(CompanionWorld w,Conversation c,Instant now) {
         if("rules".equals(c.mode))return false;
         if(!"active".equals(c.status))return true;
@@ -99,6 +145,11 @@ public final class ConversationLifecycle {
         clearPending(c);c.turnVersion++;c.nextSpeakerId=other(c,speaker);c.updatedAt=now;
         w.modelStatus=""+actor(w,speaker).name()+"刚接着说了一句";w.revision++;
         if(reply.leave()||c.turns.size()>=8)finish(w,c,now,"说完这一句，彼此道别了");
+        // Rule-level exit (docs/04-decisions.md 2026-09-14): the model is not asked and does not need
+        // to agree - one party visibly stuck on placeholder replies is a fact the rules can see for
+        // themselves, exactly like the timeout and the 8-turn cap just above. A distinct endReason so
+        // this is not read back as an ordinary leave=true goodbye.
+        else if(speakerHasStalled(c,speaker))finish(w,c,now,"对方接连只是应一声，不再多问，各自去忙");
         return true;
     }
     /** Work authority is born only in a real, validated turn between the two people at the same
@@ -139,7 +190,7 @@ public final class ConversationLifecycle {
         c.turnMemoryIds.computeIfAbsent(speaker,k->new ArrayList<>()).add(own);c.turnMemoryIds.computeIfAbsent(listener,k->new ArrayList<>()).add(heard);
         ProjectKnowledge shared=state(w,speaker).knownProjects.get(c.topicId);
         if(shared!=null)state(w,listener).knownProjects.put(c.topicId,new ProjectKnowledge(shared.id(),shared.place(),shared.status(),shared.progress(),now,speaker));
-        replaceActor(w,speaker,c.place,"talk",text,now.plusSeconds(OPERATION_TIMEOUT_SECONDS));
+        replaceActor(w,speaker,c.place,"talk",text,now.plusSeconds(OPERATION_TIMEOUT_SECONDS),now);
         state(w,speaker).revision++;state(w,listener).revision++;
     }
     public static void finish(CompanionWorld w,Conversation c,Instant now,String reason) {
