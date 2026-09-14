@@ -12,7 +12,8 @@ Output goes to frontend/public/assets/town/ (gitignored):
     town-atlas.png / town-atlas.json   Phaser JSON-hash atlas of buildings, terrain, props,
                                         and (from the farm pack) small animal idle/walk frames
                                         (dogs, doghouse, rabbits, chickens, ducks)
-    characters/c01.png .. c20.png      LimeZu premade character sheets (32x64 frames)
+    characters/c01.png .. c25.png      20 premade + 5 deterministically composed character sheets
+    characters/postman.png             Distinct player appearance for a full 25-resident snapshot
     characters/labour_*.png            Farm pack labour animation sheets (chopping / watering /
                                         fishing / harvesting / digging), one Phaser spritesheet
                                         per animation, geometry described by labour-anims.json
@@ -35,6 +36,7 @@ import io
 import json
 import re
 import sys
+import subprocess
 import zipfile
 from pathlib import Path
 
@@ -101,6 +103,7 @@ EXTRA_CHARACTERS = [
     ("postman", "Modern_Exteriors_32x32/Character_Generator_Addons_32x32/Characters_32x32/Modern_Exteriors_Characters_Postman_32x32_1.png"),
     ("scout", "Modern_Exteriors_32x32/Character_Generator_Addons_32x32/Characters_32x32/Modern_Exteriors_Characters_Scout_32x32_1.png"),
 ]
+CHARACTER_RUNTIME_HEIGHT = 8 * 64
 
 # Animated strips from the exteriors pack: (frame prefix, path, frame width, frame height)
 ANIMATED = [
@@ -733,7 +736,7 @@ def main() -> int:
         for name, path in EXTRA_CHARACTERS:
             image = load(zf, path)
             if image is not None:
-                image.save(out / "characters" / f"{name}.png", optimize=True)
+                image.crop((0, 0, image.width, CHARACTER_RUNTIME_HEIGHT)).save(out / "characters" / f"{name}.png", optimize=True)
 
     # Modern Farm pack (M0-2 animals + M0-3 labour animations): optional — a missing zip, or a
     # missing member inside an otherwise-present zip, must not fail the build (see module
@@ -762,11 +765,18 @@ def main() -> int:
             image = load(zf, CHARACTERS.format(i=i))
             if image is None:
                 continue
-            image.save(out / "characters" / f"c{i:02d}.png", optimize=True)
+            image.crop((0, 0, image.width, CHARACTER_RUNTIME_HEIGHT)).save(out / "characters" / f"c{i:02d}.png", optimize=True)
             copied += 1
         emotes = load(zf, EMOTES)
         if emotes is not None:
             emotes.save(out / "emotes.png", optimize=True)
+
+    # The second-version roster needs five more distinct residents. Keep the recipe in source and
+    # the licensed derivative PNGs in the ignored asset directory, just like c01-c20 above.
+    subprocess.run([
+        sys.executable, str(ROOT / "scripts" / "build-companion-character.py"), args.interiors,
+        "--defaults", "--out", str(out / "characters"),
+    ], check=True)
 
     counts: dict[str, int] = {}
     for name in data["frames"]:

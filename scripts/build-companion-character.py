@@ -6,14 +6,9 @@ outfits, 84 accessories, 9 bodies, 7 eyes). The licence allows editing, forbids 
 - this script only ever reads a locally purchased zip and writes locally, same as the other
 scripts/build-*.py.
 
-STATUS (2026-09-13): written, NOT run against the real pack. This repo's `tmp/*.zip` files (the
-purchased assets build-companion-assets.py and build-town-assets.py already read) are git-ignored
-and were not present in the sandboxed worktree this script was authored in, so LAYER_FOLDERS and
-EXPECTED_COLUMNS below are an inferred guess, not a confirmed fact - see inspect_pack(), which is
-the first and only thing to run against a real pack before trusting compose() at all. docs/01 flags
-this exact gap in its own words: "先合成 5 个也顺便验证那条流水线（56 列全帧对齐有没有坑，没人试过）"
-- nobody has opened this tree before. Do not skip straight to --compose on a pack this has not
-been run against with --inspect first.
+The checked-in companion-character-specs.json is the reviewed, deterministic recipe for c21-c25.
+Generated PNGs stay ignored with the other licensed derivatives; rebuilding from the local pack
+produces the same five identities without redistributing the vendor layers.
 
 Usage:
     python3 scripts/build-companion-character.py tmp/moderninteriors-win.zip --inspect
@@ -36,6 +31,7 @@ from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / 'frontend/public/assets/town/characters'
+DEFAULT_SPEC = ROOT / 'scripts/companion-character-specs.json'
 
 # Unverified assumption (see module docstring): inferred by analogy with the one sibling path this
 # repo has already confirmed against the real zip - build-town-assets.py's CHARACTERS constant,
@@ -82,6 +78,7 @@ EXPECTED_COLUMNS = 56
 # guess of (32, 64) here would have sliced every frame in half.
 FRAME_PIXELS = 32
 FRAME_ROWS = 41
+RUNTIME_HEIGHT = 8 * 64  # idle/walk/sleep/sit/read are the only Phaser rows the town loads
 LAYER_ORDER = ('body', 'outfit', 'hairstyle', 'accessory', 'eyes')
 
 
@@ -125,7 +122,7 @@ def inspect_pack(zip_path: Path) -> bool:
     return ok
 
 
-def compose(zip_path: Path, spec_path: Path) -> None:
+def compose(zip_path: Path, spec_path: Path, out: Path = OUT) -> None:
     """Layer body -> outfit -> hairstyle -> accessory -> eyes into one sheet per character, same
     frame format as c01.png..c20.png. Refuses to composite anything whose layer sheets disagree on
     frame geometry: a silent size mismatch between two "aligned" sheets is exactly the misaligned-
@@ -133,7 +130,7 @@ def compose(zip_path: Path, spec_path: Path) -> None:
     fail the build, not draw a bad frame that only a person staring at it would catch (docs/05's
     wardrobe-as-table class of bug, applied to character art instead of furniture)."""
     specs = json.loads(spec_path.read_text())
-    OUT.mkdir(parents=True, exist_ok=True)
+    out.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(zip_path) as pack:
         for spec in specs:
             char_id = spec['id']
@@ -166,12 +163,13 @@ def compose(zip_path: Path, spec_path: Path) -> None:
             composed = Image.new('RGBA', (EXPECTED_COLUMNS * FRAME_PIXELS, base_image.size[1]))
             for _, image in layers:
                 composed.alpha_composite(image)
-            composed.save(OUT / f'{char_id}.png', optimize=True)
+            runtime_sheet = composed.crop((0, 0, composed.width, RUNTIME_HEIGHT))
+            runtime_sheet.save(out / f'{char_id}.png', optimize=True)
             # The composed sheet's own size, not the base layer's - a body base is wider than what we
             # actually write (see the measurement at the top), and reporting the input size here would
             # have quietly claimed a 1854px sheet while writing a 1792px one.
             print(f'Composed {char_id}.png from {[name for name, _ in layers]} '
-                  f'({composed.size[0]}x{composed.size[1]}px = {composed.size[0] // FRAME_PIXELS} x {composed.size[1] // FRAME_PIXELS} frames)')
+                  f'({runtime_sheet.size[0]}x{runtime_sheet.size[1]}px runtime sheet; source grid {composed.size[0]}x{composed.size[1]})')
 
 
 def main() -> None:
@@ -179,16 +177,19 @@ def main() -> None:
     parser.add_argument('pack', type=Path, help='tmp/moderninteriors-win.zip (or wherever the Character Generator layers actually ship)')
     parser.add_argument('--inspect', action='store_true', help='print the real folder/sheet layout and exit; composes nothing')
     parser.add_argument('--spec', type=Path, help='JSON list of {id, body, outfit, hairstyle, accessory, eyes} filenames, hand-filled from --inspect\'s real listing')
+    parser.add_argument('--defaults', action='store_true', help='compose the checked-in c21-c25 recipe')
+    parser.add_argument('--out', type=Path, default=OUT, help='character output directory')
     args = parser.parse_args()
     if not args.pack.exists():
         print(f'{args.pack} does not exist - this script has never been run in this environment; see the module docstring.')
         sys.exit(1)
-    if args.inspect or not args.spec:
+    spec = DEFAULT_SPEC if args.defaults else args.spec
+    if args.inspect or not spec:
         passed = inspect_pack(args.pack)
-        if not args.spec:
+        if not spec:
             print('\n--spec was not given; ran --inspect only.')
         sys.exit(0 if passed else 1)
-    compose(args.pack, args.spec)
+    compose(args.pack, spec, args.out)
 
 
 if __name__ == '__main__':

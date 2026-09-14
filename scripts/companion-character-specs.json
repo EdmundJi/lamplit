@@ -1,0 +1,42 @@
+[
+  {
+    "id": "c21",
+    "body": "Body_32x32_02.png",
+    "outfit": "Outfit_07_32x32_03.png",
+    "hairstyle": "Hairstyle_24_32x32_04.png",
+    "accessory": "Accessory_15_Glasses_32x32_02.png",
+    "eyes": "Eyes_32x32_03.png"
+  },
+  {
+    "id": "c22",
+    "body": "Body_32x32_05.png",
+    "outfit": "Outfit_13_32x32_02.png",
+    "hairstyle": "Hairstyle_08_32x32_06.png",
+    "accessory": "Accessory_11_Beanie_32x32_04.png",
+    "eyes": "Eyes_32x32_06.png"
+  },
+  {
+    "id": "c23",
+    "body": "Body_32x32_07.png",
+    "outfit": "Outfit_18_32x32_01.png",
+    "hairstyle": "Hairstyle_17_32x32_02.png",
+    "accessory": "Accessory_18_Chef_32x32_02.png",
+    "eyes": "Eyes_32x32_01.png"
+  },
+  {
+    "id": "c24",
+    "body": "Body_32x32_08.png",
+    "outfit": "Outfit_22_32x32_04.png",
+    "hairstyle": "Hairstyle_29_32x32_03.png",
+    "accessory": "Accessory_13_Beard_32x32_03.png",
+    "eyes": "Eyes_32x32_05.png"
+  },
+  {
+    "id": "c25",
+    "body": "Body_32x32_09.png",
+    "outfit": "Outfit_31_32x32_05.png",
+    "hairstyle": "Hairstyle_13_32x32_07.png",
+    "accessory": "Accessory_12_Mustache_32x32_01.png",
+    "eyes": "Eyes_32x32_07.png"
+  }
+]

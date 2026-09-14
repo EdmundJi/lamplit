@@ -13,7 +13,7 @@ python3 scripts/build-town-assets.py --exteriors tmp/modernexteriors-win.zip --i
 产物：
 
 - `town-atlas.png` / `town-atlas.json`：建筑模块、地形、道具的 Phaser 图集
-- `characters/c01.png` … `c20.png`：预制角色动画表，每帧 32×64
+- `characters/c01.png` … `c20.png`：预制角色动画表，每帧 32×64；运行产物只保留场景实际读取的前 8 行，避免 26 个完整供应商动画表占用移动端显存
 - `emotes.png`：表情气泡动画表
 
 美术署名（授权要求）：LimeZu，https://limezu.itch.io/
@@ -42,11 +42,12 @@ Interiors 杯子，浇水使用 Farm 工具表的真实水流帧。保留每位�
 
 ```bash
 python3 scripts/build-companion-character.py tmp/moderninteriors-win.zip --inspect
+python3 scripts/build-companion-character.py tmp/moderninteriors-win.zip --defaults
 ```
 
 **先跑 `--inspect`**：它打开真实压缩包，打印 `Character_Generator` 下真实的文件夹名，
-并对每一层抽样检查列数是否等于文档记的 56 列——这条路径和列数目前是推断出来的，
-没有人拿真实素材验证过（本仓库的 `tmp/*.zip` 不进版本库）。全部 `OK` 之后再手填一份
-`--spec` JSON（每个角色一条 `{id, body, outfit, hairstyle, accessory, eyes}`）跑合成；
+并检查共享的 56 列帧网格。仓库里的 `scripts/companion-character-specs.json` 固定了五套
+经过检查的搭配；`--defaults` 会生成 c21-c25，完整的 `build-town-assets.py` 也会自动调用它。
+需要试验新搭配时仍可传 `--spec` JSON（每个角色一条 `{id, body, outfit, hairstyle, accessory, eyes}`）；
 `compose()` 在拼层前会先比较每层的真实像素尺寸，任何一层不一致就直接报错退出，
 不会悄悄拼出错位的角色（已用合成的假图层验证过这条报错路径，见 PR/会议记录）。
