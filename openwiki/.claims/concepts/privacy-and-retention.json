@@ -1,0 +1,212 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:ca00def7bb9557c8653299dbda9f8935a1a6a8c03d833835375d0771790a744d",
+  "claims": [
+    {
+      "id": "claim_a773f731e4424aa2bcaf7faebeb73d58",
+      "statement": "Privacy and attachment operations derive the owner from `CurrentUser`; export lookups and attachment/event association constrain records by that user ID and public ID, preventing a public ID from being sufficient authority across accounts.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/privacy/AttachmentController.java#L53-L78",
+          "version": "repo-lines-v1:sha256:6a78b9d8b9036a9f515327e46685655dff3f7ea56cc28aebfc3478673a672896:eyJzZWxlY3RlZExpbmVDb3VudCI6MjYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImJlYWFhNWYyNjI5NWE2ODczN2JlN2IxY2Q3ZGIyNDgxNTUzMDNmOThlOTJiMjhkZTkzNmE2NGM1YjFlNzMyYTYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjIyZTUyNDQxYWJhYjQzYTVjNjk1ZTI4Y2M0ZjNjZDU3ZjcwOGY1MzQzMDZhYTlkODYxNzcyNDY0NGRmN2I5MDYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImU4Zjc2NjA5NzM0YTcwMzMyNmI1MGU3N2M3MWRiZDgyOWFjYzY5YzJhN2Q0Y2JjNTJiOTE2YzY2NGRjZTRkOTQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjgzOWJmMWVkYzFiNTZjYzIwOWM5NGU3ZmI5YmI3NjE0NGJkNzA1ZDM5ZTMyNDM1OTYwOTUwMWQ4NzkzNThmNGMifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/privacy/ExportService.java#L92-L152",
+          "version": "repo-lines-v1:sha256:2ab0984f1948b65ef505f96fc0ca78873ad0e5bad497cbffb0d0835617d17b47:eyJzZWxlY3RlZExpbmVDb3VudCI6NjEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImNjN2IyY2ZlZmE0NWZlZmJiNzY3ZTgxZTkxYTYzYjA3ZWMxYWFlOWExNzJkZmZmNDQ4MGQ1M2IwNzNlNTE2ODUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM3YWFiZDIyY2FiOWQ0Mjg0Mzc1NWY4NjA2MzYzYTAzODU1NTFmMzdjYmEyNTg5NGI4Yzk5ODlmZWFlNDQ1NjYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImQ0YWU0ZDVkYzQ0ZTU4MGI4OTc3OWM1NDdhYzRkYzJiZjI2YWEzMzE1MTNkMzg1MDQ4ZjQzNTBiNGMxMzMyMTciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImY4MzA4OGM4YTU2NWY1N2EwNmQ0ZDk2ZjU1ODAzYTA0NTE2N2YxZWE1MjU5MWYzNTNlODE5MzVlNDkyNmNmNmMifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/privacy/PrivacyController.java#L42-L73",
+          "version": "repo-lines-v1:sha256:50b37f9917365fb0fa973537550a198b77250da94c8753a16f14144e64dafe62:eyJzZWxlY3RlZExpbmVDb3VudCI6MzIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjBkNDFmZTFiYzVmZWI5MzE5NGExMjM2NTQyODdjMjk1MzI0YjY0M2U0OGZhYjAwOWI2NDlkZGFiZmMzZDM2YmUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE1ZjgwZmJkZTFkNzFmNWM4YzJkNWJhNzdiZTM2MWFiOTljZWE1ZjI2OThiZGQzZTYwOTY3MzVhNjIwZjEwZmMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM5OWZhYzM1ZDM5ZjhkMjdlOGEyOTU1MDYzNjhhZTk0OGRkZjI3YzY1ZmUwNWMzNGU5NTYzZjU3OTNkMGU4NGYifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_980120a2ff9446e2b45f8215dd01059f",
+      "statement": "Attachments are metadata-first direct uploads: presigning validates an allowlisted MIME/extension pair and a positive size up to 10 MiB, creates an owner-scoped row and a 15-minute upload URL; association is allowed only after the owned non-deleted attachment has `CLEAN` scan status and the target task event is owned by the same user.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/privacy/AttachmentController.java#L37-L78",
+          "version": "repo-lines-v1:sha256:d89c750c119253bab689fb5d468eefca9d83f122637cf90238630e5b620d87fa:eyJzZWxlY3RlZExpbmVDb3VudCI6NDIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImYyNjY0OWFiZmQ4MDNkOTU4Y2Q0YTgyYzBmMjUzNjE2ZmM3ZDZhYWU1MzNiZWI3NzM4YjMyODYzNWIyODcxOWEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjIyZTUyNDQxYWJhYjQzYTVjNjk1ZTI4Y2M0ZjNjZDU3ZjcwOGY1MzQzMDZhYTlkODYxNzcyNDY0NGRmN2I5MDYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE1ZjgwZmJkZTFkNzFmNWM4YzJkNWJhNzdiZTM2MWFiOTljZWE1ZjI2OThiZGQzZTYwOTY3MzVhNjIwZjEwZmMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjgzOWJmMWVkYzFiNTZjYzIwOWM5NGU3ZmI5YmI3NjE0NGJkNzA1ZDM5ZTMyNDM1OTYwOTUwMWQ4NzkzNThmNGMifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/privacy/AttachmentPolicy.java#L11-L35",
+          "version": "repo-lines-v1:sha256:c8eb3e5a6a57da1cf360b9dec702f6138f81c26ac634cb34becf6a6424d246e3:eyJzZWxlY3RlZExpbmVDb3VudCI6MjUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjlhNDg5ZTBhZDEzNGY2YWZlMWZhYzgyZmU5YTdmYTJjMjNiM2JmNTQ1OWYyN2M1OWRmODU3ODc5ZDkwNzI5ODciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU2YjA0NDkxNDY5NzIyZTgzNjNhOTRlNDA0NDUzOGUwMTNhMmEyMTdlMzZiMWU1NjhiYTYwYWNiN2I0YzhmMmUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjdhYWRkMTE0MDU1ZjM5NzEyMzdiMDAwODVjZmVkOTVmNWM2YzA5MjE1N2FhMTg4MjVjNmVmZDhlNzBkMmM0MmUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoyLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM3OTRkMDJhODEyMTk0NGQxNzZkMjY1ZTliYjljYzU5ZjZhYjg5MGJjYWRmOGFlZmRlYmRiYmI0ZjJlYTg0NDQifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/resources/db/migration/V2__support_tables.sql#L82-L105",
+          "version": "repo-lines-v1:sha256:fe5fefd457d7b1ff748bdf944798db6197fb9aa8c887d7a1201ff90bca11cc03:eyJzZWxlY3RlZExpbmVDb3VudCI6MjQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImE4OWIxZjg4NzJhYTRjYzc0MzlmZGQ3OTk2OTI0MGFkMDhkYzVmOTc1MjNkNjZjOWNkMDM2NGY0NzAxYjJjZmUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk5YTNlOTViOTc5M2E0MzJmYzU1ZDBjMGI1MGZiYjU3ZDc5ODAwZjkwODY4NjBlMjZkNzdiMzE2NmQxMjIwZTAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjBiYWZiOThlYTYwN2NiY2I0MmMxM2YxYmE3ZjQ3NTc2NGRlYzQ3OWUyYzI3MjU0OGU3NTJlYmUzMjA1NjgwNWQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImJlOGJkNzAzMDc2NmMzOTMwNTk4OTI5MjAwNGJlMTg2ZTdlNDg0ODIzMThmNjE2MzU2YWI1NTQ4NmJlMzNmMGIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_57552fd3510e4891bffe2b84cce3e889",
+      "statement": "The inspected application code defines attachment scan states and blocks association unless an attachment is `CLEAN`, but does not include a scanner or upload-completion worker that changes a `PENDING` attachment to `CLEAN`.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/privacy/AttachmentController.java#L37-L78",
+          "version": "repo-lines-v1:sha256:d89c750c119253bab689fb5d468eefca9d83f122637cf90238630e5b620d87fa:eyJzZWxlY3RlZExpbmVDb3VudCI6NDIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImYyNjY0OWFiZmQ4MDNkOTU4Y2Q0YTgyYzBmMjUzNjE2ZmM3ZDZhYWU1MzNiZWI3NzM4YjMyODYzNWIyODcxOWEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjIyZTUyNDQxYWJhYjQzYTVjNjk1ZTI4Y2M0ZjNjZDU3ZjcwOGY1MzQzMDZhYTlkODYxNzcyNDY0NGRmN2I5MDYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE1ZjgwZmJkZTFkNzFmNWM4YzJkNWJhNzdiZTM2MWFiOTljZWE1ZjI2OThiZGQzZTYwOTY3MzVhNjIwZjEwZmMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjgzOWJmMWVkYzFiNTZjYzIwOWM5NGU3ZmI5YmI3NjE0NGJkNzA1ZDM5ZTMyNDM1OTYwOTUwMWQ4NzkzNThmNGMifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/privacy/AttachmentPolicy.java#L32-L35",
+          "version": "repo-lines-v1:sha256:f3f483329e47602ebaf8b8dd93c4594c048b69b2f0038f61cedb5586f0c3de3e:eyJzZWxlY3RlZExpbmVDb3VudCI6NCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNjA4YWU5ODE2ZWRjMTg1MzQ3YmJiNjZlMTRkZjJjNjljYzdhMTI1NWJjNjBiZTcxY2Q1NzIyNmRjZGU0MzA0OCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZTZiMDQ0OTE0Njk3MjJlODM2M2E5NGU0MDQ0NTM4ZTAxM2EyYTIxN2UzNmIxZTU2OGJhNjBhY2I3YjRjOGYyZSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiOTk5YmRlZmVlYWNhNjM0MGUwMjkwZGM4NmU4ODljODlkNWUxODlhYTViYTQ0YjU4NWIzYjcwNzM0ZjRhNjJkOCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjIsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMzc5NGQwMmE4MTIxOTQ0ZDE3NmQyNjVlOWJiOWNjNTlmNmFiODkwYmNhZGY4YWVmZGViZGJiYjRmMmVhODQ0NCJ9"
+        },
+        {
+          "resource": "repo://backend/src/main/resources/db/migration/V2__support_tables.sql#L82-L105",
+          "version": "repo-lines-v1:sha256:fe5fefd457d7b1ff748bdf944798db6197fb9aa8c887d7a1201ff90bca11cc03:eyJzZWxlY3RlZExpbmVDb3VudCI6MjQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImE4OWIxZjg4NzJhYTRjYzc0MzlmZGQ3OTk2OTI0MGFkMDhkYzVmOTc1MjNkNjZjOWNkMDM2NGY0NzAxYjJjZmUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk5YTNlOTViOTc5M2E0MzJmYzU1ZDBjMGI1MGZiYjU3ZDc5ODAwZjkwODY4NjBlMjZkNzdiMzE2NmQxMjIwZTAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjBiYWZiOThlYTYwN2NiY2I0MmMxM2YxYmE3ZjQ3NTc2NGRlYzQ3OWUyYzI3MjU0OGU3NTJlYmUzMjA1NjgwNWQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImJlOGJkNzAzMDc2NmMzOTMwNTk4OTI5MjAwNGJlMTg2ZTdlNDg0ODIzMThmNjE2MzU2YWI1NTQ4NmJlMzNmMGIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_1f4383ee6b43446ebf6af702f6f2f005",
+      "statement": "A data-export request is owner-scoped and idempotent under `DATA_EXPORT`, limited to one requested export per user in 24 hours, synchronously stored as a SHA-256-checked `READY` ZIP, and made available for 24 hours with a 15-minute presigned download URL.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/privacy/ExportService.java#L109-L139",
+          "version": "repo-lines-v1:sha256:ca3a9a1c7a34d8f8af95f37f4ab327dbd000aec74108e4184a47cda86451e97e:eyJzZWxlY3RlZExpbmVDb3VudCI6MzEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU5NWZiNDM3MTY5ZGFkNjc3Y2RkOWQ4OTJmNWI4ZjUwNjJjMzI1NWRhN2Q2MTQ1MGI3MzA3NWQyNmEyMmM2MTgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjVlOWNlMzRlZWYxZDYxMTAyMGM2Y2NlODgzODUyZjQyNzAyOTYyZDRkYWJlNDliMTIzZTkwZDllZWZkMDEyMjciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjkyYmE4MzdmMzFhYmQ0YjA3MDM4NGNjYzY1YTlmNTRkYTQ3YzM2ZDYyNWVlZTliYWRmYWVhZWM3YTIwMWVhMjEifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/privacy/ExportService.java#L59-L89",
+          "version": "repo-lines-v1:sha256:a0461917937f9ba65857a307a7544a16d00cc2b0cda9fe5ca1ab2fc4549f21e9:eyJzZWxlY3RlZExpbmVDb3VudCI6MzEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc1MjYzMzA5MjNkNGUwYjVlZWYyNTkyMTEzMTJhY2U0ZWIxYjk5MDE3OGIyNjFhODVlOWViZDRhMWFlYjA5NjgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRhY2YyMTk0MzIxZmY4Y2ZhOGJjMjE5ZDdlYzY0NjJmNzc5MDA4Y2FkNzg1OTJhYTM4ODc4OWFiZjgyZjJjNmMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjQzY2ViNTg5YzNmNzQ4MTNhYTlhZTgzNDUyMjUzYmVhMmQ5NDQ0YTAwZDdhZWJhOWRlZGM1ZTlmMWIyM2MyZGEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjNjZjY1NWI5MjAzMjU2ZjkxZDFlNDg2MWIxOTVjNmI3ODQzMjA4ZDQxMzQwZTNjMTBiNmU3Y2RmMWEyYmE4Y2IifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/privacy/RetentionPolicy.java#L9-L24",
+          "version": "repo-lines-v1:sha256:c1dd1624c64197ac972f7e28901fa1459ce7a7c053da9d58257a03f370286c1d:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk1MWFiMWMzYjRlNDAxMzA5ZjAyNjc4ZTg4MTRlNjNiOTcyM2Q3NGMwOTIwODJhNjZkYzRjODEyNDA3NjA0YzAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImQ2ZmM2OTQwM2U0NjUwYTc1MjI1ZjYwNTQ4MDAxYTA2ZWYwOTJlODJkNTNiNGUyODlkMjIyNzlmODJjNDljNDYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_c4ffd7aba2e44114b7541d0e90884e1e",
+      "statement": "The current ZIP export contains profile, goals, task events, role progress, companion world state, and companion memories loaded from the file store; it does not add attachment, AI-message, or AI-memory data in its archive-building code.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/privacy/ExportService.java#L155-L200",
+          "version": "repo-lines-v1:sha256:36cf295070700fdcf41e5a975f2c37f29fe8ab3f0ac46797654c6c7c16138559:eyJzZWxlY3RlZExpbmVDb3VudCI6NDYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQzNzVjN2Y4ODQxMzYzNDc3NzJmNTg2Y2M2OTcxYmQyNmRjYmQzMzI5ODQyOGY1NTk0MjdhZjY2N2E1YmVjOGMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjI5ZWY4Zjg0NTI2MWFmNTc2MGVmZWQ5MWJhMWFmZTQ4ZDhhODQwNTdmNWYwZmYyOWUyOTQ4MDY4YzVmYzg2MDQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQ0MDk3YzJiMTAzZGY4NTJhZjg0MGU2MzQ5YzY1MzQwMTQyODQ2ZjQ4MDcwMTcwY2E4OTEwMmU1MzlkOWU5ODcifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_a31b4a28bc01413aa5d82f8b5de38208",
+      "statement": "Companion memories are an independent user-owned authority: `FileMemoryStore` persists them as per-user Markdown files, treats the adjacent SQLite database as an index, and export discovers resident IDs from saved world state to include each owner's file-store memories.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/privacy/ExportService.java#L177-L194",
+          "version": "repo-lines-v1:sha256:167b173dd55068a7a560a2ed4938c2105d644ebc13d32ad8529e7ccd4ec214c1:eyJzZWxlY3RlZExpbmVDb3VudCI6MTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRjMjcyNzk5NDQxYzEzZWMzNjlmNTY4ZDgxZWM0ZjY5ZWU0ZTQxYjFhZDk5ODQ2ODg1MjNhYTcwZTJkZDZlZmYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjlkN2VmZDc3M2Q5ODcwOWY3MThiNzM5OTczMjNkN2YxNmY1ZDg1MGNkNDE2NTA2OTIwY2M5Yjk0NzA3ZTYzYWYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjBlMDYxMjk0ZjdiMDgzNjE3NDQ4ZTQ1Y2MzZGYxYWExNmFmNTA4NjQyZWFlNWNmNDc2ZmI4NjE5MzQ1MmNkODgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzOTk4MzE1NTRjMzM5ZWY3YzY1ZWI0MWVkMjQ5NDQ5MzM5ZGJlZTdiMWRhNzhiYmQ3MDY2YjQwZmNlNzc1ZTUifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/adapters/FileMemoryStore.java#L18-L38",
+          "version": "repo-lines-v1:sha256:6a048bf60cb7c6bfe9a8f7e4dc3c3b142f0030bac621330f993c9ba8b5087f2e:eyJzZWxlY3RlZExpbmVDb3VudCI6MjEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVhZjIyY2YwNzMyNTkyYzI0NzE0MWNiZTYxZWZhMTEwMTI2MTJmNWEzMTIyYjlhZjliYmFmNTJmNTcyNGQxOTQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdkZjUwODgyOTVjYTMyOWQwNWZjYjIyZjczZDY0MWY3ODAzODdiYTNlNzk3NjgyNzc4YTVkNzVkYzJiZjI4NDEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjRiNzEwZTk1Njg1MWM2ZTc3YTM0MTQzYjMxZjA1NjRhMGZjNTQ0NWJjNzQ5M2M3NGNhZWQxYWIyNmQ2MGQ0MDciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjkzYTRlZjMyNTBlNTYwMjkzYzAyZGRmZmJlMjA4YjZiZjU1MWFjOGQ2NTQyNzgxN2Q2ZjI0ODI3NzgyN2E5NmIifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/adapters/FileMemoryStore.java#L67-L99",
+          "version": "repo-lines-v1:sha256:2206eb394c4422c05bf793e50232e8113dd23b02ce703e928abc02a930b2989d:eyJzZWxlY3RlZExpbmVDb3VudCI6MzMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImYzNWRmMzg4Njc0ZTRhM2IwMmJkYjcyNDVhNzhjYWFkYzYzZDExMGQxNWQxYzM5MGRmZjZkMzQ2MTQ3Njg1NWUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjgxMmRhYjBhNDE3NGYwYjI5ZTFjYWY0NmYyYWQ0YThmYzc5N2FkNGQxZTNlYTIwNjY0MWIyNDlhZmVmMWJhNWUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijc2MjZiZDhiZmU3NmVhOThjYzczOWE4MWE2ZGU2ZDRiMWQzMDVjNWMxNTZhODUzYTM4ZTQ4OWM1ZjcxNmRlOWYifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_22110d83b70f4702988f214d5e66c97b",
+      "statement": "Deletion creation is idempotent while a request is cooling off or processing; a new request starts a seven-day cooling-off period, sets the user to `DELETION_PENDING`, disables notifications, and revokes all sessions. Cancellation is allowed only from `COOLING_OFF` and restores `ACTIVE` status.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/privacy/DeletionService.java#L37-L78",
+          "version": "repo-lines-v1:sha256:d75cc28a7b7c66d40f2660fe73677c1c624001824be0cc836b27858ad6aba2ce:eyJzZWxlY3RlZExpbmVDb3VudCI6NDIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc1MjYzMzA5MjNkNGUwYjVlZWYyNTkyMTEzMTJhY2U0ZWIxYjk5MDE3OGIyNjFhODVlOWViZDRhMWFlYjA5NjgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjQzY2ViNTg5YzNmNzQ4MTNhYTlhZTgzNDUyMjUzYmVhMmQ5NDQ0YTAwZDdhZWJhOWRlZGM1ZTlmMWIyM2MyZGEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImZlMzgzNDRjZTg1ZDQxMTU4M2MyYTIzOWYwZDg0ODVlZGRlNjU4MzFkNzQ5NGUwYmE0MjVkMTJmNDIxMDgxY2IifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/privacy/RetentionPolicy.java#L9-L24",
+          "version": "repo-lines-v1:sha256:c1dd1624c64197ac972f7e28901fa1459ce7a7c053da9d58257a03f370286c1d:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk1MWFiMWMzYjRlNDAxMzA5ZjAyNjc4ZTg4MTRlNjNiOTcyM2Q3NGMwOTIwODJhNjZkYzRjODEyNDA3NjA0YzAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImQ2ZmM2OTQwM2U0NjUwYTc1MjI1ZjYwNTQ4MDAxYTA2ZWYwOTJlODJkNTNiNGUyODlkMjIyNzlmODJjNDljNDYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_1e5f67e2e7ba45ac8d30f28925f8eb21",
+      "statement": "Due deletion processing locks eligible cooling-off requests, redacts AI content, marks attachment metadata deleted, removes companion world state, deletes companion memory files and their SQLite index entries, anonymizes the account, and records a SHA-256 completion receipt; the filesystem cleanup is outside SQL transactional atomicity.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/privacy/DeletionService.java#L80-L110",
+          "version": "repo-lines-v1:sha256:d9913eabb4e59c04b4955a81ca176bd577866fdaa22e87606b9101f6af982b2e:eyJzZWxlY3RlZExpbmVDb3VudCI6MzEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc1MjYzMzA5MjNkNGUwYjVlZWYyNTkyMTEzMTJhY2U0ZWIxYjk5MDE3OGIyNjFhODVlOWViZDRhMWFlYjA5NjgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImRmOWVmZmViNzY0NmM3ZTdmNzQ5MjMwOGY5NmYxNTJhMWNmMmYzMWUzNzE1NTZlMWQxZWRjNWJkMmQ2MWU3ZGYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImYyZDgyOGEwMzdhYzFjODE1MzViMWQ1NTAwODMyMzIzYmZiYjg2NmEzYTNmODdlN2E2OGMxM2EyYmFlNTZmZmYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImJiMTMzNzk1NTA1OWQwYzM1MWYwZjQ5ZDhhMzQyNjE5MWJhZTUwNTkyODMzYTdhMDM5ZTNlMTQ3MjA4NzYwODIifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/adapters/FileMemoryStore.java#L88-L99",
+          "version": "repo-lines-v1:sha256:24f9b77ee4edbb8bd58289440c35b890a681c91a2fbfbb10d622efa738404644:eyJzZWxlY3RlZExpbmVDb3VudCI6MTIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQ3NmVmYzk4NjI5MjYwOGEzNDg1YmMxZjQ5Njk1YWU0NmFjZjc5NmJlZDg1MTlmZTQ5Y2E2NGFiOGQ1NjQwY2YiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijk5OWJkZWZlZWFjYTYzNDBlMDI5MGRjODZlODg5Yzg5ZDVlMTg5YWE1YmE0NGI1ODViM2I3MDczNGY0YTYyZDgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijc2MjZiZDhiZmU3NmVhOThjYzczOWE4MWE2ZGU2ZDRiMWQzMDVjNWMxNTZhODUzYTM4ZTQ4OWM1ZjcxNmRlOWYifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_879eba189d8545fe8e93d9c678653e34",
+      "statement": "Account deletion only marks attachment rows `DELETED` and does not invoke object-storage deletion for attachment keys; retention expiry, by contrast, explicitly deletes due export objects before marking their jobs `EXPIRED`.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/privacy/DeletionService.java#L91-L108",
+          "version": "repo-lines-v1:sha256:f8b31c79e92c8b8e483e17e03e16c2004d6eeed0fe3ab02347543fcf545642cb:eyJzZWxlY3RlZExpbmVDb3VudCI6MTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImViMmRmNzlhYjk3NTdiODdiNmMwOTk2ZWM4NDRhZmQ2MGM3OTBhYzhjZDNkNTYyYjFmMWJiODE5MDk3MGIzNTEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjkzYjA1OTc4OTYyMWM0YjJhYTk2NTk3ZGJkNTQ0MWY1MjEwNmU0OWY1YmZiN2FiZjVlNzdjODlhNDQ0M2VjMDAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjM3NTcwNTQ3ODc5ZDY5MTZmOWI3Y2VkNjRlN2I5MDlkYzIzN2IyZmFlOWM3ZWI3MDYzZGFiMzI1ZWM0NzkxOTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImNhODgxNmU0ODU5MWQ5NmQyOWY4ZTFjMDE0NjJiN2M3N2E3YzI3ZjNmMmVlNjA5ZmU4ZDBlYmZlNmMyNTc2NGEifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/privacy/ExportService.java#L125-L139",
+          "version": "repo-lines-v1:sha256:243fd794c5652c28102940416263b3d49a27a8980a81658ca0c8697d35c2cb31:eyJzZWxlY3RlZExpbmVDb3VudCI6MTUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc1MjYzMzA5MjNkNGUwYjVlZWYyNTkyMTEzMTJhY2U0ZWIxYjk5MDE3OGIyNjFhODVlOWViZDRhMWFlYjA5NjgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjI3OGJjNjU5NWI5ODY3OTE1NTVhODBjNDg3MTNjNmIzYzQzZDM1ODE2YzIxNWJlZmI2MDNlMDZhZGU3NzJkNWEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjkyYmE4MzdmMzFhYmQ0YjA3MDM4NGNjYzY1YTlmNTRkYTQ3YzM2ZDYyNWVlZTliYWRmYWVhZWM3YTIwMWVhMjEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_39676a86f0fe4d5ca21601a94fa4887c",
+      "statement": "The scheduled retention job defaults to running at minute 10 of every hour; it redacts due undeleted AI messages and memories, expires export archives, and processes due account deletions. AI retention preferences accept only 7, 30, or 90 days, and newly inserted AI messages use the current preference to calculate expiry.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/ai/AiService.java#L238-L269",
+          "version": "repo-lines-v1:sha256:481960691ce5f684208b5e0c9cd6f0a38385fe8ba8fe8aa7731ad9e3612519ab:eyJzZWxlY3RlZExpbmVDb3VudCI6MzIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY1Nzg4OGQwYTQ2ZTlkZTAwYzcyZGFmMzQ5YjEzZjcxMWIxZTdkNjQ1MmJmNzU4Yjc1NWEzMTllNjlmOTAxNDciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjlmNDYzNzU5MjZlYzlhYTVhZjIxZTdjYTMyNjc4NjRhN2M4MGM1Y2NhMDQxY2UyOTUyNzBhOTYwNzYyOGY5YzAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijk2MzdjODM4OGU0M2JkNGEyMTdmMDJiMjc1MWYyNzI4MTU4ZDVhYTUwYjAxMWUxYjc3YjM0MjNiMGY2ZWNmMWMifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/privacy/PrivacyController.java#L123-L133",
+          "version": "repo-lines-v1:sha256:eddead4d960f1bd0c53bfc1371a743cbf6eb1048a4b348e3c5528ee6b0e29cb6:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFlNDk1NGNmMWM4YzkxODM1YmQ4N2Q4MTNmYjJhMTI3N2JhMjkzYTA4NDkwMWI4MWQyZWZiNWJiYWMxNDI5NDgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjU5YWJjZmFhNTdkODIwZjQ5MmMxMTE3OTBiZDFmZjUwZGVhZWNjNGQwZTA1MWQ3ODNkZDczMWMwZDRjMWIxMDMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjAwNzE1MzZjMTQxNzk5NDIwNjg0Y2VhNDAxMGY0OGQyZjdhM2U5YmY0NGRkZTA1YjdkYWU1MjhkYjU4N2Q4M2YifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/privacy/RetentionJob.java#L26-L35",
+          "version": "repo-lines-v1:sha256:adf3544294e354f52f6717086c752e35cde5b2f2324de2748dbf77b44ee3b81b:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImM5ZmIxZWVkMzMwZjBhN2NkNzIwOGFjM2MyMDRlYzIwNTI4N2EyZTg1YTI3ZmEwOGUwMjFkZmU5M2M5ODc3ZmEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE1ZjgwZmJkZTFkNzFmNWM4YzJkNWJhNzdiZTM2MWFiOTljZWE1ZjI2OThiZGQzZTYwOTY3MzVhNjIwZjEwZmMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/privacy/RetentionPolicy.java#L9-L24",
+          "version": "repo-lines-v1:sha256:c1dd1624c64197ac972f7e28901fa1459ce7a7c053da9d58257a03f370286c1d:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk1MWFiMWMzYjRlNDAxMzA5ZjAyNjc4ZTg4MTRlNjNiOTcyM2Q3NGMwOTIwODJhNjZkYzRjODEyNDA3NjA0YzAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImQ2ZmM2OTQwM2U0NjUwYTc1MjI1ZjYwNTQ4MDAxYTA2ZWYwOTJlODJkNTNiNGUyODlkMjIyNzlmODJjNDljNDYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_aecec7053ee94ce58781f958779c8237",
+      "statement": "Integration tests cover owned export access, export expiry and rate limiting, deletion cooling-off/cancellation/completion, and companion-world isolation; the companion privacy test also checks that deletion removes only the owner's world state.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/test/java/com/betterself/growth/privacy/PrivacyFlowIT.java#L72-L134",
+          "version": "repo-lines-v1:sha256:7217cf83ec67236e065eedea4d4d0959f8e7f1ddf0148b571fdcf5ab0ef9b466:eyJzZWxlY3RlZExpbmVDb3VudCI6NjMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRjZjA5ZWIwYzU3NDRmYjk3MzMxYjk4ZmYzZmJmMDVhNjAyYmEzZjdmNjdlNWRhNWJlOTA5NTAzM2Y2MjU4MjUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjA1MWY3ZGUwMzBkM2MzZmNjNmZjNzdmYjJmZGY0NDc5NmZmNTg5NGY0YmNiYjVjYTc3NTc2YmJhOTBkNzNjZTIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImFjZDA5Mzg2ZWVlZDNkNzcwN2ExNTc4YWZkOTVmYWJkMDQxZTViMWU0ODVkZmY4OTkzNmQ0YmUxMDQ0MTZjZGUifQ"
+        },
+        {
+          "resource": "repo://backend/src/test/java/com/betterself/growth/privacy/TownPrivacyIT.java#L69-L84",
+          "version": "repo-lines-v1:sha256:05f78b39530493fcfe0fc7a10d9642e1680b006f152db2a18a935c40d1b5e23c:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRjZjA5ZWIwYzU3NDRmYjk3MzMxYjk4ZmYzZmJmMDVhNjAyYmEzZjdmNjdlNWRhNWJlOTA5NTAzM2Y2MjU4MjUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjFjOGIxY2Q1YThjZjk3ZTY5Y2IyNTMxZTJmZTMyNDQ0MDY0Y2IzNjNiNmU0ZDIxYTA0YWZiZjlhOGEwMmVjNjYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjA0ZWU2YTRlYThkNmQ1YjdjZjQ3YmM2ODgwMzk3MWYyMDE1NTVmYzlmMjFhZDk5MGU5Y2RmNzliNjJiOGYzNjAifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_44670f83c6fe4345be20167d4f6fc9c3",
+      "statement": "对象存储可由 `app.object-storage.provider` 选择：S3 实现为直接写入和预签名上传请求 AES256 服务端加密，而默认内存实现仅在进程内保存对象，重启后不保留字节。",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/shared/storage/InMemoryObjectStorage.java#L10-L40",
+          "version": "repo-lines-v1:sha256:06f473ed4aae44bca442dd0b3fa60136bf1503a7d749f73dadac406752c02b53:eyJzZWxlY3RlZExpbmVDb3VudCI6MzEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY4ZmExZTlmNDQ5NDlmYTg5YTNiNDJiMDQ5MmRkYmRmZmEyZWI3NjQ4NDhkMzU3NzhjOWZiNTNjMjA3ZWJkYmQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImRkOGU0ZWU2NjFiZjQwZjczOTAwMjc5M2ZkNDdjNGY2NDkxZWJkNWYyODQ5YTExNzZlNjRkMjhkNDVjMGNiYzUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/shared/storage/S3ObjectStorage.java#L25-L84",
+          "version": "repo-lines-v1:sha256:1b15dcf5c3f747c86d6046d32eb39cf0f5491d41f660fe72488476f74ac4004a:eyJzZWxlY3RlZExpbmVDb3VudCI6NjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY4ZmExZTlmNDQ5NDlmYTg5YTNiNDJiMDQ5MmRkYmRmZmEyZWI3NjQ4NDhkMzU3NzhjOWZiNTNjMjA3ZWJkYmQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjkwOGRhZjdlMDU3NjVlMDY5ZmMwMzBiNjExOGFmNDZlNjdlN2EyMmMyNzEyMzhlMzQ5NjI2NDczYTFmODU1NzgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_04371c2f107d42dea4ca21c3c4c09b2c",
+      "statement": "隐私 API 允许用户按所有者范围显式删除 AI 会话或记忆：删除会话会将其消息内容脱敏并将会话置为 `DELETED`，删除记忆会脱敏内容、置为 `DELETED` 并设置 `deleted_at`；目标不存在时这两个更新端点仍返回 `DELETED` 状态。",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/privacy/PrivacyController.java#L99-L120",
+          "version": "repo-lines-v1:sha256:48529d85b9441d180bea3ebba3d1d8427b66ec71a8ed0151fa0c70759440c749:eyJzZWxlY3RlZExpbmVDb3VudCI6MjIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZmOGIwZTlhM2ZmYTlkMWVmNjJjNzBhYmQ4ZjQ5YmQ5NGUxYjcxZjNkNzU1OWY1ZGE1N2M0NTc0Y2U0OGNlMTIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc3YTEyNDdkZDQ3NDE1ODZkYmMyOWVjNWE3ZjI3NDdlYTRiNzJlODQ0Njg1ZjQ1NzY0NDlmYTE1NGFhMjY5MWUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjgxNjE4MDA2NGVjYzIxNjliMzEyZGU1NzFkYzc2YmQ2NmUxYmEwNmJkMDc2YjM5OTNiMDY4YWU0NjZiYTQ0ZTEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjA2ZjgyMDU4NmZkNWNhMDQzNjU5ODkxODJjNjY4ZGZiM2MyOGQ4MjRlYzI4OGE3NGFmYzhhNDM4NDg5MDBiZTgifQ"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.5.1",
+    "at": "2026-09-14T14:27:42.700Z"
+  }
+}

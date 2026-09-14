@@ -1,0 +1,160 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:7b2ea1929172a7932597b07d44e165e5cdb7b7979e78c7dc98ef4cf53c57523b",
+  "claims": [
+    {
+      "id": "claim_ec0368e900e441538e13e7ec4b8fdcb8",
+      "statement": "`town_companion_world` 以 user_id 为主键保存 `state_json`；`JdbcWorldStore.update` 在事务中先对该用户的 `sys_user` 行执行 `for update`，并且只有 `CompanionWorld.revision` 变化时才更新世界 JSON，因此同一用户的世界创建和更新被串行化。",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/adapters/JdbcWorldStore.java#L45-L59",
+          "version": "repo-lines-v1:sha256:46b62add692c5ff259f2cf99be31f0e09913990709050bb709262911fa07af2f:eyJzZWxlY3RlZExpbmVDb3VudCI6MTUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjliOTM2ZmUwYjhiNzhiZWM0YWMyZTAyNmU3Yjc4MmY4MDczZjQ1Y2U3ZjMxNzU4ODg0Mjg1ZDg0NGZjYmExNmIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU5YzEzNTkwNjY1NjMyM2QxYzVlYTQxNjU0ZWU2NmFmYjU4NWFjZGNmYWVhY2ExMjFkNWUzMGJmMTkzZWVkZDciLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjNiNTUyODk1YWM0OTIxMzUwZDc5NjhjNTNlNzcyMGY4NzNlZmVjZDE1MzU2ZDZlMTlkYmNmZmNmNjUyMTFiMjciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImRmZjJhMDVhZTMzODZlY2YwZGY5NmNkZjQ1ZTY2NmZhYWIxNzZiM2QxMmM3NGQzOTc2Y2MyMzA4YjI5ZTcxY2UifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/resources/db/migration/V29__companion_world.sql#L1-L7",
+          "version": "repo-lines-v1:sha256:577ae67e864d75475d572eed581a04725da4f42ec4c481408abd3f648dd7dab2:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYjcxYjgzOGE5NTFmMmZhMzRkOWVhYTY5NDE2ZmM4ZWYwNzcwNzkxY2MzYTFlNzVkMjgzYTBlYTBkNWI3ODZjMSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiOTlhM2U5NWI5NzkzYTQzMmZjNTVkMGMwYjUwZmJiNTdkNzk4MDBmOTA4Njg2MGUyNmQ3N2IzMTY2ZDEyMjBlMCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjAsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjAsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_b539b888e12348169e14cd030c81b1cf",
+      "statement": "居民记忆的持久化权威是按用户和 owner 分目录的 Markdown 文件而非 MySQL 世界 JSON；`JdbcWorldStore` 读世界后逐 owner hydrate 记忆，持久化时先写 `MemoryStore`、暂时清空 `w.memories` 再编码 JSON。",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/adapters/FileMemoryStore.java#L18-L33",
+          "version": "repo-lines-v1:sha256:1f30f6a76083925b5d5ef56c60d063f6eb66dfabeeecc2de4c034e8fff74b2a3:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVhZjIyY2YwNzMyNTkyYzI0NzE0MWNiZTYxZWZhMTEwMTI2MTJmNWEzMTIyYjlhZjliYmFmNTJmNTcyNGQxOTQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjMwNzBlNzQ0NzJjZGM0ZDRiY2FlNTUxMTgyY2ZhODVlMWU5OGIwYThjZjIzZTUyMTBhY2E1NzgzZGI5OTQ1ODEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjRiNzEwZTk1Njg1MWM2ZTc3YTM0MTQzYjMxZjA1NjRhMGZjNTQ0NWJjNzQ5M2M3NGNhZWQxYWIyNmQ2MGQ0MDciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjNhOGIwYmJkN2JmMTE0ZGI4Yjc3YWUyZTQ1OThlZDY5ZmY4MGQ0ODA4NGJkNjkyMWQwODUzZWFjODlmOGYwMzcifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/adapters/JdbcWorldStore.java#L64-L82",
+          "version": "repo-lines-v1:sha256:5284da6387aa6d2a18ed00d611408f1d313d577dd965fa0cda07e04975886491:eyJzZWxlY3RlZExpbmVDb3VudCI6MTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM1OTc5ZjE5Zjg2OTU1MjdlNjYxYTNmMDFmY2Q1M2FmY2EwY2Q5OTM4YmRjYWZkNzY0OTIwYWFkNzhkMTRhN2YiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjIyMzc1OTE3MmRlZGJkOTE0ODZkMjBmMzUyZjdlMzdkMjY1MTM4MWFjN2FkMGIxOTQzNzg1MjYwNjljMDlhMTIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImJlZGRmZGZlMjM1NWUzMDczOTQxMzY1YTdkYWM2NTliMmE3ZGFhYzUwZmQ1YjRkYmMzNWJmOGViZDI3ZjQ2YmQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_c17bca9690f3432fa172e5fb2896b5aa",
+      "statement": "`FileMemoryStore` 的 SQLite `index.db` 是文件 metadata 的可重建索引而非第二权威；实际 owner 读取由进程 cache 冷加载磁盘文件，单条记忆用临时文件和 `ATOMIC_MOVE` 写入。",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/adapters/FileMemoryStore.java#L106-L151",
+          "version": "repo-lines-v1:sha256:9962a46f25c9f3827029a33412c7fb3fa1455f03cabcb47fe58ac1860b24b3d7:eyJzZWxlY3RlZExpbmVDb3VudCI6NDYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc4ZDJmOTNhZDI2NGVmNjhiZTA4ZWY4ZjllZDQ4ZmNhZDI2MmNjOThjN2RiZTM5NGJlZDkwMzQxNTVjYWE3YTciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjIyNWRjMDI2YTc4MTE2ZmZkMDkzMTZhOWQ3ZTQ1NTZkZDM5M2EwNzQzZmM0NDBlZWI5NWEyNzNmODRhMDQwZjEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImE2ZDZiNDc0NmIxYTY0YzM3ZjY5N2RmMmE0MjVjZDQwZDk5ODExNzcxNmYzMjdmMGQ0ZTgxNDM3NjYzYmQxYWMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjJhYzAwN2M4NmRhMzI2NjUwMjcyNWNmNWExM2RkZThmZGRlODQyZDM2YzM3NTM4YzRkZjhkMTE4NDZlMjM2MGEifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/adapters/FileMemoryStore.java#L185-L215",
+          "version": "repo-lines-v1:sha256:031ace87acefceb3ac4ca8d948085c69cdba780e33bcf85ca17c71868930aef5:eyJzZWxlY3RlZExpbmVDb3VudCI6MzEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY1NjQ4NWMwYWUyZWQzNzAxMzI1NjZkMzUwMmVkZjcyODA5N2I3ZDM5NmRlZmNkZmQzM2NhYmI2YWRmZTc3MDAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQwYzBlMDIzNzhlM2JkMjVkOWFkMmFjNGM2MTc1YmE1MzZkNGEyMDg3MzZhNzcxZGQ2ODUyYWE4YWY5NzA0ODUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjYwMjc5OGJmNDFmNzM2YjNiY2UyNmU4YTk2ZmM4NGNlMjQ4YzRiOGE4NDAwMTMzNzAwOWY4NWMxNDNiMzc3MDgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoyLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM3OTRkMDJhODEyMTk0NGQxNzZkMjY1ZTliYjljYzU5ZjZhYjg5MGJjYWRmOGFlZmRlYmRiYmI0ZjJlYTg0NDQifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/adapters/FileMemoryStore.java#L27-L33",
+          "version": "repo-lines-v1:sha256:19049b6b05c61496ff08a126c4b8cda90160b732fc49d37f17f960ae8698e2b4:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYjE1YTdhYjdiYWY2OGFjYWE5MDQ1NTkxYzQwMTEyMjIxNDU1OGExNzhhNzRlOTBmYTQzMWJmOTc0NzUwMjgxYSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMzA3MGU3NDQ3MmNkYzRkNGJjYWU1NTExODJjZmE4NWUxZTk4YjBhOGNmMjNlNTIxMGFjYTU3ODNkYjk5NDU4MSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNzJlOWIxNTRmNGQyMTM2MWJmZTg4Y2MwNGVhMGM3OWU4MDU4NmVhZTZlNWQyMWUxOTBhYWI4ZTFmZDkzNGIzMCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiM2E4YjBiYmQ3YmYxMTRkYjhiNzdhZTJlNDU5OGVkNjlmZjgwZDQ4MDg0YmQ2OTIxZDA4NTNlYWM4OWY4ZjAzNyJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_7e26b9ce04a04a6da601fde6dfebf250",
+      "statement": "前端 `useTownWorld` 的 `world` 是服务端 `Snapshot.world` 的共享 Pinia 投影；它按 world id 和 revision 拒绝用较旧快照覆盖较新投影，并在收到 `COMPANION_NOT_JOINED` 时清空本地世界。",
+      "evidence": [
+        {
+          "resource": "repo://frontend/src/modules/companion/companion.store.ts#L132-L171",
+          "version": "repo-lines-v1:sha256:f5306ee040e50f526f54e016d0f3323ff21157841eaa1714ab044a1db7c35ccc:eyJzZWxlY3RlZExpbmVDb3VudCI6NDAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjYyODk0YmIzZDcxODgyMjNmZGVmYmMyMDZjZWFiMDljMTljN2JjZDMwODRjZTBlOWY3YjhjYjA3YzA1OTYzNTgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU1NGRhYzRkYWRmYjY3ZGY4OTVlNTBhMzIyMzYzZmUxNjA0NTlhOWUwMDRiMDcwNmNhNDcyZjFlOTEyYzgzMDEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImY2NTczY2U1ZDQ5ZmI1MTBhYzhjYzM1ZWVhYWE4M2Q5OGMxNDQ5MDM3YWRmYzA1NjFkYzMzOGM0ODAyODFjODQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjZiYjFiN2FiYTljOTNjMTZhNTI3YTcyOWFmMzZmMzdjMjc3YTk2Yzg5ZjBiZWMzMzgxZWQ3YTg1ZGViNzQ4ZGQifQ"
+        },
+        {
+          "resource": "repo://frontend/src/modules/companion/companion.store.ts#L60-L97",
+          "version": "repo-lines-v1:sha256:50f71dffaac017eba2dabff646d31bdcafc50bc9b834c0774d80e17bbe248a37:eyJzZWxlY3RlZExpbmVDb3VudCI6MzgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjI3ZjY2MjUzMTQ5ODk2MzEzMTQwMTM3OGU1N2Y3NDJhY2FiYzcxYjExYjI2MDgwNTg0ZDkyMzVhYWQ1MDRhZDIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRhNjU2ZWM2MjFlNmZhMDUzOTIwZDIyNmM4YmJkNWNiMmVlNjk0ODYyZTg2NjJiN2NkNjI1YTcyMmY2YjFiZGEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE1NWFhNzMwM2U5OTVlZjc2OTc3MjdjMzkxYTUzMzY4YjQzZTkxODdlYzg0MTM3NjNhNDQxMjI4ZWQxNWQ0OGEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjI2MDE0ODg4MDNlOTkxYTRlMmU2YzUwM2E5YmRiMTA2MjkwNTc0MzZhOGMwMDdiM2RhZTZlNDJkNjhmMjc0NWYifQ"
+        },
+        {
+          "resource": "repo://frontend/src/modules/companion/companion.store.ts#L9-L14",
+          "version": "repo-lines-v1:sha256:b06315a0f1f0f4af75ba9836cc14b5f4983a3fbebbe3f53c00e35034a04c35e8:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZWFmMjJjZjA3MzI1OTJjMjQ3MTQxY2JlNjFlZmExMTAxMjYxMmY1YTMxMjJiOWFmOWJiYWY1MmY1NzI0ZDE5NCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDA4ZTg2MmQ3ZmE4MTYzMTExZGQ0ODZmYTE1NzI5NTI1MjE0MTQxNDEzNmQ3OWZhMjhkYzFkOGNiNzZiNjUzZCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYTAzNmVlMWE2ZGU4NThlN2JjM2IxOWRjN2MzMzU0MzhhZmE4MGIxNmUyMjc2Zjk2NmRkNmQxMzUxYWFlMGZmNyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMTcwOTNhM2FkMzc1YmE4Nzc4ODI3YzNjYTM4ZmFlNzlkZWI0Njg0YTYzMjAwOGQ3NmNlNGQyMmVjZDY5YjQ4ZiJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_94391d0cc0d442b5ad39979eedc95e83",
+      "statement": "`ResidentDirector` 将模型工作拆为事务内 reservation、事务外 `ResidentMind` 调用和事务内 apply；同一世界可在 `parallelism` 上限内让不同居民并行思考，但 `thinking` 以 worldId 与 residentId 阻止同一居民同时有两次在途调用。",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/application/ResidentDirector.java#L115-L138",
+          "version": "repo-lines-v1:sha256:1ebba4539973599c5128382ea1649a221231cb53b57f2fe375503e2514a0848c:eyJzZWxlY3RlZExpbmVDb3VudCI6MjQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY4NDY3YzliYjFmYTVlMGIzYjU5N2Y2MDIxYzg5NDQ2ZGRhNDY3NGI1ZTY4MGNiY2QyYzJiYjUxYTc0MDI3M2QiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjU3OGEzNTlkYjZhZDI3YTAxZmU5ZjkwMmNlOGNlZDJiMTRiOGJiNmNiNDJkNTg5MmIyMGY3NWViYjRlY2MzMzgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImIzMjRiZDRjMDkzMGYwODk4NGM0YmMyZDZjMTk2M2ZlMGE2Y2Q2NDZkZGUxYjUxN2Y3OGE2NTZmNTI0ODYwZjIifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/application/ResidentDirector.java#L174-L202",
+          "version": "repo-lines-v1:sha256:d8111d3423ff762f816ce9969a5d4808d2ac48deb3cced0a0b40f2f019c8a65f:eyJzZWxlY3RlZExpbmVDb3VudCI6MjksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImI4MDY1MmQwNDBiNmRjMmY2ODhiOGRiZGM3ZmY3ZjM2YTYxOGY2M2VmMDM5MTA1Yjg1N2I0ODQ0OWViMmM5NDUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQ0MzU1NzVhZjFhOTliN2I4MzBmYjg5YjZmNmE5MDMyOTNmYzE0NWFhMzUxMzVlMTE3NTc1OTFmYjcyMGY4M2EiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImZmZDI2NWJhNTE2NzJlMjhiMzE1N2Y3ZDIwNzllZmMxN2RjMjVjZWM5MGI5MDU5YjIxYzM4YjA3Y2I4ZmU5MTIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjY1MzY2OGRhMjI2YzczMDAwYjhhNGVhYTk3Y2Q2ZWRkMWRmMmU3MjAyMzA1NTUxMGU3MDc3ZjQ4YjBmYjQzMGMifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/application/ResidentDirector.java#L26-L67",
+          "version": "repo-lines-v1:sha256:a3e41682b48fd173de08c4bf86af7341bacecbdf4847caf9b708ff051790a979:eyJzZWxlY3RlZExpbmVDb3VudCI6NDIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjE1MDUyZTgxYTc3MmE2YmVkM2E0YzhjMDZiZDIxYjcxYTcyNDQwNTE1NjhhN2ViZWJiMDQ4Mjg3ZTFiYzE5OTMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjA5YTgyZmE3N2FiYTlkZjBjNDg4MmM5Njg3YjNhNzQxMTFiOGIwNDVmYzViYzllNmNlNGVhNGM0MmM1ZDdmMWUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjYwOGMwMDUyZTM5OTVkZjdiOGQ4NTFlZWEwZjhiMDEwODZiMGE0ZTRmZDcyNjU1ZDNiYWE2ZGRhYzEzMTY2YjYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjZiZTU4ODQwMTcyZjU2OTNkNzI4ODMzZWZkMzIzNzY3MjkxZWM5OTczMmU0ZjhkMTljYTA2Mzc4ODYxZmY4YzYifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/application/ResidentDirector.java#L768-L803",
+          "version": "repo-lines-v1:sha256:c09a94ca7e1ab5de3e31c7b59f6436de64041c73795460dfdf8794c66021948f:eyJzZWxlY3RlZExpbmVDb3VudCI6MzYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZhMjMzM2EyODc0MTgyZjY5MzkzMjg5ODM4NjQ5MTJmYTlkMGY3Y2U4ZWUzMjMzMmM2OWZhYjUwMDBmY2RiYzgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjE1ZTkyOWZlZmFhMmYzNzhhOGQwZWRjYzc0MDA3YjQyOTU3YjgzZTZmYTEwMWY4Yjg5YzI1ZDQ2NGYxNTM4ZWIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImFjNjkyMGNkZWIyNzI1MmVhNWVmNTdmZTEyNDMxNzYzMjEyOTEwMDhhODdhOTNmNDFiZTM0NTRiMDViMDY0NGMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjZkMDlmMTRlYmEyZWIyN2RmOGM4ZWNjY2EyMGRlYzIxYTIxOGQzOTBiNTI2MGNmNTk3YzRmNTZhN2VhMTIwOTIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_e625320b7b82442eb8b48b49c7492fa1",
+      "statement": "模型回复提交采用乐观过期策略：Work 携带世界、resident 与 intent 版本，领域 apply 路径拒绝不匹配版本的结果，90 秒以上的回复也被视为过期；提交路径仍递增世界 revision，防止仅有 bookkeeping 的变化被跳过持久化。",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/application/ResidentDirector.java#L17-L20",
+          "version": "repo-lines-v1:sha256:86c3b086e74db27030c7350136953fb29818dadba11554827bdaa3d27a3990b1:eyJzZWxlY3RlZExpbmVDb3VudCI6NCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZDhlZmVmZTlhY2QyYTBkNDA5ZGYwZjNjMTJmYTZhMGY0Njc5OWIzMTBiMmVkMmNlMzA0MDg3NGJkNDMwNzY1OCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYTVlZDhiZjYzMDAyNmI5ZGJlMzQyYTVkY2NlMjA5OTJkZmM1ZGZjYjQxYzZiNmY1MmVlYTA2ZWM3YWRmZTRiOCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiOGNlZWExYTg0NWQ1OGQ1ZjhlMWY3ZTVkODllNzYyMTM5NmY4OGQ3ZmNhMGJkYzkyODU5NzU3NTdhMjk2N2U5ZCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNDU3NjYzMTE0ODk3ZDBjYjBiZDcwZWRhMDI0YjNlYWNkZGM0MTc4NGI5YmEwYTIxYjhhYWIwNTUyODg1MGZlYSJ9"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/application/ResidentDirector.java#L202-L314",
+          "version": "repo-lines-v1:sha256:1499f2906595e47c98d784f2ad0524c3d106717d6e63f6166d1c8f0d476d144c:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEzLCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiJkNDM1NTc1YWYxYTk5YjdiODMwZmI4OWI2ZjZhOTAzMjkzZmMxNDVhYTM1MTM1ZTExNzU3NTkxZmI3MjBmODNhIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiI0ZTQ2MmJkODVlYTM1MjI4MjJhOWFkM2ViMjQwOTliMDMyYTFiNjI3YmVjZmQ3YzU4MzFlOTkyN2Q0YmFjNDBlIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiIxMjQ4NmU2YTNiOTQyYzdjZTUxOWIyNmI2NWRiMmNiOTMyZWMxZWEzOGVmMzcyMmU3ZDU5NDllM2ZhNzJhOWFjIiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiI3YmJjMWM2YzQ2YjhhMmM1ZmJjNzc1NjEzODVmNWU4MDUwOWUwMDEzY2EzNGMyMzY3MjZkNTA4Mzk5MGZiMGU1In0"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/application/ResidentDirector.java#L56-L65",
+          "version": "repo-lines-v1:sha256:24f818092bae51f8a9f5865c103f36905cd4c85bc6df08fe2db8d30b0285ebce:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjYwNjRhNGQxMDgwN2JiZjkyZDFlNzlhYTVhZTBiYTZjOTE2ZDc4YzAwZmUxNDMxZjBhYmM4YTk2ZGU1ZThhNDYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdkNzZjOWEyNzkxODg2MmVkNjI2OTQ2MjBkOGZhOGQxOGI0OWQ2Yzg4NmU3ZDEyZTRmMTkxYzI1ZTUwNTNjYzgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImE5MTcyNDViYjczYzU0ZmFjYjY5M2QwMzlhODJiZjVkMWQ1MTlmYTEzOWM1M2Y2NDg5ZWM5NzBjZmVkNTJlZGQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjA5YzU1MTI0OGI2YTQ0MTZiZjMwMTg2NWQ3M2FiZDlhYmExYWIyYzZiM2U1ZGYyNjQ4ZGU2ZjcwODMwNTJkZWIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_87aac3ad7a5c499b861083887ffcbeb7",
+      "statement": "模型 usage 是独立的按用户、日期和 call type 聚合的 MySQL 计数账本；在模型调用后即记录已测 token，即使结果之后未能应用也不回收已消耗的 token。",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/adapters/JdbcModelUsage.java#L11-L40",
+          "version": "repo-lines-v1:sha256:37648ea7f8f0f03555bee34cee2c5e7a62094c9285c395baf0dff85626a50ce8:eyJzZWxlY3RlZExpbmVDb3VudCI6MzAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVhZjIyY2YwNzMyNTkyYzI0NzE0MWNiZTYxZWZhMTEwMTI2MTJmNWEzMTIyYjlhZjliYmFmNTJmNTcyNGQxOTQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImRkNWQyMmFkNzc4YWViNmI1YWM2NjdkMWEwYzViMzYxMWQyNzgwYjlmNDYwZmJiMzc0NWExY2M1NjYwNDcyNjQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImE1NjY0OGViMmI4ZDU3ZmE1NTNmODEyMzlkZjNiYzRjM2ZkNzExZDM0MDZkZDI0NjcyYTIwODNkZmQ5MjdkODIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoyLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM3OTRkMDJhODEyMTk0NGQxNzZkMjY1ZTliYjljYzU5ZjZhYjg5MGJjYWRmOGFlZmRlYmRiYmI0ZjJlYTg0NDQifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/application/ResidentDirector.java#L184-L201",
+          "version": "repo-lines-v1:sha256:81897155c14544ecc93d7f59b85d76768bdf380a6d49f6c671e4e2ab4141d4b3:eyJzZWxlY3RlZExpbmVDb3VudCI6MTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjI2Y2M0MDg4OGIzNTMxNDUwZjkyYWExYjk3MjIyMTM2Y2NiY2U5ZDhhMjViMjI1NjRmZjdlMDQ0OWI0NDM2NDYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjI3ODMxMzgzNTI3NmE0NzcyMGUyMjM3Nzk2MmI3NzAzYjBiMjE5YmZlZTk4NjA3ZGE5NGVkZmNhMDY1NTZlMWUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjM5YzRlY2FhYjM5MTAyYjJiZTNhZjcxNjI4MDFlMzYzODQyMWY4OTFkYjQ0NTVkYmFhNGE3OGYyOTljMDM1OWUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImJjMTQwNTM4YWM2OWE4MmYyOWZhZWVhM2Y4NjQ1NGVhM2MzNzMzYmFlODE3MTViYWM2Y2IxZWY4YzQzNWUyMDgifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_a07df2c42b4440719e1cc8565ffbaf83",
+      "statement": "隐私导出在创建时把 MySQL 世界 JSON 与逐 owner 读取的文件记忆写入 ZIP 并上传对象存储；导出读取没有覆盖两种存储的一致性事务，且归档类别未包含模型 usage 聚合表。",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/privacy/ExportService.java#L155-L199",
+          "version": "repo-lines-v1:sha256:020a985a9b15a408b18700a1eeae0608b6fa752681a3560a76ce6c0212c1fb69:eyJzZWxlY3RlZExpbmVDb3VudCI6NDUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQzNzVjN2Y4ODQxMzYzNDc3NzJmNTg2Y2M2OTcxYmQyNmRjYmQzMzI5ODQyOGY1NTk0MjdhZjY2N2E1YmVjOGMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU2YjA0NDkxNDY5NzIyZTgzNjNhOTRlNDA0NDUzOGUwMTNhMmEyMTdlMzZiMWU1NjhiYTYwYWNiN2I0YzhmMmUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjI5ZWY4Zjg0NTI2MWFmNTc2MGVmZWQ5MWJhMWFmZTQ4ZDhhODQwNTdmNWYwZmYyOWUyOTQ4MDY4YzVmYzg2MDQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjE1ZDM4YmE2NDUyYjU4MTgxNWFlNjhhOTM0YzJkZTg1OTc0MDg5YjMzNTdlOTY3MWE4MjFjOThlODI3MjI1YTMifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/privacy/ExportService.java#L59-L89",
+          "version": "repo-lines-v1:sha256:a0461917937f9ba65857a307a7544a16d00cc2b0cda9fe5ca1ab2fc4549f21e9:eyJzZWxlY3RlZExpbmVDb3VudCI6MzEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc1MjYzMzA5MjNkNGUwYjVlZWYyNTkyMTEzMTJhY2U0ZWIxYjk5MDE3OGIyNjFhODVlOWViZDRhMWFlYjA5NjgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRhY2YyMTk0MzIxZmY4Y2ZhOGJjMjE5ZDdlYzY0NjJmNzc5MDA4Y2FkNzg1OTJhYTM4ODc4OWFiZjgyZjJjNmMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjQzY2ViNTg5YzNmNzQ4MTNhYTlhZTgzNDUyMjUzYmVhMmQ5NDQ0YTAwZDdhZWJhOWRlZGM1ZTlmMWIyM2MyZGEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjNjZjY1NWI5MjAzMjU2ZjkxZDFlNDg2MWIxOTVjNmI3ODQzMjA4ZDQxMzQwZTNjMTBiNmU3Y2RmMWEyYmE4Y2IifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_3a4d381d346c4831954a38aba0e54690",
+      "statement": "账户删除先删除 MySQL 小镇世界行，随后在 SQL 事务外调用 `MemoryStore.deleteUser` 删除用户记忆目录和 SQLite 索引行；因此世界 JSON 与文件记忆没有共享原子回滚，运维上需要处理跨存储清理失败。",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/privacy/DeletionService.java#L80-L109",
+          "version": "repo-lines-v1:sha256:f7641a54c6b4205571a700fe4ad4d1ca040f2ac79412de154d0abe52845e782b:eyJzZWxlY3RlZExpbmVDb3VudCI6MzAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc1MjYzMzA5MjNkNGUwYjVlZWYyNTkyMTEzMTJhY2U0ZWIxYjk5MDE3OGIyNjFhODVlOWViZDRhMWFlYjA5NjgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU2YjA0NDkxNDY5NzIyZTgzNjNhOTRlNDA0NDUzOGUwMTNhMmEyMTdlMzZiMWU1NjhiYTYwYWNiN2I0YzhmMmUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImYyZDgyOGEwMzdhYzFjODE1MzViMWQ1NTAwODMyMzIzYmZiYjg2NmEzYTNmODdlN2E2OGMxM2EyYmFlNTZmZmYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImU2OTZmM2ZkZGI5OTA3OWJkMzAxZWY4YzVmNDEzYTE0OTE5ZjAzMDdkMGE5MGY0MTg3MmIxZmYzZTg1YWFkNGIifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/adapters/FileMemoryStore.java#L88-L99",
+          "version": "repo-lines-v1:sha256:24f9b77ee4edbb8bd58289440c35b890a681c91a2fbfbb10d622efa738404644:eyJzZWxlY3RlZExpbmVDb3VudCI6MTIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQ3NmVmYzk4NjI5MjYwOGEzNDg1YmMxZjQ5Njk1YWU0NmFjZjc5NmJlZDg1MTlmZTQ5Y2E2NGFiOGQ1NjQwY2YiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijk5OWJkZWZlZWFjYTYzNDBlMDI5MGRjODZlODg5Yzg5ZDVlMTg5YWE1YmE0NGI1ODViM2I3MDczNGY0YTYyZDgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijc2MjZiZDhiZmU3NmVhOThjYzczOWE4MWE2ZGU2ZDRiMWQzMDVjNWMxNTZhODUzYTM4ZTQ4OWM1ZjcxNmRlOWYifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/adapters/JdbcWorldStore.java#L76-L82",
+          "version": "repo-lines-v1:sha256:0af5b5b30010cd495291fddd53640e02e19832e3c354bb1b3e2e6a9fd5e3b386:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNDJjNTJiZGIzNjUyOGFkMDMzNmMyOTkyYTFiNWMzNzU0ODZkOWFkZTgyMGE3YzQ5ZGZhN2VmODk4MzIzMjE2YSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDg5M2Y0MGUzNzgxZWI4OTZjODJkMDQ2YTA4MDY3YTExZTM1Y2RmMmYxZGZhZjI2ZmVhOTBiOGRiNjY3NjQxMyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMjdkOWEzOTRkY2Q3OTVmNzljYThjNTgzMDBmNzgzODI1MzY0ZmNmNzMzYjUzNTVjOTVlMWE5YzBjMWVmNmE5MCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYmVkZGZkZmUyMzU1ZTMwNzM5NDEzNjVhN2RhYzY1OWIyYTdkYWFjNTBmZDViNGRiYzM1YmY4ZWJkMjdmNDZiZCJ9"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.5.1",
+    "at": "2026-09-14T13:15:33.655Z"
+  }
+}

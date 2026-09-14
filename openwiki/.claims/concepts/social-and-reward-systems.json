@@ -1,0 +1,252 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:b2e429d6e5caab2bb6484112531ac9b72f957ac907702bd448924675a80b20ec",
+  "claims": [
+    {
+      "id": "claim_a63f309f16da4600bcc3d6b1353345d5",
+      "statement": "Daily status is an authenticated, user-timezone-scoped one-record-per-local-date check: the service validates energy and minutes, derives SHRINK, KEEP, or LIGHT rather than accepting advice, upserts the row, and treats Redis insights-cache invalidation as best effort.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/daily/DailyStatusController.java#L33-L60",
+          "version": "repo-lines-v1:sha256:5501aeff5395dd0ec8f2dfb23ebd37e4a5197dee406bedebc296ede4f46d296c:eyJzZWxlY3RlZExpbmVDb3VudCI6MjgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk1NzFhODJiNjExYmQ4Y2Y3MzI5ZTI5MmFkNzA5Zjk2YWNlNjM3ZjVjNzNmYjA2NDUwYWQwM2VhMGY4MmU4YjgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ3NTUzNTE5Y2IzODMxOWJmZTViMzI4NWFkYmMxYzExNzI3NGRkMGFjYzkxOTE3MDg5NDc2ZDFjYjcxYTI0NjUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE4MzA2MGQzM2IyYTNmZDEzZDljNDUyMzkyODkxNDE0OWVhMTMwNmU1ZTgzYjA3NzdlNTQzNTgxZDVkYWQ0MzgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjgzOWJmMWVkYzFiNTZjYzIwOWM5NGU3ZmI5YmI3NjE0NGJkNzA1ZDM5ZTMyNDM1OTYwOTUwMWQ4NzkzNThmNGMifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/daily/DailyStatusService.java#L38-L100",
+          "version": "repo-lines-v1:sha256:23605eaa5eaddcd63730ce1773456757f6244ac9495a9fa34121b45d7c1a9c0d:eyJzZWxlY3RlZExpbmVDb3VudCI6NjMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM5Y2JiYzY1NDY5ZGIxY2EyODQyZWZkOTdkZjdlZTJjZTZjYzE1NzE0ODJkMDFhMThiNzkwYTEwYzdjNTEwZjMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFlNzVjNzBkOTQ2MzYyNWUxMDc5ZmQ4ZmM4ZWU2MmFkMmU5MmM0MmJlYWFiZmQ4NWI3OGQ4ZTBhNDk3OWI5NGEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjVhZjBiNzY5YmYwZjkwNzE3ZGZiZmNiMGYxMzVhODUzYWEyNzU2NWFmZGQ3N2YxYWU5ZDM4Yzg3YzBlN2UxYTMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImMwNmI4YzJmZWY3MWRlODkwMmRjNDA2MmVmNDMwMTZjNmE5YTVlMGJiZTEwYjg2NDhjZGFlY2NiNjZiMDA0ZTMifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/resources/db/migration/V13__daily_status_check.sql#L1-L16",
+          "version": "repo-lines-v1:sha256:fddc4357847e0c18daf8a8a6c5ff540cce4e64fb300b31931b19af4b1880fe90:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQ2MjdjMWNjN2E5NmIyY2YyNzA1ZmQyYzQyYWQwOTI4N2U5NTY1N2I5ZDRhZDE4YzhkMGE0OGQ2NmJhYTRlODkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY1YWZhNmVjYjNjMmJlZTA4NTBiMTEyYzQyNzhlOWRjMjU5YzQxODZhZWYwNDhlMTUzZTBhYjcwZmYyYWI4YjYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijk5YTNlOTViOTc5M2E0MzJmYzU1ZDBjMGI1MGZiYjU3ZDc5ODAwZjkwODY4NjBlMjZkNzdiMzE2NmQxMjIwZTAifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_16f5a2d039ac4bbdb8be50a2f018a886",
+      "statement": "The Today client uses persisted daily advice only as a presentation recommendation: SHRINK orders active tasks by shortest estimate and recommends two, LIGHT recommends the first scheduled task, and KEEP retains schedule order; it does not mutate task schedules.",
+      "evidence": [
+        {
+          "resource": "repo://frontend/src/modules/today/today.logic.ts#L123-L175",
+          "version": "repo-lines-v1:sha256:ddfb8b34d52fb73d72be8ea8fb6906ae73ad84c9843508bbc5647053efd61061:eyJzZWxlY3RlZExpbmVDb3VudCI6NTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg0MmYzODQ3OGM2YjNjZmZiZTlhMzZlN2ZhOWZkODBlZjY4MmExZjZmNzgzMjk0YWU5NTUyZjM1ZjA3M2QwYTgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjcyNTQzODk4Zjc1NDQ0MTkxYjMzYTNlY2E0NDFiYWFjYmQxNzA4YTU1YTQwM2RiODkxODhhM2VkMmFiOWQwYjgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImU3MGQxOGJmZjgxODI0MjFmZTMzZDZjZjQwYzc4ZDRmMGNiZTlmM2RmMzVmYjA4NmUyM2FjMjk2ODQyM2NlYTcifQ"
+        },
+        {
+          "resource": "repo://frontend/src/modules/today/today.logic.ts#L96-L114",
+          "version": "repo-lines-v1:sha256:73cab3df6920460a01504609d12b97204f336a2bfbad91c013eee2471f6332b7:eyJzZWxlY3RlZExpbmVDb3VudCI6MTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImJiYjRiNDM4NTEwZTRiZTM4NmRlYjgzYzUxYjVmOGE0YWY1M2U4MTE1MjMzMzhkYTViMGJjMTZhYzE1OTk1YTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU3OGYyNDRhNmYwNGVjNWU1YmE5MjE3MzlkOGMyOTY4MGExZTg0YjczMTc0ODk4OWYzZGYzZmQ3NjMxOTJjYjEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImJkZDU1YzY2YzRmODBlMGZkZTk0Yzk2OGVlZjRkZjIxMjZhOWEwNjc0MjRkNjg2MjE2ZjBkYjI3YmQzMTFjZTMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImJlY2E1NzA3YjEzNjhkOGNlOWRhMmJiYmE5Zjg3NWViMjc0MGNjMTM1MWNiYzg0NDhiYzJiMjEyNTIzMWQyZDUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_0c2f7d6eb44f41619fc86e358ba5d193",
+      "statement": "Achievement evaluation is deliberately lazy on the authenticated achievements-list read: it calculates current user metrics, records a newly satisfied active achievement, and grants its active reward title transactionally; unique user-achievement and user-title keys make those grants one-time.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/achievement/AchievementService.java#L44-L107",
+          "version": "repo-lines-v1:sha256:46e70268e629ee7ca21fab5bff0b961810467bcf6857381f25e0feddaaf92f7b:eyJzZWxlY3RlZExpbmVDb3VudCI6NjQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM5Y2JiYzY1NDY5ZGIxY2EyODQyZWZkOTdkZjdlZTJjZTZjYzE1NzE0ODJkMDFhMThiNzkwYTEwYzdjNTEwZjMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImM3OWQzYTg3NzgwYWQyMmQxMWM3OGIyZGVkNTU4NDY1M2NlZjRlM2M0Y2Q5YWRlNDhmYmNmNTRiNDdkMGE5N2IiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjkzYTFjYTA2M2QwN2U4MThhNTNmNGZlNDNmZjY3NjhiM2JkY2RhNzk1NjdiODE2M2ZjZTYxNjI1Zjk5YzY1MzEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjMzODMwMThiYTg5MjQ5ZTIzMTdkODE0NzU2NTAzNjJiZmQyNzU0MzliMTIxNDVjN2ZiYmI0Y2RlYTU3ZDEyOWIifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/achievement/TitleService.java#L58-L71",
+          "version": "repo-lines-v1:sha256:14c34c51667fa265b3c893b5f504d72306651681026b57f99314433ab5d5671d:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjBjYTc5ZjU3YTYyZjU4M2ZiZDAzYmFhZTk5NzM5MTQyODU4YzhjN2VmZjVlNmQ2NGRjNTUzYTY5YmNmMGMzNDYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE1ZWI3YTNhOTczMjQxZTlhNDMxNDc5MmE1MDlmOGMyZDUyODVlYzEzMjVmZDYxNjEzOWQwMzViYTA3MTJjYTMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijk1ZDExYTdhZDI3N2JjNjJhZjMyYWY0MmQ2MmZkYTFhNTgzYjQ5ZWM1MGVlZjhhYjI4M2MyMGE5ZWYwZjUwYzgifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/resources/db/migration/V14__achievements_and_titles.sql#L23-L32",
+          "version": "repo-lines-v1:sha256:7ed4ae53cc2851d5103bd6de027c48261978dae268d009f2b83b2a4550545c6e:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjA4MzEzNjZkYTY1MTM5NmQ3MmVmNjkzNTRmZWEwNjEwYWM3ZjA0NWU2NjJjMDJhZjI4MmNlYjgyYmIzZGVjZjEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk5YTNlOTViOTc5M2E0MzJmYzU1ZDBjMGI1MGZiYjU3ZDc5ODAwZjkwODY4NjBlMjZkNzdiMzE2NmQxMjIwZTAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjQ3NWIzYjNhOTVjNDlkYmE3MGQ1MDRhMjYzMTY5MDkwMzRmNWNlOGYwM2E2MzViNmM1NTJkNWRjMDc2NTY1ODciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImQ0NTRlZGJiMzlkZWRlN2FlMzZjY2QzMTQwMzY2MzAxZGVlZWI1ZmNlZjAwYjBmNDgzMDhjMTc4ZGRkNmVlZDgifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/resources/db/migration/V14__achievements_and_titles.sql#L56-L71",
+          "version": "repo-lines-v1:sha256:e1eb42be407b42e6b2dd864ccb3bd885c72e6241609422910e845e3830215224:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY0NTY3NDE5ZjUyYTk3NGZiZDc3YWRmNDRhYjVmNjM3ZWE3ZWUwYTUzODY1OTRmYzc2MzZjMjkyOThmNGZlNDkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk5YTNlOTViOTc5M2E0MzJmYzU1ZDBjMGI1MGZiYjU3ZDc5ODAwZjkwODY4NjBlMjZkNzdiMzE2NmQxMjIwZTAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjhjMWQwNWUxZjU4MGFhNDE3ZjBlYWMxMTA4YTgxNTdlYjU2NTNiN2UzYmNlOGMxNWVhMjdlOWRlYWRkOTU5ZWUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijc1YWM3NzI0MDAxN2I5NTRjNTc3ZDU2ZDM3Yzg5OGI3ZWIyY2Y2ZjBiOTQwMGRkNzdjOWYyZmNmMDg3NjM4MGEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_27f8688affa74b7ca1864ce5099758bd",
+      "statement": "Achievement metrics count only unreversed COMPLETED/PARTIAL task events, calculate weekly action and fulfillment from Monday through today in the user timezone, and derive recovery and longest streak from distinct active local dates; malformed or unsupported JSON conditions fail closed.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/achievement/AchievementConditionEvaluator.java#L19-L95",
+          "version": "repo-lines-v1:sha256:b8287dcf67a66282e1b5f0fafc2b5e8d0f242823f15761dd813433b1bd69dcff:eyJzZWxlY3RlZExpbmVDb3VudCI6NzcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZjNDYyZmYwMTcwNDUzMzUzMzA2ZWM2MWJiOWFhNGZiZGMxNGIyMjY1OTE5NDdmZDZmOGRjZmMxMjg1OTY5MGUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImM2ZWVlOWUyY2QyM2U4MTRhOGFjMTE5OWYzY2Q1ZmViNzVkZWU1MDBjMGZjNjA0NjZmNWY1NmIzMjBlZDg1NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/achievement/AchievementService.java#L110-L201",
+          "version": "repo-lines-v1:sha256:99f7072b7dfefd1c3a7a0cb4d86620f339da3a2b44e9befa9950af452883df8f:eyJzZWxlY3RlZExpbmVDb3VudCI6OTIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjhmOTEwNjFiNmU1MzAwNzE2MTI1Mzk3OGM1YjYxN2I2MzNhNjI0OGI4MmE2NWQ2MzM2NzY0ZDg5NDc2OTk0YWEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU4YzAxYjExZWE5YjEzZmM4MmRhYzgwYjkzYzUwMjM4OWZkY2EwNmEzNDJlZmM2YTdlMjRhZWU5YjM1MWQxMzIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjM1NzkxNzllMzk2ZmNmOGU5ZTY1MzM4MDhiMjg5MThmNjhjODJjMmI5ZjdlOTI3YTExYzEwMTUyYzU1OGMyN2UiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQ2MTliYmE1ZWZlZThhNzU5MmFhYWRjMTgyMjJmMjk4MzhkYWYyMzIzODhlNzdkNTFmNDVhM2M0ODdlZjZhOWMifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_0205422eca544ba7a616ad9f230d22f9",
+      "statement": "Titles are caller-owned: equip locks the user, verifies an active held title, clears prior equipped titles, and equips the request; a generated-column unique constraint prevents more than one equipped title per user even outside the service path.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/achievement/TitleService.java#L73-L109",
+          "version": "repo-lines-v1:sha256:39db0fe9e972b8ca3173c1a708e5f2f77fe5836e2e2d8028cdc506e15bb74167:eyJzZWxlY3RlZExpbmVDb3VudCI6MzcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc1MjYzMzA5MjNkNGUwYjVlZWYyNTkyMTEzMTJhY2U0ZWIxYjk5MDE3OGIyNjFhODVlOWViZDRhMWFlYjA5NjgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjI0M2JlNGIyYTBhMTE3Nzc5YjYwYWY0YjQxZDBjYjAzZTQ4YmNhNjJlYjQ2OGFiOGYyOGIzYzFmMzlkYjJjZjIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImYyZDgyOGEwMzdhYzFjODE1MzViMWQ1NTAwODMyMzIzYmZiYjg2NmEzYTNmODdlN2E2OGMxM2EyYmFlNTZmZmYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjFlYjViMThjMGJmNmE3ZjJmMzEzMTY0NjhkMzQyMWVhODcxZjI5YzZhMDM5NjFiY2UzNzI4MmNjNGFhZjlkNzIifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/resources/db/migration/V14__achievements_and_titles.sql#L56-L71",
+          "version": "repo-lines-v1:sha256:e1eb42be407b42e6b2dd864ccb3bd885c72e6241609422910e845e3830215224:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY0NTY3NDE5ZjUyYTk3NGZiZDc3YWRmNDRhYjVmNjM3ZWE3ZWUwYTUzODY1OTRmYzc2MzZjMjkyOThmNGZlNDkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk5YTNlOTViOTc5M2E0MzJmYzU1ZDBjMGI1MGZiYjU3ZDc5ODAwZjkwODY4NjBlMjZkNzdiMzE2NmQxMjIwZTAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjhjMWQwNWUxZjU4MGFhNDE3ZjBlYWMxMTA4YTgxNTdlYjU2NTNiN2UzYmNlOGMxNWVhMjdlOWRlYWRkOTU5ZWUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijc1YWM3NzI0MDAxN2I5NTRjNTc3ZDU2ZDM3Yzg5OGI3ZWIyY2Y2ZjBiOTQwMGRkNzdjOWYyZmNmMDg3NjM4MGEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_c796b4064e454b35ae862acb4ccd668d",
+      "statement": "Task execution is the reward mutation boundary: it applies earned task XP to the task role and partner wallet, records actual role and coin effects with the event, and reversal compensates using recorded XP effects in the same transactional flow.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/career/RoleProgressionService.java#L38-L53",
+          "version": "repo-lines-v1:sha256:52797d51af9882735c0463ed9ff422183119cf0be74b51cc6cf2804220d32f2c:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc1MjYzMzA5MjNkNGUwYjVlZWYyNTkyMTEzMTJhY2U0ZWIxYjk5MDE3OGIyNjFhODVlOWViZDRhMWFlYjA5NjgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ0MmM2ZDEyNzQwOWRiMTQ4YTZhMzQxMzA5ZDFmNmUzMjM2NDZkN2QyNDNkZGU0NjcwZjVhMzBmZmViMWM4YTkiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImYwZjEwNzM5MTdjMTk1NGQwMmVjYzQ1YTc4ZjQ2MTlmYTYwMGM3NTFlMmQ2NDRmMjRkNDljODUyMmY0MWZiNTMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImQ1N2NiZDI3YTA4ZWRmYmM1NzhlYTU0MmIzM2M3NjBhOTJiZTM4ZDNkMzJkM2Y4ZDMzNGUyZTQ4NzViNDk1NjUifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/execution/TaskExecutionService.java#L126-L164",
+          "version": "repo-lines-v1:sha256:3cb92cf780adbf4b67933114da3d51afcb264e27b6ca77114e0ea2f2a635b95a:eyJzZWxlY3RlZExpbmVDb3VudCI6MzksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc1MjYzMzA5MjNkNGUwYjVlZWYyNTkyMTEzMTJhY2U0ZWIxYjk5MDE3OGIyNjFhODVlOWViZDRhMWFlYjA5NjgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRhY2YyMTk0MzIxZmY4Y2ZhOGJjMjE5ZDdlYzY0NjJmNzc5MDA4Y2FkNzg1OTJhYTM4ODc4OWFiZjgyZjJjNmMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImQ0YWU0ZDVkYzQ0ZTU4MGI4OTc3OWM1NDdhYzRkYzJiZjI2YWEzMzE1MTNkMzg1MDQ4ZjQzNTBiNGMxMzMyMTciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImViZmRhMGViNDVlODFiN2E5YTViZWNmNGU1MmNkN2FmMTg3YjY3YWQ2MmRmNTk2YjdhOWZhMzA3OWM1MDg1M2QifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/execution/TaskExecutionService.java#L74-L123",
+          "version": "repo-lines-v1:sha256:5ddc633929d431c961ae96a3f7a3bbd3f8b6752f944396d60f196414db3e7c1a:eyJzZWxlY3RlZExpbmVDb3VudCI6NTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc1MjYzMzA5MjNkNGUwYjVlZWYyNTkyMTEzMTJhY2U0ZWIxYjk5MDE3OGIyNjFhODVlOWViZDRhMWFlYjA5NjgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRhY2YyMTk0MzIxZmY4Y2ZhOGJjMjE5ZDdlYzY0NjJmNzc5MDA4Y2FkNzg1OTJhYTM4ODc4OWFiZjgyZjJjNmMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImM5NWVlYzgxNmExNDZhM2M4ZGQzMmViNTNiZTE1ODg3NDM1NDc0ZjVkMTA0YjY0ZWY0NWNlYTdkMjJkZTM0NmYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjNmNjM3OGJjMmNkMjI1ZmJkZmFiNmRhNGE1N2EyMGQyNjgyMzg5OTVmZGVkZDVhMGRhNzhhZjVjNGEyYTU1MmUifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/partner/PartnerService.java#L154-L176",
+          "version": "repo-lines-v1:sha256:cd9d239ed824689e5566e12d3dd4f8fd29c38e823ba1d4cf5c6445d3442be5be:eyJzZWxlY3RlZExpbmVDb3VudCI6MjMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc1MjYzMzA5MjNkNGUwYjVlZWYyNTkyMTEzMTJhY2U0ZWIxYjk5MDE3OGIyNjFhODVlOWViZDRhMWFlYjA5NjgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjVmYTdlMzdmOTM3M2Y2NzZlNWZhMGViZDc4NWY1OGMxMTFlMjQzZDY4ODY3YTM0OGNlOTllZTJmMzZmODc0M2QiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImVhYzM5ZWU5OTNjOThjM2QyNWQ0YzIyZjQ5MzAwMzdjNjBiMzdkZmNiMTA5Y2Y3Y2RhZjhkYTA3YThlZTcwMTAifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_c8ec846db9ff484fab3021980315ad90",
+      "statement": "Role progression creates the four role rows on demand, locks the changed row, clamps total experience to 0–2149, and derives levels 1–10 from cumulative thresholds ending at 1150 for level 10.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/career/CareerRole.java#L9-L58",
+          "version": "repo-lines-v1:sha256:841ae253bac57ada6d0f3364e139511c02827ead49b87d725d9f6332e77782e1:eyJzZWxlY3RlZExpbmVDb3VudCI6NTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImM4OWIwYzhkMTBmNmUyNzg1MWJjZGMxN2JmMzAwZjA3YjA4MjZmMWEzOGVlNWJmYmU5MzY1MjFkYzAxZTMwNTMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImMzNDEwYTVjNmFlNzRjODhlYmRlMzMyYWNkNGQzNDY3ZTNkODZhODcxYWRhZTkzZmJlOTQwZDZhMTlmYTg2OTAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/career/RoleProgressionService.java#L13-L91",
+          "version": "repo-lines-v1:sha256:c8ff20f4ad6ada92e4c87a3c864a1a967807f0a8203f232166cb017bde5bb437:eyJzZWxlY3RlZExpbmVDb3VudCI6NzksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImUyNzcxMTA0OWJlNGY5YzFkZjU4ZjNiZWY3ZWUyNjA0MWU1M2MzMTFhMjg1MjI0MmY3N2U3NGVhMTZkMjc0ODEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFlNzVjNzBkOTQ2MzYyNWUxMDc5ZmQ4ZmM4ZWU2MmFkMmU5MmM0MmJlYWFiZmQ4NWI3OGQ4ZTBhNDk3OWI5NGEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjYzYjFhMmNiZmZhZjU1NTI4YWYwMTZjMTVlZGE4NmM4MTU4MWM4MDU0NTBiMzQ0Yzk1MjI1OTFmYTk3NzY2MGQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImRmZGY5MTkxNzYwOGIzZjM1YjkyNTc2MWM3MjAxNDQwNzUwYTk5YzZkYWFhYmE3YmM3NWRmMmRlNTI4YzM1M2MifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_d00387a30c424c58b6657b9c68394d3c",
+      "statement": "The partner profile lazily ensures a wallet and selected starter pet, while all pet mutation lookups are scoped by both user ID and public pet ID.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/partner/PartnerService.java#L178-L194",
+          "version": "repo-lines-v1:sha256:9de0207e933c53dfc03bcc20329aa150c8347cbba8bdf535d9302cfc7fe3a236:eyJzZWxlY3RlZExpbmVDb3VudCI6MTcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM5MjIxOWUwMTY2NmEzNWRjOTliZWRkYTFjOTkxZjExODJlNmQyN2I0Njc3NTRiMDhjOGI5ZDdiOGIzZWFlNjgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjNlZTdiMjhlNjE1M2U3NDdmZWM2OTE0NWM3NzY2OWNmNTM5Yjk3MThhNTJiNDY2MDg3YzE0OWM1MTJhNjQ2M2QiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijc4ZjY5NTBkMzM1NWZmMzUzODU3MGRkN2YxYzhlNjU0NGFjODQwNTExYzc0ODEzZmYyNjE5ZDBhNTc2MDIyZTYifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/partner/PartnerService.java#L239-L254",
+          "version": "repo-lines-v1:sha256:fa21b7d121455d6289d9695e566048b584ba982ea073f7160718ba5c8493fee0:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImRlNGE1OTBlNmQzM2E5MjdjODJlMDgxMjMwNjBhOTQ2YzM2Y2M5OTNiZmRkZjkxYzQzMzk2MTg2NTYxNDM1YTQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijc5ZGEzM2Q2YTE1OTYwMjk2ZWE1MTVlNjJjYjgyMzQ1Nzg1MDAxZGFlMjBlMDRiN2RmMmFiMzZiN2ZkYzJiYmEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImFiOTRjN2YwNjk1YTljN2FmODkzZWVjZTllNWFjMTM5NDI4Y2Q3NzBmYTZhOTYyMmIzZjEwMGU5MTZlZjA2NGIifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/partner/PartnerService.java#L34-L85",
+          "version": "repo-lines-v1:sha256:7396f4ff5f2f2e180bb0a75ae11b4bb615ac5237db607422446d2b4f05d9a414:eyJzZWxlY3RlZExpbmVDb3VudCI6NTIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc1MjYzMzA5MjNkNGUwYjVlZWYyNTkyMTEzMTJhY2U0ZWIxYjk5MDE3OGIyNjFhODVlOWViZDRhMWFlYjA5NjgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE1ZjgwZmJkZTFkNzFmNWM4YzJkNWJhNzdiZTM2MWFiOTljZWE1ZjI2OThiZGQzZTYwOTY3MzVhNjIwZjEwZmMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUwNDlhMWFiYTliYmM4ZjgyYjRhOWQyZjAzNTUzYjEyNmUxZjc1YTQ1YTNlZjM1YzhkMWM3Mzk2NjZkMzA3MDgifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_f2132dd246a442d5b586b5e9bf8e1175",
+      "statement": "Partner interaction is limited to one affection reward across all a user's pets per user-local calendar day by a unique user/date interaction key; the first interaction gives two affection and later interactions only update timestamp state.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/partner/PartnerService.java#L303-L323",
+          "version": "repo-lines-v1:sha256:947aed09fc10a249bbe498a1533f6f6b423209efe33802c31313efb803ccbc45:eyJzZWxlY3RlZExpbmVDb3VudCI6MjEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImRkMzBiOThiZjUxZDNkZTI1OWQxMDE5YmYzNjIyMzc0NjY4NDlkMGM1NjRmOGE5ZTk1NTcwYzkxNmNmZmQyOWMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImYyZDgyOGEwMzdhYzFjODE1MzViMWQ1NTAwODMyMzIzYmZiYjg2NmEzYTNmODdlN2E2OGMxM2EyYmFlNTZmZmYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjAxMjIwM2QwMzhlNGRlZDhmMWJjYzYwNTg4NmM1NDBmMjhhZDY1ZWRlZGQ4MTQ1YzE5YjRjYjJlYjc1YTlhZjMifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/partner/PartnerService.java#L87-L116",
+          "version": "repo-lines-v1:sha256:c872793419737f975f99717a6bca703400763eab694a63b64caca04f7bea4597:eyJzZWxlY3RlZExpbmVDb3VudCI6MzAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc1MjYzMzA5MjNkNGUwYjVlZWYyNTkyMTEzMTJhY2U0ZWIxYjk5MDE3OGIyNjFhODVlOWViZDRhMWFlYjA5NjgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjA2MGZiN2Y3NGIzMzRmNTM0YzBkOTRlOTFhNzM1MTk2N2IzYjM5NGEwMDUyMmYwMGFlY2RhMDIzYWZmN2E4ODciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjdjYTEwYTM1ZTVmNzBiNTJmYTcwNjNhZjIzMTZiOGVjODk0YTI4OGVjYmQ5NzA3NDdjMWJiYTcyY2JlZmU4YTQifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/resources/db/migration/V9__daily_partner_interaction.sql#L1-L15",
+          "version": "repo-lines-v1:sha256:91c8f9e1bd3a6b3c5cbfa4587dfb091fac7a9f1194e9bd6cb96fca5be9699680:eyJzZWxlY3RlZExpbmVDb3VudCI6MTUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjlhOWJkOTk0ODE3NDM0NzdhYTNkYjk2ZTE0OGMzMjY5ZjliYzdhM2NjY2I2NzNiYTdhNzU4YjY2NTYyMmU5ZTAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImMwNzJiNmNhYjY5YTc0MWU4MTVjMjM1MGVmM2FlNGUxZWIyMjE4M2M4NmNhMTFlMzhlMzMzN2ZiZWQ1Y2U1MmMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijk5YTNlOTViOTc5M2E0MzJmYzU1ZDBjMGI1MGZiYjU3ZDc5ODAwZjkwODY4NjBlMjZkNzdiMzE2NmQxMjIwZTAifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_d686d0cf65924c44a393067219861733",
+      "statement": "Partner purchases lock the caller wallet, reject insufficient coins and pet/species mismatches, then debit coins, increase affection, and create a purchase ledger row transactionally.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/partner/PartnerService.java#L118-L152",
+          "version": "repo-lines-v1:sha256:0d51fa59d5a807fb18845c8930e85a91c9dda297963c4b2cf1570c921ac26089:eyJzZWxlY3RlZExpbmVDb3VudCI6MzUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc1MjYzMzA5MjNkNGUwYjVlZWYyNTkyMTEzMTJhY2U0ZWIxYjk5MDE3OGIyNjFhODVlOWViZDRhMWFlYjA5NjgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijk5ZWM3Y2JlMDM3ZGY5Y2YwOWI0ZTU0ZDZiNGZlZTE5MjFkMTExYTg4ZmQ3NDc2NDA5YjlmYmY5MjAwY2ExNzAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjFlOTAzYWJlY2EyNzQwYjY2MGE4ZmM0YTBhM2RiOTllOTAzNTAwOGNhZmQ0MDZkYzAzZTYxYmFmZDllYTdkMjcifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_c292640fc2d540afbd6d851b67338de4",
+      "statement": "Friend relationships use a canonical unordered pair and explicit PENDING/ACCEPTED state; new requests honor active-account and solo-growth eligibility, reciprocal pending requests auto-accept, and direct peer operations require an accepted relationship containing the caller.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/social/FriendService.java#L109-L201",
+          "version": "repo-lines-v1:sha256:96059af987085c90dddd59fa8e697422e0e650d3fb9880a06be7513b949d9978:eyJzZWxlY3RlZExpbmVDb3VudCI6OTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc1MjYzMzA5MjNkNGUwYjVlZWYyNTkyMTEzMTJhY2U0ZWIxYjk5MDE3OGIyNjFhODVlOWViZDRhMWFlYjA5NjgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM3YzM2ZjBkMGFhNDM4MTVlYTFhMjg3ZjIyY2IwNDQ0MTQ2MzNkM2VmZTIzMTQ2YThhY2ZiMjY2NzQxZjJjZmYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImZmNjJlZjkyNGUxNzIzZDU4OTAyZmU1NGFjNDI2Yjg0NWQyMzRlNjlhZDQ1OWRhOWRjNmVjZDIzNTg0MjRiZDYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjA2ZTVmNWU3ZjIxODI4MDg4ZjZiOWQ4OWY5ZTQ5OTk2YjY1OTdlNTc1ZWIxZmE5Mjk4MTFiNjFhZGFkNmMzY2QifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/social/FriendService.java#L352-L381",
+          "version": "repo-lines-v1:sha256:14cb0de8617c0b47b39c410ade3c903f2c6ff7dfe4de302b2056816a9f69b777:eyJzZWxlY3RlZExpbmVDb3VudCI6MzAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjIzNjMwYWNjYjI3MTMzZjk3NzYwYjNjY2FjZTEzZWEzNzZiNzYzMTFjODg2YWQ2MzM3MWEzYTM5MjY1MzI1NjQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjIzMDE2NDJhNGJkM2FhZDRmZjkyMWRlNDAxNjY1NDAxYjMwYjZjZGY1YzA4Zjg3OTRmYjVhYjgxNDA3NGM2NjEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImYyZDgyOGEwMzdhYzFjODE1MzViMWQ1NTAwODMyMzIzYmZiYjg2NmEzYTNmODdlN2E2OGMxM2EyYmFlNTZmZmYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUxZWIxOGJlMjQwZmNmYmY1ZTBhOWQ3YzM3ZTZiZjhjMWNlMWFjOThiNDUwN2IxM2QzNTBiODQ0NGRhZDA2MzYifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/social/FriendService.java#L58-L67",
+          "version": "repo-lines-v1:sha256:629159e394008852627c57fc936d11528549a0ae95d07f38807ed61965d00173:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM5Y2JiYzY1NDY5ZGIxY2EyODQyZWZkOTdkZjdlZTJjZTZjYzE1NzE0ODJkMDFhMThiNzkwYTEwYzdjNTEwZjMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijg5ODllMzFiNzVmZjdhZmJlZTU1YzQ5MTI5YjEwM2I3NGQzY2Y4MWVkYWZmY2UxOGViNzNjNWU0ODc3NmNhZTIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjUxM2JjNjFkOGM5MDg2MmE3MWI3YjQxMjc0ZTBhY2NlMWZmOTQxODljZTU5NjhkODk4YTc0MzE3YmNiNTYzM2IifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/resources/db/migration/V10__friend_relationship.sql#L1-L18",
+          "version": "repo-lines-v1:sha256:ba4d2983a910a37d1b2dba149786dac5dd2e0beeecc48d89aaae211d853976b9:eyJzZWxlY3RlZExpbmVDb3VudCI6MTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZjOWE2YzAzNWZjM2RhZjBhNmFjYmU2N2I3MTVhYzg5NWE1NTZmMmI2NDYyNmM0YzA2MGFmYjkwODYyMmFiNTEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk5YTNlOTViOTc5M2E0MzJmYzU1ZDBjMGI1MGZiYjU3ZDc5ODAwZjkwODY4NjBlMjZkNzdiMzE2NmQxMjIwZTAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_5eb94ea53cd64c41a082589ef5174ae5",
+      "statement": "Direct messages are accepted-friend-only operations with trimmed, nonblank bodies capped at 1000 characters; conversation unread counts are receiver-owned unread messages, and marking read updates only messages sent by the specified accepted peer to the caller.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/social/FriendMessageService.java#L36-L135",
+          "version": "repo-lines-v1:sha256:541be0263a18a5a0cba81d45f645ef64e2f4e7917f72498447a729cc2bd6eb14:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAwLCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiJjYTZiYjcwNDM5YmMxYmRkZTZhZTRmODNiNjExMDA2NzQ0MDlhN2QzZWIwYjliNmVjMGNmOWM1NWMyYjEyODgxIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiI0ODkzZjQwZTM3ODFlYjg5NmM4MmQwNDZhMDgwNjdhMTFlMzVjZGYyZjFkZmFmMjZmZWE5MGI4ZGI2Njc2NDEzIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiJmOGJkYjJiNzU4Zjg1OWIyNzllNzlkYjZhM2I0ZDQ1NDc4NzcyODY0YzE5ZTJhNTY2YTBjMWNkYTU2ZGE1OTRhIiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiJlNDY2NjgyMzQ2YzBlMTI5ODI5Y2ZjYjUxMzA5MDZkNGI1YmYyOGE5MjlkZjU5OWNjYmNlZWViZTQyZGZhMGUzIn0"
+        },
+        {
+          "resource": "repo://backend/src/main/resources/db/migration/V11__friend_message.sql#L1-L15",
+          "version": "repo-lines-v1:sha256:225573873d1217218f212b02b369f00aa63fb772e2c6e582ff7c37712ad99247:eyJzZWxlY3RlZExpbmVDb3VudCI6MTUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjA3ZmVhYzYwNGMwZmMzNmFhMDlmMjY4ODJkNjZlZmVkYWY1YzcwMWI3NTVhZDc2NDIyYjI2ZWE1ODkyOTM4MTgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjMwNjQzZDM5ODYyZTEyODYyZjc3Y2JjOGE4YmQ1OGRlZGI4NjBlMTRkYmY4Mjc3ZjFmN2M0NDJjZDk4NTk3MjYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijk5YTNlOTViOTc5M2E0MzJmYzU1ZDBjMGI1MGZiYjU3ZDc5ODAwZjkwODY4NjBlMjZkNzdiMzE2NmQxMjIwZTAifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_b8dc47284fd7498f9f895758935a7fa8",
+      "statement": "Group creation requires accepted friends and permits at most ten people including the creator; later group detail, message, send, and read operations require membership, whose last-read timestamp drives group unread counts.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/social/FriendGroupService.java#L151-L287",
+          "version": "repo-lines-v1:sha256:6ffbfedd1e3c20ec1460c4f0e2d8a10da44ecfd2d4ee67e0aabf211e94c61374:eyJzZWxlY3RlZExpbmVDb3VudCI6MTM3LCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiJhYTFiMWQwOWJhNDVmY2YzZmFjYzE0OGZiMjgxNjg3ZDQyYTZlMTU3OTliNDQ5MmFiNmI3MDMyYmFiYjQ3M2Q2IiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiI0ODkzZjQwZTM3ODFlYjg5NmM4MmQwNDZhMDgwNjdhMTFlMzVjZGYyZjFkZmFmMjZmZWE5MGI4ZGI2Njc2NDEzIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiIxNDg5MWQ4ZmYwZjBhMmQ2ZGUyMzg4OGZlMTI1ODZlZGY2MjA2ZGI5ZTc1NjUzMGUzNDMwNzc0YjliOGExOWMyIiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiJlNDY2NjgyMzQ2YzBlMTI5ODI5Y2ZjYjUxMzA5MDZkNGI1YmYyOGE5MjlkZjU5OWNjYmNlZWViZTQyZGZhMGUzIn0"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/social/FriendGroupService.java#L39-L80",
+          "version": "repo-lines-v1:sha256:d4e814d1b2f0e4ff9ded23dcd00171ca6556cd1449fe7bebceacb38770e59d17:eyJzZWxlY3RlZExpbmVDb3VudCI6NDIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc1MjYzMzA5MjNkNGUwYjVlZWYyNTkyMTEzMTJhY2U0ZWIxYjk5MDE3OGIyNjFhODVlOWViZDRhMWFlYjA5NjgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQ0MjE4MGI4ZGRlMWY3OWIyMjk1YzQyNDNkODZkMGEwYTgxYWFhNDdkMjRmYTBkZWZhYjNmMjBhNGYyNzM0YWEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImY4YmRiMmI3NThmODU5YjI3OWU3OWRiNmEzYjRkNDU0Nzg3NzI4NjRjMTllMmE1NjZhMGMxY2RhNTZkYTU5NGEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjJjMTMwYmY0MmFiOWQ3MzJhYzIzMjhkYTQ1ZmFmZTk2NDAzMTA3ZDllYjM1YTUyMGRkNWFkODQxMGZlY2RiMzYifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/resources/db/migration/V12__friend_group.sql#L15-L40",
+          "version": "repo-lines-v1:sha256:c98a2ee796a8adda0a17ba55ede32ab5df237d167037073be6a258077037bd3f:eyJzZWxlY3RlZExpbmVDb3VudCI6MjYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjgzNzFhYmIwZWM3ZGQ5ZDIyNzYyMzVjYzY1YTczMTAyMDg3MTRiMWJiOWZmNWVlZjc3NjQyNzA0YmE0ZTQ1ODEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQ4ZmJjNzcwN2E5MGVlNDc0YmM4N2EyZjE4YWRkYzhjNmY4YjgwOTExZjM2ZDFjNGIwMGU2YzJiNjFjNGU5M2YiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImRhMjc2ZDkyMmJjYWU3Yzg5ODFlNmY2YTJhM2ZhM2JmNTIwMTQ0MWNmY2M2ZmYxYmZmYTZlZWEwYTI2YjNiZTkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijk5YTNlOTViOTc5M2E0MzJmYzU1ZDBjMGI1MGZiYjU3ZDc5ODAwZjkwODY4NjBlMjZkNzdiMzE2NmQxMjIwZTAifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_f6481240eab947dfb9615c3d482c5254",
+      "statement": "An accepted friend may view a limited composed profile of aggregate growth, roles, selected pet, attributes, and that friend's locally dated schedules, but the relationship check occurs before these internal reads.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/social/FriendService.java#L212-L285",
+          "version": "repo-lines-v1:sha256:6a91df2607a16f0c84c563b6dcd69175fa49be64f0d38ab5e254bf96a8a1cdac:eyJzZWxlY3RlZExpbmVDb3VudCI6NzQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImEzMmNmMjE1MTkwYTYzYTYyMjk5YmRiMWMzNWE3MjhlNDM4YmVlMTc2ODc3MTA3M2ZlMzA5ZjBhZWI2NjA1YzciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFlNzVjNzBkOTQ2MzYyNWUxMDc5ZmQ4ZmM4ZWU2MmFkMmU5MmM0MmJlYWFiZmQ4NWI3OGQ4ZTBhNDk3OWI5NGEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjRmYTA4NGVjNTk3MmM5MTVhOWQ3Y2NjNTQ3ZjM5MDVlMjIwNzUxNTA5Y2Q1NGMyOWM2ODIxMGQ4ZDcwYmE3MTQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImFjNGNhZDIwMmVkNDJiYTFlMGZiN2M4NTRiOGQ2M2IwMDNmNWVjZDVmYjNkY2RlMTQzMWRlNjRjYjg0MDg3M2EifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_9566194efd3d4448a8f10fee978cc671",
+      "statement": "The browser chat client polls an open visible thread every four seconds, marks it read after loading new content, silently tolerates polling failures, and retains a draft if a send fails.",
+      "evidence": [
+        {
+          "resource": "repo://e2e/chat-flow.spec.ts#L17-L85",
+          "version": "repo-lines-v1:sha256:4b995e661441bf9154e7045d6e49f42f50b0485e5434866d3aecbbf05a9a908a:eyJzZWxlY3RlZExpbmVDb3VudCI6NjksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQ1NDBiYjIwNjBjZmExOTU1NzE0YTkwNjNkY2M3NmNmNTFmMDNmMTQwYzM0ZDQ3OWNkZWRiNmMyNWY0MjVjZGYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ5MTc0MTYzZWVmYjAwM2UwMzVmMmJhNTMzNmE1MjJkMzg5Y2MxODlmODNkODg5MDkxZWY5M2M0NDk0MTRmYWIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijg3ZWEwZTJlZWY0N2I4NGE3MWMwMWFlNDE0Njk2NjhkYzNhN2NiYjcwM2RkYTlkYTk4MTcxOWVlNGI4ZjA4NGIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjE1OWI5ZGI1N2IzMmZiODFlMDc0YjM4YjYzYmM2YzY4Y2ZmMmU4NWUxZmQyM2M5ODk4NDBmY2NlYWUzODIyYWYifQ"
+        },
+        {
+          "resource": "repo://frontend/src/modules/friends/friends.logic.ts#L304-L412",
+          "version": "repo-lines-v1:sha256:424d5667f81092dd12de3ccd42b5fea8a6537c981627deb8bd96b5a4327e2030:eyJzZWxlY3RlZExpbmVDb3VudCI6MTA5LCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiI5Y2Q5M2I0MWM3MjcxMjcxZWQxY2VlNjlkMjMzNmNlOGI1NmJhOGNhMDc4N2M3MGFmMDNkNGY1ZDQ0ZDdmMzgzIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiIzNDY2MzUyODYyYjEwMzQyYmU2ZDRiYzA1ZjdjMjU0ZDRiMzRlZDM3OTAwZWIwNjY0YWI2YjhiOGYwMWQ5NDAzIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiIyMjU1YmM2ODJjYzY1N2JmYTQ3ZjRhN2QzMGMwMTg1NjExMjI1YzNkNDM2YTU3NWY5YzUzZjRmMWQ3Y2Q1MTRjIiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiIwMzUyNmIyMjQ5NTIwODczNGNhNDc4ZTU2NTQwNmY2OTdjZTA5NTlmNTY4MWRiYWNmN2JjMzgzMWUwYjNkYjBmIn0"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.5.1",
+    "at": "2026-09-14T13:15:33.655Z"
+  }
+}

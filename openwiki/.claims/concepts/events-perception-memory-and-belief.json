@@ -1,0 +1,196 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:20f5006676c0f9926f49333c6eff865217dd176359410569640a00dfbb407fe8",
+  "claims": [
+    {
+      "id": "claim_bfb5c6a71f3e40f690823b6753c0cd00",
+      "statement": "`WorldEvent` 是 `CompanionWorld` 中有界的公共事件记录，而 `ResidentMind` 的契约只允许模型看到单个居民视角，不能看到世界聚合或用户 intents/Todos。",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/application/ResidentMind.java#L7-L11",
+          "version": "repo-lines-v1:sha256:fb587c7fb2452c300617737144d5bf85f04206e77467d771763da935448e3f12:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiOGU2MGI2MTA5MjNlODQzYzA2ZDA0OTgwNTMxN2NkYzlkMzI2ZjY3MGFkYjY2ODNhZDRjNDRlM2U1MTM4M2I3NyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiOWZlZmI4YTYyMzBiNjlmYzdhMTUzOGZiOTVmOGY5NGUzZjI2MGIwMTYyYzk3YTgwMWZhYjliYTU0MGYzNDljNCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMjNmY2MyNWFmYTFlMTdmMjkwNDBiNmRjYWM4MjRkNDg3YzE3MTMwYjEzZjRjNmI1YmNiYjRiNGY2OTVjMjIwNSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNWJlN2Y4MzFhZDZmY2YyNjU5MGU2YjhlNTdlNzM3YzBjYmQ1NjMwMWZiYTczYTVlODM5ZTA5MTA0MTU5MzgxNSJ9"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/domain/CompanionWorld.java#L603-L608",
+          "version": "repo-lines-v1:sha256:cb467a9415f4eca4152616b4bf49e6b482c494e75db56ba3f06dad2fd6ac52f5:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMzNhY2VlNmFmYzZmYjBmNjBiMzk4N2NiYzIzMDNmNWRjZGZjZGI0Y2YwOWQyNTJhNjRhNThjZmFhMmViMmQ5ZCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZTZiMDQ0OTE0Njk3MjJlODM2M2E5NGU0MDQ0NTM4ZTAxM2EyYTIxN2UzNmIxZTU2OGJhNjBhY2I3YjRjOGYyZSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiOWFhN2I2YzMyNmJjOTdjZTA3MTU3NTljMzJmMjkyZTJjZTQ2NTBiYmIyMGI2ZDU2NmNkZmFiZTllYmVkMjdkOCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiOGIwYjQ1ODRlZjNiN2M3NWI0NWIxNmRkNDUyZWZkMDczYjg1NTA3NDY3NmRjYTRhMmYxOWQxMDJlYjNlMWQ2YSJ9"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/domain/ResidentSimulation.java#L3311-L3316",
+          "version": "repo-lines-v1:sha256:771021dbd422ddce0485575f25e1d645cb9600401571522d083dfae2cda2a2ef:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiY2ZkYWE2ZGIxMjg4ZDhlNjkzM2Y3NDY3YTQ2ZWM2YTA4ZTYwOTk2ZmI5ZmYzZjYyMzBhYzIwNjUyMzc5M2E1ZCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYmI4ZjM5YTUzNzk4MzQ0ZGE3YWE4MmNmNjU0ZWZiM2M0NTI3OTU2ZTY4ZGM2MDk0MDFjNjI2NGNhYjRiMjhmNSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMGJjYTJkYjBhODg3MDI2MjkxMzg4ZDI4NzdiMjg0OWJjODViNDA0ZDZjOTk1YWJmMjliMzhkZDMzMGU3YWYyYiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNTc1MjBmZTFiOTRjYTQyNmM1NjRiMTBjZjExOWY5YWE1ODMzMGM0NWZlZDMyOGJhMDFiNDk0NGExYWQ0NTQ4ZiJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_2acf53e3f92a457c86ba6222ff385e6d",
+      "statement": "模拟感知仅对非步行、非睡眠居民运行；同 room 且未在途中、睡眠或离开的他人可被 `witnessPeople` 记为观察，记录粒度和是否留痕受观察者敏感度、场景签名及最小间隔约束，且活动文字来自固定映射而不复制对方理由。",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/domain/ResidentSimulation.java#L2815-L2829",
+          "version": "repo-lines-v1:sha256:58e4926e3d4f25cd5d2792e7f67eda1ca0e7ba8f5f71924d390425fee0361945:eyJzZWxlY3RlZExpbmVDb3VudCI6MTUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk5ZDQ4OTJkNDJiMGEyY2E3NTZmMDc2ZjA0MmRhZGU3YTQ5MWJiOGY3ZTExNTI5NTk1MDAxZGI4NmRkMzVhOTciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImQxN2YzN2FjMWU2ZWVmOTQzZjA1ODU2ZTdhNjFkZGI4ZTJmZDhkZGI0MTgxMGRiZWU3MTg5M2I1ZWQ4NjI3YWUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImNiY2VhNjY0MTQ5MDViOGFiYjg1ZWNjNmU4MDllNDI2ZjE1NDMyOGNlOTQ3YjY0ZjBlYTNiYzFkZTk0MjU5MTQifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/domain/ResidentSimulation.java#L2831-L2869",
+          "version": "repo-lines-v1:sha256:0361ebcc12cdf3fbe1c92141f656fdcd332ee46f810e8f867e467eb404fb5a2f:eyJzZWxlY3RlZExpbmVDb3VudCI6MzksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRkY2E0YWZhY2Y5YTQwZWExNDQxZmY3NGEwNmI4NGYyOThkYTJjN2RlMGJiNDY2ZTQ0MmRkZjk1NTRiNjRkZGIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImRmMTY5OWVjZWNhOGZjMGNkMTg1MzdiMmVhNjFlMTJmMzg1YmVlMDUyNGRjMWY2OWEyNGIxMGVkODNkYmE5N2QiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjUzNmQyZmU2ZjU5YzdjYTkwZmFmNzliMjc1ODA2M2ViMmI5MWE3NDg1YTIxMjI0NTY0NzYzZWM5ZGY0NDQ2YTgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjlhNWIwOWU5MGYzYmUzYjk0OWIwZWI0ZDRlZDY2MGI1NmJlMDQ4NmM0ZjRjNjRkNDcwNDhhYzA2ZmZjZTI2YTAifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/domain/ResidentSimulation.java#L2892-L2934",
+          "version": "repo-lines-v1:sha256:46f637e94952c58d4891932aceca7e7545243eceedc3a04004e7977f73623d82:eyJzZWxlY3RlZExpbmVDb3VudCI6NDMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImUzYmM4MGQ2NmE0ZmUzMmQ1NzA1ZWMxM2QzOWIyMzVlNzU3M2M2NzAwNDc5MGE4ODY5ZTk1OTI1OGMwMGU2YjkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImM1Y2RlZjgwODVhZTc0YWI2MzZkNjQ1OWY1YzZkNWZiZmIwZGIyNjRmMWIwZDc1YmFjNTE5YzliM2Y2NzE3YWMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImE0NjhmZmFkMWJkNWNmNWVlNGY4MWMxYTExMmY4NTNjNjlhNWFiZGRmZTlhODQ5ZTIyZWJhYjNlMWI2MmYzODMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjlmZjUxYWYxYzJhMjcxNzc3NDEwNDUwMmMwOGU2ZmU4NTkwYjhjNDY0MDVjOTVkOGE3NTcxMWEyMDM5MWYzMmYifQ"
+        },
+        {
+          "resource": "repo://backend/src/test/java/com/betterself/growth/town/companion/domain/WitnessPeopleTest.java#L50-L115",
+          "version": "repo-lines-v1:sha256:0afe91c7c37c5a626584644131c70a380917f6976596a103f1095f0faedb1f02:eyJzZWxlY3RlZExpbmVDb3VudCI6NjYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRjZjA5ZWIwYzU3NDRmYjk3MzMxYjk4ZmYzZmJmMDVhNjAyYmEzZjdmNjdlNWRhNWJlOTA5NTAzM2Y2MjU4MjUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjZiZWUzYjViMjQ2MWZmYjBkYzRmNzZkYjAxYWM4OTg3NjdlZGRlMjZhOGYwZWI1MGY5ODY0N2RiZWEzYWQyODQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijk2NjU4NjViOWQ4OWRjYTFmOGMxMjA1MDViMjZjMTViN2RlOGYzNjY1MjcyNDU5MGFkNTdlODk1OTYzYWRjNjYifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_2e75d9b207004fc79a289b4a8808d595",
+      "statement": "模型对话提交一轮言说时，系统写入 Turn，并为说话者创建 `observed`、为听者创建 `heard` 的个人 raw memory；谈话摘要只能引用该参与者的 turn memory，模型不可用的 fallback 会中性结束而不伪造台词。",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/domain/ConversationLifecycle.java#L110-L153",
+          "version": "repo-lines-v1:sha256:570350b6ccb7e73c4aee8b73a3539a664fc063bc5ccadae54baf7c465ee8e227:eyJzZWxlY3RlZExpbmVDb3VudCI6NDQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjllNThhODczNjQzZDc4YjBiYTkxMjJiZTZlNWEzMDAzYTJjMTRhMTMxMzIxNGVlODk5MTgxMWQ3MWZiNjc5NGIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU4OTAwMDY2ZTZhMzI2YjE5ZTE5NGZkNWJjMmVhZTQ4ZTcwMjNmNTY3MWQ4M2M1NzA1YzA1YjRlZWU1OTdlN2MiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjgxMGY2N2UzNmZlODdiZDY5ZGRmYzA4Y2I1NzVlNzM1YWFmMjk2ZWJkMTJhYmZjMDQxZDg5MDdmMGMyMDkxMDMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijg1MjcxZWEwOTc2MGMzOWM2Y2UxNzU3NjdmNGQ2MDVjMWQ3N2UyYzllOGQxYTg5ZDZiYjI1NGE4NWNhMTdlYTgifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/domain/ConversationLifecycle.java#L185-L195",
+          "version": "repo-lines-v1:sha256:569ec25fd8f6eee63d1eaac44e9226793920837a94ea39fb231b90333f0b4cd9:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdiZDRjODEzZWFlMzEyMTFhYTUwNTU5MmMzNmJjNDFiY2IzNTNiNDJmMTMxMGMyMDBhOWVkMDBhZDNhZGUzZDMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImQ2ZTc1YjMzMDE1MmNkNjdjMDZmMjkyOThkYTk1Zjg4MTYzYTI4Mzg1NjVhOTU3MWJkOWU0YjFmZjVhZTUwYzMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM4ZDUzMjlhNWNhNzJhYTdmNzNhYzRhMDdkMGU0NzZjYTc2YjRjZDQ1MGRjZGI4MDcxM2U5ZjkyYzE0MWIxMjAifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/domain/ConversationLifecycle.java#L213-L228",
+          "version": "repo-lines-v1:sha256:1fa4ad1f6a35548ddd1ebc5c794b164e62b5c6729c875a2fbc0915b944c75181:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZlMGE4YWE4MjM0NTE4Mzk4NmZhODM3NGQ0ODAyOTY3NmU5ZTMxY2Q3NmQxNjQ0YjAxNDYyYjZhZDNjNjMxMmIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjJhZWVhN2Q0MTY2OTVlMzE2YzQ5OWZlZjcyNDZhZGM3MDZkYjEzNDQ4NzhjZGY4NjI4MTAwZmY2OTQ2ZTNjOTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjUwNDcyYWU4YTVhNTlmNTE2MzJjODgzZGFiMGZjZTgyMjQ1NWQ5YzY1NDhmM2E5NDVjZTRiMmUzMTU4MjgwNDQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImM4MTYwZDFiZmM2YjBlOGY4NGMwYWNjNDM3ZTVlMmNhYmJiNzk5MTRkNzIxYjU2NTY4NmRjODE1MDFlYjg5NGIifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/domain/ConversationLifecycle.java#L81-L98",
+          "version": "repo-lines-v1:sha256:73258b6d855934373a04f6c5e105542807e641dbe3b3e83adae4808696292d78:eyJzZWxlY3RlZExpbmVDb3VudCI6MTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjUyNjcxMTdkOWU2N2NhZTM4NWRkYzJhOGE1NmIzMTk3MjMyZWY5MjFkNjZiODY4ZDMxOTFjMmYwM2MyNTkzMTQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU4OTAwMDY2ZTZhMzI2YjE5ZTE5NGZkNWJjMmVhZTQ4ZTcwMjNmNTY3MWQ4M2M1NzA1YzA1YjRlZWU1OTdlN2MiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImZlMjlhNjUxYTg2YTNkMzFlOGEzOTkyZmJiNjY1NzI1M2VmNjBlZjgyZmFjODQ1Y2M3OGEyMWE1YTU3MDU5NzIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjNjZmUyMDI2MjFjMmViODYwNzFkZWIzNzRkZjlkYTJjMTI1MDc2YjM3ZjA1ZmE2YmM5ZDQwNjRhNzgzYWE0MjEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_33f35d72eb4247979aadd722e1dbd051",
+      "statement": "承诺只能在双方同 room、清醒且非途中时创建，并给承诺人、被承诺人和当时 witness 分别写入个人视角记忆；到期结算只记录 promiser 是否到达约定地点的 `came`/`did_not_come` 事实，不写守约或背叛判断。",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/domain/CompanionWorld.java#L92-L142",
+          "version": "repo-lines-v1:sha256:946f23ae3ad49d080376ed0e4f0ac32d1b3d754570ec37d7b032fea031f4aacc:eyJzZWxlY3RlZExpbmVDb3VudCI6NTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImMyOTgyZmIxZWJlOTc5MDAwMTNmYzI3ZjE2NWE5MTUxMTJmYjZhY2I2OGJmNTRjNmQ5MGQ1NTZhNGUzNjkzM2UiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU2ZjJkNjI1NDU0NmFiZmMxMTExZmNlODA0NGM4YzQ4Nzk2M2FjMzlkYTRmOGVmMzAwOTA4YzJiNzRhM2VhN2IiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijk4ZDcxZTBmZGFmNDk3OGI4MDY3MWUyYjdiNGUyYTM5NTUzYTFhYzE2NmQ5MjA1OWQ2YWZlNzYyZjdkYjM0MjkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijc1YjhjNmM4MWU5MmUyN2JlZDc5YTEwYWE3YWY3NDlhNmMzNzY4MTBiNmU1Nzc0MmMzOGQyYjcyYmRmZWZkOWUifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/domain/ResidentSimulation.java#L2043-L2094",
+          "version": "repo-lines-v1:sha256:7997e68f2eeee730bd6a574d484f3416868fa0f5e7234e37c1474a92058a23f5:eyJzZWxlY3RlZExpbmVDb3VudCI6NTIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImMzZjk4ZmYwNmFiMzYyYWRhYzBkODAwZmI2YWRjY2U4NGRlOGY1NzEwNzFhNjQzMTc3MzBkYzZjYjAzMDBjNDAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU4OTAwMDY2ZTZhMzI2YjE5ZTE5NGZkNWJjMmVhZTQ4ZTcwMjNmNTY3MWQ4M2M1NzA1YzA1YjRlZWU1OTdlN2MiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImRlNGFjOGIwYTE0YmUwY2IzYTc5ZjMxOThmMDk1ZGI0YzkyMjgzNjgzYzVmOGMzZjhjMTJiYTUzMjEyNjE3ZDEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjZiZWU2ZTliYzc1Yzc5Nzg0NzMxNmU4MWQ0ZDY5MDQ2MDVkMWU2ODMzNTg1MDc4MWU3MGFmYTMxNjM4MzA1NzgifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/domain/ResidentSimulation.java#L2104-L2133",
+          "version": "repo-lines-v1:sha256:1a93776edb7c9ed04df35cfa407ba02df0d9f2471dd33e331b4762b8cd92299f:eyJzZWxlY3RlZExpbmVDb3VudCI6MzAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImRkN2RjMmU0Mjg3NmE4NDQyZGY2NzM2Zjg4ZmIwNjAxNjgxMDJjNTk4ZTkyMTVjMzc4NDc4ZmQ4NzNkMWQ5MDIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU2YjA0NDkxNDY5NzIyZTgzNjNhOTRlNDA0NDUzOGUwMTNhMmEyMTdlMzZiMWU1NjhiYTYwYWNiN2I0YzhmMmUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijc2ZTU1ODkwMmQxZDE0NGI4MmJiMWY4MzJkODM1YzFkYWYxMmNkYTEwNmRlNWVmNTZkMWY4ZDQxZGRjZTA4NTgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQxMjI0YWU3YThlY2JjOTQzZDJmNWQwMTU0NjFiODFlZDFjNWI3MmU5YTg0YzI5MjJmMDc1N2QyOGNmMDg1Y2MifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_acd8031b79c7411b80ffa9cea089c0cb",
+      "statement": "`Memory` 将 `seed`、`observed`、`heard` 作为 raw 层，将 `reflection` 和 `belief` 作为更高的个人综合层；反思应用要求至少一条当前 owner 的真实证据，且应用层还将引用限制在实际提供给模型的记忆切片中。",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/application/ResidentDirector.java#L288-L300",
+          "version": "repo-lines-v1:sha256:af393ea07c0c63df71b0072671ad2be4d8c041b5307b3b9ff5573fff8c9d010f:eyJzZWxlY3RlZExpbmVDb3VudCI6MTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg0NDFlNmVkMWNlZDYwNzMzNGI3MjcyNTYzYjVjMzFkZGU1ZjQxNmVhOWEyMzA0N2Q3ZjRlNDA3YjAxMzIwZmUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU3MmMyNWViMDMyM2EwMjM5YjJlOGJjY2RiYmIzZDQ0MWY0ZTZhZDY3MTIwMzEyMzQyZTZmOTg3MzUyMDg0OGYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjY0MDEyOGU2ZWM3ODc2MWVlMzQxNTU5NDNmNmVmZDE2MTkwYjY2OWI2Y2Y3MzFmZTIyN2FjMjRjYjM0YjI1MzciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImQ3ZDQ2ZGUwZjdlMzVjOTY2NDNlYTJhMjQ2NzM5YzBjYjI4ZTk1Y2RlYTYxN2VmNDcxYmUwZTMxZTk4N2EyYmYifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/domain/CompanionWorld.java#L683-L712",
+          "version": "repo-lines-v1:sha256:36c2154189d3a511f6859c7361de51e18c7d96a92eaf687958dc1e5f53b59b44:eyJzZWxlY3RlZExpbmVDb3VudCI6MzAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ1NjA4OGIxZjBlZmI2ODQzMjA0OGRjNzFjNjA1MTMzMTBjODg0NWI5NzM1MTg3NTg1MGJkMmYwYzAyYjcwMWYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImYzNzVjZjc4MTJjYTJmMzM2MmYyNjNjYjZmOWJhZjczZjI5OGU5NDI0YmI3ZTUzMDlmZjJhNTcyMWMyOTgyNzEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/domain/ResidentSimulation.java#L3275-L3308",
+          "version": "repo-lines-v1:sha256:5b760873c16276a597067093277a2fbe980e9693762a72e223fbafa379a0ae5d:eyJzZWxlY3RlZExpbmVDb3VudCI6MzQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImE1YTljNThkYTJlNDI1YzUwMmEwZmNjNWEyMDFlNWQzOTkwY2I3ODNjODIwZGUzMjJlYTY4Y2RmYTUxMzM1ZGIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU4OTAwMDY2ZTZhMzI2YjE5ZTE5NGZkNWJjMmVhZTQ4ZTcwMjNmNTY3MWQ4M2M1NzA1YzA1YjRlZWU1OTdlN2MiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijc0MDBjY2MyMzExMjFlMmE4OThlMjE4NmQ3NjE2NWE0MzY5MWUwYmM0ODA4NGMyMTE1YTBjY2MxYTU4MDNhYTQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjgwZmVlYzk3YjNhZDc0ZWVmOTRmYTE0ZjJmNTI3YTFmMjQ2ZmIwYzkyNWRkNDk1MzQzYzgzNGYyZDdiMWU2ODAifQ"
+        },
+        {
+          "resource": "repo://backend/src/test/java/com/betterself/growth/town/companion/domain/ResidentReflectionTest.java#L167-L195",
+          "version": "repo-lines-v1:sha256:eb09c92dd88b64a3fe602acc74f023417b7555fcacd26c7639d75a9562e6f1d1:eyJzZWxlY3RlZExpbmVDb3VudCI6MjksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImUyOTkwOGVmMTFhYWZlNzNiM2E1MjFhZjdkNDY5YjQ5ZWI0NTMxNTdiNzY4YzA2MGNmMDJjNGMzNzVhZGNkYTMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjNlMDgzZmI1NzAxZWZhY2RhYTk2ZWE5NWNjY2M5MmI0ODJjMWZkOWI3NjgyYTkzMDVlNjc1MDNlM2M1YzQyYmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijc5MDE4ZDQxZDkzZWI1ZDlkODBhNjdhYjgyNjY1OTIzMGZkYjQxNTQzOWFiMDY3MzZkYTdlZmQxYjgxOGY1YjEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijk2MDFkODgwYzQ4NGFkMWE3NTcxOTMzZjY4NWNiMGJlNWQxNjQ2MTNiY2RjM2ZiYWY5MGE1Y2VjYzQ4OTkwNDUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_0bbf4c0d18004c42ab35d5e45d6302f5",
+      "statement": "普通居民上下文将未 superseded belief 加 seed 背景组成最多 12 条的 self account，并将自 `lastAskedAt` 之后的 raw 记忆组成最多 10 条 working set；对话 turn/summary 不推进该水位线，以保留谈话产生的 raw memory 供下次真实决策使用。",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/application/ResidentDirector.java#L768-L801",
+          "version": "repo-lines-v1:sha256:8ce764255529fe99352eea8016b601fd4607a383a2b04de2d2e1f425e0a23abf:eyJzZWxlY3RlZExpbmVDb3VudCI6MzQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZhMjMzM2EyODc0MTgyZjY5MzkzMjg5ODM4NjQ5MTJmYTlkMGY3Y2U4ZWUzMjMzMmM2OWZhYjUwMDBmY2RiYzgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU2YjA0NDkxNDY5NzIyZTgzNjNhOTRlNDA0NDUzOGUwMTNhMmEyMTdlMzZiMWU1NjhiYTYwYWNiN2I0YzhmMmUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImFjNjkyMGNkZWIyNzI1MmVhNWVmNTdmZTEyNDMxNzYzMjEyOTEwMDhhODdhOTNmNDFiZTM0NTRiMDViMDY0NGMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjA4ZmNlYjQzMDA3YzhhZjZjZDE2Y2YwYmJhYzI0NmJjZDUyMjRiMGQyYzM0YWI3YTEwOTdhNGM0MmRkM2RhYjMifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/application/ResidentDirector.java#L805-L845",
+          "version": "repo-lines-v1:sha256:2b79b572d2c1019078f8222f742f1c15f9031ee6a9fa6e84292e3494b0ececdb:eyJzZWxlY3RlZExpbmVDb3VudCI6NDEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZiMjhlNjEwMDQ3OWQwMTc0MDUzZGJjY2I1YTg3YTEyMzg1NTAxZTA1NTFiZDJjNzdmMTU2YTE0YzU3NmY5ZDUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImIxNjNlNjU4YTIxZTU3OTA4ZDI0YTE3YWRiNWFjYjQzNzg0YTFmZDY1ZGQ0YTRmOTQ4MDNkNmI0N2U2ZGVhM2MiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjA4ZmNlYjQzMDA3YzhhZjZjZDE2Y2YwYmJhYzI0NmJjZDUyMjRiMGQyYzM0YWI3YTEwOTdhNGM0MmRkM2RhYjMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImEyNDQyZjA5YmRiZGNkYzk5Y2UwZjIzZGE3NzQxYzM4ZGJhMzg3ZDBhNzcyMDZlZmZmMGRiZTJmOGVkZmM4MzMifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/domain/CompanionRecall.java#L119-L173",
+          "version": "repo-lines-v1:sha256:b3e06ef9b07dc722c8577f14b87fa8d347b4cfabfb22f294aeb716f0c96b130e:eyJzZWxlY3RlZExpbmVDb3VudCI6NTUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImM2YjEzOGU0NDViY2UzNjljOWQzYzg5OWViZTBiYTNkNmUxMmRmM2RlOTM1YTZmNTZlYzk0NDBiOTU0MmEzMTYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImUyODY0ZGQ0OGQ4NTc3YWQ2M2MzMThlZmI3MTg4OTU5YWM4N2ZkNjllMjAzNjBjZmIzM2UwNjVhOGMzNTI2YjAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjkzYTIxNWMxNDA3ZjBiNTdmMTQ4MTI3OTBmNzU5ZGJmYWRmOWVlN2M2NmFiNjRiNDNjYjM2ZTdhM2Y2NDQwYjkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjE0ODYyYjg3ODY2OGM2ODUwYzQ4NzMwMTU2YzQzNWE1ZGVlYjJhYWUwZjg3MGRjMGRhYjJhM2RjMzgxNjUxNzkifQ"
+        },
+        {
+          "resource": "repo://backend/src/test/java/com/betterself/growth/town/companion/domain/CompanionRecallTest.java#L123-L214",
+          "version": "repo-lines-v1:sha256:ca50a81870412c0c4754c455ebdcc51b7c90947834ac7b075e1b6381213dba06:eyJzZWxlY3RlZExpbmVDb3VudCI6OTIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjE3YmZjMDJiNTVhZTE0YzM3NzhmYmI5ZDA1N2RlNGNmZGE2NmRjMzcyNzRlMDdiZTA2MjcwM2RjYjE0N2ViN2EiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjcwOGIxOWUwZTBkZTAxNmZkNjAzMjA3NjFlNDRhMjI2OGNhOTU1ZGZjYmY2N2YxOWNhNzRjNzkwZDg3Y2NlMjgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_e2cbf03e6fe4430dab4bc1cd3f5aa0af",
+      "statement": "反思是否应被请求由最小间隔、未处理 raw 经验的重要性或日界触发决定，但结论由模型形成；非空 `supersedesKey` 将结论写为 `belief` 并仅标记同 owner、同 key 的旧结论为 superseded，旧记录保留但被检索排除。",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/application/ResidentDirector.java#L633-L650",
+          "version": "repo-lines-v1:sha256:00a186483e0abd89f826d9c2d6aab02f35545ee589e56f829942a00246a28898:eyJzZWxlY3RlZExpbmVDb3VudCI6MTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFhYmIzMzMxM2Q3MWVhZTJkNzZjOTNlYTM1N2U5OTQ5YzgzMzE5ZDc2MWIxYzlmYzgyNzQ5ZWQ1ODIwOTBkZWUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjA2M2Q0MjQ1ZDQ3OTBkODU5ZWNhN2JlY2VjNjY1NDAwZjExYTI2MDE1MjZjODUyMGFjZjA3ZWMwNjY3OWNiYTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImVmYmY5N2MzMjMxZWJmM2NhZWVhZjAwYjZhMDI5MzQ1ZmUzOTIzNDUxYTAzMzMzYWEyNjQzMjRkNWE2ZDRkODgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjkzODRmMWFlMWViM2FiNGI0OWFkNzliNmNmZWY1NmNjYmQ1ZTVhM2MxOWVmZmQxMDY5ZGU2MTdkYzZkN2EyNzMifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/domain/ResidentSimulation.java#L3151-L3206",
+          "version": "repo-lines-v1:sha256:19b85e14d37b91bc6442118f2dd6ad173fe41d83134d9286365db11962df0433:eyJzZWxlY3RlZExpbmVDb3VudCI6NTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjVhZDdmYjY0ZjhlNzU5Y2VkYWU0N2RlZmMyYzg5YzhhMjYwNzRhMjM2OTM5ZmMwMjA0NDhiMTk3YWQyY2FhYTciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU2YjA0NDkxNDY5NzIyZTgzNjNhOTRlNDA0NDUzOGUwMTNhMmEyMTdlMzZiMWU1NjhiYTYwYWNiN2I0YzhmMmUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImI2MTI3M2M4YTY0ZGIwYTA2MDU3ZGZlMmZkMzA2YmI3YzA3ODBmNzg1NmM5NWZmZjE3NzY1YWM4MTM2YzJiOWUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImIyMjkxMzJiNGZjMDY1YThmNDUyNDNhMjFkYjliNTJkOGU5MGJlYTNmNWRlMDUyODRjNWNiMmE3ODg2YjBlYjQifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/domain/ResidentSimulation.java#L3223-L3308",
+          "version": "repo-lines-v1:sha256:fe561e30e6292558a8979aa58317f4ca84da24c8a5f513700dbab05845fea2cd:eyJzZWxlY3RlZExpbmVDb3VudCI6ODYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImI0NzAzYjdiZGVlMTc2Y2M4OTA5ZDI2MWNlOGM4Y2IxMzNkZTA0NzY2NWIyMmVkNzlhZDM4NzhkOGQ1N2M5MDkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU4OTAwMDY2ZTZhMzI2YjE5ZTE5NGZkNWJjMmVhZTQ4ZTcwMjNmNTY3MWQ4M2M1NzA1YzA1YjRlZWU1OTdlN2MiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjI5NWU2ZDk4MzVhMDYwYjQyZmM1NTgzYzA3Njc2OGU2NmYyMWY3OWY0ZGE4OTFiMTRiOThhNjllZTM3ZDM5MmEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjgwZmVlYzk3YjNhZDc0ZWVmOTRmYTE0ZjJmNTI3YTFmMjQ2ZmIwYzkyNWRkNDk1MzQzYzgzNGYyZDdiMWU2ODAifQ"
+        },
+        {
+          "resource": "repo://backend/src/test/java/com/betterself/growth/town/companion/domain/ResidentReflectionTest.java#L148-L215",
+          "version": "repo-lines-v1:sha256:5af05e4e703c27970c732171ab25659f1a2a9003b2e8fdb381fbaa3c0d80efbd:eyJzZWxlY3RlZExpbmVDb3VudCI6NjgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQxYTE4NjI1MmE1ZDljOTc4NTA0MThhNjBkOTg3N2Y5ODg0MzlmMjNiZjQzN2NjODkyZjQwOWIxZGZmYmVmOTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImJmMGVhNjE2NDY3MmM0MzRiYzFhMGVjZjI3Y2M1YmUyNjdkOGRjMDI3ZDRiZTA4MDUxYjIxMTBjYWJiMzNkNTQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjVkMzExMThkZWY1YWQ0YTIzZjg2Zjc1NTcyZjE0YzQ1OTRhYTk4YWViNjAxNmQ4YzU5OGRhZmE5YjcwMDJjOTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_c58392a9e9ea480a899bd4bdd0936a2b",
+      "statement": "规则驱动的无意识行为先作为没有动机的 `Deed` 进入有界未解释队列；累计到三个后才请求 `explain`，成功的个人解释作为 `reflection` 写入并清除所列 deed，而不是反向把解释写成规则动机。",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/application/ResidentDirector.java#L504-L520",
+          "version": "repo-lines-v1:sha256:e8ee18a3121ff68dbb3c604de891427ec6516dbcb5dc3f37d72a7bd7cf1075ab:eyJzZWxlY3RlZExpbmVDb3VudCI6MTcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjI5ZTU2MDY0YjA2MDc0YTZhYzBhZjA3MTU2NGQzMDQ1NzgzZmRlOWFiZWJkN2M2MGVlNDMwNTVjOTBiOTQzNmYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU1MjJjNDJjZDE5YzZkMDNkODA4YzQ1MjcyMDU1MjgyNWI3ZWExYzViNDkxYjIxODUxMWNhYzc0MTVjZjlkOWIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImZmMDI4YzdkY2I4NTg0ZDJhYmIyZDliOGQwYmNmNmI3NmY3NTI1N2FmMjkwZjEyMjRlOTEwNTgwMDVjNjgxZGQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijg5ODJiM2Q4ZDNhZjE1YzFjYTEyYzI0ZTkwZGVmZWVlNDU2OTlhOWE5OTczN2U0MjZlODZmOTY4YzI4M2Q0M2UifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/domain/CompanionWorld.java#L668-L680",
+          "version": "repo-lines-v1:sha256:d977ba70ab9660d5c64dcf7da3d2d39563acd9234fef7719c478a121f1d8594b:eyJzZWxlY3RlZExpbmVDb3VudCI6MTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjBkMmUxNzY3YmVlYTc3Mzc4ZWY5NGQzMWE0NzQwZWZjOGJiMmZiZDRlMDA0NDJjYmNmZjg3ZTk0Y2RkMjQyZDAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijg1YTU2N2Y2ODQwNzUwNzVlZGNmZjZiMTBhZjMyNmQ5ZWU1ZWM3Yzg0YTgyODQyMWRmMGRjNzgxYWJmYzljOTMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijk5NTkxYjA5MjVmOTE4Zjg5M2Q1MjlmOTY4NDljYTc5MzM3YWJmY2QyMDZmYzE3MTFiZjAxNWVmNmI0M2ZiNmQifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/domain/ResidentSimulation.java#L1881-L1923",
+          "version": "repo-lines-v1:sha256:870a2c03748d8f7e9b34394931c1f068e0e729951f98d749bcd1e6981799c403:eyJzZWxlY3RlZExpbmVDb3VudCI6NDMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjcwNjJmZGY0YWRlMGNlNjIzMWQ0OTU4NzMxODQ2MzVkNTFiNTc2MmQ4ZTU5MjA0ZjU3NTI5NDc2MjlhNzBmMmYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU4OTAwMDY2ZTZhMzI2YjE5ZTE5NGZkNWJjMmVhZTQ4ZTcwMjNmNTY3MWQ4M2M1NzA1YzA1YjRlZWU1OTdlN2MiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjM5ODBmYmNlZWU3YWM1ODIwZDY3ZmMyOWViOTU2ZmUxYTI0N2M3ZDRjZDE4ZTQ2ZjlkZmM4Y2U3M2Q1ODgwYmMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjBmODQzYTYzMDZmNmIxZDliNmJhMzdkM2VjMWZiMTExYzdlYmVjMTVkZDg3NWVlZWY4OGE4YWFiMGU2MThlMWYifQ"
+        },
+        {
+          "resource": "repo://backend/src/test/java/com/betterself/growth/town/companion/domain/DeedExplanationTest.java#L27-L82",
+          "version": "repo-lines-v1:sha256:5e53c427228107f4f6ac3a4261578c18ddb5e56aaa6d74f1b10f4f2d2f0e3c24:eyJzZWxlY3RlZExpbmVDb3VudCI6NTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjhmYjcwMmM3MzFhMzJlMzg2NmQ4ZDVlMDlhNGFhZDBkOGM3ZTQwYWQ0MzczZWIxNmFjMjRhYzk3ZDY1MzQ4NzEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjNmNDI4ZjM2ZWUxODg0ZWNhYmZjZDcwNjMyNDkwOTc2YjE3YjFkM2U5MTVlM2JhMDZiMTk0YjBkMWFkNTIzYzgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_03040ad1f22d42da81ed1b77d3bd88dc",
+      "statement": "每位居民的 memory store 上限为 200；超过容量时优先裁剪超出占比的 `who-was-here` 目击记忆，随后按 raw、seed/reflection、belief 的顺序保护更耐久的材料。",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/domain/ResidentSimulation.java#L2842-L2869",
+          "version": "repo-lines-v1:sha256:c41ad744c04c477e854c97d4af8f1a64215a1c9ef86afd4b9cd6a6bd7f83f0a7:eyJzZWxlY3RlZExpbmVDb3VudCI6MjgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjA0ZDg5MGNkMjNmNGRlMTE5ODYyOGY0YjY3ZDZhMGI3NzZjNTNjNTQ0ZDE5YWQ1NzRiZmQzYzU2Yzg2MzhjMTQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImRmMTY5OWVjZWNhOGZjMGNkMTg1MzdiMmVhNjFlMTJmMzg1YmVlMDUyNGRjMWY2OWEyNGIxMGVkODNkYmE5N2QiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE0YzgyZjU4ZWEyYzZmN2RlYWM5YWJmY2ViMWMzNTE1ZWFiYWM0Zjk5MTUzODI4NTNjN2EyMGM0NTk5ZjhjODgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjlhNWIwOWU5MGYzYmUzYjk0OWIwZWI0ZDRlZDY2MGI1NmJlMDQ4NmM0ZjRjNjRkNDcwNDhhYzA2ZmZjZTI2YTAifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/domain/ResidentSimulation.java#L3148-L3197",
+          "version": "repo-lines-v1:sha256:a7d45730b5266719fbd1c0070d6111ac0e4306a04b5bef0a0643fdef24241f59:eyJzZWxlY3RlZExpbmVDb3VudCI6NTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVhMGQyY2ZhZTI5M2FjMzhjMjgzNGVmYzc4ZmYwZDBmNzVlZDU1OWI1YzIxZmM1MTAxNmI5ZTg3MDM4ZWE1YzQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM1YWJmNTY2ODExNGQ0ZDRhMmY3MzhhZDY4YjY1MjUxNDNlMjA1MWM0YWU3YTkxNjkyOWQzYTljM2Q1NDM2ODEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjNhMjc4ZDExMDMwY2Q3MzlhYTRlOTAzMTQ4ZjNiZmUxNmRkMzYzNDgwNGQ1NmQ1OWFhODQ3NzJjNTczNmQ2MWQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijg2NjVjOWQzNDY4NzMxZTk2NWVlODBiZjhlZGRjNzA5MGE3ZThlOGUwNzQxZTViZWNjZDU0Zjg3MDFlYTFmNjkifQ"
+        },
+        {
+          "resource": "repo://backend/src/test/java/com/betterself/growth/town/companion/domain/WitnessPeopleTest.java#L135-L170",
+          "version": "repo-lines-v1:sha256:e34375b5c9574c6d8a2d22ce32978e70613bbb36e759e054b652558f4d988002:eyJzZWxlY3RlZExpbmVDb3VudCI6MzYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRjZjA5ZWIwYzU3NDRmYjk3MzMxYjk4ZmYzZmJmMDVhNjAyYmEzZjdmNjdlNWRhNWJlOTA5NTAzM2Y2MjU4MjUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjQzZWFhODcyNzUwNGYzZDg4OGYzY2YwNjhkZjNlYzljMTM0MWIyZTA1ZTU3ZDYxYmJmYzlkNzhmOTg0MTBiNDAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEifQ"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.5.1",
+    "at": "2026-09-14T13:15:33.655Z"
+  }
+}

@@ -1,0 +1,206 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:d60d2dac4969deda7c0e863ac826dbe8818aa35817e0e1195fd7c631b7ef52ae",
+  "claims": [
+    {
+      "id": "claim_7f584484d7d6441ab254cfd25d91aa8f",
+      "statement": "`CompanionRules.join(...)` 创建 avatar 与四名初始居民后调用 `ResidentSeed.initialize(...)`；初始化一次性装配 25 名 NPC 的开局，而后续 `ResidentSimulation.advance(...)` 再次调用该方法时会被版本闸门跳过。",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/domain/CompanionRules.java#L17-L30",
+          "version": "repo-lines-v1:sha256:36f03c252ab7fa973721b1383e4247bcf19f60098eb2e75b8b68365a6301d292:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ2Yjc4ZmRiMWNiMDJkZTE0ZmU0ODQ2NjJlNmZhMWI3NmZmODI5ZTVmN2FhNjdiOTcwNGQ5Y2FhODgzOWNjMDgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImM3YjVjNjBkMDk0MWQyZDcyNzc2MDZhN2ZjYzE1M2ExNTIyNDJhYTQxOTZiNWYyMGJmYTAzZGNhZGU0MTU5MzQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjNiOTdkYjk3ZDI5ZTIzM2NlZjU4MTY1ODBlN2Y3MGVkNGViNDU0ZTI3OGRiNTBhMzAwNTEwZDA2NWEyYWFmZWMifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/domain/ResidentSeed.java#L125-L224",
+          "version": "repo-lines-v1:sha256:8d2ccd7f4df2e1f97a50111684bfb251973781a6ad1199249e5540e99b891924:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAwLCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiI5OTQxMDU0ZjY1NTE4NmY2NDUzMzc3ZDRkYzA2OWJmNjIxZmZlZWI4YzVmOWY3ZmRkODdhN2I3NTZmOGY4NzRiIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiI0ODkzZjQwZTM3ODFlYjg5NmM4MmQwNDZhMDgwNjdhMTFlMzVjZGYyZjFkZmFmMjZmZWE5MGI4ZGI2Njc2NDEzIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiJiMjdjNmMyNTVkZjljOGU3YjA3MDlkZGZlMWFiYWEzYWNlMjA3ZjU5YWJhYWJjZWQ0YjZmZGM0ZThkZTVhZTUyIiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiJiZjdhNGIwOTUxMzY0NTlmY2JlOTQwMWNmNTUyNGM2YzljZTIzN2M1MGQwNDYyMmExNTk2NDNlYjA4ZDNmZjI4In0"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/domain/ResidentSimulation.java#L164-L180",
+          "version": "repo-lines-v1:sha256:602a049b83e28926846d8f0cc7c85dc97c7a8c17714bc90bc776b4b0757db5af:eyJzZWxlY3RlZExpbmVDb3VudCI6MTcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImRlYjQwMjUyZGI2MTRiMTliZTQyNDI2ZjFiYzAxNWNhNDJiOWJjMDk4MDQxYzYzNWY1NGMzYWQyYTJlOTliMTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjZiOGQxMmM1ZmU3N2JiMTkwYzdkYmU5ZWNmOWM4MWQ5YmJjZWMyMjI1OGE3NDNlOGZlYTBlY2UxMDVhNTBmMGUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImJhOTlmYjQ1ZDk5NzAxMGM3Yzg0ZWUwMWE1NzdjOTdhOTM4NjY3OTRlNmEzMTVlOWNkNzFjZDBmM2NmMDY0ZTYifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_ec92435edbd94f8dab9090284edeb8f3",
+      "statement": "初始化以 `past = now - 90s` 写入手工开局内容，暂时关闭模型对话，执行固定 15 个相隔 6 秒的 `step`，最后将 `simulatedAt` 置回 `now`；这使 warm start 是确定性规则过程而不是模型偶然生成的互动。",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/domain/ResidentSeed.java#L125-L132",
+          "version": "repo-lines-v1:sha256:9ac6c15530358a12affb087af6d08d3b7f2459308d44902f0b6dc690e37b6f4f:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiOTk0MTA1NGY2NTUxODZmNjQ1MzM3N2Q0ZGMwNjliZjYyMWZmZWViOGM1ZjlmN2ZkZDg3YTdiNzU2ZjhmODc0YiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZmU0ZTlkNjcyNzFiZGRkMjAxNjAzOGJkYTZiMzgxYWI2MWVlM2Q4MzU4OWFlMDlhZTQzYjFiNmY5ZjIyNzg3YyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYjI3YzZjMjU1ZGY5YzhlN2IwNzA5ZGRmZTFhYmFhM2FjZTIwN2Y1OWFiYWFiY2VkNGI2ZmRjNGU4ZGU1YWU1MiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMTQ5YWNkZjg2ZGJmNjhiN2Q5OTY0NzI1ODNhMDZjMmM2Y2JiZThiODUwNjY1ZjZkMDBlMzQ4NTQwYTgzYTAzMSJ9"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/domain/ResidentSeed.java#L208-L223",
+          "version": "repo-lines-v1:sha256:3660065e79984f4b1be08a2fe4fbb40d55de3efce47824076ae8d207693ec622:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImEzOWIzNWRhMmI2YzM0NjlkNjhiMzZiYWE2MmMwYjdlYTczYjNjNTRjNzdkMzM4MjNmMDhkZmQ4NmYyODdjMjciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY2YjAzZTVhNDhlMzk4MDhmNjAyOTBjMjViNjgxNzBkN2Q3OWI3NTA5MjdkNzM3ZjBhODgwMTE2YWI1NmI1YzMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImE1OTdjMTRlZDZlYTQ5NWI3ZTQ4MDI0MWViYWM0ZjkyZjkzMzkzOWVjOTVkMmMzMWQ3Y2JhNTRlNGMyOWVhZDQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImEyZTU4YTE1MTA3MzRhZmIzZDMxNzIyMzU4NTRiZmRhODQ4NjljZjBkNjZkOTQxZDJmY2UzYTE2MzY4OTVlOGMifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_5f7b21f9045a40c498c3e750fe1335f0",
+      "statement": "版本低于 5 的世界通过 `reconcileSecondVersion` 加性补充缺失居民、住房、物件和地点，不清空演化列表、不替换关系或回退计划；例行 `reconcileLife` 同时补齐生活字段并种植职责。",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/domain/ResidentSeed.java#L226-L240",
+          "version": "repo-lines-v1:sha256:52ee78ccce54d5edc9177c7f098fc5432ad611501211d46f2a8e570371e68b36:eyJzZWxlY3RlZExpbmVDb3VudCI6MTUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImExNDdjOGI3NTI1ZDhjNzUzY2EzNmExZWFjYTA5NjRlOGE5OTcyMGNkNjQxNWMwY2IxMDFkOGI4YTYzYTM1ZDMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxM2E1YWJmZWUzNzI2ZDUwOTc1NjhhOTg4NjY2MGFiODk1NTI3Njk3ZTA2Mjc0ZmE5MjZlOWViZDAxMzUzOWIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjJlZmI4ZmQ4MjY4ZTVhMzVjMmVlMTBmNjg4NTcyM2Q3NjA3MGJhMTY2OTY0MjcwMDNiYTI5YzVjNzZlMTIwMjgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjJiYzc5YzVmYTViMzhjYzM5Y2IzY2YyZDM5NmNiNjZkMjQyYjgyMDJkZDhlNWFlNDdhZDE3NzViMmI1YmMwODEifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/domain/ResidentSeed.java#L37-L50",
+          "version": "repo-lines-v1:sha256:34e349946e36b0510d569cecd0719ee6d988297ae088107e78ca6e93c97f2ab5:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU4NWU3MzU0NjI0NTk2ZTU2YjI5YzdhM2I0NzBmNjBkNDM1ZGE4MzY2YTdjY2Q5MGI3MDQ5ZTJlNmFhNmRhYTIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImIyOTgwY2Q5MjdhOTk2ZWEwNjY4ZDk5ZTRkZjAzOTNkMWJhZDUyMzdiZTE3M2NmNDI0NTQxNTc1MTVmMTM4YTciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjNmNmEzNzMwNDQyMzM1YjNkMmIzYjc3ZGY2NTU3ODRhN2FhMDQ3ZmZiNDAwNDRiODM5MjRlYzUxZWIwYzY3YWUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_c08d85c6b73a43e1836318569c124980",
+      "statement": "新增居民只能经手工 `addResident(...)` 的校验与装配路径出现；它验证 ID 和必填文本、拒绝重复、建立独居住所，并写入 newcomer state、actor、搬入 seed memory 与初始安顿计划，模拟本身不招募居民。",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/domain/ResidentSeed.java#L24-L28",
+          "version": "repo-lines-v1:sha256:ae5cc8c15d7d42de9f8da299d2a3bb1602e862fe5d03ca2c6eccc34cf41cb71a:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYzNhZTdhOGUwM2UxOTc1NDIzMzMyNWViYmJlZjIzNWExNmNjNjBjYjBhOGJjZTNjYTE3ZGJhYmIxYjNmOTE2NiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYzE5MDkyNWI2MjViYjE0MmFkNWFkZDljZTQ3ZDRiZWVjNjAxNGI3OGRhNDJhNDMxOGI2N2E1OTkxOGY0NGMzNyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZDdhYTUxMWY0OWIyYWU1MWJmNmJjMTkxNTgwNWE2OGFhOTNjODY3NzIyOGZiMmNhY2RlYmEyN2U2ZDZkYmI1NSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMDkyNTQ2YjY1M2M2NTI2ZDg3MDZlZTA5NjIzMTVkZjA1ZDljYzA5ZTQ0YzNmYjUxODBmOWExMmIzMTE1N2NlOSJ9"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/domain/ResidentSeed.java#L245-L299",
+          "version": "repo-lines-v1:sha256:04b12b8eab1c55d5a6dba6fde55e555cb51f3e62fc880f88c8195226c50edbab:eyJzZWxlY3RlZExpbmVDb3VudCI6NTUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImMxNThlNmM4YmUxYmMyODhjYTQ2YmIxYmY2MWQyNjZiNTcwZDZjYTA3ZGQxNjk4NTI1MDY5NjIwYzdlOTY4YTAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc5ZWIxNTA3NGNiODY5NjA5ZmU5M2FiMjg1ZDNjOTYzYmZhMjFiMjkxNDkyOTAxMTMxYmQ4YjIxMWFlZWE2N2YiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE3NGE1M2JiNDc4MDgyMWZmNTM5ZmZkNTliZmNiYzI4YzUxMTZiMzIxNzc2MTYyY2E4OTViNGU5OWExZDFmYTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImM5Yzk5YTQ3ZjRjNDJiZDk3NWRiZDRjNjYzOWIxZDkyMDk2MmU4ZjI3ZmMzYTA0ODYxZDZhMzYzOWYzMmU0NGEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_e572a389b3bf48aeb287e53588211ef0",
+      "statement": "当前人口由 `ResidentSeed` 的六名手工居民和 `ResidentPersonas` 的十九名冻结 `NewResident` 装配而成；`ResidentSeed.narrative` 用同一入口提供其五段叙事，而 avatar 或未编写 ID 返回 null，`ResidentDirector` 仅将这些文字复制到模型 context 的 persona view。",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/application/ResidentDirector.java#L876-L886",
+          "version": "repo-lines-v1:sha256:63b70e84f97b5ce81ebd9f5448195864439f354bb368e8a4bb00cd2da4c2d83f:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjUxOTBhY2M3ZTQ4ZjAwNjFiZDg2MWVlMzY3YmQ1NmI3YWU2MTBmNmQyZGJhODlmZjIwYzliMmI0MzMwZTg1YTciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjY0ZjY1OTk0Njg2NzViYjRkZjYwNzQzMDcxMjUxY2JhNzUyMDA2ZTVhNGRlYTVkM2ExZTI0MTdjNjRkNDM2YzMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjU0NTUxYjY1YmJlZTMzZTEwM2Q5NTNiMTFlN2M5MzJmYWY5YjM4Yzc5MWViMDY4YmU5MDY3NTQ3Y2ZiYmNmZjAifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/domain/ResidentSeed.java#L161-L180",
+          "version": "repo-lines-v1:sha256:0b4c503d2836153a0414a9988a97272ff2ff2d7d15aa4a441fcc69c471344917:eyJzZWxlY3RlZExpbmVDb3VudCI6MjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjcyNmMwMTdhZDhlNTE2Mjg5YTQ5NjNkY2U3MTY2MTI1YWY3MDJhYzc4YjhjNjE2ODhhYjlhYTRhMjI3NTgyMTAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjkyNTBlNjY4YWY0YjRlYmMxMmRiODZjY2YyZDE1ZmNkMTVjMzI5NDQ1MTM5NDI4Nzg5NjAwNDIyOTdiNzUwMzAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjM2N2U0MWY0MDg1ODJmZGNiNWZmNjFhZmNlYTNjMGU1M2ViYjE2N2M5NGRhNmNhNmMxZmZmYWU0OTUxODBmMjYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImI2NjAyOTg0NDliNjQxYzc1NjRlNmFiNTZlOTI4Yjg3NDM5OGI2YWY5NWJmYjg0MGJjZWFlY2IxZDk0NGQ3NjMifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/domain/ResidentSeed.java#L273-L284",
+          "version": "repo-lines-v1:sha256:8d897781fb519c90d40c426d2927086e2410d1adfa76fb7270a6a0eb2bb1f4db:eyJzZWxlY3RlZExpbmVDb3VudCI6MTIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImM0YjkxZjIwODZhM2E0YjdiODU4NGE2YjkwODdhZDFiNjBmNzI4NTkzYjU5MmZkNmEwOWJiMDU5NGRjYTAxM2EiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImRmNGM0ZDI0NmEyZWJjNDIwMDAwNWM1YTEwYmJkOTNjNGIyNzE3NDFkZDgwMjdmZjcxMzczZTJiOGYxYmE3YzAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjUzODI1YzJjNjRiNWIyODcxY2JkZDhjMjBjY2NlOTZjNWVlOWRjYTQ3OTdhMWY2YWQ0MTA1NjUwZjA4NjRmNGUifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/domain/ResidentSeed.java#L71-L124",
+          "version": "repo-lines-v1:sha256:1b5198f799b0ad2f81fdbce05956455ab08794328ef70e6fee3fecbb31032e45:eyJzZWxlY3RlZExpbmVDb3VudCI6NTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY4NWUwMDU4Njc3NjM5NTU5MDc3ZDViZmNkNmI4NzAyNGRjN2ZiYmY0ZmQ4MjE3ZGZlMmEzYWE3Y2VkYzhlMjAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjQwOWVkZjUyNTRmNTM4NjkxZWQxNzM0NGVhMjBhM2RkNDJiMTljMDdhYTc2ZTQ2NzRhMzA3OTQ2OTM3ZTcyMjQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjljMDY1MTUzMjNmNDMwZGZlMWNmMTRmZTQ0MWE5N2Q4NTIzMzY3M2U5MmY1ODFjMjdkNWYyNmRmNjlmN2I1YWUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_59bfdc8f1b3048aa8166c0be47d6dfc3",
+      "statement": "数值 `Personality` 只在 `ResidentState.personalitySeeded` 为 false 时写入初值，之后读取持久化 state 而不重置漂移值；其维度被规则用于社交、项目、观察和关系变化，而非单纯展示。",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/domain/Personality.java#L47-L95",
+          "version": "repo-lines-v1:sha256:32f7f76e7728dc9c7ce51a7ae52d1dd466685fdabb89110431d2fdc4e7e55a69:eyJzZWxlY3RlZExpbmVDb3VudCI6NDksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImRlNjEyN2MwYmM4YzI5Y2VjNGM1NjZlZmVkN2VkYjg0NDUzOTJjM2MwM2Y4MmZlNGY3OWY0MjkxOWFmNTUyNmMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImE0Mjg3ZjU0YzExYTRiZWM1M2VlMmUxY2MwNWNkOTFmODA4ZDlkNjA1Njk2YzllOGE0NDZjYmVjYmY4ZmFlOGIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjNhMTk4N2Q4ZGJkMGZhNDIwNDYwOWYyZjMyMDVjNjYxNGRjZGE2NzYxMTEyMTIwMDE1YmY5ZGYxMTFmODc0YmEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUyMzJlNDMyN2MxMDFhYWM5OTU4M2FjZjVjYTc4ZmQ3NGUzOGI0NmYxYzA2NWFkMDYyYmNkMjg3NGEwZjEwZTUifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/domain/ResidentSimulation.java#L345-L368",
+          "version": "repo-lines-v1:sha256:c44609134761ed1be209e7848e1af79c02e3d6d81a9cd4c9ab6dde03c256e656:eyJzZWxlY3RlZExpbmVDb3VudCI6MjQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjUwYWI4ZTFiMmMyMDhhYWVmZTAwZjBiMTFkMjk5ZTQ1YzkzNjEzMWZhYjg2MDk3NzgxZThiMjM1ZmUyNWE3YjAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjcwMmMzMzFjNWE4MzE4YTZmM2UwMDJiZjhjZGI0MDkyYjQ3ZjhhMGQ0MTRhOTY3ODkyMTVkNjk2YWI0YzhlZDYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImY1NTExZjk3MmY2ZDc4ZTNkMjk5ZTI3MTUzNmIwNmRjNjYxYjA1YWRkMjk2NWQ1YTcxMzJjODAxMDEyODBmOTYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjNjOTI2YmY5OTc0MjYyZTkwZTQyZjI3YzM3NTg4Y2MzZjMxZDkzODEyZTk5MWVjYjA1MzdlYjI2YzhkYThmYWQifQ"
+        },
+        {
+          "resource": "repo://backend/src/test/java/com/betterself/growth/town/companion/domain/PersonalityTest.java#L58-L97",
+          "version": "repo-lines-v1:sha256:ce92e35e786fa9231659b336f3948274f74dd399034a12c0151428e49929ab7a:eyJzZWxlY3RlZExpbmVDb3VudCI6NDAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjhlYzZjMTU3NmQ4ZjAzNzNiYjU2ZDlkMDNlZWU0N2ZmZmViZWY0MGFiZDhjOTdkNzJhNjQ1ZGIxYjdmZjJjNjMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjM2NzIxMjcxODViZDM5MDExNTIxMzFkNmViMjE5YjA1NzhmMmMyM2JhZTE4ODEwZTc1MWFiMTAyNWZmZGU1MjAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjJiZTVmM2JhYTRlNjI2ZTNjMmJiMGZlYjdmNDQyYzEyY2IyY2Q0ODU0NDhlYzM2MmJjNTc4MjM5OTQ4ZWRjMWQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_0ee7fb8f41a549f79f8da62b1161e08e",
+      "statement": "`TownPlaces.homeOf` 将 flatmate 路由到 host 的同一住所，`addFlatmate` 仍为每位合住者创建独占 bed、desk 和 bedroom；十九人的 household 分组是该住房装配的来源。",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/domain/ResidentPersonas.java#L249-L269",
+          "version": "repo-lines-v1:sha256:3736ac5ceb730e82082cfc6acab9a1243e73593dcb0d44cbd8bbc78480db8a85:eyJzZWxlY3RlZExpbmVDb3VudCI6MjEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU3Zjc0YTU5OGE5ODY0NjJkN2RmMTViNTFmYjQxMTlkZWZjZjY3MWQ3MWViMjdlNTdhNjUwYWM1ZWNlNDhmNzkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjJlNmYxM2ZhNTZlZWE3YWJkOWE2ZGU1OTNlOWE4Yzc0MDZkNGQzN2M3MjM0Y2RiYzNlNjRhMWQ3NWE3NzA3NDYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImQzYjkzNzEzM2M5YTQ3ODZlYTkxYTQxMTI1OGZmN2IwZjZjNzdhN2ZhYTIzNWJiOTcxYzM5YjUwYjU3MTAwMjYifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/domain/TownPlaces.java#L121-L164",
+          "version": "repo-lines-v1:sha256:55a5d8e72f6e4fa3bb2858226dc4f5322d853e7a0f69facb19a8fd706eb97623:eyJzZWxlY3RlZExpbmVDb3VudCI6NDQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZjNDRkNDdkOTljMmI0N2YzZmZiMDQ5M2U1MmUwZjZiYTQyYzYxYjQ1OGIwZDIzYWNiYjIxM2ViZDQxYjNjNGYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjFhMWE1MWU5MmI3YjY4ZmFlNjYzZjg2NGY1ODVkMTQ2YjQ4MWUyNWQ2N2QzZTM3ZWJmYjc4MDRiOTVhZjU2ZDciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjBjMzMwYjZmZTM1MDgxYjc5MzIzYWEzZDk1ZTliMzA4NmIxNDUwMWFiYWRmMGNiZjMyYjRiYTI2MmZlMjQ1OTUifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/domain/TownPlaces.java#L70-L105",
+          "version": "repo-lines-v1:sha256:f19270cb0a6483a7ff593108069a22566996c5c0ad111c0856c6ed34646c8dde:eyJzZWxlY3RlZExpbmVDb3VudCI6MzYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjkwZGZhNDkwNDVkZTM5YTBiYjQ3YmU1ZWVmYjIzNGUzZTljNzk4MTI0NTY0OTM0NTE5OTMxNDcxNmJiZGE3ODgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImRjZTNiOTliZmY3Y2Y0YjhlOWE5NGVhOTQwNTAyZDdkNDE1MTQ5MGUzZTYxYTBhM2FiYjdmMzY2ODU4OWZkYzYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImVlMzdjMzJiY2M1NWE3ZjJmY2I5NzljZDQ1YjliYWY2MWU4ZWU1YzMyNDJmYjZmY2E1ZGE4MzRmZDMzMDEwMmQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_45c9c3d8bbb44cebaa839ec0ce3558fb",
+      "statement": "25 人扩展的十九名新人不会默认与全镇相识：它们以 `newcomer(..., false)` 出生，随后只应用由家庭和职业簇作者化的有向初始关系边，因此图保持稀疏并含手工不对称关系。",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/domain/ResidentPersonas.java#L286-L325",
+          "version": "repo-lines-v1:sha256:74532c64571b984456b42150511d03dc49d1aed89a02639751669ed0a5150d1d:eyJzZWxlY3RlZExpbmVDb3VudCI6NDAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjI2MWNkNjI2ZmM0NGYyZmMyMTRlOWY3NDIyYmU2MWY5OWZkN2Y3OTY3MTYwYWRkMzBlNDRlZTE4NjJhMzBiZDciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg5NjZmZWFhZjA2YzI5YzJiNjljMmQxNWVhNDU2NjAyN2U1ZTBlNzMwM2U1M2M2MTcyZjM5YTI3ZDJhNTY4MTQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImYyZDgyOGEwMzdhYzFjODE1MzViMWQ1NTAwODMyMzIzYmZiYjg2NmEzYTNmODdlN2E2OGMxM2EyYmFlNTZmZmYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjdkODMyOWZmZjA3MjRhYWFjZjdhMjk3MjlkZTE2MGRhNDM3YTJhNmY5ZmUzMjgxOThjYTY0YzFmODQyZjU5ODAifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/domain/ResidentSeed.java#L273-L299",
+          "version": "repo-lines-v1:sha256:e54ba673350babc47a516eae6e389bdfa080c20c2848b4bd3ad8f761fa12e2e7:eyJzZWxlY3RlZExpbmVDb3VudCI6MjcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImM0YjkxZjIwODZhM2E0YjdiODU4NGE2YjkwODdhZDFiNjBmNzI4NTkzYjU5MmZkNmEwOWJiMDU5NGRjYTAxM2EiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc5ZWIxNTA3NGNiODY5NjA5ZmU5M2FiMjg1ZDNjOTYzYmZhMjFiMjkxNDkyOTAxMTMxYmQ4YjIxMWFlZWE2N2YiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImRmNGM0ZDI0NmEyZWJjNDIwMDAwNWM1YTEwYmJkOTNjNGIyNzE3NDFkZDgwMjdmZjcxMzczZTJiOGYxYmE3YzAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImM5Yzk5YTQ3ZjRjNDJiZDk3NWRiZDRjNjYzOWIxZDkyMDk2MmU4ZjI3ZmMzYTA0ODYxZDZhMzYzOWYzMmU0NGEifQ"
+        },
+        {
+          "resource": "repo://backend/src/test/java/com/betterself/growth/town/companion/domain/TwentyFiveResidentsTest.java#L59-L85",
+          "version": "repo-lines-v1:sha256:631a26d06f06186a003bd7e4237f13acb5c3c791522af4d41c8612598c5274db:eyJzZWxlY3RlZExpbmVDb3VudCI6MjcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRjZjA5ZWIwYzU3NDRmYjk3MzMxYjk4ZmYzZmJmMDVhNjAyYmEzZjdmNjdlNWRhNWJlOTA5NTAzM2Y2MjU4MjUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU2YjA0NDkxNDY5NzIyZTgzNjNhOTRlNDA0NDUzOGUwMTNhMmEyMTdlMzZiMWU1NjhiYTYwYWNiN2I0YzhmMmUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImEyY2MwZDQ0ZGRlMzkxMDE4YTQ1OWMwNmIwOTBlZWVjOGRmNTA0MTg4Mjk3MzIwMmQwYTc2NWZjOTM1NjRjYTYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImU4ZWFmM2UxZGIyODRmNmE2ZmQ0ZTA2NmFlMmZiNjU0YWU2OGZkZmNmM2U3ZTRkY2E0YzJkZDIxNGE0OWI5ZDAifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_a9df580ed9a24a258855a134e5df30bd",
+      "statement": "初始化向每位居民写入自己的项目知识，并以 `noticeboard` 来源补充他人项目的元数据；这条 knowledge 不等同于亲历 memory，也不预先告知后续项目进展。",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/domain/ResidentSeed.java#L146-L147",
+          "version": "repo-lines-v1:sha256:7aaca0a850bdca6dd62ab8ebbb8e328caa07ddd27cfb1f57657e54e20fd1b58b:eyJzZWxlY3RlZExpbmVDb3VudCI6MiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiOGM2ZGI4MGU5ZTkzMDc5MjU0ZDA1Mzc5NzMwNjQ0YTcyNDgyMGEyOTA5MjAzZWEyYzFlZjBkYTdkZDQ1MmJhYSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZDFjZmY4ZWU4ZDQ4YzYyYjRjZGMzODhkZWEwOGIzYjE3ZjgyMDI2OTg0ZTIwZTY1MjA2YmQxMjdlNDU1NmFmNiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNGZhYjY2MzZhMDA1ZTkxNTk0M2Y0NWUxY2FlODIxNTEzYWUwZWI3NjU3NzYwMDA2OGMyYzc5OGNhN2RjMWY5MiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZmNjNGIxMTg4ZjBlMGFjMTdjMTRjZDVjM2NiNTA4YWNmZWRhMmNhNmVmMTkzYTgzOTdjOTIxMmY0NGY0MGVmOCJ9"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/domain/ResidentSeed.java#L181-L201",
+          "version": "repo-lines-v1:sha256:ffabc91e2e6dc05936ffe1edaefcd21a528d7bc0663d77936d1a60132036fe26:eyJzZWxlY3RlZExpbmVDb3VudCI6MjEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk3ZmM2ZGQxM2RmNzMyYWFlZDU3ODRhZTM5NDQzZWRkZDcyNjA0NjMzZjU1Mjc0ZjVlYWU0MGIzMzlmNzNiNDEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU2YjA0NDkxNDY5NzIyZTgzNjNhOTRlNDA0NDUzOGUwMTNhMmEyMTdlMzZiMWU1NjhiYTYwYWNiN2I0YzhmMmUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImMwY2I3ODNjNDYwYjNjZWFlYmZhMTNhMTQyNTRhYmI4ZTIxY2MyNTY3NGU3Y2EzYmUwOWZmYTlmZTMyYWU1NmEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjRlOTBmYjczYTExOTM3ODNhOTJjNTk5M2M3MzBmYzU4ZGNlZjIyMDQ5NGIxODNmYmNlZjQyNzUyYzQyZTZiYzAifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_8545bbad5bed4ec9b43a5f3a46852ddc",
+      "statement": "`ResidentDuties.plant` 将每人版本化的作息和 duty 复制进 state，首次才写工作 seed memory；升级可刷新职责但会保留居民主动清空的 duties，且 duty 是日计划可读的线索而非自动移动命令。",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/domain/ResidentDuties.java#L15-L30",
+          "version": "repo-lines-v1:sha256:00f92cad221b37f707718179cd800d2d4748864f81c4b3d5d90641f01ba20383:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVhZjIyY2YwNzMyNTkyYzI0NzE0MWNiZTYxZWZhMTEwMTI2MTJmNWEzMTIyYjlhZjliYmFmNTJmNTcyNGQxOTQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk3MmE0MjkzODJiMmUxNDcxOGUwZTM3YjA1NzBhOGExNzAyOTkxZmNkODQ5OGNkODQwNjBhOGJmNGYwNTAxN2IiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijk0MjNmYmI1MmY2NmNjMmVkMjdlZDliZWRiMmU0OWVmMDlmNjkwZWI4YTQ0N2EzYjgwNTcxMmQ5ZTVlYTRkYjkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijg0NjVlZjIxN2MzNjliN2Y3MGI3YjNiZGNkOGI1ZGQ0ZDlmZGEyN2Q2YzRmMzczYjk1NzQ3M2I1MWY1YjQzZjUifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/domain/ResidentDuties.java#L168-L181",
+          "version": "repo-lines-v1:sha256:f8f0e0654ff43ef34a5b202e01ead7885a646a2b91ad64eb06eff01bccd45a9f:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImUzY2ZmZDVlOTQwMzlhNTU5NjlhNTMwZGExZWM4NjljZjc5NjdjNzk2ZDVmODQ1ZTk3NGY2MzNhODAxYzI1ZGQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImMwN2E1YjAyODRkYjYwNmRkNmUyMGRiNWM3OGIyZGRjNWQ1ZjZlZjVhNjc3ZmNjMjdiOGMwNDE3OGYzZTM2MjQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjFhM2ViMDkwOTI5NTA1YWU0ODE5ZGU2M2I1NmQ4NDE1ZDQwZmI1ODA3N2UyNzc2YmEzMDlhZDdkMjc2YmRhN2MifQ"
+        },
+        {
+          "resource": "repo://backend/src/test/java/com/betterself/growth/town/companion/domain/ResidentDutiesTest.java#L12-L46",
+          "version": "repo-lines-v1:sha256:409bed594aa73be3fced653c55fc8a84a095538416acb70a2d89544e48e90057:eyJzZWxlY3RlZExpbmVDb3VudCI6MzUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU0ZGMzYWVjYzE3NjIyOTA1MjQzYjQ4MTMwOWRkY2M3YzEwMzE1N2Q1YzM4YmU4ZTdjZjA1NmQ5M2M1ZTZlZjMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjlhNDFjNTYyMDlkOTFmOGU1MjJmYWYwZTI4MDIzNWQ1NTQ5Y2I4NmU2MDdiODllZDdhNDdiMGI0MWZiZTFiMmQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImIwNWYxNWJhZTRiY2Q4NWYyYzRlMGVjZGFjMDA4ZDk2ZTVjYmU3MjhjMjY1YWNhMmFmMjliMmUwYjdiMWY0MmEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_04325c2728a0430e931c82cbe2b1347f",
+      "statement": "`student` 独有一条手工虚构的 anomaly seed memory；其他居民不因此取得该记忆，所以它是小川以后可讲述或质疑的私有开局材料，而非全局观测事实。",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/domain/ResidentSeed.java#L202-L207",
+          "version": "repo-lines-v1:sha256:c446a4ca2a988d4de0bf295d42003068f795d2f806069f24878d584ef13f7e45:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZDViMjJlNmRiYjMwODk0MWZjZmYxNDU2NmZiNzAwMWFlNmZmYTk4ODE3ZjgzOTAwMjJhYzEzY2VlMTU2NmQ5NSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiY2NmNmIwNzFkNzY2YjQxY2M4MjQ1ZjA1MjVmZjg1OTBlNDM4ZDExNGJiYjJkNmZhMzMwNWY2YTg3MDE0ODA5ZSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNDVjYjA0NGY2M2IxNjEwM2Q3ZTRiYTk2OWY2MzAwM2MyOGIwYjk4NDk3ZTkxZDQ5YjNhNzc0MTM2MzM3N2QxNiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiOTJkMmI3YzExZDMyMjQzNWYzMWVlYjFmZTdjYzJiNWI3NzkyNWNiYWU2YzI1ZjJmY2EyZmIyOWJlN2Q1ZmU0ZSJ9"
+        },
+        {
+          "resource": "repo://backend/src/test/java/com/betterself/growth/town/companion/domain/ResidentSeedTest.java#L74-L80",
+          "version": "repo-lines-v1:sha256:a34739ae5f1d31a63aa9806de99baffd87432ecba8f9b57c316bbbc320c96a19:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiOGZlYzExMDgyMmQ2YTNkNDdkNDdlNjM0ODc2MTEzOTMxZjliNTg2M2Y2ZjQ5ZjE2ZGNlZDViZGQ2OTA0NmJiOCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDg5M2Y0MGUzNzgxZWI4OTZjODJkMDQ2YTA4MDY3YTExZTM1Y2RmMmYxZGZhZjI2ZmVhOTBiOGRiNjY3NjQxMyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiOGU3NTc5NzJjZjc3ODVjZWY2ZTc4NmFiMzc2MmVmOTMyMDQ3YzFkM2U4OTYxY2Q3NmM3ZjVjNDhhYTcwMGVlZCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiOTY5MmVjYmY1MGRiZGMzZGExYmYxZTFjNzBmNDQyODJmZWExMGUxM2ZiMjcyYWU5Nzc1MGY3MTg3OTdhM2Y3ZiJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_59b6e5bae83c4c6e8c67b8b1215a3f5c",
+      "statement": "路人由 `reconcileLife` 在本地固定小时按日去重地产生街道事件，但不创建 actor、resident state 或模型心智；只有当时位于 street 的居民得到自己的 observed memory。",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/domain/ResidentSeed.java#L305-L334",
+          "version": "repo-lines-v1:sha256:0011764271a69fd072babde867cd0b64392481d3ce15d375dd41a40d5c076975:eyJzZWxlY3RlZExpbmVDb3VudCI6MzAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM5Y2JiYzY1NDY5ZGIxY2EyODQyZWZkOTdkZjdlZTJjZTZjYzE1NzE0ODJkMDFhMThiNzkwYTEwYzdjNTEwZjMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU2YjA0NDkxNDY5NzIyZTgzNjNhOTRlNDA0NDUzOGUwMTNhMmEyMTdlMzZiMWU1NjhiYTYwYWNiN2I0YzhmMmUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE0OTU0YmUzOWIzODFiNDM0MDFlNWZmNjA4ZDQyYTdmNmQ4Mjg4NWNkNjlmMjhhYmE0NzkyNjViM2E5NDU1NzUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoyLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM3OTRkMDJhODEyMTk0NGQxNzZkMjY1ZTliYjljYzU5ZjZhYjg5MGJjYWRmOGFlZmRlYmRiYmI0ZjJlYTg0NDQifQ"
+        },
+        {
+          "resource": "repo://backend/src/test/java/com/betterself/growth/town/companion/domain/ResidentSeedTest.java#L82-L101",
+          "version": "repo-lines-v1:sha256:0df8a8d372e228cebc69d550dccf12172d6ea4ce8407f6b8aabf528f1dc07a37:eyJzZWxlY3RlZExpbmVDb3VudCI6MjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjA1Njc3YzEzZjk2MTFlOTNjNTVkMDAxYWI0NGVhNTQxOTcwNmU2NDFkODEyMGQyY2Q5ZTIzMmE2YzZiZmQ0NmIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImNlM2JhY2Q1MDQ5YTE0NzQzNjRiZjk1MjQwMjFlY2ZkN2FiYWNlY2Y0MjlmYmJmMDhlMmE0OTdjZDk0NWEyNjAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjE4M2Y3MTVkMzdlZGMwNzUwZTI1N2FhMzU5ZGExOWMwNDVjMDg2ODFhY2RmNDcwYzUzMWVlMWQ5NzVhM2ZkMWEifQ"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.5.1",
+    "at": "2026-09-14T13:15:33.655Z"
+  }
+}

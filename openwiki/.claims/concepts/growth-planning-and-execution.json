@@ -1,0 +1,226 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:e27f8cfd31f2b4d987b189a12ba176329ae2f82b6e2a6ce787243cd6eea100e9",
+  "claims": [
+    {
+      "id": "claim_959f7b1982bb463bbdcabf9fdb94478a",
+      "statement": "Growth planning separates persistent task definitions from dated schedule occurrences and immutable task-event records; events snapshot task attributes and can reference a compensating reversal event.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/execution/TaskExecutionService.java#L243-L269",
+          "version": "repo-lines-v1:sha256:e78ad95c9542640a3c6763d2490f5fad272c654bb7f8c23e921e054c12c58679:eyJzZWxlY3RlZExpbmVDb3VudCI6MjcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZkYzFlZTlmOTgzZTJiOTQ5MzA0OTVhNzFkMjRkNTUwZTZiMWViOWExYzJjOTM3YjUyNmRlYjIyMGQ1MjkzMmUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImIyOTFiNDA5MWQyNzQ5ODY4OTZkZmUxMTRmMjg2YzNkNzg5OGExYTg1MDgwYTAyOTRiZWVjOWM5MGU2NjZmNzQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjIzZThkYWNiMWU3NjcyNGNmZjk2N2YwMzAyYzA4NGZhOTQ3ZmI4ZTBlZTI4NDFmNjBkZTA4MzU0ZWJhZDdlMGYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjllYjAxNmJkZmUyMDk4OGViNWMwY2E1M2U2MzdiMWU3OWU1YjdkOTQzZWI1NjU2YmIwYjE5MzcwMDRhYzE3OGUifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/resources/db/migration/V1__baseline.sql#L192-L266",
+          "version": "repo-lines-v1:sha256:c546aaf9349e17430f43bd94ac3f259bb44d19fe0987d18160ec233de1ffb001:eyJzZWxlY3RlZExpbmVDb3VudCI6NzUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM1YTYxMWI1MTZmZDE3YzkwNDM5MzU3ZTIzZjI4M2U0MzYyZmIyZDcxYTQ5NDhiNjEwMTNhN2IxMWE5NzNjOWMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk5YTNlOTViOTc5M2E0MzJmYzU1ZDBjMGI1MGZiYjU3ZDc5ODAwZjkwODY4NjBlMjZkNzdiMzE2NmQxMjIwZTAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjgyZjM4OTllNjZmNWZkNzA4OWRhZmUzNTE2NWZiYTA3ZGFhYzAzOTA4ZjY0NWM4OTliNTlhZTdmNDI3M2VlMzYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImNlY2E3Y2I1Njk4MWIyN2UzMjY1MTI5ZTMyMTQ3NmJhZWVmMmEzODdhZTRhMmJiNTAwYjJkMWJiZGVhYjI4YmIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_7d6ecba7e71d4f5c81b470134c02d048",
+      "statement": "Goal creation enforces an inclusive 14-to-84-day duration and at most three active goals per user under a user-row lock; active and paused goals can move between each other or to completed/cancelled states.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/goal/GoalPolicy.java#L11-L21",
+          "version": "repo-lines-v1:sha256:2f7a4e48cf0c2235fa63fa2253de610fadc48d889eba29ded280c5ddc925ec07:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY4M2MxMGRlZWQ0YzZhNGViODBmNzlhM2Y0MjU2MmE2ZjAwYjc2M2JkNGY2ZTRkZWE4MGIwZmFmMTdkZGMxNGQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjRiNDRiMGUwNWQwMWNmMWVjZWM2OTFhYzcxZmRjZDVkOGVmMTAwODA0Y2Q2MjlhMmUyOGY5ZTY3ZWU2NTBiM2MiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/goal/GoalService.java#L105-L141",
+          "version": "repo-lines-v1:sha256:fe5667bfa1597c98b22cb97cbd5e2aac404376bd15799264c6efe56e6522c454:eyJzZWxlY3RlZExpbmVDb3VudCI6MzcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc1MjYzMzA5MjNkNGUwYjVlZWYyNTkyMTEzMTJhY2U0ZWIxYjk5MDE3OGIyNjFhODVlOWViZDRhMWFlYjA5NjgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjNhM2JiNWQ4ZmYxZmU3ZDcxZjY1ZWY5MGZmYTVlOTM5MTZhODVkMjQ1MzIxMTFmM2UwYWIzNGNhYThlNDJkNDciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjlhYmI3ODVmNDJmNGY2YTIwMDU3MmJlNmRmNDdmMjFiOGJjNzhmYjcwMzU2YjVmNDJjZmFmYTE1NGYzOTk4ZWMifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/goal/GoalService.java#L192-L227",
+          "version": "repo-lines-v1:sha256:519ffd0dfd95d18c9a5d16307db9ccdb6bf8bafb17c0efd431d63b477afd15f9:eyJzZWxlY3RlZExpbmVDb3VudCI6MzYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc1MjYzMzA5MjNkNGUwYjVlZWYyNTkyMTEzMTJhY2U0ZWIxYjk5MDE3OGIyNjFhODVlOWViZDRhMWFlYjA5NjgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImM1Y2RlZjgwODVhZTc0YWI2MzZkNjQ1OWY1YzZkNWZiZmIwZGIyNjRmMWIwZDc1YmFjNTE5YzliM2Y2NzE3YWMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE1YTFiODk5ZmVkZDk1ZWE3Y2Y1MzgyY2ZkMTRhMmY1ODdkY2UyNjU5MWZjOGYzNTQzOGZjZjQ0MDFiNjM4ZTAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjE4NDMxYzE5M2Y5YTRhMjFkYWJiY2I4OGViNTZhNWY2OTc2ZGY1MTY1Yzc3YmNiMmYyMzZlMGRhOTA2ZDViN2YifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_ce0c9e5169e94f59a01c4c8b39a77d11",
+      "statement": "Tasks created directly for a goal create any missing weekly compatibility plans and materialize their requested occurrences immediately, whereas weekly-plan tasks materialize through the weekly endpoint; unique task/start occurrences plus insert-ignore make repeated materialization safe.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/goal/DatabasePlanningService.java#L232-L270",
+          "version": "repo-lines-v1:sha256:fc46f9a3aebb040e4ac301a8d29fbc898038749bcec2906a96b77ec68944cfe9:eyJzZWxlY3RlZExpbmVDb3VudCI6MzksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVkYzJiMzExYWJlODc1NzJlOGE3Y2MwZDk5NmE2NTg0NDA3NmU1MjMyZDIxYjdhODU0NzVmOWI0MDU1Yjc0OTIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU3N2EwMWQwMzI0MzVhOTU1OGVmYmQyYmViMmI2NGE5NTA0NTg3MTU2NGZlMDQ5YWVhODZlZDEyNGEwMTQyMjAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjFiMGYyYzhlZTI3YTE5Y2QzNzYwZGIxYjRiMTk0YzMxZDFmZTRlZTY2ZmMwZDM4YTNmYzQ4Nzc3OTY1ZGMxYTgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImYxODY3ODk3YmVkYzg2M2RjMWNmYWFhYmQ2YTBiNTNmNzMxNjA1ZGI2NzhkNWFhMjQ3ZjAyNjE4M2QyZTA2Y2EifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/goal/DatabasePlanningService.java#L383-L456",
+          "version": "repo-lines-v1:sha256:4b113bcb2dd0d5d0d1e5ba21b60250cf37add789b22ecd0a0936a47c2fddb30c:eyJzZWxlY3RlZExpbmVDb3VudCI6NzQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjE2ODgyNzk3OTM3ZWY2MjMzMmYyYWEzN2Q1NzFiN2ZlYTcxMGEzNWJkZWVmYjkxZjQwODEzNjU2Mjc2MjgzYmEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjI5ZWY4Zjg0NTI2MWFmNTc2MGVmZWQ5MWJhMWFmZTQ4ZDhhODQwNTdmNWYwZmYyOWUyOTQ4MDY4YzVmYzg2MDQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImE5ZDZmYWNkZTA1YTY5ZmJkZTI5N2RiMWVkM2NhOTBiZWM0MzMxYjQ3N2Y1ZThiN2Y4ODAzZTQxNmQ4MjgzZmQifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/goal/DatabasePlanningService.java#L86-L166",
+          "version": "repo-lines-v1:sha256:b2f18bcfa143ff7435229b39257191007837b41d88b20cb399065467ba7246b5:eyJzZWxlY3RlZExpbmVDb3VudCI6ODEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVkYzJiMzExYWJlODc1NzJlOGE3Y2MwZDk5NmE2NTg0NDA3NmU1MjMyZDIxYjdhODU0NzVmOWI0MDU1Yjc0OTIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFkYWFlYzllMTVkZWE0NDA4YzQ2YzY3YjlkNDBlZmU5ZWY2ZDRlNjU4YWM5NTkyY2M3N2Y5MmM4YzM4MGU4NmYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjhhNDMzMjdhNmM1N2NiOTc5NDMzMTI3ODU0OGI5OGIzZDEyMWY3YzA0Y2RjNjU1MzI1Njc4OWE1YjY1MDZkMzAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM2OTQ2ZTEwMWU1ZTc4ZDkwYTUxMGM2OWYyNjZlZjc2NTQwZDMwOWIxYjgyMjY5NWI1MzE3MmVkMmNhYTAyNTkifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/resources/db/migration/V1__baseline.sql#L217-L239",
+          "version": "repo-lines-v1:sha256:fa01eb218f6afeb1069b09d05346cd9f70fed1a11dd6479bcb13bf2afa353a33:eyJzZWxlY3RlZExpbmVDb3VudCI6MjMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjI0MDY3NWFiZTRlNzI5MzdiMGE2YWRmNGI3OTMzMGU0MTBiM2YwZTY0NjEwNzQyYzg5MDk0ODFlMzcwMmZhOGQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk5YTNlOTViOTc5M2E0MzJmYzU1ZDBjMGI1MGZiYjU3ZDc5ODAwZjkwODY4NjBlMjZkNzdiMzE2NmQxMjIwZTAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE4YWNiMWIzMzQwNGUxOGIzYzc1ZmRlODhjNjVlYjcwNGIzNWQ5MGFhOTY0NzY4MWRlYTM2YWYzNmU1M2I5YjgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImRhNzljMTAwMTk5NWI4Y2YwYjhjYmRhYTNhYzhkNGJlYTUxNjZhMGEyODdkOWFlNGRhOTY1MjQyNTZkZjE1YTAifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_d4ca3ba45d0c4075b9d1ee7437dc9c00",
+      "statement": "Recurrence accepts only daily or weekly rules with validated interval, weekdays, and either count or until, and resolves each matching local date/time through the selected timezone into an instant, preserving local-time semantics through DST.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/goal/RecurrenceExpander.java#L25-L56",
+          "version": "repo-lines-v1:sha256:b3c6ba65791947bc91edb6dfa09ff0e6e71a28d9df59271cc6b84ad6a2a996c5:eyJzZWxlY3RlZExpbmVDb3VudCI6MzIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjVjYWU0NDRhMjdjNjk2NGUyNmYzYzIwNjNkMWI5M2Y0YTA2ZWM1MDcwZDMwODdiZmQ2ZGQ3NDVhODY5Y2E2M2YiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjMzNTRiZmVkNTllNTU0MjgxMzhlZDQ3MzUxNTQyNWY1OGIwNTU0YzY0YTUwNmZkZmMwZDhjZTlhY2U4YzY0NzMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImJkNjhmODhhYjc0ODg2OWZmMTU3ODJjMzYzODFlNmUxMmViN2Y2M2JjZDMyODFhZjFhZjUwYWRiMGQ5OGZjNzciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjE5ZTc2MzU1Y2YxMTk5NDgwYzNmOTk4MzZiMTQ4NmM4NDFkODkxZmFhZDkwNGM2MDhlMDkzMDIyZDM3NTdhZWUifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/goal/RecurrenceExpander.java#L63-L165",
+          "version": "repo-lines-v1:sha256:508eb67e241804fe0304e6bc1ce7bf0510a487030f61ddf28a6c4876bc92be79:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAzLCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiJmMjUyOGIyZDAyY2Y2MjYyYTllNGM1MTMxYzUwMDlmYzEzZDUwNDU0OWMwNDU2ZWQ0ZGE1ZjUwY2VmYTI2MDJiIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiI0ODkzZjQwZTM3ODFlYjg5NmM4MmQwNDZhMDgwNjdhMTFlMzVjZGYyZjFkZmFmMjZmZWE5MGI4ZGI2Njc2NDEzIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiJiZTkxMDZlY2I3YTkyMzg0ODkwYzhkZTY0ODRiNGI2ZmRmNjI4ZmMzNWIyYTI3NmFhYzQyNGQ4OTNhNzUxY2MzIiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MSwiZm9sbG93aW5nQ29udGV4dEhhc2giOiI0MTJjYTM0NWNjZjc1YmY5YzA4MDZiY2U2OTViZThkZTgwOGI3OTk4NDI1MWE3YTU0ZDIwMmNmNjEwMWRkNDUxIn0"
+        },
+        {
+          "resource": "repo://backend/src/test/java/com/betterself/growth/goal/RecurrenceExpanderTest.java#L15-L41",
+          "version": "repo-lines-v1:sha256:77c92ebac4deb87c04c61feb8948375258e3801f32fedec209e8108f15863a50:eyJzZWxlY3RlZExpbmVDb3VudCI6MjcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM5ZTUyZTI3NDVjMzVjYjEzZjk5MjJkMjYzZDE4Y2Y3ZTU1NTczYTUzZmIxY2I3ZjM4YzFkOTU4NDEyZTFkNmYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijg2OGY4ZTJkYmNmZjk3MjJkYTNiMDc3YTNjMjMzNTI0OTZlZDMyMDM1NzAzODY0MzEyZDdlMTNhMzhhNDYwNWIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_6f459c1b08954bb69eb35a82e79a47d8",
+      "statement": "Quick tasks are standalone tasks with no weekly plan or goal and a planned schedule without an end time, so unfinished checklist items are not eligible for deadline expiry; their creation is idempotent.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/goal/QuickTaskService.java#L34-L60",
+          "version": "repo-lines-v1:sha256:88dc272a4d2f658f4d5407dc33ed9b3fe2ef88fbe1ec9e23ae8e3de3997d235a:eyJzZWxlY3RlZExpbmVDb3VudCI6MjcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc1MjYzMzA5MjNkNGUwYjVlZWYyNTkyMTEzMTJhY2U0ZWIxYjk5MDE3OGIyNjFhODVlOWViZDRhMWFlYjA5NjgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjUzMTk2YWU2NGZiMTI0MWUyODU0ODEzMmE1MzI1ZjI3MDlmYTUzOTNhN2Q1MWFjZjZkODVmZDJiZmI4OWE2YmQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjU1MWVkNGYwMGE1ZmNjMzJmZTY2ODUzMGFhMjJmZTM2OTk3M2VjNmM4NDE0ZjJiYTg1ZTVlOGYxYmM3NzY1MWEifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/resources/db/migration/V25__standalone_tasks.sql#L1-L2",
+          "version": "repo-lines-v1:sha256:d4b252affacad9153afd056f1ee9bcfb0cd9ed89523698cc41750703016a4978:eyJzZWxlY3RlZExpbmVDb3VudCI6MiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMzZiNGZmMGE1YjUxYjMyNzU0NzQxYTczZjAxMDU3YzRkM2Q3OGY2OTg4ZWM0ZGU3Mzk1ZWVkY2NmODVhMDZjMSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZTdiNDc5MTIzZjY2YjY4ZGQ3ZjA0YzliMTA5NWQyZDM2ZjlkZDg0OTY4NDY5ZjA3NjE2OWExNGU0NWU0ODAzZCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjAsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjAsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_0e306cbf189e4a6a954baf9a35974a94",
+      "statement": "Task event recording is transactional and owner-scoped: it locks the schedule, requires an idempotency key, validates state and completion ratio, applies experience, role progress, partner coins, event/status updates, and operational records before retaining a replayable result.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/execution/TaskExecutionService.java#L192-L225",
+          "version": "repo-lines-v1:sha256:31fa9dea310b5a68d57254d6979e1ff2f8ab34d245c31b64b188f38ee401e084:eyJzZWxlY3RlZExpbmVDb3VudCI6MzQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU5MTA4NjliY2ZlZmI2N2Q3Y2E4Y2JlMDdlNDg3Mjc1YzdkNmEyYjE5ZmQ2MzQ1Y2NmYTkzNWYxOTVmNWE1NTYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImYyZDgyOGEwMzdhYzFjODE1MzViMWQ1NTAwODMyMzIzYmZiYjg2NmEzYTNmODdlN2E2OGMxM2EyYmFlNTZmZmYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjgyYjA4NDU3YmM5MGU3NjIyNThjNGZkNTM1ZTQzOWJmZGFjZTRiMGQ0NzMzOTc1NTBhYWYwMjBhNWFjN2M3OTkifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/execution/TaskExecutionService.java#L74-L123",
+          "version": "repo-lines-v1:sha256:5ddc633929d431c961ae96a3f7a3bbd3f8b6752f944396d60f196414db3e7c1a:eyJzZWxlY3RlZExpbmVDb3VudCI6NTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc1MjYzMzA5MjNkNGUwYjVlZWYyNTkyMTEzMTJhY2U0ZWIxYjk5MDE3OGIyNjFhODVlOWViZDRhMWFlYjA5NjgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRhY2YyMTk0MzIxZmY4Y2ZhOGJjMjE5ZDdlYzY0NjJmNzc5MDA4Y2FkNzg1OTJhYTM4ODc4OWFiZjgyZjJjNmMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImM5NWVlYzgxNmExNDZhM2M4ZGQzMmViNTNiZTE1ODg3NDM1NDc0ZjVkMTA0YjY0ZWY0NWNlYTdkMjJkZTM0NmYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjNmNjM3OGJjMmNkMjI1ZmJkZmFiNmRhNGE1N2EyMGQyNjgyMzg5OTVmZGVkZDVhMGRhNzhhZjVjNGEyYTU1MmUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_cad8e2d1be9e43ca80381566b1b4b75a",
+      "statement": "The task state machine permits transitions from planned to started/completed/partial/deferred/skipped/cancelled and from in-progress to completed/partial/deferred/cancelled; invalid transitions return INVALID_TASK_TRANSITION.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/execution/TaskStateMachine.java#L13-L33",
+          "version": "repo-lines-v1:sha256:d8b43d019e2e218b469a2cad1d03b149dde7ee9e64a2629f2c6a28fbd7eb84f5:eyJzZWxlY3RlZExpbmVDb3VudCI6MjEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc2MGQzMGIzMTE5YThkNTJkNDkxODUxMGI1ZmM4MTdlMTkzMjBjYzU0MWEzYjdiODlhYzk1MmYxOTkyNDQ1YjQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjI2ZTUzZmI0YjAxNGNhODc1NmMxZmI5ZDA5MzE1NTkxYjcwODhjZmEzNDkyYzE0NGM4NWNlYjg3M2IyNWI1ZGMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_8fe3fbda0c7e4a328d61e857bb6e3d19",
+      "statement": "Idempotency records are user-and-operation scoped, retain canonical-JSON SHA-256 request hashes for 24 hours, replay a completed identical request, and reject key reuse with different content or a matching request still in progress.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/execution/IdempotencyService.java#L32-L85",
+          "version": "repo-lines-v1:sha256:a5b758a05d9098b260b862b5121d83002f79f91256ac81ad720936212d7a7282:eyJzZWxlY3RlZExpbmVDb3VudCI6NTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFiNTVmYjFjNjVlNGVlOGQ1YTdhODNhMzk5NGY2MTc4ZTFmMmJmNmIyOWQ5NWNlYTk0YTQ0YjIwZTY0ZDU5YWQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU2YjA0NDkxNDY5NzIyZTgzNjNhOTRlNDA0NDUzOGUwMTNhMmEyMTdlMzZiMWU1NjhiYTYwYWNiN2I0YzhmMmUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE1ZjgwZmJkZTFkNzFmNWM4YzJkNWJhNzdiZTM2MWFiOTljZWE1ZjI2OThiZGQzZTYwOTY3MzVhNjIwZjEwZmMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjFmOGM3ZWQwNzcyMWM0Njg3ODM3MDc3NGUyNWU5YWQ4OTgzZTE2OThmNTE2MDk4MmM3ZDVkMGExM2QzYjNjOWEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_ae67755cfad44cc8b2c5ef39583631ca",
+      "statement": "Undo appends a REVERSED event only for the latest unreversed terminal user event, negates recorded XP effects, restores planned or in-progress status, and cancels a still-planned deferred child when reversing a deferral.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/execution/TaskExecutionService.java#L126-L165",
+          "version": "repo-lines-v1:sha256:30970b9dac982595d4801ff7271f8242832de01bc54c225f09b0d43d7dd23107:eyJzZWxlY3RlZExpbmVDb3VudCI6NDAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc1MjYzMzA5MjNkNGUwYjVlZWYyNTkyMTEzMTJhY2U0ZWIxYjk5MDE3OGIyNjFhODVlOWViZDRhMWFlYjA5NjgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImQ0YWU0ZDVkYzQ0ZTU4MGI4OTc3OWM1NDdhYzRkYzJiZjI2YWEzMzE1MTNkMzg1MDQ4ZjQzNTBiNGMxMzMyMTciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjcxMDlkOTg5MDJlMWE1ZjBiNjIwYTkwYmQ3OWE2NmFmODUyZmY1MTc4ZTI3MWZmYTMwYzlmZTczZDJiYWQ4ZWMifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/execution/TaskExecutionService.java#L292-L327",
+          "version": "repo-lines-v1:sha256:43aa38e1c2f1e208b8a9d3d8fae028533188eceed22a97bc573f93ae6ab3848e:eyJzZWxlY3RlZExpbmVDb3VudCI6MzYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImM1NmRhOTRiMDQ3MGJjMWQzOTY1OTI4ODIyNTY2YjdlNDViNjE2NTNhY2E2NGViYzY5ZmQ2NWE5NTg0MmRhN2YiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjI0YWVkNjAzZjY2MjJjZmQ2NmFjM2JhOGFmOTIxNmY0OTljZWU5YzE5MTFiZDE0ZmY3Y2JhNjgxOWQ1MjM5NmIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImNhNWM0MWJhOTYyODg3ZDBlYjVmY2FlMzUyMWZiY2ZkZmY2NDZkZTc4OWU0ODljM2NiZjJlNWNiZjU4NDVhN2UifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_9f04bf317af34bfeb8af220f75508530",
+      "statement": "The scheduled expiry job defaults to a 60-second delay and uses transactional FOR UPDATE SKIP LOCKED selection plus conditional status updates to mark overdue planned schedules expired and append zero-XP snapshot events.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/execution/ScheduleExpiryJob.java#L27-L65",
+          "version": "repo-lines-v1:sha256:5dec702d7285efe7330c62a1b8239374d5f4a70f9d80aec19426f89876c5015e:eyJzZWxlY3RlZExpbmVDb3VudCI6MzksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjE2YWY1NWZiZmY4MTIyY2EzMzFlY2M5N2Y2YmNlZGI5NjQxZjZkYzU2MzZhMWQ4MjRjODY3MWFhODMwZDRjNDciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjNkYmE0MzYyYjJkNjEwZjljZmE1NzYzYWYzOGU1YWU1YzUyMTJhNzU0OGVkMGM3MjNjOGY3NDM5MzIwZDgyZWMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE1ZjgwZmJkZTFkNzFmNWM4YzJkNWJhNzdiZTM2MWFiOTljZWE1ZjI2OThiZGQzZTYwOTY3MzVhNjIwZjEwZmMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImVhZTQ1YjRhMTQ2MjZiY2ZjYTRiNWRhMGJjZTk3MGRkZjNhN2FmMjYwN2QzZDUzZDJlYTNiMzQxYzI4M2Q4MTAifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_786d0a48ef6d4c5b915b6ea5379c9c04",
+      "statement": "Completed and partial tasks earn a bounded, daily-capped XP amount that is distributed across dimension weights; role progression is row-locked, initialized on demand, and capped at 2,149 total XP across ten levels.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/career/RoleProgressionService.java#L24-L54",
+          "version": "repo-lines-v1:sha256:87e790329fae858dd1cdac3e3177f3f64d5ff13922f776300bab0943e7abedaf:eyJzZWxlY3RlZExpbmVDb3VudCI6MzEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU0YWQ1OWVhMzA4NWI5MTY0YTBkMTg5NjcxMTI2YjkxNDI2ZTAxZjQ3YmEwNDA3MTUxZWU0Mjc0YjkwYmIwZTAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE4MzA2MGQzM2IyYTNmZDEzZDljNDUyMzkyODkxNDE0OWVhMTMwNmU1ZTgzYjA3NzdlNTQzNTgxZDVkYWQ0MzgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjRmYmQ0OTQwMzYxOWQxM2MwMTQwODA1NjA5MDFlNzRhNzVhM2I2ZWQ3NjIzZjhiNDNiNjE1YmIyMmQ1NjIyOTEifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/career/RoleProgressionService.java#L66-L91",
+          "version": "repo-lines-v1:sha256:6916857a348a22c25f0409768f1925dc78f42317c0f5d647edebe3d4a6e9f345:eyJzZWxlY3RlZExpbmVDb3VudCI6MjYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImJiYWNkOThlNTgyMjdiZmZhMjM1Y2E3ZTJmY2I0NzgwZThiZjU5MmUwNDg1Mjg1YjE1YTY3MTcxYThlY2QyYzUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFlNzVjNzBkOTQ2MzYyNWUxMDc5ZmQ4ZmM4ZWU2MmFkMmU5MmM0MmJlYWFiZmQ4NWI3OGQ4ZTBhNDk3OWI5NGEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijc2OTJiZGFlOTc5MGE1Y2EyY2E4NWYzYmZlMWJmNjVlMmFhZGNlYWNkYzhhZGFlNjQ4MTIxYzM0ZTMzZjE3MTgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImRmZGY5MTkxNzYwOGIzZjM1YjkyNTc2MWM3MjAxNDQwNzUwYTk5YzZkYWFhYmE3YmM3NWRmMmRlNTI4YzM1M2MifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/execution/ExperienceCalculator.java#L8-L22",
+          "version": "repo-lines-v1:sha256:371f67feb0096265584c828b2fdb43f412ecbc8bab054a12795e3799c85a665f:eyJzZWxlY3RlZExpbmVDb3VudCI6MTUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY3YWJkYmEyYmQxNjcxZDg2ZmJlNDkzZTE1MGM4NWQyZWNhYWQ1MGE5MDc3MWQ2NTk3NjVlM2RiNWU2NTMyNGYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjdmNzJmZTk0YmUwYmJmMDhhZWY0ZDIxYmYyZjM4OWJlM2VjNTgwMWEwN2Q3OGVmNDgyNzFiNzA3YzY0NzllYjQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/execution/TaskExecutionService.java#L231-L241",
+          "version": "repo-lines-v1:sha256:7fbe78bdb82bd6abf267d8a55bccc06fb48110d229a704e1d04c92353933932d:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjhhNWFkY2FjMmEwZTY1MTM4OTJhMjVhNmQwNTcxMmYyYmVjNjk3Y2JiOGE3MTcwODdhOWVjZDc5MWNlYzllMjMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImFiMjQ0MDExNmQ5YTg1Y2VmMGJjMTMwMzlmZmQ0NmRiMjcwZmFkNjg2YzhkNjEwNDI1MzE5ZGE3NDNhODExNjciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjUwYTcwN2FlMjYxMDljZmM4Y2VhYTc2MTY3NjQ4NzBjNzNlYTBiZjY1OTdmZDQ4NWU5MDFiNmVhZWIwYmM0NTQifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/execution/TaskExecutionService.java#L329-L353",
+          "version": "repo-lines-v1:sha256:e9dff4f4fe66344106c53098b8bcae7586d6c64682dd8196f8fcc0997fbe1d09:eyJzZWxlY3RlZExpbmVDb3VudCI6MjUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk1OTUwZWQyMDExMjM5ZmMwODg1ODY1MTI1OTZiOGIwOWNhZDQzYTQzNWQ1MjQ5NjdjNTU4Nzg5ZmQ0YzI2MWQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijg2MDExM2JjNjBjNjk0MDdjZDQ0NTEzM2VjYWJhZjExNWQ3MjlmYjg3ZmYyZTE0OGIyODliYTY1MjkzMjhkYTkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjlhMzE0OTU4NmU4NWU1ZmE2NmM1ODk1ZTk2NmM0ODZmOWY2YWQyYzk0YjMyMDJlYjY1Zjg2YTYyODBiNzY3MTcifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_f4a0de2e731241bfb3aba04a2a326b2a",
+      "statement": "Task XP changes partner coins by half rounded up, with wallet balance and lifetime totals capped; purchases lock the wallet and reject insufficient funds or species-incompatible items.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/partner/PartnerService.java#L118-L176",
+          "version": "repo-lines-v1:sha256:ca6d5e7c5b2a6c1d08bb252a5057e805d6435f0fe477516738aabb3b828d50cf:eyJzZWxlY3RlZExpbmVDb3VudCI6NTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc1MjYzMzA5MjNkNGUwYjVlZWYyNTkyMTEzMTJhY2U0ZWIxYjk5MDE3OGIyNjFhODVlOWViZDRhMWFlYjA5NjgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijk5ZWM3Y2JlMDM3ZGY5Y2YwOWI0ZTU0ZDZiNGZlZTE5MjFkMTExYTg4ZmQ3NDc2NDA5YjlmYmY5MjAwY2ExNzAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImVhYzM5ZWU5OTNjOThjM2QyNWQ0YzIyZjQ5MzAwMzdjNjBiMzdkZmNiMTA5Y2Y3Y2RhZjhkYTA3YThlZTcwMTAifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_4cb27dd921f34807b35510c0d680aab9",
+      "statement": "A partner profile lazily creates a wallet and starter pet, and the unique user/local-date interaction record limits the two-affection interaction reward to the first interaction across a user's pets each local day.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/partner/PartnerService.java#L178-L194",
+          "version": "repo-lines-v1:sha256:9de0207e933c53dfc03bcc20329aa150c8347cbba8bdf535d9302cfc7fe3a236:eyJzZWxlY3RlZExpbmVDb3VudCI6MTcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM5MjIxOWUwMTY2NmEzNWRjOTliZWRkYTFjOTkxZjExODJlNmQyN2I0Njc3NTRiMDhjOGI5ZDdiOGIzZWFlNjgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjNlZTdiMjhlNjE1M2U3NDdmZWM2OTE0NWM3NzY2OWNmNTM5Yjk3MThhNTJiNDY2MDg3YzE0OWM1MTJhNjQ2M2QiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijc4ZjY5NTBkMzM1NWZmMzUzODU3MGRkN2YxYzhlNjU0NGFjODQwNTExYzc0ODEzZmYyNjE5ZDBhNTc2MDIyZTYifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/partner/PartnerService.java#L34-L39",
+          "version": "repo-lines-v1:sha256:7363ab95b515831ded432d4e3059e8512b91187db4d44cc7f40ff46ee2aa3ebb:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNzUyNjMzMDkyM2Q0ZTBiNWVlZjI1OTIxMTMxMmFjZTRlYjFiOTkwMTc4YjI2MWE4NWU5ZWJkNGExYWViMDk2OCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDg5M2Y0MGUzNzgxZWI4OTZjODJkMDQ2YTA4MDY3YTExZTM1Y2RmMmYxZGZhZjI2ZmVhOTBiOGRiNjY3NjQxMyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMTVmODBmYmRlMWQ3MWY1YzhjMmQ1YmE3N2JlMzYxYWI5OWNlYTVmMjY5OGJkZDNlNjA5NjczNWE2MjBmMTBmYyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZjNhZTVhY2Q5YjU3ZGMwZWI1OTYwM2NkZWIwNjQ5ZWM1NmVlZWFlYzM1ZjAzYjU2MDZiOTg4Mjg4MjFkYzczNyJ9"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/partner/PartnerService.java#L87-L116",
+          "version": "repo-lines-v1:sha256:c872793419737f975f99717a6bca703400763eab694a63b64caca04f7bea4597:eyJzZWxlY3RlZExpbmVDb3VudCI6MzAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc1MjYzMzA5MjNkNGUwYjVlZWYyNTkyMTEzMTJhY2U0ZWIxYjk5MDE3OGIyNjFhODVlOWViZDRhMWFlYjA5NjgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjA2MGZiN2Y3NGIzMzRmNTM0YzBkOTRlOTFhNzM1MTk2N2IzYjM5NGEwMDUyMmYwMGFlY2RhMDIzYWZmN2E4ODciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjdjYTEwYTM1ZTVmNzBiNTJmYTcwNjNhZjIzMTZiOGVjODk0YTI4OGVjYmQ5NzA3NDdjMWJiYTcyY2JlZmU4YTQifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/resources/db/migration/V9__daily_partner_interaction.sql#L1-L16",
+          "version": "repo-lines-v1:sha256:8102f76ef11b5c369fc605bd736cf384260b47c323e99af9676dbc4e0f3613d5:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjlhOWJkOTk0ODE3NDM0NzdhYTNkYjk2ZTE0OGMzMjY5ZjliYzdhM2NjY2I2NzNiYTdhNzU4YjY2NTYyMmU5ZTAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk5YTNlOTViOTc5M2E0MzJmYzU1ZDBjMGI1MGZiYjU3ZDc5ODAwZjkwODY4NjBlMjZkNzdiMzE2NmQxMjIwZTAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_e3f3de079cd84572865922ed6af13918",
+      "statement": "过期任务仅选择 `planned_end_at` 早于当前时间的 `PLANNED` 日程；因 SQL 对 `NULL` 的比较不成立，无截止时间的快速清单日程不会被过期任务选中。",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/execution/ScheduleExpiryJob.java#L27-L45",
+          "version": "repo-lines-v1:sha256:9944cfaa9f122d9d127ebde2c645ede546e46949929d083ea7f3e4adade33127:eyJzZWxlY3RlZExpbmVDb3VudCI6MTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjE2YWY1NWZiZmY4MTIyY2EzMzFlY2M5N2Y2YmNlZGI5NjQxZjZkYzU2MzZhMWQ4MjRjODY3MWFhODMwZDRjNDciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFlNzVjNzBkOTQ2MzYyNWUxMDc5ZmQ4ZmM4ZWU2MmFkMmU5MmM0MmJlYWFiZmQ4NWI3OGQ4ZTBhNDk3OWI5NGEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE1ZjgwZmJkZTFkNzFmNWM4YzJkNWJhNzdiZTM2MWFiOTljZWE1ZjI2OThiZGQzZTYwOTY3MzVhNjIwZjEwZmMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijk1YmQ2OTQzNzI3ZWIyMjI3ZjFlNjQ5NTBhMmQwNTJlMmZkZTJjMTZlNjk0MjExN2MzNTIwMzJkM2I3NGUyZmMifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/goal/QuickTaskService.java#L52-L56",
+          "version": "repo-lines-v1:sha256:820f0ba0fc734f3315a6ed3f38389f8094f949f573f246490cbce6e715210fce:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNTIxNzZkN2JjMDA3ZTJjOTg2MTQ2NTg0N2NiNDY5MmFjZGJhOGUzMWMzYzIwZDk3ZTNmNTVmNDJlNDc4M2Y5ZiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiY2EyZWQxNzNmYjAxODI5OTJlYjUzYWRhMzc4YWUzYWVkYzMyYjEyNDE2OGU5NzdkNGI4MGE5MGE4NDI2NTY2NCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZjIwOGEwNThmMmU2MzVmZGNiN2JhMzM3ZWU2NzVmMGYyY2U1MTNjY2FlOGQzOWE1Y2U3NzljNzdkMTcyZTVhMCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNzM0YmNiNDMwYTMxMzhlNTg3NjI5ZTgxMWYxNDFlNmY1NWQ0NTlmMDg0NDE2NjMxOTRkN2RiOTQyMGMxYjZmNCJ9"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.5.1",
+    "at": "2026-09-14T14:22:35.953Z"
+  }
+}

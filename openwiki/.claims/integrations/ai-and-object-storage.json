@@ -1,0 +1,286 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:aa0606fb7704638075178f46e453dd12db111b72910d9c4fbcea2be706d2d30d",
+  "claims": [
+    {
+      "id": "claim_761ae8db9e22480b8ca1c55bca3aa79e",
+      "statement": "The application-wide QwenProvider is selected by app.ai.provider: MockQwenProvider is the default/mock primary, while QwenHttpProvider is the mutually exclusive primary when the value is qwen.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/ai/MockQwenProvider.java#L10-L16",
+          "version": "repo-lines-v1:sha256:844e1e6354634adc12a90b97cbb501b643c1c3075794ba7d043a402c4916d969:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiODY0Nzk3NWFmMjYxMDc1Mjc0NDczYzNjODU4ZjE1N2FlNzU5YWQxMzJjMzE1MGE2ZmQwNWZmM2JjMTBhYWIyYiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMjlhYzM2MmU5ZWJkMTNiMzRiODMzMDk1NGM2ZTU4YjU1Yzg0NjA5OWQwNGEyYjNkM2Y3Mjk4MzAwYzFjMjhhZiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMWVjMzY4NTZlNjIwYjgxZmRhODBkOGJkYmUyYzQ4MGM4ZDdlYjEyMTE1M2M4YjM0N2I4MGUzMWQxOGNkOGRmMiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMTc5YmI2YTAyZjllMjE2NGEzODMyZWEwY2Y1NWI5M2ZlNDBmYjU4NjgxNTFjMDVlNzEyMTIyMTM5NDdkMmY1MiJ9"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/ai/QwenHttpProvider.java#L27-L35",
+          "version": "repo-lines-v1:sha256:1198b5356829b0eda295be06cb3b5f9f7a64ead54f5ea1db115ed6658e55f384:eyJzZWxlY3RlZExpbmVDb3VudCI6OSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMzhlYjFlZWY1OWQ3NjUyY2QwZWZjMmE0N2Q5MDk0YTQ5NDMyZTMzY2JkN2U3N2QwMDU1ZWQ0Mjc5YjQ4ZWU4YSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiOWZmM2M5MzNmMmJiYTc3OWQwNmE0NTZjMmFiMThiOTI4OTZiZGZhODc4MjU5NGE3YmI2ZTU2ODU1N2MyZThiMSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiY2ZlMjBmZmUwMjM1NDM5NWVmYzJkZmRkODNiZTZmZjIzZGI5N2E1ZTFkNDk5MTliOTMwZWZjODI2YzIyM2NlZSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiN2U3NmY0MTBkOGMzNGEwNTc3OTRiZGQ0YmQxMWY3YWYzMmY4MmVjMzEyNWVjZDBhYjQ4YmEwZWYzNDExNmJkNiJ9"
+        },
+        {
+          "resource": "repo://backend/src/main/resources/application.yml#L77-L90",
+          "version": "repo-lines-v1:sha256:22af1f2318daf9a72cf0e3a77b302c65861ee937aca2e843b37843d7d757ac17:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImE1Y2IyY2U5MjRmNTc2YTE2OTg0N2RmZDE3Njk2YTFkMDMwMGQwYjIyNzRmZTA5Y2M4MmI1MTk0OWNmMmNlOGIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk2MWQxMGMxOGUyODVhN2QzNzE4ZmRhMjI4Mzg3N2RhNDZlYzRmYTExODdlNDZmYzkwNWRhOGJlNzFmZGIzNTgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjEzN2U4YTZiYzI4MDZhYmFjYjE5MmU5ZGE5MDM2ZDQ2ZjBkMzk3YTUyNzZmNjRhN2U0NTQ0OWJiNTg3ZWQ1NTEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQ3YjI3YTY0Njc2NDVjODVjZTAzM2YzMDk0ZjNlYTBiZjhlN2FkMDIzNzMwM2JhNDNiM2RiZWJlOWM0MGRkZmQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_f37bd5b1b4a14e0c8959aea063f60941",
+      "statement": "QwenHttpProvider validates real-provider credentials, base URL, and model at construction, appends /chat/completions to an HTTP(S) base URL, and sends OpenAI-compatible bearer-authenticated completion requests.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/ai/QwenHttpProvider.java#L171-L199",
+          "version": "repo-lines-v1:sha256:9d90288f67cda5c88746733604a2894f2d70001323b408102e9762369bcbd50c:eyJzZWxlY3RlZExpbmVDb3VudCI6MjksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjlkYjJkMGE2NDhiNGEyNzRmMGVhMTZjOWE2NDYzOWQwNDBiMmE1ZDY4ODUyOGMxNTg4ZDdlY2NlZDhlN2UwZWYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjU4YzJhYjNmNDZmOTA2YzQzYTA1N2NiM2U4MDUzOTU0OThlZjkzNWViNzc1MDgxMzk2YWYwZmY5NTk2NDdjZTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjE3OWJiNmEwMmY5ZTIxNjRhMzgzMmVhMGNmNTViOTNmZTQwZmI1ODY4MTUxYzA1ZTcxMjEyMjEzOTQ3ZDJmNTIifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/ai/QwenHttpProvider.java#L360-L387",
+          "version": "repo-lines-v1:sha256:5b08f12c9622598c68fe870c09dcac1498a537c1f1bde23db461936bde29c681:eyJzZWxlY3RlZExpbmVDb3VudCI6MjgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjJkM2MxYTEwMTllNWE1ZTRhZmEwMzczZGQ0OWZiMDg0MWJhYzUwNTE0YzZkNDM2MjJhMWI3N2VhNzYyYjg5MWQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjkzOTBhZDc3ZTczMjc5YWVhZWIxYzQ4ZjlhNGQwMTRjNTg1MWE2NWM1YmRkYjFjZWExNTFiYzY2ZjIyYTQ2NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImNkMTUyMDAwMjBlYzVhYmQ0YjM1NjgxYWMwMmNlMTQ3Yjk4ZGVmN2FmZjczOGRlYmRkYThjMDYzNzRjZjZiMDciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImI4ZjAwYjMwYmY2ZjIyYjU0MjA3NWVlM2YxMDgyOTllNmQ5MDFjZjYzMmQ4YzI0MjNiNGUwMGNlYjlkMjA1NDYifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_80a67d8b471746ac8f545d1cdc30f0a8",
+      "statement": "Structured Qwen generation requests JSON, strips code fences, makes at most one JSON repair request, aggregates usage across the original and repair responses, and fails with AI_INVALID_JSON if repair is still invalid.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/ai/QwenHttpProvider.java#L201-L234",
+          "version": "repo-lines-v1:sha256:6d9f1d0134b02064e2614e3bd227ff4ff628a3b35c7d1c5e24fe14842f39b489:eyJzZWxlY3RlZExpbmVDb3VudCI6MzQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVkYzJiMzExYWJlODc1NzJlOGE3Y2MwZDk5NmE2NTg0NDA3NmU1MjMyZDIxYjdhODU0NzVmOWI0MDU1Yjc0OTIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjhhMzdjNWFiYzllODE1YmZkNzAyNzU1OGE0NjdmZDQyMmM5ZDY4MzFjMjI0MmVjZmEyZGM0ODJiYzQ1MGRjYTgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjgxMzRkNjAzNmNjYzU5OGE5YTQ3MTNhZGU3ZmNkMDNlYjhmNGQwMmVhYzQ3NGQxNzU0NmI1MDZmZDg5ZTNhZDcifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/ai/QwenHttpProvider.java#L252-L270",
+          "version": "repo-lines-v1:sha256:d7f33d04ceb0ac463b394468adeb6e3d4052c0570b91c9456036688fa661f935:eyJzZWxlY3RlZExpbmVDb3VudCI6MTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjA2YTQwMWU5N2YyYjQ4NzBkZmMyMGEwNGEzMzcyOTYyOGJjOTM5NjcyZTJhZjg0N2EwOTBkNjk4N2IzZDIxNDEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImNjYzMyNjc0Y2QxMTU4NTE3NmM4ZGJlZWE2NDU4NTBlNDkyOTFjZTIyNjY5YzJiZTI2YTYxZjhmNGUyMTM1MjMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImVmZTg2Njk2ZmQ5ZjZmMjBhM2Y0NTU3NzVjODRiNWQ0NWE4ODFkNGQzOTVmN2MwOThkZjI2OGZjZjZkYzY5YmQifQ"
+        },
+        {
+          "resource": "repo://backend/src/test/java/com/betterself/growth/ai/QwenContractTest.java#L166-L180",
+          "version": "repo-lines-v1:sha256:7612e3b76d29fac4e1e98eda46cbdd9a2dcc504be3d4409b947bdbfddff663a4:eyJzZWxlY3RlZExpbmVDb3VudCI6MTUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRjZjA5ZWIwYzU3NDRmYjk3MzMxYjk4ZmYzZmJmMDVhNjAyYmEzZjdmNjdlNWRhNWJlOTA5NTAzM2Y2MjU4MjUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImY2MmU1ZWM4ZTEyZGM4NDJjMWRlZDBlZDczNjMyNmI2ZjUxZGY5NDNjNWRhYzFmOGQxZWFkNTZjYjcxN2YxNjciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjYyYTcxNmYzYjBhMDJlNGE2Zjk2NjYzMjUyODEwYTg3ZWVkMTU2ODExZjUxNTEzOGVlMDQzNDE4MDczZDgxYWYifQ"
+        },
+        {
+          "resource": "repo://backend/src/test/java/com/betterself/growth/ai/QwenContractTest.java#L36-L66",
+          "version": "repo-lines-v1:sha256:a58610b3a1ea895d1f6906bf6900bc5986cde8c3d18388721a22d7697f9ba5c6:eyJzZWxlY3RlZExpbmVDb3VudCI6MzEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRjZjA5ZWIwYzU3NDRmYjk3MzMxYjk4ZmYzZmJmMDVhNjAyYmEzZjdmNjdlNWRhNWJlOTA5NTAzM2Y2MjU4MjUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijk5OWJkZWZlZWFjYTYzNDBlMDI5MGRjODZlODg5Yzg5ZDVlMTg5YWE1YmE0NGI1ODViM2I3MDczNGY0YTYyZDgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjA4NGQzYjMyYWJkMTc5MGQ4Mzg1YzA5MDEwOWYzN2NmMTNkNzFiMjgzMzY1ODdmNTEzY2RmNGU4OGZjMmFlNGIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_ef3ac160021d4a238470df686878c248",
+      "statement": "The provider streams SSE content deltas and usage, rejects an otherwise successful stream with no content as AI_EMPTY_RESPONSE, and maps authentication, rate-limit, request, provider, and transport failures to safe unavailable-service error codes without exposing provider response bodies.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/ai/QwenHttpProvider.java#L272-L315",
+          "version": "repo-lines-v1:sha256:2426e5b0debe7e43f4ee3f3b671c33e3b1940082e4fdb2232ce4905b777f6cf6:eyJzZWxlY3RlZExpbmVDb3VudCI6NDQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVkYzJiMzExYWJlODc1NzJlOGE3Y2MwZDk5NmE2NTg0NDA3NmU1MjMyZDIxYjdhODU0NzVmOWI0MDU1Yjc0OTIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijk5OWJkZWZlZWFjYTYzNDBlMDI5MGRjODZlODg5Yzg5ZDVlMTg5YWE1YmE0NGI1ODViM2I3MDczNGY0YTYyZDgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjNlNWQ3OWM2ZTExNmYyMTY4Y2FjMmMyNTQ0ZDRhZDhjNDhiNTQ4ZDNmMzkzOTdhNmZmZGViZjM5ZjQ5ZDY5NWUifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/ai/QwenHttpProvider.java#L331-L349",
+          "version": "repo-lines-v1:sha256:f980b7c74dd700f2f92b227cb6c93ef8c2eb7ed767592b201372a9e6771ea0d2:eyJzZWxlY3RlZExpbmVDb3VudCI6MTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjkxYjFmZWI4NjVlZTJhMmU2MDZiN2JlNTZiZWE5MWUyOWI4NThlZDEyOWRjODBhOTViM2JiY2M3NmFkZjk0OWIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijk5OWJkZWZlZWFjYTYzNDBlMDI5MGRjODZlODg5Yzg5ZDVlMTg5YWE1YmE0NGI1ODViM2I3MDczNGY0YTYyZDgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImU2NDI0NTgyMTk2NjFmMWNhZTIwMjhlZDYyNzc5MDRmZGQ0NmYwZTUzZmQ5NWFmODNmZTUzZjcwZTZhNWNmNDgifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/ai/QwenHttpProvider.java#L406-L450",
+          "version": "repo-lines-v1:sha256:7b2a4e5b8e71472cbb8e0575523cc25881b9372b97a56f8932d313e60281ac1f:eyJzZWxlY3RlZExpbmVDb3VudCI6NDUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjhjOWQ5MWJmMWM4ZTc1MzYwOGM0MDYwZGY4OGY3ZjkzZjY0ZWQxYWUzYzNiY2Q3MTNkOGZkMDNjNjJkM2M5OWUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijk5OWJkZWZlZWFjYTYzNDBlMDI5MGRjODZlODg5Yzg5ZDVlMTg5YWE1YmE0NGI1ODViM2I3MDczNGY0YTYyZDgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEifQ"
+        },
+        {
+          "resource": "repo://backend/src/test/java/com/betterself/growth/ai/QwenContractTest.java#L295-L326",
+          "version": "repo-lines-v1:sha256:b19dfb3c5808cd123f080cca46ccda01144ee8ba88c95766e48f2cc6a064daa5:eyJzZWxlY3RlZExpbmVDb3VudCI6MzIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRjZjA5ZWIwYzU3NDRmYjk3MzMxYjk4ZmYzZmJmMDVhNjAyYmEzZjdmNjdlNWRhNWJlOTA5NTAzM2Y2MjU4MjUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjcwMTg1MDc0MTU1ZmU1OWJhMGVlNTAyNDczMzE3YmZlMzkzYTViZGI0MWYyZDhhMzcyZDlkNzQzMzEyYmNlNDEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjkxZTkzMTczNjcwYjFiZTNiNDAyOGE0MzkxY2NmMzExMzllNDVhNWYxNGJlZGQ1NjE2ZjJiN2RlNzViOTI5NTIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImU4ZWFmM2UxZGIyODRmNmE2ZmQ0ZTA2NmFlMmZiNjU0YWU2OGZkZmNmM2U3ZTRkY2E0YzJkZDIxNGE0OWI5ZDAifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_e0abe15c47b94fe9bac99843c6dcdbcb",
+      "statement": "The vendor-neutral structured-prompt thinking switch is translated only at the provider boundary: qwen style uses enable_thinking, DeepSeek style uses thinking.type, and an unrecognized style sends no vendor field.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/ai/QwenHttpProvider.java#L360-L375",
+          "version": "repo-lines-v1:sha256:bbefe6f5d3cb1217e473909cb4736d29b3a501d9e5309e842489f9e2b7d012d2:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjJkM2MxYTEwMTllNWE1ZTRhZmEwMzczZGQ0OWZiMDg0MWJhYzUwNTE0YzZkNDM2MjJhMWI3N2VhNzYyYjg5MWQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU1MjJjNDJjZDE5YzZkMDNkODA4YzQ1MjcyMDU1MjgyNWI3ZWExYzViNDkxYjIxODUxMWNhYzc0MTVjZjlkOWIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImNkMTUyMDAwMjBlYzVhYmQ0YjM1NjgxYWMwMmNlMTQ3Yjk4ZGVmN2FmZjczOGRlYmRkYThjMDYzNzRjZjZiMDciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijc4NzIyMGVmZjA0MDNjMDg2NGM2YjQyYTJlOWZlNzZhNWE1ZWIzOTYwNDAyNWUwMGRhNzJiZmFiZTg5MWI2ODIifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/ai/QwenHttpProvider.java#L393-L403",
+          "version": "repo-lines-v1:sha256:81a8cdb0e76b3c8ffa02897142aeaff924ea6c77e24434210b893a8404dc3b0a:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM5Y2JiYzY1NDY5ZGIxY2EyODQyZWZkOTdkZjdlZTJjZTZjYzE1NzE0ODJkMDFhMThiNzkwYTEwYzdjNTEwZjMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU2YjA0NDkxNDY5NzIyZTgzNjNhOTRlNDA0NDUzOGUwMTNhMmEyMTdlMzZiMWU1NjhiYTYwYWNiN2I0YzhmMmUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijk5OWJkZWZlZWFjYTYzNDBlMDI5MGRjODZlODg5Yzg5ZDVlMTg5YWE1YmE0NGI1ODViM2I3MDczNGY0YTYyZDgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM0NzI0MWQ0YjliNWE5MDEwODVmMzlhNmQ2NjNlNTU5NGE2ZmE1ZWU5OGY4N2U0YzFiZWJmNDlkMmRkMjBkNWUifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/ai/QwenProvider.java#L15-L27",
+          "version": "repo-lines-v1:sha256:29fde26e454ae5467be087de6b9a9e5f7a5542d6c0da941d06c3a80aee852a0c:eyJzZWxlY3RlZExpbmVDb3VudCI6MTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM5Y2JiYzY1NDY5ZGIxY2EyODQyZWZkOTdkZjdlZTJjZTZjYzE1NzE0ODJkMDFhMThiNzkwYTEwYzdjNTEwZjMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImI4ZGRhNjBjMWE5M2JkZjNjYTZjMjA1OTQyYWI2ZTQ1NTUxNTc1YTU4NTcyYzE3ZWRhZGMxZGZlMjYyMGQ3M2MiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjczODFhOTRhYzVlNDkwMzI5OTZmZGFlZDRhMDI0ZDdiY2FlMDgyMDBhZGM3M2UxNWU4ZjE2ZmEyNWY2ZWY4NjkifQ"
+        },
+        {
+          "resource": "repo://backend/src/test/java/com/betterself/growth/ai/QwenContractTest.java#L236-L269",
+          "version": "repo-lines-v1:sha256:0af18e25df174aafe08dc00a0732d2e0ce5286bb531ad4bbbb670e771dd8f3cb:eyJzZWxlY3RlZExpbmVDb3VudCI6MzQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRjZjA5ZWIwYzU3NDRmYjk3MzMxYjk4ZmYzZmJmMDVhNjAyYmEzZjdmNjdlNWRhNWJlOTA5NTAzM2Y2MjU4MjUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjQ1MWQ2MDE1NGUzOGI1OWM2YWI3OTQ5OWJkMjc2YjQxMTFiYzhkMTk4Mzc3MTY1NWU0YmYxNDY3ZmEyNmMyNjgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImNjYTMxMGI1YTI4ZDZhZTBmOGIzMTYwMTg1NThjMzdiYWYwYzM1OGIwNjJlOTBhZDE4M2Y2M2Y0OGQwYTkzYjYifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_b5dfda99d1104404b4669fb4f17c9076",
+      "statement": "WireRequestBudget reserves immediately before dispatch, can be shared among clients, records requests, and prevents requests after sealing or after its maximum with explicit service-unavailable error codes; ordinary production provider construction uses an unlimited budget.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/ai/QwenHttpProvider.java#L331-L335",
+          "version": "repo-lines-v1:sha256:8bca2545ac07d2a8ba01732c4e7750eadaffd1809df46bcb594e61db936ae13a:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiOTFiMWZlYjg2NWVlMmEyZTYwNmI3YmU1NmJlYTkxZTI5Yjg1OGVkMTI5ZGM4MGE5NWIzYmJjYzc2YWRmOTQ5YiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMDk1NTE2NGIyZTRjOTJkM2M1MTM5ZmFmYWQyMWY2MDQxZjgwYzAwZDIwMjA0M2YzYWQzZjMyYjRjNzFmZWQ3NyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiOTk5YmRlZmVlYWNhNjM0MGUwMjkwZGM4NmU4ODljODlkNWUxODlhYTViYTQ0YjU4NWIzYjcwNzM0ZjRhNjJkOCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMDg1NDk2OGEzMTViNzJlN2IyMzg2NWU1ZTgwYzU3ZDQxMDM1NjlmYzIzNDM3OGExNDM3MDhhNTZkZGIxY2UwZSJ9"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/ai/QwenHttpProvider.java#L49-L111",
+          "version": "repo-lines-v1:sha256:d161cd04c4c302e1ebf796d0d95a3de3780d96a632c18a8cc633cd48522ccd83:eyJzZWxlY3RlZExpbmVDb3VudCI6NjMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM5Y2JiYzY1NDY5ZGIxY2EyODQyZWZkOTdkZjdlZTJjZTZjYzE1NzE0ODJkMDFhMThiNzkwYTEwYzdjNTEwZjMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjQ3ZjAyYjMyMDg4YjZjMTU2OTZlM2E3N2MwMTY5N2Y1NjQ2ZjFmMTFhMjIzNDBlZTkxN2UxY2NlNGM2NjE1YzciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImY5ZWNkMDYyMmI3NGZmMjE4NzBjYzRjZTRiZjcyMzU4MzU3MzNkNDUyN2YzOTY1ZTI0YjY5ZDQ4MWEwODVkNzgifQ"
+        },
+        {
+          "resource": "repo://backend/src/test/java/com/betterself/growth/ai/QwenContractTest.java#L121-L164",
+          "version": "repo-lines-v1:sha256:eac3f6621c5f7ff9f1d3b43cc6c1310cc414516ca367fa07214a9e3f1b4dea48:eyJzZWxlY3RlZExpbmVDb3VudCI6NDQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRjZjA5ZWIwYzU3NDRmYjk3MzMxYjk4ZmYzZmJmMDVhNjAyYmEzZjdmNjdlNWRhNWJlOTA5NTAzM2Y2MjU4MjUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjBkYTEzNTM1Yzk3YzRmZWQ3MWU5MmExMzJhNzVmNGI1ZDRmZmE2ZDhlYmIxYjEzZGM3MzQxYjU5ZjcxYjFjYmYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjU4NmQ0OGE2MTkyMDhhMjdkNGU3ZmQwYTg2ZDE0NTg5NzUyZWUxNjdhNDAzZWU1OTM1ZjYyYzRlZWQ4NzU5ZDYifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_7b2d08baa99043ad8c1976e21489e432",
+      "statement": "Companion-town routing tries named provider minds in configured per-call-type order, returns the first success, logs and falls through after an earlier failure, and propagates the last failure when no route entry succeeds.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/adapters/RoutingResidentMind.java#L151-L185",
+          "version": "repo-lines-v1:sha256:9e6623e9c76b7c651224e1035d1705ac092ad3955a572654a34a60db92d425a7:eyJzZWxlY3RlZExpbmVDb3VudCI6MzUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM5Y2JiYzY1NDY5ZGIxY2EyODQyZWZkOTdkZjdlZTJjZTZjYzE1NzE0ODJkMDFhMThiNzkwYTEwYzdjNTEwZjMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFkMTY5ZDkwMWY1MWNlOTczNjkwODExNjIzOWNmMmNhNmQ4NWRmOThlZmFmOGNlOTQ0N2RmMjFhOTRhMTA1OWEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjVlNGY4OGI3NDhkNGQzYzFmNWZkYzljOGQxYTgwN2IzNjNmYzUxMzc3OWQ5NTk0NjQ1ODJiZDAxMjcxYjk0YmIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoyLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM3OTRkMDJhODEyMTk0NGQxNzZkMjY1ZTliYjljYzU5ZjZhYjg5MGJjYWRmOGFlZmRlYmRiYmI0ZjJlYTg0NDQifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/adapters/RoutingResidentMind.java#L18-L30",
+          "version": "repo-lines-v1:sha256:f721d1555990f35bdd5db14bcaf65fecdf24058565cff604f5684dddc6a00b74:eyJzZWxlY3RlZExpbmVDb3VudCI6MTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVhZjIyY2YwNzMyNTkyYzI0NzE0MWNiZTYxZWZhMTEwMTI2MTJmNWEzMTIyYjlhZjliYmFmNTJmNTcyNGQxOTQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZlMDAyNWRmMTZjM2JjM2YxODNjYTRjMDUzMDJjMmIwNTlkZGQyMWM4YjRiNTcxM2M5OGE2YTBjNzFhNTdhMTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjkxNDA0M2UyZjA0NzYxMWUxNTAyYTIyZTM4ZDY4ODQ4NGQ2MmRhZWZkMDc3OWQwMTViYzVlYTIyMWFiZjBkZGQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM4MDA1NzIwOGNkMzUxZWU4ZWFmNWY5Y2Y2NzhhNDhjYThlNjM5ZjQ5NzliYTZkOGYzNmQwMWI3MWI4ZDc1OGQifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/adapters/RoutingResidentMind.java#L91-L94",
+          "version": "repo-lines-v1:sha256:4b8e76cae13ff552e72d0ae4c4c6fb673219708125182114ac643eee36ae05b8:eyJzZWxlY3RlZExpbmVDb3VudCI6NCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiOTI5NDRkZTFkNTYzZDU2NzhmNjA1NDhjYzk0MGMwYTU4MGI3MGZiNzhlMGYxNDNlYWUzNjk0NjMyZjk0OWUyZSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDg5M2Y0MGUzNzgxZWI4OTZjODJkMDQ2YTA4MDY3YTExZTM1Y2RmMmYxZGZhZjI2ZmVhOTBiOGRiNjY3NjQxMyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNjViYzI0NTRmOGU0YzkyNTkyNjk0ZGNlNGIyYjQ0MWU3YmExMjA3OTc1ZjU4ZmJlNjdiNTFiMjdiYjU1MTQzZSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiOTRkMTIxZGIzNmZkYjQ1MTdiZTAyOTQ2NDM0YzVhNjY4MDgxMDUyZjNiOWNkNTQ4Y2YzNjI4YzA1NGZmZGRjYSJ9"
+        },
+        {
+          "resource": "repo://backend/src/test/java/com/betterself/growth/town/companion/adapters/RoutingResidentMindTest.java#L58-L100",
+          "version": "repo-lines-v1:sha256:e6d7daba45c8b5e6d57d9def66058be8638b9837e15238295e56f8ac248afbfc:eyJzZWxlY3RlZExpbmVDb3VudCI6NDMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImJhOGYzOTJhN2QyMzc1MjY5ZTQ4NjEzY2IzMDBhNDgyY2Y1MGQzYjg2ZjcyZDVlMmUwNDdmODRkNDFmMTE0MGEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVmZDgyODA5MTgzOWZmYzI4M2I0ZmEzNDFjNjE5NzM5MWZjMWJhZWM0MjFjNzU1ZDI1ODU3YTBiNmJiZTE5YWYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjA5YzkwMjg5ZDc5MGNiODk0YmZkMWVkYjQwOTQ1OTdmOGQxNTkzYjdiZDUxZWIwY2UzYTc5ZmFjMTA1YTVmYzQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjYxNWM0MThhNjFhMjgxMTdiYWIyZjExYjA2YmQxNjNiODM3ZDRhNGE1N2JlNWI0NjIyYmE4MjhjOGZlZjJhMjEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_941b49eddf4645eda7e9feb16de0827f",
+      "statement": "The DeepSeek companion fallback is independently configured and missing its required settings creates an UnavailableModelProvider rather than blocking application startup; companion routing is enabled only when the general provider is qwen and the companion toggle is enabled.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/adapters/CompanionModelConfig.java#L13-L22",
+          "version": "repo-lines-v1:sha256:fa5fecebd57b90994d61891b7aa5827000a32e41f9f6d98a48e7cc1cb91b1769:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVhZjIyY2YwNzMyNTkyYzI0NzE0MWNiZTYxZWZhMTEwMTI2MTJmNWEzMTIyYjlhZjliYmFmNTJmNTcyNGQxOTQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk3MmE0MjkzODJiMmUxNDcxOGUwZTM3YjA1NzBhOGExNzAyOTkxZmNkODQ5OGNkODQwNjBhOGJmNGYwNTAxN2IiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImEzOWQ3OGQ0OTZmZjhjNjgyMDk0N2IwMzUyOWVjYjE5NWU0ODhiMzBiN2I5YzRkYTM3MGNjN2FlYTMwYTZmMTQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjRlY2E2NTA1ZjNjZWM4MGZjMzNlMjk5ZmVjODM0NTQ2MzRhYjgwOWU1YWEyMzNmNzY2MmZiZmNjODU2N2FlNzQifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/adapters/CompanionModelConfig.java#L39-L53",
+          "version": "repo-lines-v1:sha256:476dcff486b02007892227c9215b1064506bbbbe5dd0d1d2830ced80b6b50e16:eyJzZWxlY3RlZExpbmVDb3VudCI6MTUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjA5OWZiZGU0MzM5OWU4MDI1Zjc4NmYxNDJlZDFmNzViYzI5NTA4ZTJmNDRiMzA2YjNjMTUyYTQ3MGUwMjY4MWIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImIwOWZmODhlOWNjNmRiZWI0MTZjNTk1MGE4MzEyNmE1NDVmNjVlYTY4ZDJmNDM0MDA5NDBkNTljZWVkOWRkZDMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjAwZTMzNjkyNjNiZDgxNmEzM2JmZjY3NGI2ZGJlYzE1M2RiM2MwMDM5MDM0YzVjODA3ODA4ZGMyYjQ4YzJmNTQifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/adapters/RoutingResidentMind.java#L85-L89",
+          "version": "repo-lines-v1:sha256:e757e382796945f48b924576455eeb13c968171b4871ea179ecf9ded2c21d6e2:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiOTU5ZGJjMjI0YjU4OTA5ZTQyNzMzNjJjZTg1OGViOGNlMzgxOGMyZTFmODdjNTVhYWZjYzBhMzE0MmZiMDJjMiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDg5M2Y0MGUzNzgxZWI4OTZjODJkMDQ2YTA4MDY3YTExZTM1Y2RmMmYxZGZhZjI2ZmVhOTBiOGRiNjY3NjQxMyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYjRhMWMwYjMzZDUwYWVmMGQ4ZmViZWRkYmZlNTUyMmQwNTAwN2VlY2IwMjVhZmRmODljNzg4ZDcwMTUxNmY0NSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYzNiMWU1NjZhOGNjMmI5N2M2MzdjNzhlNTlmODMzY2E3ZDk0NDI0NjVkYzJjZmExMDRjYWI3MTU0N2EzYmVjNCJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_7bf9a6409b2a441a82ffeb637e00e2b8",
+      "statement": "Companion model usage is carried from structured provider results through tagged ResidentMind usage, and the director treats usage-recording failures as non-fatal.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/ai/QwenProvider.java#L35-L50",
+          "version": "repo-lines-v1:sha256:d6795bea80c790ddca4cad6370ba3790372869612cc3efe620b9402c4eda31d0:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjIxZTQ4ZThmOTdkMzUyN2Q2MmJlZmZiYTE5ODg4MTRhZjI2Y2I1ZWQzNWFjMDFkYmFlNDdmZWVlZjdlODdmN2IiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRiODY0N2NjNWQxZGZkNjRhYTY1YzhiZTVhYjM5NWQ3YTNhNTA4Zjk0NzM3ZTUxZmM0MmJjNTk0NTNmYWU3YTYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImMyMTY1NTJhNGQyMDFmYzIyNzQ0ZDZhZmM2OWUwZjQ1ZmY4YzUyYWJjNGZkYzZmMDJkMzYxOWVlMWQzYTYyZmIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjRjOWE0OGMyNmI2N2ViNDcxMGEzYTEzZjBmY2I3NDM2YjFlOTNmNzQxYzcyOWQxNjFmZjFlOTEwMzc0ZTUwYTgifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/adapters/QwenResidentMind.java#L104-L110",
+          "version": "repo-lines-v1:sha256:1e9569d49cfefd8515c0b0d06e1d65b20fb80c466746510bff7933e7b9424f38:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMzY0ZTZiZGMyZDE1ZGU2YzNiYzE3Njg3ZjcyNWQwNjUzNGVjZWU4OWQ3OGI1Zjg3ZjE5Y2RhNjRjZDFlY2Q4ZSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiY2NlM2NmZTQ4Mjk5OGQ3M2MzNzQyY2MxNTYyMjRhZjc0OTdhZTQ2ODczNzQ3MzIzMmRmNzE3NWVhYjE2MGE0YyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMjJiMGEzZWZjOGM5NTQxMTVmZDdhNWVmNzI3YmNjNTE2ZmU0MWU3ODE2Y2YwNGU2M2MxNmYzZmVlNTM1MzY3MCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiOGYxYTIzOTZlNWQyZDY2MzhmMGI0OTljM2ViZDAyY2QxMDliMGMyNDAzMGJiN2RiYjIxNDc3MjM1ZDYwMjdmMiJ9"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/adapters/QwenResidentMind.java#L228-L241",
+          "version": "repo-lines-v1:sha256:37c8f26102e0f9b67eac6dfa1f22e59f0b338f10f3ce5027317c6fb54f937353:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImViMjkzZmEyMGQ3M2VjOWZmMjNkMTBkODMyMjkzMzAzYmM1MDNmMTA2NjM2NzliY2I1ZGRmYWQyMWQ1YTRmZjciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjIyNzc1YTdiZGE4ZmM4OGE1MjgxYjJhMDQ0OGNmMzhkZGQ5YTUzNzI1Y2M3NjE1YTFiN2U0ZTA5MTI1NTJmMDQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImMxODA0Y2QzMDMwNzVjZDY2ZDcxODFkMTlkMGI0ZDZiOTBlNDMwNWFhMzM0NTI4Y2M0MWY2MmZhYTc3OGExMDkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImQ3YjE2NjMyZjJiYWFmYzY3NDc4YTJjYzk3ODQ5ZTY5NDI1NzBjNGQwMTI4ZTcyZmQzNWNhOTNjYjNkYjQ3MWUifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/application/ResidentDirector.java#L1015-L1022",
+          "version": "repo-lines-v1:sha256:4962d61246394ecc5517ebb52f9907fd09e3af0313e2e4889af9cb3982578aaf:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiOTIzYmU5OThjNjE4ZjlmN2NhNzAzMGYwZWM5ZjY5MjVhN2UwNTU2MmY1OGU5ZDk5ZjA0YWFiNzNhMWQyMjJhNiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDg5M2Y0MGUzNzgxZWI4OTZjODJkMDQ2YTA4MDY3YTExZTM1Y2RmMmYxZGZhZjI2ZmVhOTBiOGRiNjY3NjQxMyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYjhiMjMxYjJlYzIwYTMxNzgzNDQ1ZjhlNDI4ODc2NTA5MjE3MDVjYzA3NTEyZWM5ZDA1ODQxMDUzMzMwZWZlZSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiOWRkNjI3YzhmNzM3NmRiNjJlNTQyNzMyNDIwOTkzNzhjNWE5MTQzNTRkMmE4Y2FjNGNlYzk3N2Y2MWRjOTc2YSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_280c9b05642143c4b0b78c976d4040d0",
+      "statement": "JdbcModelUsage persists additive per-user, per-day, per-call-type token counters only when measured tokens are positive, and provider attribution is encoded into the call type using compact qwen/deepseek codes.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/adapters/JdbcModelUsage.java#L11-L40",
+          "version": "repo-lines-v1:sha256:37648ea7f8f0f03555bee34cee2c5e7a62094c9285c395baf0dff85626a50ce8:eyJzZWxlY3RlZExpbmVDb3VudCI6MzAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVhZjIyY2YwNzMyNTkyYzI0NzE0MWNiZTYxZWZhMTEwMTI2MTJmNWEzMTIyYjlhZjliYmFmNTJmNTcyNGQxOTQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImRkNWQyMmFkNzc4YWViNmI1YWM2NjdkMWEwYzViMzYxMWQyNzgwYjlmNDYwZmJiMzc0NWExY2M1NjYwNDcyNjQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImE1NjY0OGViMmI4ZDU3ZmE1NTNmODEyMzlkZjNiYzRjM2ZkNzExZDM0MDZkZDI0NjcyYTIwODNkZmQ5MjdkODIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoyLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM3OTRkMDJhODEyMTk0NGQxNzZkMjY1ZTliYjljYzU5ZjZhYjg5MGJjYWRmOGFlZmRlYmRiYmI0ZjJlYTg0NDQifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/application/ModelUsageQuery.java#L10-L46",
+          "version": "repo-lines-v1:sha256:27ccfbca6c2823aea515cd59dc7f82c9f297d74d34a07d79a93eff272a877b6f:eyJzZWxlY3RlZExpbmVDb3VudCI6MzcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM5Y2JiYzY1NDY5ZGIxY2EyODQyZWZkOTdkZjdlZTJjZTZjYzE1NzE0ODJkMDFhMThiNzkwYTEwYzdjNTEwZjMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjliYmRkOWQ0ZDFmZTY1YmFjNDZjZGU3YjkyZTEzNzRlZWMxMWUwOWE5NzcxNTE1Njc1ZmZlOTcyOTQzNjU1N2MiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/application/ModelUsageRecorder.java#L15-L24",
+          "version": "repo-lines-v1:sha256:32ef5b9f686aab37c0a60d6ce40511f91c3bc2e2a31b39ceb7669740ed70d6b9:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM5Y2JiYzY1NDY5ZGIxY2EyODQyZWZkOTdkZjdlZTJjZTZjYzE1NzE0ODJkMDFhMThiNzkwYTEwYzdjNTEwZjMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImRiZWRjYTRmNzhiMGM5ZDc4ZDA1ODY5MjVmZDc4M2YyYjBjZmJjODVjNGY0YzJmMzZiMmYxZTM0NjllNWQzY2MiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_12189279594d4e0284664d613f1e5680",
+      "statement": "ObjectStorage selects in-memory storage by default or S3 storage when configured; the S3 implementation uses an endpoint override and path-style client, ensures the bucket exists, and uses AES256 server-side encryption for object puts and presigned uploads.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/shared/storage/InMemoryObjectStorage.java#L10-L40",
+          "version": "repo-lines-v1:sha256:06f473ed4aae44bca442dd0b3fa60136bf1503a7d749f73dadac406752c02b53:eyJzZWxlY3RlZExpbmVDb3VudCI6MzEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY4ZmExZTlmNDQ5NDlmYTg5YTNiNDJiMDQ5MmRkYmRmZmEyZWI3NjQ4NDhkMzU3NzhjOWZiNTNjMjA3ZWJkYmQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImRkOGU0ZWU2NjFiZjQwZjczOTAwMjc5M2ZkNDdjNGY2NDkxZWJkNWYyODQ5YTExNzZlNjRkMjhkNDVjMGNiYzUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/shared/storage/ObjectStorage.java#L5-L15",
+          "version": "repo-lines-v1:sha256:9f4fb7dc1ab3fb4ac2fb3903dfd4edb0d6ba0538657f8f4895f288dc3f84e24e:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU5YWVkOTRhOWQ5Y2FmNTkzYjAwZjMxZWVlMmYzZTlkZTYwNDE5ZDU5NTg0NzcyMDFiZGMzZGUxY2ZiMjIxZTEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImEzOWQ3OGQ0OTZmZjhjNjgyMDk0N2IwMzUyOWVjYjE5NWU0ODhiMzBiN2I5YzRkYTM3MGNjN2FlYTMwYTZmMTQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/shared/storage/S3ObjectStorage.java#L25-L84",
+          "version": "repo-lines-v1:sha256:1b15dcf5c3f747c86d6046d32eb39cf0f5491d41f660fe72488476f74ac4004a:eyJzZWxlY3RlZExpbmVDb3VudCI6NjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY4ZmExZTlmNDQ5NDlmYTg5YTNiNDJiMDQ5MmRkYmRmZmEyZWI3NjQ4NDhkMzU3NzhjOWZiNTNjMjA3ZWJkYmQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjkwOGRhZjdlMDU3NjVlMDY5ZmMwMzBiNjExOGFmNDZlNjdlN2EyMmMyNzEyMzhlMzQ5NjI2NDczYTFmODU1NzgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/resources/application.yml#L70-L76",
+          "version": "repo-lines-v1:sha256:1f2ade8bef36c567c8c51448231cf936c0a68c03af9a65540445e7657a5ac80c:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiN2I2MjQ1ZjFhM2Y3OTA3NTdkOWQ4Njg1Zjc5YWQ3YzRhZTY3NGZjYjIzMjZjMmMxNzU0OGEzNTk4ZWE3ZDc0OCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMTFmYWQzNmFhMjU1MjU1Y2IwNjBjNDJjOTFkMGZlZTE5YTlkNWYyOWRiYWRlY2MwNzJlYTIzZDQ3OWYxYTc1OCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNjYyMGQ3Y2RlZWMwZjhiZDFmMDJhZWJjNjQ4ZDZhMTRhNmMxNDhhZGUyNGM2NDA5Yjc5ODliNGYzNjBjYTk4MyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZjkzMzZlZWQ3YjQ1YTUwMWMxNzU0ZDI2MjAzYTI2YjRiNDMzNzY2MGRhYTA4ODIyOTgzMzFkY2EyNmNkNjhmZiJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_feb3909c8cd147e285cf7b74072a4105",
+      "statement": "Attachment presigning validates allowed metadata and creates a user-scoped object key plus database row with a 15-minute upload URL; association requires an owned non-deleted attachment whose scan status is CLEAN.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/privacy/AttachmentController.java#L37-L79",
+          "version": "repo-lines-v1:sha256:186519b1ac97ec07385e08e5a54e049ad06d99fd5c990856f1a8c727c201cbcf:eyJzZWxlY3RlZExpbmVDb3VudCI6NDMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImYyNjY0OWFiZmQ4MDNkOTU4Y2Q0YTgyYzBmMjUzNjE2ZmM3ZDZhYWU1MzNiZWI3NzM4YjMyODYzNWIyODcxOWEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE1ZjgwZmJkZTFkNzFmNWM4YzJkNWJhNzdiZTM2MWFiOTljZWE1ZjI2OThiZGQzZTYwOTY3MzVhNjIwZjEwZmMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjAwNzE1MzZjMTQxNzk5NDIwNjg0Y2VhNDAxMGY0OGQyZjdhM2U5YmY0NGRkZTA1YjdkYWU1MjhkYjU4N2Q4M2YifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/privacy/AttachmentPolicy.java#L9-L36",
+          "version": "repo-lines-v1:sha256:a9edc09852b91d466efa24606aa867ef495f4613205b2044e4d67af33d6e5bbc:eyJzZWxlY3RlZExpbmVDb3VudCI6MjgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjMyODY0OGMyMzI3ZTIzMjg0YzhkOTg0OGE3NDRlZjdkZGI2MjFiMGExZTlmMTk3NDhhMGRhMDVjN2YxM2ViN2QiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijk0MjNmYmI1MmY2NmNjMmVkMjdlZDliZWRiMmU0OWVmMDlmNjkwZWI4YTQ0N2EzYjgwNTcxMmQ5ZTVlYTRkYjkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_c4bc79fe772c449896549e002b5a8342",
+      "statement": "Privacy exports are synchronously built ZIP archives stored under a user-scoped key with a SHA-256 checksum and 24-hour object lifetime; downloads require a READY unexpired job and receive a 15-minute URL, while retention deletes due objects and marks jobs EXPIRED.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/privacy/ExportService.java#L109-L139",
+          "version": "repo-lines-v1:sha256:ca3a9a1c7a34d8f8af95f37f4ab327dbd000aec74108e4184a47cda86451e97e:eyJzZWxlY3RlZExpbmVDb3VudCI6MzEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU5NWZiNDM3MTY5ZGFkNjc3Y2RkOWQ4OTJmNWI4ZjUwNjJjMzI1NWRhN2Q2MTQ1MGI3MzA3NWQyNmEyMmM2MTgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjVlOWNlMzRlZWYxZDYxMTAyMGM2Y2NlODgzODUyZjQyNzAyOTYyZDRkYWJlNDliMTIzZTkwZDllZWZkMDEyMjciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjkyYmE4MzdmMzFhYmQ0YjA3MDM4NGNjYzY1YTlmNTRkYTQ3YzM2ZDYyNWVlZTliYWRmYWVhZWM3YTIwMWVhMjEifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/privacy/ExportService.java#L155-L199",
+          "version": "repo-lines-v1:sha256:020a985a9b15a408b18700a1eeae0608b6fa752681a3560a76ce6c0212c1fb69:eyJzZWxlY3RlZExpbmVDb3VudCI6NDUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQzNzVjN2Y4ODQxMzYzNDc3NzJmNTg2Y2M2OTcxYmQyNmRjYmQzMzI5ODQyOGY1NTk0MjdhZjY2N2E1YmVjOGMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU2YjA0NDkxNDY5NzIyZTgzNjNhOTRlNDA0NDUzOGUwMTNhMmEyMTdlMzZiMWU1NjhiYTYwYWNiN2I0YzhmMmUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjI5ZWY4Zjg0NTI2MWFmNTc2MGVmZWQ5MWJhMWFmZTQ4ZDhhODQwNTdmNWYwZmYyOWUyOTQ4MDY4YzVmYzg2MDQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjE1ZDM4YmE2NDUyYjU4MTgxNWFlNjhhOTM0YzJkZTg1OTc0MDg5YjMzNTdlOTY3MWE4MjFjOThlODI3MjI1YTMifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/privacy/ExportService.java#L59-L89",
+          "version": "repo-lines-v1:sha256:a0461917937f9ba65857a307a7544a16d00cc2b0cda9fe5ca1ab2fc4549f21e9:eyJzZWxlY3RlZExpbmVDb3VudCI6MzEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc1MjYzMzA5MjNkNGUwYjVlZWYyNTkyMTEzMTJhY2U0ZWIxYjk5MDE3OGIyNjFhODVlOWViZDRhMWFlYjA5NjgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRhY2YyMTk0MzIxZmY4Y2ZhOGJjMjE5ZDdlYzY0NjJmNzc5MDA4Y2FkNzg1OTJhYTM4ODc4OWFiZjgyZjJjNmMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjQzY2ViNTg5YzNmNzQ4MTNhYTlhZTgzNDUyMjUzYmVhMmQ5NDQ0YTAwZDdhZWJhOWRlZGM1ZTlmMWIyM2MyZGEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjNjZjY1NWI5MjAzMjU2ZjkxZDFlNDg2MWIxOTVjNmI3ODQzMjA4ZDQxMzQwZTNjMTBiNmU3Y2RmMWEyYmE4Y2IifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/privacy/RetentionJob.java#L26-L35",
+          "version": "repo-lines-v1:sha256:adf3544294e354f52f6717086c752e35cde5b2f2324de2748dbf77b44ee3b81b:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImM5ZmIxZWVkMzMwZjBhN2NkNzIwOGFjM2MyMDRlYzIwNTI4N2EyZTg1YTI3ZmEwOGUwMjFkZmU5M2M5ODc3ZmEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE1ZjgwZmJkZTFkNzFmNWM4YzJkNWJhNzdiZTM2MWFiOTljZWE1ZjI2OThiZGQzZTYwOTY3MzVhNjIwZjEwZmMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/privacy/RetentionPolicy.java#L9-L14",
+          "version": "repo-lines-v1:sha256:db8f2c9ee80cc2adb22f5b13095b9436bebfc05c8e76ec6a6b7d640935ceef75:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiOTUxYWIxYzNiNGU0MDEzMDlmMDI2NzhlODgxNGU2M2I5NzIzZDc0YzA5MjA4MmE2NmRjNGM4MTI0MDc2MDRjMCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYTFkYTQyM2UwYTUyOWE1NmM0MGE4NjNlM2ZlMjVhZGI2ODMwNDgwZTIyM2RiM2I5Yjg0NGZjNjRjODFjY2M1MyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZDZmYzY5NDAzZTQ2NTBhNzUyMjVmNjA1NDgwMDFhMDZlZjA5MmU4MmQ1M2I0ZTI4OWQyMjI3OWY4MmM0OWM0NiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiY2ExNWEzYzJhOGJiMjJjMGI3NTEwN2NkZWU3Y2E2ZjdlOGZjMWVjNmNmNmVlZjE2MzI0ZjA5ODBjODJhY2JhMCJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_16e11e52fe5549e3b2a42d9e5d8fc6ef",
+      "statement": "The Compose stack runs a persistent MinIO service and configures the backend to use its internal S3 endpoint, but the backend has no MinIO depends_on health condition.",
+      "evidence": [
+        {
+          "resource": "repo://deploy/compose.yaml#L127-L133",
+          "version": "repo-lines-v1:sha256:9db2d189942015c0f1ac2d286a8cfc5bea8aafd49f3c861541f525c682a7a19c:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZDVlNTEwMDMxYjNkNWNmZjg2OGI5OWEyNzVkZDI0ZDcyZTQ1Y2I1MDZiM2M0ZjU4OWNkMDhkZDgwZTlmYjJlYSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMWQ3ZWFjOTgwZmQwODM1ODgzYzA0Y2ZhOGQ5YWZjNzg3NzY5MTQwMmM3YTY5N2M5OWJmMzVmOTgzZThmYzJkYyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMjFjMTU4OGMxODc2YTBkMmRiZDQ4NzNlMmM5Y2VjOTZiODZhN2RlZTZjMmU4YmYxMTc2MTk1MmI1YjljNGQyMyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjAsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSJ9"
+        },
+        {
+          "resource": "repo://deploy/compose.yaml#L40-L58",
+          "version": "repo-lines-v1:sha256:526c1982313e94e19cdf95e38e97586011bebe8abe5d63bd74a53ada025d3458:eyJzZWxlY3RlZExpbmVDb3VudCI6MTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFhNmNmYjY4Njc4MjJlZDc0NzkxOWJkZWM1NTA0MWYzZWIwNTVhZjA5ZmY1MjNiNTQ4NDc5M2VkODY5YjUzNTQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZiM2VmNmE0ZWEwZTU2MzdjMjNkZGJmMWU0YzdhMTUyYTYyNGZjOTQwNjIxZGU5YjEwOGJkNDNjODc4ZjU1N2UiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjRlMmI5MzQ3OGFjNDY0ODM1NTVmZDA5ZGY4OGMxY2MwYmVjMTNiZmNkZWZhODI2YmI2NTQ2ZTlhYzllZWNlMWQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM3NGQ0MDhkZGUzY2EwMjNjMTkwNGVjMjhhOThmNGI0MWVjZWEyODI0ZTJjMjkwYjA2ODAwZWYwNDBhYzhiNWEifQ"
+        },
+        {
+          "resource": "repo://deploy/compose.yaml#L60-L116",
+          "version": "repo-lines-v1:sha256:5bd968839b91b00c0a51c5b40dc6c70d370740c1c9b05072cb13887e2321acff:eyJzZWxlY3RlZExpbmVDb3VudCI6NTcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk2YzgyZWI0NzlhN2VlMWRjMmU4Y2QxMjZjZjA4NTg5ODc2ZjM4ZGFkYWI1NjVhYzMwZjQ0YmQ3OGY2YzMyYjUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjRlMmI5MzQ3OGFjNDY0ODM1NTVmZDA5ZGY4OGMxY2MwYmVjMTNiZmNkZWZhODI2YmI2NTQ2ZTlhYzllZWNlMWQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImE2MGNlMDhlZTllNWJjMTQ3YjZmZDI5OTc2Mjc5MWNkZTI5Mjg3NGI2OTlmN2JjNjQyM2IxMDU3ZTQwNmY3NDIifQ"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.5.1",
+    "at": "2026-09-14T13:15:33.655Z"
+  }
+}

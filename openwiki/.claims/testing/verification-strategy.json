@@ -1,0 +1,204 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:72e7bfa51a4a24c14d30ad958ab04f9e0ace53e9917b35c115976ac6db40f2b3",
+  "claims": [
+    {
+      "id": "claim_65fa0b59e327437ea0e657756fc09753",
+      "statement": "Backend Maven testing is configured by Surefire to run both `*Test.java` and `*IT.java`, disables application scheduling, and includes Testcontainers/MySQL support, so the standard backend test command covers both rule tests and database-backed integration tests.",
+      "evidence": [
+        {
+          "resource": "repo://backend/pom.xml#L137-L166",
+          "version": "repo-lines-v1:sha256:4624bca99e6ca7014091ae005e1fb26eff32411c1bf2fca17fb33d1b3490eb2b:eyJzZWxlY3RlZExpbmVDb3VudCI6MzAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImMzMGZhMzY2Y2I4OTllODlkYjkyNTM5YWRlNzFhZGFmODg3ZjJmMGY0Yjc4NjAyZWE5ZmVhYTJkNmE3NWE5YTQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImMxNWU3NmRjNzEwODgzYmVlMDYwYjFhZDZiNTllYWQ5NDhmNDJiZmRiN2VhNWI4ZGI1ZDMwZDM1ZWEwZDBkYjIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImVjMGIzOGVjYWM3YjA1ZDEyNDM2M2UyZWY0MTc2MjQyOTA4MDg2NjM5YzU0MTI4YTI4YWIwOTI0MGY3MTEyOWIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImMxYjMwNGI1YzY5N2FjMzk1N2NlYTQxZmYwMWEwYmI0ZmFhOTYyNGY2ZmZlYTMyOWM0ODVmMGIyMGJhN2JkMGQifQ"
+        },
+        {
+          "resource": "repo://backend/pom.xml#L175-L187",
+          "version": "repo-lines-v1:sha256:974640b2bfd08d2d62ff36890de81cdee3ad5e6dd111b60cd5d85cda1b61ce98:eyJzZWxlY3RlZExpbmVDb3VudCI6MTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImYzZjA1MDYxZTExOWMxZjk0M2Q5OGI0NzhmNWJiNTNkN2NkZTRkYjdjMDlmNzA4N2ZkNDQzNGRlNGU2MDg3M2EiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFiN2Y2NjY0ZjNiZjMzYWUxYTU4N2Y5ZTJiYTgxNDAwZjk3MjM4MzFkZjU5YmZmYWY3NTNlZTE3ZjRlY2VjMjUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjMzZDczOTIyMmFhNmZlNzRlNjNiM2VjMjY3MTE1NjQ0ZTMyNWU1ZDdlMDgxN2JjMzRiMzIzMzUxMjQ2YTliZTYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijg1NTI2YmVhZGJjMmQ2YzdiOTU3YmFhZjAyYTY1MDc0ZWE4MjNjMDhhOGE1N2ViODkxMjdlOWM0Y2Q3NTYyNzcifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_74d7ebee0ebe4e1ab2da139fc3a2c978",
+      "statement": "Backend integration tests use disposable MySQL 8.4 Testcontainers with dynamically supplied datasource and test security settings; representative tests verify Flyway baseline/seeds, cookie-and-CSRF behavior without token JSON exposure, AI SSE safety/idempotency, and concurrent task-event idempotency.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/test/java/com/betterself/growth/ai/AiFlowIT.java#L27-L48",
+          "version": "repo-lines-v1:sha256:d3d2b90247e24bd43784de45202b06c254f4efff97bcaeb665840d2d4d8bb279:eyJzZWxlY3RlZExpbmVDb3VudCI6MjIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImIzYjZhYTZiMmU0NzMzNDU1N2E2NGMyYjNiODFjNzRmNDNlODkwNjEzOWIxODdhODgwYTNlNTVkZjczMGUyNjAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjYzYTI2MTFiMDM1YjkyYWFlNzhlZjNlMDZlZDdiZThhN2Y4ZmNlMmY0MjMyMjM1MTMwNDEyZGFkYjc5OTdjOTciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjY2ZWU2YTgwMmZjNzdhMTk2NTRmZjQ3ZGJkNjc4YzU3YjVhY2JjZGY2MDA5M2ZlODgyZDU0OWEwMDA5YjRkNzkifQ"
+        },
+        {
+          "resource": "repo://backend/src/test/java/com/betterself/growth/ai/AiFlowIT.java#L53-L149",
+          "version": "repo-lines-v1:sha256:f5e0e98ff1b944ef1c89c91bcca6d4e28ff32fccb28b670ff1c85737525c8e00:eyJzZWxlY3RlZExpbmVDb3VudCI6OTcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRjZjA5ZWIwYzU3NDRmYjk3MzMxYjk4ZmYzZmJmMDVhNjAyYmEzZjdmNjdlNWRhNWJlOTA5NTAzM2Y2MjU4MjUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE5ZjFmNTI1Y2E3YjBiZjExNGE1MDllODZmNzg5NTgyMWFiNGNhZDdmYzA4Y2NkMTM0Yjc3YjAwM2JjYmQ4YTEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQ1ZmEyNzM5ZjdmYjNlNzNlYjQ0ZWM2OTVjMTIyY2I0MTZjM2E4ZDc5NDc5ZjZjMDQzNjE5YmQwM2JiNzBhODAifQ"
+        },
+        {
+          "resource": "repo://backend/src/test/java/com/betterself/growth/auth/AuthFlowIT.java#L29-L47",
+          "version": "repo-lines-v1:sha256:dc86312c63f68116c642c4e3688bed44b3761b608e14a390e2c3fc316ee61580:eyJzZWxlY3RlZExpbmVDb3VudCI6MTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImIzYjZhYTZiMmU0NzMzNDU1N2E2NGMyYjNiODFjNzRmNDNlODkwNjEzOWIxODdhODgwYTNlNTVkZjczMGUyNjAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjYzYTI2MTFiMDM1YjkyYWFlNzhlZjNlMDZlZDdiZThhN2Y4ZmNlMmY0MjMyMjM1MTMwNDEyZGFkYjc5OTdjOTciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjY2ZWU2YTgwMmZjNzdhMTk2NTRmZjQ3ZGJkNjc4YzU3YjVhY2JjZGY2MDA5M2ZlODgyZDU0OWEwMDA5YjRkNzkifQ"
+        },
+        {
+          "resource": "repo://backend/src/test/java/com/betterself/growth/auth/AuthFlowIT.java#L52-L110",
+          "version": "repo-lines-v1:sha256:ac83657ff62137de2e9b99c6c55e867d6d7e90f3d56b55ac3c14e550b352268d:eyJzZWxlY3RlZExpbmVDb3VudCI6NTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRjZjA5ZWIwYzU3NDRmYjk3MzMxYjk4ZmYzZmJmMDVhNjAyYmEzZjdmNjdlNWRhNWJlOTA5NTAzM2Y2MjU4MjUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE5ZjFmNTI1Y2E3YjBiZjExNGE1MDllODZmNzg5NTgyMWFiNGNhZDdmYzA4Y2NkMTM0Yjc3YjAwM2JjYmQ4YTEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjNiMTQ5MWNkODgxMWZmY2E1YjFjMzAyN2QxNzgxZjYwNWM4YTdmMmM1OTUxZTIyNzY2M2RlODhkNzMwMTBlMzkifQ"
+        },
+        {
+          "resource": "repo://backend/src/test/java/com/betterself/growth/execution/TaskExecutionConcurrencyIT.java#L84-L120",
+          "version": "repo-lines-v1:sha256:94ac0307d0cded07f4a190b5cde002c396a2df67ad5e99d6164629934ca119f6:eyJzZWxlY3RlZExpbmVDb3VudCI6MzcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRjZjA5ZWIwYzU3NDRmYjk3MzMxYjk4ZmYzZmJmMDVhNjAyYmEzZjdmNjdlNWRhNWJlOTA5NTAzM2Y2MjU4MjUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxYTFkMjkyYzg0ZDU1NjVhZTdkYjI1MTRhY2UxZjE1YmRhY2QxN2Y0YTRiZTY1NzIxODY4NzVmY2VjODMxY2UiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImY1MzlhMDk1ODU2YzJkZGZiNTdlMzQzNzQ3OWQ0MmIyYTJjYmIyNjVhMmFjZTcyMDUyZGI4YTE3MjhkZDYyNGIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoyLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM3OTRkMDJhODEyMTk0NGQxNzZkMjY1ZTliYjljYzU5ZjZhYjg5MGJjYWRmOGFlZmRlYmRiYmI0ZjJlYTg0NDQifQ"
+        },
+        {
+          "resource": "repo://backend/src/test/java/com/betterself/growth/shared/DatabaseMigrationIT.java#L17-L32",
+          "version": "repo-lines-v1:sha256:66e624eae15b603e3c43bfa1effdc2133e236c387d141d31750dc6d11d9603aa:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImIzYjZhYTZiMmU0NzMzNDU1N2E2NGMyYjNiODFjNzRmNDNlODkwNjEzOWIxODdhODgwYTNlNTVkZjczMGUyNjAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjY5M2FhZjllYzNhOTUxYWViNzIwZTZkNjZhZjE5MzRmODhkYzc0MTYwNWNiM2UyYWQ5MzQ2YzlmMGMxODljYjYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjlmNDQ5MjhmMTAwNmQ2Nzk0ZDQzZjcyZDk5MWRmOWMzODlkZDM4ZTczZjUzMzRiNmMwMGRkZTY1YjEwNmM0YmYifQ"
+        },
+        {
+          "resource": "repo://backend/src/test/java/com/betterself/growth/shared/DatabaseMigrationIT.java#L37-L82",
+          "version": "repo-lines-v1:sha256:d21ae8314c0fe34a700a9e0d526e74bf2e3b79659187583b75b7beca73f6250d:eyJzZWxlY3RlZExpbmVDb3VudCI6NDYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRjZjA5ZWIwYzU3NDRmYjk3MzMxYjk4ZmYzZmJmMDVhNjAyYmEzZjdmNjdlNWRhNWJlOTA5NTAzM2Y2MjU4MjUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImJlN2E5MGJjZDJhNGQ5YmM4NzcyNGEwMGEwNTY5NGQ4YWJjMzViYTAwYWRlNGY2MDkxZjZjYzIxZTAwMDI4NDUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImRmYzNlZjA3NmZiNGM1M2E4MDE1NGU4ODA2YzE0YzY3ZmMyMDA3MzZjN2M5MWYwMDkzZTRkMWZkMDA5ODA0ODEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoyLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM3OTRkMDJhODEyMTk0NGQxNzZkMjY1ZTliYjljYzU5ZjZhYjg5MGJjYWRmOGFlZmRlYmRiYmI0ZjJlYTg0NDQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_a2e720fb13a14895b177a90e33e7fc4c",
+      "statement": "Frontend scripts use `vue-tsc --noEmit` for both `lint` and the pre-build check, run Vitest separately, and configure Vitest for jsdom while excluding browser e2e tests and stale pnpm-store links.",
+      "evidence": [
+        {
+          "resource": "repo://frontend/package.json#L10-L18",
+          "version": "repo-lines-v1:sha256:9366e9bad0305c08c56e9fa3ce499fbc5edb421dbd89580b9ebfb68a22986dc3:eyJzZWxlY3RlZExpbmVDb3VudCI6OSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMzQ4MzNkNTk0OWMwM2E0MGNhOTUyNDkxNjEwYTY2NTk2NDRiM2FhNDY2MzYyZjc5OTAyMGRiZjE5ODE1NDdkYiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMWM5NDY1MzgyNDYwNzE4YmI3MWJiNjI1YjcwMjBlNWFjNDZjYjAxMTVkOWZmMmZlMWYzMDZmZmIyY2EyZTIzZCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNzI3MDExMjg3MzUwM2EwNzQ4ZTVlZjQwZWI5ZmVlNTJhNmM2ZGI1N2E3MzMxMjVmNDk0OGQxOGY0Y2MxN2I2NiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYjg1Y2MyYTg2MjVjOTI3OWUzZWFjZWY1ZWM3NzIwZjdkNjcxNzM2ZjQ1ODliNDM5Zjk4YzNhN2M1MGE4MTAyOSJ9"
+        },
+        {
+          "resource": "repo://frontend/vite.config.ts#L57-L64",
+          "version": "repo-lines-v1:sha256:0862fa04538b4eb72d11cc9021767d3698cbcdac1f7458d87b349739fcb96271:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNTkzNmRmN2E1YTNhYWYxODBjZmZkMWQ2NWM2NDZlZjZhZWEzNTJjYzI3Nzc0Njg2MTk5Y2Q4ZmIzZTg5OWM3YiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNGQ1Y2QyZmI0ZjNkZjg4NDUxNTI1NWIzOTUyM2YyZjhiNTQ3MmJlZWE5ZjU2NmZmY2EyMDRkYjgwMjU2MTA0MSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiOTQ4ZGQ3NWYzMGQwYTVmNDcwNGQ0ODkwMjk4YTVhMjc3MzllMTcwNzhiNDc5NDY2MDVlN2ZlNGVjOTIzNmEyZSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjEsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiODU4MGI3NjUxOGRhZTk3OWZhZWJkMDIzNjdhMjkyOTJhNTBkOTc2MDkyMjUxYTM4YTZjZTMwODgwYmE0MjgyNSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_a27af85a4ebf4b5db6affe58dbf25fdf",
+      "statement": "The companion Pinia store tests protect server-authoritative state and lifecycle invariants, including rejecting stale in-flight snapshots, retrying an unconfirmed thought with the same id, never completing a real task for a focus intent, shared polling lifecycle, and clearing state on account switch.",
+      "evidence": [
+        {
+          "resource": "repo://frontend/src/modules/companion/companion.store.test.ts#L11-L48",
+          "version": "repo-lines-v1:sha256:02a41498e891b2d134459eb713699478139217bf16fd7015003fe6b58ae20a5a:eyJzZWxlY3RlZExpbmVDb3VudCI6MzgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjVhMjUwOTQ5NWZmY2Q3MzU1YmIyNDJkODI0NDM1MTk1NWVjMTdkZmQ1OGY2ZTk1NWJmMjIzZmFjOTg3YWNmMTciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImIyMzUyNTg5YzM0ZDNjNjA2ODU5MzFiNmVjYzRkNTA5OTFhN2M1NmM4ZmJhMjg5NDExNDY1NzY5MDI3MmNhYzMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImM3MWJhYTYyNGZkNTcyYjNjNDg1NzZhNjY1MWRmYWRmMzc1NmUzMzUwZjQ1NjJlNzlhMWY0M2ZlNTgxZjFkMTQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjEyNGY4M2Y2MDNlZjI5MWE2OGUxZDU3YWUyNmYzZjgyZGNmYzQ2YTU1OWI1OWZlYjI4MjVkZTcxYTFmNjk5NzkifQ"
+        },
+        {
+          "resource": "repo://frontend/src/modules/companion/companion.store.test.ts#L128-L217",
+          "version": "repo-lines-v1:sha256:4d8ee3c05795ef22c09e87f3dbbbe1dd2d80c15f66037574cea352f7ceaff645:eyJzZWxlY3RlZExpbmVDb3VudCI6OTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxZmYyY2YxZTYwOTk1MDJiZWFkMWY5MzE1MDAzZjI1N2MzNDcwZDgyMzEwMGRhMmQwNTRjZGU2ZDc2ZDA5Y2QiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImIyMzUyNTg5YzM0ZDNjNjA2ODU5MzFiNmVjYzRkNTA5OTFhN2M1NmM4ZmJhMjg5NDExNDY1NzY5MDI3MmNhYzMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjFlZjBiOWRjMmI1ZTFiOWFiZWNiZjJmMTAxNWE0NTIzY2IyYTc1MWVlZDgyNDQyYTBhNzA4ODBmZmNhZjliZmYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijg1ODBiNzY1MThkYWU5NzlmYWViZDAyMzY3YTI5MjkyYTUwZDk3NjA5MjI1MWEzOGE2Y2UzMDg4MGJhNDI4MjUifQ"
+        },
+        {
+          "resource": "repo://frontend/src/modules/companion/companion.store.test.ts#L76-L125",
+          "version": "repo-lines-v1:sha256:40c578fb74ad17a3985ba4b753cc728b1e3438af541b23a999458b3e340736df:eyJzZWxlY3RlZExpbmVDb3VudCI6NTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjJhMDE3ZDM5ODlkZTg1MTAwYzBkZDA3MjgwMjhhODY2YTJmZmY3NzVmNjg5MmZhMDcwNjE3NDY2ZjVjODZkNGYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImIyMzUyNTg5YzM0ZDNjNjA2ODU5MzFiNmVjYzRkNTA5OTFhN2M1NmM4ZmJhMjg5NDExNDY1NzY5MDI3MmNhYzMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjQzNmVmYzEwMTQ0ZWZjMTUyMDdhOWQzNjU5MGI1MGRiMWFlMjc2MTYyYjlmNjY5MWFiMzk2MTU3MjZiM2MwYmEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjFkZTY0OTc4NWU0M2QzMzM4OWEwMDkyNDc0NzU4NWY0ZDA2YWE4MGU2MzZmZGY1YmM2Mjg1ODFiZTVmNGQyZWQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_7a29ed95f3b24a17bdb437420ad5782d",
+      "statement": "Default Playwright acceptance testing runs repository `e2e` specs in desktop Chrome and iPhone 13 projects against `PLAYWRIGHT_BASE_URL` or localhost, retains traces and captures screenshots on failure, and writes an HTML report.",
+      "evidence": [
+        {
+          "resource": "repo://frontend/playwright.config.ts#L3-L16",
+          "version": "repo-lines-v1:sha256:923c56050ca2c7453858c5a7ada960d32d8f177c656a05bb4d49ef024156cb52:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImIyY2VjYjE0NGE0NmY1ZGNmMTJhNjE2OWZjZWVkNzY5NWU4Mjk0YjA5MGRlNzZmMzY2MWNkZDAyNDkzMDAxNDciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk2NGQ4YzA3MzQyOTg5MzEwMTU3NmQ4OGQ5OTEyN2U4OWQ2ODkxZDNiMTdlODlkZjAyZWM5YWU3MDcwNWQ4YmUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjoyLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImZiY2MwMDVhODA3ZGFmMDc0NDA0MDY5OTBiMzFkMTBmNjJlZDE5MzE2Y2YyMWU0Nzc0NmZiZTJhZDUxNDE5MjkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijg1ODBiNzY1MThkYWU5NzlmYWViZDAyMzY3YTI5MjkyYTUwZDk3NjA5MjI1MWEzOGE2Y2UzMDg4MGJhNDI4MjUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_5a50dde1d25f4df4a5b8fc4e3260bb69",
+      "statement": "Representative Playwright acceptance coverage verifies consent-based registration, AI interaction, friend/chat behavior, anonymous resource denial, and companion-world persistence/idempotent intents/privacy/focus invariants through browser and API interactions.",
+      "evidence": [
+        {
+          "resource": "repo://e2e/ai-assistant.spec.ts#L3-L22",
+          "version": "repo-lines-v1:sha256:994ab900a93aabee0f6c4cd684d6f27e19e110fece9fffa7d664e79a78390dfb:eyJzZWxlY3RlZExpbmVDb3VudCI6MjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjYzODBmZTFkMTA3OWUwODc0YjIyNWU3MDE3NDc4ZTBmMDk1OGMyZjE2OGQ0MTZmY2IxOGY0YmQyMDdkZTRhZmQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg1ODBiNzY1MThkYWU5NzlmYWViZDAyMzY3YTI5MjkyYTUwZDk3NjA5MjI1MWEzOGE2Y2UzMDg4MGJhNDI4MjUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjoyLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjYxODEwMGU2YzJjOTQyNmY4ZWU1YWFjYjZmNjM3MmM5MGI0Y2IzOTg1YTdkMGRlYmNiODkwY2VlMTlkYmRmMGIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        },
+        {
+          "resource": "repo://e2e/chat-flow.spec.ts#L17-L88",
+          "version": "repo-lines-v1:sha256:195869944367084e185184ecefeb3960399a8f6ffd9fad408307f6101810b6d9:eyJzZWxlY3RlZExpbmVDb3VudCI6NzIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQ1NDBiYjIwNjBjZmExOTU1NzE0YTkwNjNkY2M3NmNmNTFmMDNmMTQwYzM0ZDQ3OWNkZWRiNmMyNWY0MjVjZGYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjkzNWZjOWUzNTVhMGM3OTc5ZjRhNzVmNGM4NzA0MDJlYjRhNWJlZmNjNmI3ZTk0NDQyMTc3OTExYmE5ZjM1ZWYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijg3ZWEwZTJlZWY0N2I4NGE3MWMwMWFlNDE0Njk2NjhkYzNhN2NiYjcwM2RkYTlkYTk4MTcxOWVlNGI4ZjA4NGIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijg1ODBiNzY1MThkYWU5NzlmYWViZDAyMzY3YTI5MjkyYTUwZDk3NjA5MjI1MWEzOGE2Y2UzMDg4MGJhNDI4MjUifQ"
+        },
+        {
+          "resource": "repo://e2e/companion.spec.ts#L4-L88",
+          "version": "repo-lines-v1:sha256:4ccd385caf13b46aaa454df1dfbfad3ebdd4a8ae91bf9abc8604c1991ad0898e:eyJzZWxlY3RlZExpbmVDb3VudCI6ODUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY3YTc2NDM0OTllNThiZTk0OWFlZDA4MzBmZGQ3YTNkODFiNjE5YzdjYzBiOThmNTQ2ZDI2OTE1MjAxMDhkZWUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg4MGFhMDk2NTU2YWYwZjFlOTgwOGFmNTU0ODYxNzMyNmE5YzBlOTI2ZjUzOTkwYzBmYTNkYWJlZjliZDQ1ODgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjQ2NWQxZjhkYjdmYTUwOThmMzAzZTllYjIwOTExZTBhMDAzMGUwZThkMzYxMTNjNTY0MzVhNWNlZGYyZjY5MzQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijg1ODBiNzY1MThkYWU5NzlmYWViZDAyMzY3YTI5MjkyYTUwZDk3NjA5MjI1MWEzOGE2Y2UzMDg4MGJhNDI4MjUifQ"
+        },
+        {
+          "resource": "repo://e2e/global-flow.spec.ts#L3-L16",
+          "version": "repo-lines-v1:sha256:0f92554c5526903f5c33b8329616482ed9f0a5156389ff2d953011ca58bfd1d9:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFiY2E4MDhmYmVhZjk3ODBiMzJiNWE5MGVmMGQwNDVjMGY3Y2EzNmU5MGI5YmZiMjBjZDc5ZGM3OTkxMGUxYWQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg1ODBiNzY1MThkYWU5NzlmYWViZDAyMzY3YTI5MjkyYTUwZDk3NjA5MjI1MWEzOGE2Y2UzMDg4MGJhNDI4MjUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjoyLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjYxODEwMGU2YzJjOTQyNmY4ZWU1YWFjYjZmNjM3MmM5MGI0Y2IzOTg1YTdkMGRlYmNiODkwY2VlMTlkYmRmMGIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        },
+        {
+          "resource": "repo://e2e/ownership.spec.ts#L3-L8",
+          "version": "repo-lines-v1:sha256:f2b15d672e74465c16d0b2d0ee1d762851aa56968ecda5f4a715ff4d49dd725a:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiM2IwYmE4NTI1Nzc4YWVjZDI4Zjc0M2FhMjI1N2Y0ZjcyZWMyNGJmNmY5OTgxODBhODk2YjJiYzliN2RhYmM0OSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiODU4MGI3NjUxOGRhZTk3OWZhZWJkMDIzNjdhMjkyOTJhNTBkOTc2MDkyMjUxYTM4YTZjZTMwODgwYmE0MjgyNSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjIsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNjE4MTAwZTZjMmM5NDI2ZjhlZTVhYWNiNmY2MzcyYzkwYjRjYjM5ODVhN2QwZGViY2I4OTBjZWUxOWRiZGYwYiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjAsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_fd08a5f88ec44f4290196f515f162e7f",
+      "statement": "Acceptance and global verification default to the mock AI provider: the example environment sets `QWEN_PROVIDER=mock`, and Compose uses `mock` when it is not overridden, avoiding external model calls in ordinary checks.",
+      "evidence": [
+        {
+          "resource": "repo://.env.example#L33-L42",
+          "version": "repo-lines-v1:sha256:2fc99db6098a002e2fcd15ad9794ef6a7e13e38339111f9ffc7f06b3fdd829f6:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImI1MmE0ODM1Nzc2MDY3MzBkMDBkMDhmMWJiMjA3MjJmODRmYzVlOTMwNjc0NmFiMzNhY2QyNGFiZGVkZjMzMjQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc4N2M5ZGEzOTliMjI1NTI4MTU3MmUyZDcyODk0MzUwYTY2ZjI4ZGRiNzI3NGI3ZGY2OTA4NDAzMmZmMGQ1NjMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjJlMzM5ZDQ5MTVjZjBjZjVkZTNjM2EzMzllMGFkNGFjOTZlMjIyMDA5YjcwYTEzMjVmNzE4NjlmZDY5ZDllNDgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM0Njg1YmUzNzk3NDdkODAzZTIzOWQ5NjE1MDE5ZDg2Mzc0OGNmMjgzNWFkMzM0ZGIzODEzY2Y3MDNkZGVkNzIifQ"
+        },
+        {
+          "resource": "repo://README.md#L128-L143",
+          "version": "repo-lines-v1:sha256:4a0fbcc84ee263132ea9fda651d170335c0324ca2e928a6a77536b58ab533fa6:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImJmYzc0ZjMzNzk2OTJjMGZhNDc2N2M0ZmFmYjQ0NTExNDAyNDFmMDY0OTk2MjAxYTM2OGUzMzYzMzAyOWVhYmUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImM0NzRlNTUzMzlmYzNiNTU4M2ZhMTE3NGI5ODg3MTk5MGNlMTljNmVlNDZjNzA3ZDRlZmI0NjFhZWU1NmIwMmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjNlMzIwZDBhNjMwOTVkYWNlNmE5ZGQ3NzM1Y2FmYWQ0MjFiZGE2ZmYyYzZkZTZkOTBmNWY3M2MwMWVmOGEzNTEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImI1Y2EwMzFlNWE4MmNjY2E4ZWIyYjRjMWZiN2NlMGM1NmNmYThhNTI0NDliZDlmYmNlZDkwOTExNmVkMDYwOTEifQ"
+        },
+        {
+          "resource": "repo://deploy/compose.yaml#L89-L107",
+          "version": "repo-lines-v1:sha256:44ce006b8255d72bc02fbb65f43d3f9f1a04d4c06cd604c78fd881089533797c:eyJzZWxlY3RlZExpbmVDb3VudCI6MTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjJjNmQ5N2MzNDg1OWUyZDdiZDk3MzczNGIyY2EwM2RhM2QzMGExNTU1ZjIzOWM4M2RlZmM3ZDRlMDE5ZjhjZDciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY5YWE1MjljMDgzOGEzNWIzNzg5YzRhOTJlMzIxYWQxOTc2OWE5NGFjNWExMTk0YTc4MzA2Nzg1ZTQxOGUyOTIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjMyZDUyNmYxNDk4YmMyNTViYWIwMzExMDA3MzUwY2Y2YzRiNGViZmZmMWZjYzEwZWFkNmQ5OWQ2NmJjN2FjYzEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjcwNzlmMDMxMThjYmNkMTZmZjI0ZDI2MDU3M2UwYzE4OGRlNzA5ZWNjMWZmMmJhMzliZWNjZTVjYTdmMjI2ODkifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_679dd83e3fa04894a43ad3a150b40dbd",
+      "statement": "`verify-global-flow.sh` requires `.env.local`, starts Compose and waits for reported service health, then runs offline Maven verification, CI-mode frontend lint/Vitest/build, Playwright, and the API smoke workflow before persistence, Redis, and log assertions.",
+      "evidence": [
+        {
+          "resource": "repo://scripts/verify-global-flow.sh#L1-L32",
+          "version": "repo-lines-v1:sha256:a79c7ea7f4ead6b183ebc55a9b006e388b829433819780f4a64338af5d3ad23e:eyJzZWxlY3RlZExpbmVDb3VudCI6MzIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFkOTVmYzA0YTgwYzk1MmY0OWNlNDE4ODYyN2M1M2IwZmJlOGM0NDA0MWI5NTJkNTkyYWNkMWRlOTk4NjE0NjYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM3NjlkMjM3Y2Q0MjBiOWQzOGI5ODFhMGE0ZjY3NzAxOTBhNGE4M2RjYTFmZTU2YzRmNWJhMWUyY2JjMGVmNzYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjBhMzY5YzYyYTlhMzg0ZmQ1ODgwNmFjNGI0ZGVjZjc4YWFkYmNhN2IyMzc1ZTczOGRhM2E2YTQ5YzlkMWQyOTYifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_288c49d9b51c436e9d0c84a919812c9c",
+      "statement": "The API smoke workflow preserves cookie/CSRF and idempotency behavior while exercising registration/consent, task preset quota, plan materialization and event reversal, normal and crisis AI SSE, suggestion adoption, ZIP export, ownership isolation, and deletion cooling-off cancellation.",
+      "evidence": [
+        {
+          "resource": "repo://scripts/smoke-api.sh#L15-L35",
+          "version": "repo-lines-v1:sha256:805331240fdd2ef8605b206de2dc6639b5a0def402b678458406e41469018850:eyJzZWxlY3RlZExpbmVDb3VudCI6MjEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY0YzY0YWI0YTQ5MWIxMTEwN2IyNGU0NDhmZmQ0ODM5NDYxMjc2MWM3ZWUyMzIzNGIwYzFlNjU2YmI1NjA5YzIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4NjExODc3MjQ5NTdjMjM3ZGNmZGQ4NDFiM2Q2NjBkOWE5ZWI1NDgzMjVhM2ZkOGY1MmJiMWQ1ZDJiNGIyYTgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjJhNDViNGNhZGFiZmFjY2E4YThlYmY5NjVjYzA4ZTk0MzZmNjk5YTBlMWNjNGJlZDMwN2Y5MTUzNDdiMWQ1NTMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImE4OTcwOGE1ZDM5NjMyNGY1NGMzYmVlMjkyZjQzYzNkNTU5ZDM5Mzg2YTJjM2ZmNTNkZmY2MWE1NTBhNWNmOWEifQ"
+        },
+        {
+          "resource": "repo://scripts/smoke-api.sh#L37-L90",
+          "version": "repo-lines-v1:sha256:b43aa224e6e1b0a3066f72420a5c26c127d1a31a51261b458656e712a5a86f26:eyJzZWxlY3RlZExpbmVDb3VudCI6NTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjE4ODhkMWJjOTg1MDZjNDhiOTQ1NDk3YWNiYjY0NzY1YWUxNDc2OGEyYjhjOTAzMDhiZDM1NjViODU0NmQyNTQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZkNTU5NjM2MDU4MTc4YmFhYmU2MTc2OWNiYWM2ODIwNDI5NGFmMjI1OGE1N2UzYjg1NTYxMzVhMzEwZjZhNDkiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjhiMjNjMWM1ZjZiODc4YzU2YWJiMTc3Y2U0YjY3ZGQzMThhYTE4OWI4NWU1ZjYyYThlYTg5YmIzYjVkODZhMTYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjhlZGM5M2YxYTFmNzc5Njk3MGExODI5NGY5OGZjOGE5ZjY0YzYzNWJiOTg2NWVkMTg5MTc3N2I5ZDIzMGU5NmQifQ"
+        },
+        {
+          "resource": "repo://scripts/smoke-api.sh#L92-L133",
+          "version": "repo-lines-v1:sha256:3b56a1b6e52ed0b8ef5b0339ae3a44b243ccf1a7fc282823ca9a3c74690ce326:eyJzZWxlY3RlZExpbmVDb3VudCI6NDIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFlYWNjYmFiN2Y5NjlkNGY5YmU3MGJlOTBmMjY2NDFjN2QwOWJlNzBkNDllNGY4OTJlNzQwNmQ1Yjg5NmNiYTIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjI1NGYyZmE0YWY5NjgxMTBiYjQyZTVjODRmZjdhYjBjNmU0ZDZiYjA4YzE0MDhmZTMwODQzMjg3OTM3Y2M3MzAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjIxZWVhYmZiYzc2MWVhM2Y4MzI3YTVmMjQ3M2UwOWUzNmNjNjUxYjJiMGUzZTNhNmQxZGQxYjAzNTFlMzA1ZWEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoyLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjA4ZDgwOTFiZThiMThmZTYwODQ5ZDgxMjY1NTA5MjVjMmJmNmM5OTNmY2ExOGIwN2JkMzdhN2ExNWY4YjNhYTIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_6e6af2f882ab4118a3ac7a5f5cb6d534",
+      "statement": "After the smoke flow, the global gate requires eight MySQL predicates, authenticated Redis `PONG`, and—when present—a backend-log scan that rejects cookies, auth tokens, the smoke password marker, and recognizable `sk-...` keys; shell strict mode makes any failure nonzero.",
+      "evidence": [
+        {
+          "resource": "repo://scripts/verify-global-flow.sh#L1-L3",
+          "version": "repo-lines-v1:sha256:0f817e5e5fd74c1af1d500c61af8b435e19e5623e07ac9c10cf6aa82883ba953:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMWQ5NWZjMDRhODBjOTUyZjQ5Y2U0MTg4NjI3YzUzYjBmYmU4YzQ0MDQxYjk1MmQ1OTJhY2QxZGU5OTg2MTQ2NiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMDFiYTQ3MTljODBiNmZlOTExYjA5MWE3YzA1MTI0YjY0ZWVlY2U5NjRlMDljMDU4ZWY4Zjk4MDVkYWNhNTQ2YiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjAsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYWQyNWVhNmE5YjA1NzhkMTg5MDRjNzU2MzkzMGVkMDAxNmE3Mzk0NjcwOTc4ZDViMWM2YTliMDI5OWVhZGFmNSJ9"
+        },
+        {
+          "resource": "repo://scripts/verify-global-flow.sh#L25-L32",
+          "version": "repo-lines-v1:sha256:0c601a52ebf95a95341654426b0be33d0c4b0d40fe6ac7214f7e8face287c5f0:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMTM4MzcyMmE0M2QwMDRmYWMxYWU4YjA2NTNmNDNiNWJhYTY4N2Y4YWY3NDI1NWVmYTYyNmZiMDA4ZDFlOTJmNiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMzc2OWQyMzdjZDQyMGI5ZDM4Yjk4MWEwYTRmNjc3MDE5MGE0YTgzZGNhMWZlNTZjNGY1YmExZTJjYmMwZWY3NiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYmVjZDNmM2VjMTA3OGRkNGIzNDQwZjk3NzZiNzY2MzFjYmQyOTA2YmEwODYzYjM3YjQzNzc2ZTY5NDAwNTI4ZSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjEsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMGEzNjljNjJhOWEzODRmZDU4ODA2YWM0YjRkZWNmNzhhYWRiY2E3YjIzNzVlNzM4ZGEzYTZhNDljOWQxZDI5NiJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_4b9eb1279aea41cba586418ff9bbca1d",
+      "statement": "The Compose topology used by verification health-checks MySQL, Redis, and MinIO; Redis requires authentication and uses append-only persistence, while backend startup depends on healthy MySQL and Redis.",
+      "evidence": [
+        {
+          "resource": "repo://deploy/compose.yaml#L4-L38",
+          "version": "repo-lines-v1:sha256:acfe5f47014e2768f7f44df9ad06d197a3bd15ab09517dc9748738b09def72fe:eyJzZWxlY3RlZExpbmVDb3VudCI6MzUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQxYTE4Nzg4MDllNDc5ZDFiMzYwMzk5YTk2YmM3M2NiNmM1OGI4MThiODg0YWY1MGJjMDlkYjlkYTlkOTc2NTciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZiM2VmNmE0ZWEwZTU2MzdjMjNkZGJmMWU0YzdhMTUyYTYyNGZjOTQwNjIxZGU5YjEwOGJkNDNjODc4ZjU1N2UiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImEzOWViNjM1Yjg4Y2E4NTI0N2U4MjViNTU1NDVkOTgwYWIwNzEwNTcyOTg0M2Q3NzllOTdmMGM0YjI4ZjE1YjQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImE5NmY5Y2U2NTZmNmM0YWQwZjA0M2FjODExYWQyMWY4NmZhZDU0MzY0MTIyMWJjYWQ1NzE5YzEwNzM2YzQ0MjIifQ"
+        },
+        {
+          "resource": "repo://deploy/compose.yaml#L40-L58",
+          "version": "repo-lines-v1:sha256:526c1982313e94e19cdf95e38e97586011bebe8abe5d63bd74a53ada025d3458:eyJzZWxlY3RlZExpbmVDb3VudCI6MTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFhNmNmYjY4Njc4MjJlZDc0NzkxOWJkZWM1NTA0MWYzZWIwNTVhZjA5ZmY1MjNiNTQ4NDc5M2VkODY5YjUzNTQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZiM2VmNmE0ZWEwZTU2MzdjMjNkZGJmMWU0YzdhMTUyYTYyNGZjOTQwNjIxZGU5YjEwOGJkNDNjODc4ZjU1N2UiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjRlMmI5MzQ3OGFjNDY0ODM1NTVmZDA5ZGY4OGMxY2MwYmVjMTNiZmNkZWZhODI2YmI2NTQ2ZTlhYzllZWNlMWQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM3NGQ0MDhkZGUzY2EwMjNjMTkwNGVjMjhhOThmNGI0MWVjZWEyODI0ZTJjMjkwYjA2ODAwZWYwNDBhYzhiNWEifQ"
+        },
+        {
+          "resource": "repo://deploy/compose.yaml#L60-L115",
+          "version": "repo-lines-v1:sha256:dc5b3594a656f9fdf21c08a8927a0b5d333377cd61d59b98e370f81de0e19f8a:eyJzZWxlY3RlZExpbmVDb3VudCI6NTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk2YzgyZWI0NzlhN2VlMWRjMmU4Y2QxMjZjZjA4NTg5ODc2ZjM4ZGFkYWI1NjVhYzMwZjQ0YmQ3OGY2YzMyYjUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjYyZTYxNmRkNDBkZGIyNjg1NjM5OGY2Yzk1NThiODIyNjJkMjhjMzk0YzkwNTQwMGU2OWQ5OTMxODYzOGVlZTUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjRlMmI5MzQ3OGFjNDY0ODM1NTVmZDA5ZGY4OGMxY2MwYmVjMTNiZmNkZWZhODI2YmI2NTQ2ZTlhYzllZWNlMWQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImI5NDQ0NmFjYjUwOWJkZmVjNTQwYjI1MDIwZWMyYzFmN2FkN2M3NjkzMmNlOTU5Y2FmZjIwYzM5MGY5YzQxYzMifQ"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.5.1",
+    "at": "2026-09-14T13:15:33.655Z"
+  }
+}

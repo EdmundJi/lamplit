@@ -1,0 +1,166 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:d0573fa4c2c17f6ffa2b8223ee17779521aeb8042390d0512e14bab9b34a6748",
+  "claims": [
+    {
+      "id": "claim_a3046997707942dba7af72a846b2ba2d",
+      "statement": "Companion town endpoints are authenticated beneath `/api/v1/town/companion`; `CompanionController` derives the caller from `CurrentUser` and delegates read, join, advance, intent submission, cancellation, and usage to `CompanionService` rather than accepting a client-selected user or world.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/application/CompanionService.java#L24-L63",
+          "version": "repo-lines-v1:sha256:b1ed57d9eec8267f08022cab471e278a2f701221fede790f9ec7512298b067c6:eyJzZWxlY3RlZExpbmVDb3VudCI6NDAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImI1OGExZWRhYThhNjVjYTY2OTNiNTExNjAwYzIxZWQzMDM3MzAzYjJhYWU0NmRiMWY2ZTgwYTQzMDQ0YTAxNWIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImRkZjM1OGUwODBlZjgyNmVhMTVjYTAyZDViNWI4Yzk2ODg0NmIzZDA3MWVjN2VjZTE0NmUxN2Q3OWIzMDNjODkiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjFiZGU0NWEzMTJjNWM5ZDdiYzYyZjc4NjY2OWQ4YWI2YmQ5NzliYzM3NGNlNzZhMmVhNWFjYzQzNzMxZWIzMWMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQ0ZDNlMzdmMTVjNzAwMWFmOTI1MTQ1ZWIwMDFiMTExZjhjMjllMDhmMjBiYmViYWVjZGU2NDQxY2UzYTlmZmMifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/interfaces/CompanionController.java#L9-L22",
+          "version": "repo-lines-v1:sha256:353f135b493cdbf37b36a5e7b83743774f47330d55081a636bfae0087bf0237b:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjgwMmI1ZjJkZmE2OTM5MDYxOGY2NmFkYjZiNzk2YzM0NjYyMzIxYzc3YjQwZjAzZGFiZTUwYmUyMTg3ZmU3ZTgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImI3YWQxYTYxZTJhNTNjYzZmNWYzOWZkNjQ5ZjdjYTg0M2ZmMWQyNzkwNWU0MTk2MWY2M2RjNGVjZjFhMTUyMjciLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjBmZjZkMzRmMWYwM2UzODJmYTM4OWNjM2VlMTQwYzY0MWMyY2JjZDcwZWZlOWNiODJiY2YxOTJlOTBlODkwOWUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_4a615d60c05d47bdaa50842d1ed6cc3c",
+      "statement": "Joining validates a bounded name and timezone, atomically creates a world only when absent, and repeated join requests retain the existing world; the JDBC store serializes simultaneous first joins and later mutations by locking the owner's user row within its update transaction.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/adapters/JdbcWorldStore.java#L45-L59",
+          "version": "repo-lines-v1:sha256:46b62add692c5ff259f2cf99be31f0e09913990709050bb709262911fa07af2f:eyJzZWxlY3RlZExpbmVDb3VudCI6MTUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjliOTM2ZmUwYjhiNzhiZWM0YWMyZTAyNmU3Yjc4MmY4MDczZjQ1Y2U3ZjMxNzU4ODg0Mjg1ZDg0NGZjYmExNmIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU5YzEzNTkwNjY1NjMyM2QxYzVlYTQxNjU0ZWU2NmFmYjU4NWFjZGNmYWVhY2ExMjFkNWUzMGJmMTkzZWVkZDciLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjNiNTUyODk1YWM0OTIxMzUwZDc5NjhjNTNlNzcyMGY4NzNlZmVjZDE1MzU2ZDZlMTlkYmNmZmNmNjUyMTFiMjciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImRmZjJhMDVhZTMzODZlY2YwZGY5NmNkZjQ1ZTY2NmZhYWIxNzZiM2QxMmM3NGQzOTc2Y2MyMzA4YjI5ZTcxY2UifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/application/CompanionService.java#L25-L32",
+          "version": "repo-lines-v1:sha256:4b743542e8fb5272292a31b13e457aa773d41710632def78a99170633e74a4c0:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiM2ExMmEzMzBmYmU1YTIwNzRmNjIyNzYzMDYwZGNiNThkMzRlNTgxMGNlNzI4YTZiMWI3YzY5YTA1ZjhhOWYyMyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDg5M2Y0MGUzNzgxZWI4OTZjODJkMDQ2YTA4MDY3YTExZTM1Y2RmMmYxZGZhZjI2ZmVhOTBiOGRiNjY3NjQxMyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMThmMDc0YjViMDI2NTljOTkxM2VjZGRiZjViYjBjZmIxNTI0YzQyN2NjNzUyYzg3MDRkZjA5ZGM5MGFhNjFkZiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiM2M0ZDkzZDM0NWM0ZGRhNmMzMjg0NzUwNWI2ZjMxM2UzZjE2NjBmZmJmNGMwZmVhZjAyZjdkMGRiYTA2OTA4OCJ9"
+        },
+        {
+          "resource": "repo://e2e/companion.spec.ts#L20-L25",
+          "version": "repo-lines-v1:sha256:24589c33860eba08ea7a0a6577918c27657305aaad78dafdeb7ac80db7ad104e:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNTc4ODk5ZWI3ZTMxNDYxMWFiM2RjODgyODFhZmVjZDIwNzVlODEyNDA1YWU3YWZjZmI0MmM3NTMyMzQxM2RiOCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiOTQ2ZmRkZjlmOGVhZjU5N2IyZDdiY2RmNjY4MTE4YjkyMGM4Y2EyZmQ1YjVhMWI1MzcyMjQyNTNiZjcxMzA2MyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNGE1NDMzZGIxYjhmZTg5YmFjZGM3ZTY0MjI2MDNlODQ2OWMyZWMxZGZlMzRjODA0ZDFmNTMwYzgwNmFiZWE0MCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiN2ZlN2NkMDIzMjNjNWViODg4ZTVlZmQ2Y2ExYTk3ZWNhMTUwNDcxN2NhMTIwOGIyZmU4YmM5MWYxNmRkY2Y0OCJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_e7a1a3817e9b4c10b0d4df88dfd9098d",
+      "statement": "`JdbcWorldStore` hydrates companion memories from the separate `MemoryStore` before world operations and writes them through while excluding them from JSON state persistence, so memory-file and MySQL world rollback semantics are independent.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/adapters/JdbcWorldStore.java#L18-L29",
+          "version": "repo-lines-v1:sha256:ea28d758525736a9c39c665e9efba6d2683b5034d7ac9a9763445f0a76ef4883:eyJzZWxlY3RlZExpbmVDb3VudCI6MTIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVhZjIyY2YwNzMyNTkyYzI0NzE0MWNiZTYxZWZhMTEwMTI2MTJmNWEzMTIyYjlhZjliYmFmNTJmNTcyNGQxOTQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQzYzY3ZGQ2NzIxZDRlMTkzMmJiNGFjMWM4ZTcwODZmN2IyMzY3NGU5NjNkMThlNjM3OTcxZjQ2ZmZiNmQzMTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImEzM2VmM2NhOWNmMzJiODJhYmE4Yzk4NzVhYzJjY2ZmYjAyZmE2MjMxZmJjNzdjNWUwNTJhZDk2Y2ZkN2ExMzAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjI2YTM0OTVmZWIzNGRlY2UyN2NjNjIwYjRlODMzZTg0ZjRiOTc5NGIwNTFjNjk5ZGMwOTMzOGY3MTQxY2NmMjIifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/adapters/JdbcWorldStore.java#L64-L84",
+          "version": "repo-lines-v1:sha256:7a431e6d4091bec06289fd84b947c1245f7d4011d20631ad46f0fd32b93837e6:eyJzZWxlY3RlZExpbmVDb3VudCI6MjEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM1OTc5ZjE5Zjg2OTU1MjdlNjYxYTNmMDFmY2Q1M2FmY2EwY2Q5OTM4YmRjYWZkNzY0OTIwYWFkNzhkMTRhN2YiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY3MGNiZGM4YWQxZTM2YzgxYWI1NWUyZjQ1MTE2NmMyYWQwMThlYTk5ZjVhNWEzZTZmM2ZkNWZjMGRkOTUzZjUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjIyMzc1OTE3MmRlZGJkOTE0ODZkMjBmMzUyZjdlMzdkMjY1MTM4MWFjN2FkMGIxOTQzNzg1MjYwNjljMDlhMTIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_8ef351c38534480ab8d40b79bfb3bbf0",
+      "statement": "The shared `useTownWorld` Pinia store is the frontend's single authoritative companion-world consumer: it revision-gates arriving snapshots, clears/ignores stale work on account change, and runs one reference-counted visible-tab polling lifecycle that advances a loaded world and responds to task/today data changes.",
+      "evidence": [
+        {
+          "resource": "repo://frontend/src/modules/companion/companion.store.test.ts#L145-L217",
+          "version": "repo-lines-v1:sha256:ab84a2a90979bbee2c6964e69531d073fa1ec6fd4e2bde711b9f94787dfde0ac:eyJzZWxlY3RlZExpbmVDb3VudCI6NzMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRlNWYxMzJjNmE4NDkyYTJlNGVhZmZkODJlYTZiYzk0Y2YzNjNmYWMwMjVlMWU4ZWExNjVlOWRiZTY3M2U0MTkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImIyMzUyNTg5YzM0ZDNjNjA2ODU5MzFiNmVjYzRkNTA5OTFhN2M1NmM4ZmJhMjg5NDExNDY1NzY5MDI3MmNhYzMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjQ1MzAxYWRhNWVjMjVhNzM2ZmZiODllMTZkYTI0YjVmMGZjNmZiZjBkMDAwNWIwNWU2ZjZmMTU0OTJiODQ2ZmYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijg1ODBiNzY1MThkYWU5NzlmYWViZDAyMzY3YTI5MjkyYTUwZDk3NjA5MjI1MWEzOGE2Y2UzMDg4MGJhNDI4MjUifQ"
+        },
+        {
+          "resource": "repo://frontend/src/modules/companion/companion.store.test.ts#L90-L125",
+          "version": "repo-lines-v1:sha256:2df283a8c273abcfbcb582d07b1608aa0690987ff34e5618e5423fffeafed62c:eyJzZWxlY3RlZExpbmVDb3VudCI6MzYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk3NDE5NzJlYWEyOTZhMjJiMDNlZDYwOTMwMmQ4MmIyY2FjYWQ3N2QzMjAyZDE5MWY3MmZiZjJhZjdmMWU2NzIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImIyMzUyNTg5YzM0ZDNjNjA2ODU5MzFiNmVjYzRkNTA5OTFhN2M1NmM4ZmJhMjg5NDExNDY1NzY5MDI3MmNhYzMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjMxODFiY2EzMDgyMDc5YTRhNDVjNzZhOGQwMWVlOGRiMTAyN2U5NmRkNjc5OGU5ZTNjMGVlY2UwMDAyZThmMGIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjFkZTY0OTc4NWU0M2QzMzM4OWEwMDkyNDc0NzU4NWY0ZDA2YWE4MGU2MzZmZGY1YmM2Mjg1ODFiZTVmNGQyZWQifQ"
+        },
+        {
+          "resource": "repo://frontend/src/modules/companion/companion.store.ts#L130-L171",
+          "version": "repo-lines-v1:sha256:04b089046977964cbf0ed227633b85322ac1c5307a7e0e8cb34c4c958288eeb8:eyJzZWxlY3RlZExpbmVDb3VudCI6NDIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjJjMWNkMDYwNTRmZGI1OGY0MzJjNTgzMTFhMzA2MDcyZDI2MDRmNjRhNTA5YWY1NjAzZjJmM2I3NGFkM2ZjMjUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU1NGRhYzRkYWRmYjY3ZGY4OTVlNTBhMzIyMzYzZmUxNjA0NTlhOWUwMDRiMDcwNmNhNDcyZjFlOTEyYzgzMDEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImE5NjA2MGU4MDI4NzY3ZjFiOTcyNjQzMzI2OGMwODgxMmZiYjU1OWUzMDc0MDc0OGJlZGRkODAxYzEwYzZhYzIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjZiYjFiN2FiYTljOTNjMTZhNTI3YTcyOWFmMzZmMzdjMjc3YTk2Yzg5ZjBiZWMzMzgxZWQ3YTg1ZGViNzQ4ZGQifQ"
+        },
+        {
+          "resource": "repo://frontend/src/modules/companion/companion.store.ts#L60-L98",
+          "version": "repo-lines-v1:sha256:8e98d27411beacfd7f322db84cc34d25756bbcc334ab58a11d0be09ea890a7bb:eyJzZWxlY3RlZExpbmVDb3VudCI6MzksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjI3ZjY2MjUzMTQ5ODk2MzEzMTQwMTM3OGU1N2Y3NDJhY2FiYzcxYjExYjI2MDgwNTg0ZDkyMzVhYWQ1MDRhZDIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjI3ZTU3ODhkNWQ5ZDczZDI0YTgxZGJjMGE1YTc0YmZhODJjOWMzYjNhZjk5ZTUyYWY3OTZlOTBiNDY4YThhM2QiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE1NWFhNzMwM2U5OTVlZjc2OTc3MjdjMzkxYTUzMzY4YjQzZTkxODdlYzg0MTM3NjNhNDQxMjI4ZWQxNWQ0OGEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjAyMmQwN2E5NmU5NGIxYzViMmVkNTc0N2E3ZWMxZmUxMzQwODEyYmJjNTE2MDljMDJiN2Q0NTZjYWQ1ZDA2ZTEifQ"
+        },
+        {
+          "resource": "repo://frontend/src/modules/companion/companion.store.ts#L9-L14",
+          "version": "repo-lines-v1:sha256:b06315a0f1f0f4af75ba9836cc14b5f4983a3fbebbe3f53c00e35034a04c35e8:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZWFmMjJjZjA3MzI1OTJjMjQ3MTQxY2JlNjFlZmExMTAxMjYxMmY1YTMxMjJiOWFmOWJiYWY1MmY1NzI0ZDE5NCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDA4ZTg2MmQ3ZmE4MTYzMTExZGQ0ODZmYTE1NzI5NTI1MjE0MTQxNDEzNmQ3OWZhMjhkYzFkOGNiNzZiNjUzZCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYTAzNmVlMWE2ZGU4NThlN2JjM2IxOWRjN2MzMzU0MzhhZmE4MGIxNmUyMjc2Zjk2NmRkNmQxMzUxYWFlMGZmNyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMTcwOTNhM2FkMzc1YmE4Nzc4ODI3YzNjYTM4ZmFlNzlkZWI0Njg0YTYzMjAwOGQ3NmNlNGQyMmVjZDY5YjQ4ZiJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_5ce55d0487d545c980acc6023567d571",
+      "statement": "Companion intent submission validates kind, priority, request ID, thought text, focus task ownership, and duration; a duplicate ID with identical semantics returns the existing world while reuse with different semantics fails, and the frontend retries an unconfirmed semantic intent with the original UUID.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/application/CompanionService.java#L34-L52",
+          "version": "repo-lines-v1:sha256:a6962316949d0fffcd9ebbda86a1061ef67ee3f262c613e1e1b31f63bfa9f5ef:eyJzZWxlY3RlZExpbmVDb3VudCI6MTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjIwYzEzYWMxMjc0NTViMmQyZjgyZjVjNmJlNThhMzAwNjQyOGFjMDE3MGMwNjcwOThiOThlM2IxYTQxYmI4NzMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg3ZDE2NmVmM2QyNTM0MmMwNzRjMTBkN2E3ZTNhNzI3MWJlNzU5ZjdlNDI0ZjAwNjdlM2ZjMjAwNTY0OWUzMjkiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijg0OThkZDBiODU3NDZiN2FjY2U5OGEzMDBlMzg0NDBlZWI2MWFkNGFhNjBhZDg4OGZkZDhmOGNmNTBlYjUxYWMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImRlNjQ3ZDdiNzM1NjVmNDliYmM4OTlmMDY0ZWVkOTkzOWYyMjA3ZGRjNTk1NTJmZWJiZGFjZjQ2ZWJmNGRiOWIifQ"
+        },
+        {
+          "resource": "repo://frontend/src/modules/companion/companion.store.test.ts#L31-L40",
+          "version": "repo-lines-v1:sha256:0f437e73d676a498abfe9a37b476d8d8fbdcaf7dad677dd2fdfefb21e6de902a:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImI3ZjcwNDU3NDdmODgxOTM0MjU1MjY3YjM2MTY1YWM5ZTIyMzYxMzFlZTM2YWM0ODE1MDc0NjQ3ZWI1ZWViMmYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImIyMzUyNTg5YzM0ZDNjNjA2ODU5MzFiNmVjYzRkNTA5OTFhN2M1NmM4ZmJhMjg5NDExNDY1NzY5MDI3MmNhYzMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImNiMGZlM2IwYjIxYWQ1YWE1NDI0YWE5MWM1MWM0NTg4MzNhNzVhNzNjYWJhM2M5OWQyNzNmN2MxZTkyODhkOGQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImYwOTIyMTM2YTA2MjAwMDdmM2RmNzc5MzNmZWJhM2QzZTExYTM5ZGM1MDY1YWQzMjk4MmQ2ZTA4ODAyNjI3NmIifQ"
+        },
+        {
+          "resource": "repo://frontend/src/modules/companion/companion.store.ts#L114-L123",
+          "version": "repo-lines-v1:sha256:e8924942163a27a14126b2aa0e3552d0a75a1123c5a17006cceffe5beef19edc:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM2YWVmNzNlMTg0NWM0ZmYwMzg2NDIxMDYwY2JjMjFmY2E1YmJhODJjYjI2NmY3OGMxNTlmMWQ4OTgzZGM3MWMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc2ZjU2ODAxYjI2NDYwYjZmZjJlZTIyZDliNGRiZjRlZjI4ZThiMDhkOTJiNmU4MGM3MDQ1MTFlZWQ1ZGZkY2MiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImZiYzkzYTc2ZDM5ZDBhOThjNjVjZWQwMDg4OGMyYjc5ZDgxNzAwZjczN2RlOGU4NDUzMjVhZTIyZmRkZDdhYWUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImYxODBjYWM3NGEzMGYyZDgxYzljNWQ4MjJkMTFmZDdjYjYwYTEzNDY3M2Y3ZWI1YmMxNDkyNDkxMzQ2NGE5YzAifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_cee7f71055744d1f9e13db851ffa914c",
+      "statement": "Rules make explicit intents preempt current avatar work and let passing intents wait, while cancellation changes active/pending intent status and increments `intentRevision`; that version participates in later resident-result validation.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/application/ResidentDirector.java#L986-L1010",
+          "version": "repo-lines-v1:sha256:4d0ccdb43cdd2610b4dfaf76f0c10118de94f61ab545ed85bbc70a26efa585d3:eyJzZWxlY3RlZExpbmVDb3VudCI6MjUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjI0Y2IwNTFiMmIyYzI1ZTY2NGVkNjgwZDc5MjZiMTM3OWViMjhkMDY0MzVlOWJlNGVhNmQ2MjYwYzMxNmY2MzAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU3OTYwZTBkOWYxYjhlNWY3MGUwMTE4MTRiOTNlYTE2ZTE3OGExMGFlOGQ5OGQ2NDJkNjQ5OTllNDdiYTY2ZWMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImIxMWM0YzZhMWI0NDQ2MDNkNWIzNGVmZjQyZGIwMTdjOTZhNDAwODgxZmE1NTk1NjdkMjdkNDJhNDVkOWQ5ZjMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjVlODU3M2U5NzUzYTkxZDYyNDg0ZmVjMGI5Mjk3ZjFiY2FiMmM2M2RmMDQ5YjljYjFiODk5ZjhiMjA5YmRhNTMifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/domain/CompanionRules.java#L57-L71",
+          "version": "repo-lines-v1:sha256:11f0950a441c02e5b16151d5fc70850d4edfd94d05be50a829f89c7c845e0edb:eyJzZWxlY3RlZExpbmVDb3VudCI6MTUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImNkYmMxZDU0NjQ3NzlhMGVlMmQyNjJiNjNiZmNkYzIwMzAzOTIwYWNiNmZjYjhhYzc2OTE1MmM4MTA0NTQxNzciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU2YjA0NDkxNDY5NzIyZTgzNjNhOTRlNDA0NDUzOGUwMTNhMmEyMTdlMzZiMWU1NjhiYTYwYWNiN2I0YzhmMmUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImYzMTc5NzUwZGIxNmI0YjFiMjMwY2NhYzdkMDMzZThiNjdiNjE2NmRhMWIzZTg0MzJjNGIyZjJjNWQ3YzEyNDIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjI5ZTA2NjA3ZWMxZjQxYzUwNzQwZDRiNTVlMmRiZTAyMjA0MmUxZGFjNzdjNmM4YmMzNjE3YmI1YmNjODExMjQifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/domain/ResidentSimulation.java#L2568-L2646",
+          "version": "repo-lines-v1:sha256:5cabae02cb63ea38113cdbb0e02796592cf1c1dd4946f9ba40dd17005ecf8aef:eyJzZWxlY3RlZExpbmVDb3VudCI6NzksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImIwZmEyODZlYjI4Y2E0NGUzZDEyNGY0OWNiMmZiZTBkMzQwYjJjZDEyMzQ1OGFhYzFkMmE4ZTdiYjVhNWY5YjYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImNmYTk1ODVkMWY5MWQ4OTMyNjgyMjFjNjMxYTI5MjQ5MTY1ZTJmYmQwODFhMWZjYjliM2E1MDFkODViNjc0MGEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUxNmQzNDI2YTUwNmUzZjRlMjExMGNkYjE0ZDU0MGQyOTY2N2Y4MDljMTljMDI2Yjk4NTc5ZmY3YTI0NTk2ZDkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijg1ODlmZjkyMTg0YzQyZGE4YWQ0YmVjN2Y4MGU3OGI2YWNkYTU0MWUxOGFjYzRhMjgzNGRkZTE5Y2I4ZDdjZjYifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_98046f998ad440c5859ee3726f1bc3b3",
+      "statement": "A focus intent can only reference the caller's active task, but it only creates a companion timing session; expiry marks the companion intent done and explicitly leaves actual Todo completion to the user, without a companion write to task completion.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/application/CompanionService.java#L37-L40",
+          "version": "repo-lines-v1:sha256:413bb6e8d3a52a9d710614e858f24f7dc40125ebe181edd550c40585763deb29:eyJzZWxlY3RlZExpbmVDb3VudCI6NCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZDMxYjEwZDNjMmZhN2RjYjU5MzNiMDczOTYyZTE1NGQzMmQ5Zjc0ZjBkZGUxN2I4MDU1NGJjMDQ5OTZjOThiYyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZjVhYWI0ZjYxNDhlYzNjYzAxNzUyNThlM2M5MmRiZWQ2MDg5MTI0YmQwZWViNWQ2OWRhYTcxMjEzOTRkYmQ5YiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiY2FkOTg4MWJjOTI3ZGQwMGVmM2Q2MDMzYTEzMGQzNWIxZjMzMDg0MzAxMDBhN2NlZTJjYzZkZDgzZmQ0MWY4OSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNmE2NWU4MzU4MDI1YzUwZTE2MTg3OGQ1ZTkyOWIyMGMwN2IyYmExODQ4MjkxODRkN2E4NWU2ZmIxZjYyNmRjMCJ9"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/domain/CompanionRules.java#L40-L46",
+          "version": "repo-lines-v1:sha256:3a448c705c3eaeb9dbd8abdf55c7c51552aaa0e6ecab395e35e607c09232957c:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiOTE1ODBjZWQ3Yzk3M2ZjZWZmODZlY2RmYTQ5ZjRhYTk4ZWM3MWM0OGNhYmRjNmViZTJmNDVhMmU4NGU5NTBmZCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYmI5MDg3M2ViMWQwODBkZDJkNDhkMzljMjY0MjlkN2M4MGQzMGRkYjFkYjI4N2U4MGVhMTRkYjRkNjFlZWZhNiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMDVmZDExZWM5NDQ1YjI1ZmQ4MDYxZTdmYWY3NGRkMWU1NmZlYTM5ZWYxM2U2ZDgwNzI4OWZiNTMzOGYwMGYxMyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiM2E2MDFmOTRhNDUyM2I0OWEzOTUyZDY4YzQ1MTIxOTZjMWI3ODdjYmE5Y2QwZDgwNTNjZGU3NzU5YjIyYjE3NSJ9"
+        },
+        {
+          "resource": "repo://e2e/companion.spec.ts#L34-L45",
+          "version": "repo-lines-v1:sha256:da9471859b9e97c18bc34e82105593bed76155e4074364d9f7e618ce02a229e0:eyJzZWxlY3RlZExpbmVDb3VudCI6MTIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRiM2U4MWIxMjgxYjA3ZWNlZWYzZmJjYzEwMDE2ZjU4NWU4YmI0ZGMwMjQxYmQwYTkzNDBlNjRhNzY1NTE3NTgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjVmNmU5ODRhNTFhNjYyZTg3N2UzMDQ5NDVhN2FlN2JkMWEyN2JiNTBjNDE4N2U0MTJhYzNhMjMyYjk0N2U4YjgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjhmYzI0Y2Q2NjVlODFmMDBjYWRhNTBmMDA2Njc2MzAxYzJkNDMzODFjY2RkNzZlMjY1NmM3MGU3ZTQ4YzQ5YjMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjYyNDU3ZWYxYWFhZjFkY2M2MGViMzkzMGM1OTJhNjU5NGZlNGE5ZDdjOWQzZDM4MDI4OGU1NTE1MjM1ODRlNDAifQ"
+        },
+        {
+          "resource": "repo://e2e/companion.spec.ts#L65-L71",
+          "version": "repo-lines-v1:sha256:c9ce962bfeb494c03bba37e905db99a10c6530a48e8ed166d699e16479d5e5be:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYjBiZTk5NmE1NjZhZjZlZjY4NmRmZDNiNjkzYTU3YTljNjcwNGVlNDY2YjFlM2VkMzRhNDBjZWNlNmU5OWNhMCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDNlMmIyMjBhOWY1YjJjMzQzMjE4NTBjOGNkOGY4YjM0MTRmZGU2NjVlMzBmYTNmNDQwOWJkMTRjNzJlNjVlMyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZmNlNzA5Zjc5NzA0MjdiNThiMDcyM2VjNDc5MGQ4Y2E3N2ExMmU4NTZmNjBkMGFhNTY0ZjZiNzQ1Nzg3Y2VjYyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZjZkYjVmNWVlMjdkMGMwMGQxNmYyMmZkYzE5MmU0NTU1NGNhOWRmM2Y0ODhmNjUyZThkNTc3MGFiZTgwMDhhNCJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_91bfd104fcb147e7abcfcdc8fe8c3e6a",
+      "statement": "Resident model work is reserved and versioned inside the serialized world update, performed outside the database transaction, then re-entered for application; per-world worker limits and a world-plus-resident thinking key prevent duplicate concurrent questions, while mismatched, expired, or illegal late proposals are discarded.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/application/ResidentDirector.java#L174-L220",
+          "version": "repo-lines-v1:sha256:182dfe74084d97d9f5bac06894fcc3e8f8316c281da17c7fb3040f21c9a81364:eyJzZWxlY3RlZExpbmVDb3VudCI6NDcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImI4MDY1MmQwNDBiNmRjMmY2ODhiOGRiZGM3ZmY3ZjM2YTYxOGY2M2VmMDM5MTA1Yjg1N2I0ODQ0OWViMmM5NDUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImE2ODlhMjkwMDU0YzA4YjkzMGI1NzM4YTZjN2ZmOWE4OWE3NzcyMTkxZWNiN2E2NDNkNjRhMTAwZGJmY2RjM2MiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImZmZDI2NWJhNTE2NzJlMjhiMzE1N2Y3ZDIwNzllZmMxN2RjMjVjZWM5MGI5MDU5YjIxYzM4YjA3Y2I4ZmU5MTIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjFiYzczMzJhMDAyOWJhZDI2OTlmYmE1NGM0MGQyZmI4OWYwNDQxOWYyNTg4NjZmODkwNTgxNDJmMmE5N2RhZDkifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/application/ResidentDirector.java#L50-L67",
+          "version": "repo-lines-v1:sha256:6a7a29ae9d9abe2f2208cad97a11471ff1697e1a381cd1e064c9bba894da2fe7:eyJzZWxlY3RlZExpbmVDb3VudCI6MTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjlkNTM3NGI0ZjAzYzk4NDdkZThjYmEzOTEzOGVkOGVmNmIyNmIxN2U3ZjViZTMzNDUzOGVmMzBiMGFlYzJiOWMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjA5YTgyZmE3N2FiYTlkZjBjNDg4MmM5Njg3YjNhNzQxMTFiOGIwNDVmYzViYzllNmNlNGVhNGM0MmM1ZDdmMWUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjI0NGZjMDZiNmU1YTQwMTcxNzZkZGNmOGE0ZWIzNjQ1NDI5MDE1YzQ0OTdkOWYyZmUwYzRhM2JhNTQzYzEwNzYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjZiZTU4ODQwMTcyZjU2OTNkNzI4ODMzZWZkMzIzNzY3MjkxZWM5OTczMmU0ZjhkMTljYTA2Mzc4ODYxZmY4YzYifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/application/ResidentDirector.java#L768-L803",
+          "version": "repo-lines-v1:sha256:c09a94ca7e1ab5de3e31c7b59f6436de64041c73795460dfdf8794c66021948f:eyJzZWxlY3RlZExpbmVDb3VudCI6MzYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZhMjMzM2EyODc0MTgyZjY5MzkzMjg5ODM4NjQ5MTJmYTlkMGY3Y2U4ZWUzMjMzMmM2OWZhYjUwMDBmY2RiYzgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjE1ZTkyOWZlZmFhMmYzNzhhOGQwZWRjYzc0MDA3YjQyOTU3YjgzZTZmYTEwMWY4Yjg5YzI1ZDQ2NGYxNTM4ZWIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImFjNjkyMGNkZWIyNzI1MmVhNWVmNTdmZTEyNDMxNzYzMjEyOTEwMDhhODdhOTNmNDFiZTM0NTRiMDViMDY0NGMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjZkMDlmMTRlYmEyZWIyN2RmOGM4ZWNjY2EyMGRlYzIxYTIxOGQzOTBiNTI2MGNmNTk3YzRmNTZhN2VhMTIwOTIifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/application/ResidentDirector.java#L986-L1010",
+          "version": "repo-lines-v1:sha256:4d0ccdb43cdd2610b4dfaf76f0c10118de94f61ab545ed85bbc70a26efa585d3:eyJzZWxlY3RlZExpbmVDb3VudCI6MjUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjI0Y2IwNTFiMmIyYzI1ZTY2NGVkNjgwZDc5MjZiMTM3OWViMjhkMDY0MzVlOWJlNGVhNmQ2MjYwYzMxNmY2MzAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU3OTYwZTBkOWYxYjhlNWY3MGUwMTE4MTRiOTNlYTE2ZTE3OGExMGFlOGQ5OGQ2NDJkNjQ5OTllNDdiYTY2ZWMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImIxMWM0YzZhMWI0NDQ2MDNkNWIzNGVmZjQyZGIwMTdjOTZhNDAwODgxZmE1NTk1NjdkMjdkNDJhNDVkOWQ5ZjMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjVlODU3M2U5NzUzYTkxZDYyNDg0ZmVjMGI5Mjk3ZjFiY2FiMmM2M2RmMDQ5YjljYjFiODk5ZjhiMjA5YmRhNTMifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/domain/ResidentSimulation.java#L2568-L2646",
+          "version": "repo-lines-v1:sha256:5cabae02cb63ea38113cdbb0e02796592cf1c1dd4946f9ba40dd17005ecf8aef:eyJzZWxlY3RlZExpbmVDb3VudCI6NzksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImIwZmEyODZlYjI4Y2E0NGUzZDEyNGY0OWNiMmZiZTBkMzQwYjJjZDEyMzQ1OGFhYzFkMmE4ZTdiYjVhNWY5YjYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImNmYTk1ODVkMWY5MWQ4OTMyNjgyMjFjNjMxYTI5MjQ5MTY1ZTJmYmQwODFhMWZjYjliM2E1MDFkODViNjc0MGEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUxNmQzNDI2YTUwNmUzZjRlMjExMGNkYjE0ZDU0MGQyOTY2N2Y4MDljMTljMDI2Yjk4NTc5ZmY3YTI0NTk2ZDkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijg1ODlmZjkyMTg0YzQyZGE4YWQ0YmVjN2Y4MGU3OGI2YWNkYTU0MWUxOGFjYzRhMjgzNGRkZTE5Y2I4ZDdjZjYifQ"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.5.1",
+    "at": "2026-09-14T13:15:33.655Z"
+  }
+}

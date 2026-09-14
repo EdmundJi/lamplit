@@ -1,0 +1,162 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:de9160f357c821c720eec397da8c4ca4b138e9a6899bbf4601591366664671bd",
+  "claims": [
+    {
+      "id": "claim_2b4fa3eb2ca8481093172836718dfbe7",
+      "statement": "Lamplit runs as a Vue/Pinia single-page application backed by a Spring Boot modular monolith; MySQL, Redis, and MinIO provide the configured relational, acceleration, and S3-compatible local storage services.",
+      "evidence": [
+        {
+          "resource": "repo://README.md#L27-L35",
+          "version": "repo-lines-v1:sha256:288a4b06e7b0b05b95ddbbe2338c45aa7c3d8b226091e8a8b2b5bbd7010c2028:eyJzZWxlY3RlZExpbmVDb3VudCI6OSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYzY0YmNlMGRmYzZlMjNkM2MyMjBmZWM2YjVlOWE5NDkxNTY2MWVhM2Y5YzVlMzBkMWFkYmQ2YjRiZmE5NzZiMCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNTU1ODgxNTM0YThlNjNmNTUyOTI2MGE1NzkyZWZhODBjMjRlMGI2NzI4ODQ4MWZiYTNmZmU1ZDZhOWFiNTgyMSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYzhkNDk2NmJhNTQzMThjMWMzN2RlZTZiOTJlMjQ5MDk4MWI4MmMzNjg0ZjdmY2JiMTczOTI1MGVkMjY5MDhkZSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYWYxZTIyYjk1ZjNhYzg5N2YxNDJkMWU3ZWI5Y2I5YzdlMjZkNmMwNWI4Y2JmMWZmZGRlYjg3MmJiZGE2MGI4NiJ9"
+        },
+        {
+          "resource": "repo://backend/pom.xml#L51-L86",
+          "version": "repo-lines-v1:sha256:4c5a3377b7040833a6c9b9a364d642bafbe648e7d570f018c3cc81913c4adbea:eyJzZWxlY3RlZExpbmVDb3VudCI6MzYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImMzMGZhMzY2Y2I4OTllODlkYjkyNTM5YWRlNzFhZGFmODg3ZjJmMGY0Yjc4NjAyZWE5ZmVhYTJkNmE3NWE5YTQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdmNzY4MGFlNmQwMmUwMGQ1ZmE5MDI3ZDkyNDI3YmZiMzlkMzc4ZDcyNTE0NWNkYTY5M2EwYzMxZDllMDNlYzkiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImViYzA1M2RiYTg4NGU4ZGQ5NTNmMGMyOTE2NzM3Zjc2NWJiNjI3M2VhMmRiOWY3ZjBlZTgwYWI5OGU0MjAwNDEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImE4OTJjYjI0NzQ0NTk0NDE0MmQxYTgzZTE0N2E3OTQ4NTQyOWQ5Y2MzMjhhMjc5YTlkNTA3NzRiNjFmZTBmZjMifQ"
+        },
+        {
+          "resource": "repo://deploy/compose.yaml#L3-L58",
+          "version": "repo-lines-v1:sha256:67115f2ce3a4478beaa2652dec2c40b8e0d7d88791d76777b942f33f95da0dd5:eyJzZWxlY3RlZExpbmVDb3VudCI6NTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZhNzNmY2NkYzk5ZWE4MzU5NjdjN2RlZTdlZmJlZDFmM2NhODcyNjBkOTI5MzE4NTBmZGQ2NmRhOGNiMTJmMWQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZiM2VmNmE0ZWEwZTU2MzdjMjNkZGJmMWU0YzdhMTUyYTYyNGZjOTQwNjIxZGU5YjEwOGJkNDNjODc4ZjU1N2UiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjoyLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImM0OTc2M2RiZmE3OWQ4MjdkOTNlYmVkNDk4MDc0NDZmNDg1ZGQ1MGUyMzlhNzA0MjFlODk3NGZmZTY0N2M4OTgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM3NGQ0MDhkZGUzY2EwMjNjMTkwNGVjMjhhOThmNGI0MWVjZWEyODI0ZTJjMjkwYjA2ODAwZWYwNDBhYzhiNWEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_3e66d249f0624095b7262a19eeaa4c8f",
+      "statement": "For host-process development, start only the MySQL, Redis, and MinIO services from `deploy/compose.yaml`, then run Spring Boot with the local profile and Vite on the host; the shared container development-server mode is mutually exclusive because it shares volumes and conflicts on default ports.",
+      "evidence": [
+        {
+          "resource": "repo://README.md#L37-L63",
+          "version": "repo-lines-v1:sha256:e316195a48ceb41b64ac4d37a3fde53c785f221e44d64babb08649003efa2006:eyJzZWxlY3RlZExpbmVDb3VudCI6MjcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjE3Y2Q4NTY2ZjAwYTA3YzgwZWZhYzExNTI3M2E5NjgwZTVkYzllYTU4ZGIzYWIzNDk0MTY1MmQxNWQwNjgxMjUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ3YzA2YzU2MWQ1YzMyNzM0MzY4NTI2OGE0NmIzMzkxZjM5OThlZWU4OTBkMmJlNTFmMGQyMWNjNGE1M2FlNmQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjA4ODdmOTg3ZjQzYjIwZjRlZGQ1OGM4ODc2YmM0NGFmM2EzMGMyZTJkMjU3MGQ0OTkyNDljYzIxZGIxMjQwNjgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImVkMTY4MmYzYTkzODI4ZDQwYTg4MWY1NWEyYjE0ZDg3YzY4NGM0N2VlYTE4NjA2ZTI4NmRiZjExNGIyNjc2ZGMifQ"
+        },
+        {
+          "resource": "repo://README.md#L84-L101",
+          "version": "repo-lines-v1:sha256:8ab6e936366fdd61d061fbd64505b7aa7e76b6fed7174f3b1f9af1815e04a7b3:eyJzZWxlY3RlZExpbmVDb3VudCI6MTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjcwZmYwM2JhYzBkOTZmYWM5MzAzNzU1Mzc1ZTM1YjkzNzBmODM5MDMxODlhYzQxMDU2YTZjMmQxZjliYzBkNjkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc2ZWE5MDZiZjJmMTMwOTI0OGIyNzQ1MjAzYmU2ZWFmOGVhZjZjMTBmNGQ3OTZkNzYyY2I1NThmMDRmNzRlYzEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjgxOTVkOTc1MzBiODEyNWU3OGQwOWMxMTQ1YzhlYjUwMTMxZWExMjZiMDA4YzJhODkzZjQyZDJkMzE4MWUwOWYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImEwOWZhYzAwZDhkMDg5YTAzZWM2ZDcyNTM2NmQwMmJmNTlmZDBjMjJkNDNkM2UyNmE0ZjhkOWE1OWViYzQ0Y2MifQ"
+        },
+        {
+          "resource": "repo://deploy/compose.yaml#L3-L125",
+          "version": "repo-lines-v1:sha256:1f8ea6726121f20cf33cc324cb2188b50f1e2c6e8929f1989c531d8146c13a58:eyJzZWxlY3RlZExpbmVDb3VudCI6MTIzLCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiJmYTczZmNjZGM5OWVhODM1OTY3YzdkZWU3ZWZiZWQxZjNjYTg3MjYwZDkyOTMxODUwZmRkNjZkYThjYjEyZjFkIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiIzZmRlMDJkNWM3N2MzYjRiMzc3NDNhYmU4OGM2YWFkOGFmNjQyNjBmMTczOGRlYTg3NTEzNjg3NjZlZmQyYTM4IiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MiwicHJlY2VkaW5nQ29udGV4dEhhc2giOiJjNDk3NjNkYmZhNzlkODI3ZDkzZWJlZDQ5ODA3NDQ2ZjQ4NWRkNTBlMjM5YTcwNDIxZTg5NzRmZmU2NDdjODk4IiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiI5MGU2ZjI0NjZjNTA5MjBhZTNkOTE4ZmE4ODU1Yzk3MzQ1M2QxNGZmY2EyYjU5YTIzYTQyZjUyYzFkZDJmY2JjIn0"
+        }
+      ]
+    },
+    {
+      "id": "claim_a607c840bc2e4bcb8c336d710afdfdf9",
+      "statement": "The frontend bootstrap creates one Pinia instance, hydrates appearance preferences, installs the router, and mounts the Vue application; route navigation initializes auth, redirects anonymous non-public routes to `/auth`, and redirects non-admin users away from `/admin`.",
+      "evidence": [
+        {
+          "resource": "repo://frontend/src/app/router.ts#L4-L36",
+          "version": "repo-lines-v1:sha256:0a4471985995dd03210f610044d210b755a9ff0b36ee698ef388241bd2963b8d:eyJzZWxlY3RlZExpbmVDb3VudCI6MzMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImE2ZjgxZWUyZTI5YWMzMWE0NzhhODk4NTFmZjA5MTI0ZWVkMjc0ZWJiNTU4ZjhiMzVhNTlkMGNkZWM2ODM3ZTIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRjMmU4OWY2NzBjNDc1NmVhZjA2N2MxMmE4OWRhZjBlNWYzMDA5MGY4YjE3MDVkNmUxZGZhZDE2ZGRmNzQ2MmQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjAwNzU1NmQyZTU1Y2UyNjk3OTRjMDE5Nzg0OWMyNzNkZjkzZTIwYTYzNjgyZTFiNjEyMGRlZjQ4YWZmNzdhNDciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImExYWEzMDVlM2U3YzU3YjM1MjE2OTczNDY3YTExYzg4NGFhMzFkODY4ZjQ2ZTFkOGQ1YmJiMTMyMjBmODQyNjAifQ"
+        },
+        {
+          "resource": "repo://frontend/src/app/router.ts#L52-L59",
+          "version": "repo-lines-v1:sha256:ef1cb4296f892a6db688394c7c469e2bd3cbc9875827993e620d1d2a704c3f2f:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNDkyNGU2ZThkMjg4OGY1ZDM4MDU5ZGRmMzZkOGNmNWM2NDk0MTM2MjMxNWRjMjM3ZWU2MjRjYjYyZTNiYjY3MiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiODU4MGI3NjUxOGRhZTk3OWZhZWJkMDIzNjdhMjkyOTJhNTBkOTc2MDkyMjUxYTM4YTZjZTMwODgwYmE0MjgyNSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZmI1ODBlOTY0ZjgzYTQ3M2Y0M2Q0NDM4NDYyOTQ5ZDY4YjU2MDBmZGE3ODdmMTYzNzQ1ZDAwZGU4OWNiZjM2YSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjAsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSJ9"
+        },
+        {
+          "resource": "repo://frontend/src/main.ts#L1-L13",
+          "version": "repo-lines-v1:sha256:902354b23732bd0ae8fab38adeff7427dc48d35fd3a7f436d32f604d9fcaea49:eyJzZWxlY3RlZExpbmVDb3VudCI6MTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjIzZjNmODhkNTlhNTE3Y2UwYzAyODg3YjAzMGFjZGEwMjAxMzJlM2I0MGQ4NTk3MzUzNGMyNjM1MGIzMTU1NzciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc0ZjdhMjMwYTcwMzNiNzRiYTRiNWYzYjgyNmZlYmZlYmI4Y2I1MjA3OTc1NmEwZGY4NTM3YTYyMWE1MDNmOWYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_6ec938287e8f40f08feff9d577254216",
+      "statement": "The shared browser API client prefixes calls with `/api/v1`, includes credentials, sends the CSRF cookie in `X-CSRF-Token` for unsafe methods, disables GET caching, and makes at most one refresh-and-retry attempt after a `401`.",
+      "evidence": [
+        {
+          "resource": "repo://frontend/src/shared/api/client.ts#L4-L26",
+          "version": "repo-lines-v1:sha256:3206269dc02c4bde8a9f5b1340c4419b74d40fa199a74bfd831eb266c81b18d8:eyJzZWxlY3RlZExpbmVDb3VudCI6MjMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjUyYThkNmFiZmVhN2U0ODk3ZTg0MWRkOGRmOTk2ZDk0MDQ1YTk3N2ZlYTE0M2YwY2Y2Yjg2M2VjMDA1NzAzNDYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjNlOGQ0N2ZjOTAxMGNiODEyNWRkMzZlYTIyNzAzYTRhMThiMGRkMWIzZGVkZjVmMzg5ODFjYWVhOTEwOTA2YjAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjgzOGNhMDBlNWY0NzIwYmE0ZWI4NjIwOTU2NmVlOWM1ZjE0YWIwNjEzZmQyM2E1ODMyNDQ2NWVlYjg4N2Q4OWMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImJmOTlhYzJmZmI4NWQ1ZDE2NTUxY2EyNjBmYTI4Mzk0MDBmOTY3NzM0MWMxZjg4NTNmYTkxMGEzNmQ3NzU3ZjUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_389ff110482e4c59b66a168f2d1eea44",
+      "statement": "Spring Boot starts from `GrowthApplication`, while `application.yml` configures MySQL, Redis, Flyway, scheduler pooling, security, object storage, AI, and companion memory/model routing through environment-backed properties.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/GrowthApplication.java#L1-L12",
+          "version": "repo-lines-v1:sha256:5af8f1d98a41fbe9fe21f4fb8e4ed5495f8e4f7556c9eb47c26119858337c433:eyJzZWxlY3RlZExpbmVDb3VudCI6MTIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImI2YmY0MDcxY2FiOTU3MjU4ZDk0MWJiOGVmNWE5M2U1NGI3MWRhNWZhZDA3ODY4NDViNGJkOGM3NTFjZGJiZTgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/resources/application.yml#L1-L119",
+          "version": "repo-lines-v1:sha256:f4229e1ad196e9255d780612952429dd966f74e0b3af9cb68e1fb2ab0fd6f539:eyJzZWxlY3RlZExpbmVDb3VudCI6MTE5LCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiJjZjdhYzFmNzkxOWNkZjhjZTZhODVlNTU0ZGNlYjkzMjU3OTBhNjNjZjczMDdlMzY4MDc2YzlmMzA5ZmQ5YzRlIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiI3OWZlZmE5MDFmOWVhODU3NGEzZGM1ODk3MmJkODVmNGUzYWJlOTgxOTQyOTdlNDA0Y2ZjZDFlNzk1MjBjMDc3IiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MCwicHJlY2VkaW5nQ29udGV4dEhhc2giOiJlM2IwYzQ0Mjk4ZmMxYzE0OWFmYmY0Yzg5OTZmYjkyNDI3YWU0MWU0NjQ5YjkzNGNhNDk1OTkxYjc4NTJiODU1IiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MCwiZm9sbG93aW5nQ29udGV4dEhhc2giOiJlM2IwYzQ0Mjk4ZmMxYzE0OWFmYmY0Yzg5OTZmYjkyNDI3YWU0MWU0NjQ5YjkzNGNhNDk1OTkxYjc4NTJiODU1In0"
+        }
+      ]
+    },
+    {
+      "id": "claim_5700b9cc8b9a4d259fca316bb26a0e82",
+      "statement": "The production-shaped Compose topology starts MySQL, Redis, MinIO, backend, and Nginx; Nginx serves the SPA and proxies `/api/v1` and `/actuator/health` to the backend, with API proxy buffering and caching disabled.",
+      "evidence": [
+        {
+          "resource": "repo://deploy/compose.yaml#L3-L125",
+          "version": "repo-lines-v1:sha256:1f8ea6726121f20cf33cc324cb2188b50f1e2c6e8929f1989c531d8146c13a58:eyJzZWxlY3RlZExpbmVDb3VudCI6MTIzLCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiJmYTczZmNjZGM5OWVhODM1OTY3YzdkZWU3ZWZiZWQxZjNjYTg3MjYwZDkyOTMxODUwZmRkNjZkYThjYjEyZjFkIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiIzZmRlMDJkNWM3N2MzYjRiMzc3NDNhYmU4OGM2YWFkOGFmNjQyNjBmMTczOGRlYTg3NTEzNjg3NjZlZmQyYTM4IiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MiwicHJlY2VkaW5nQ29udGV4dEhhc2giOiJjNDk3NjNkYmZhNzlkODI3ZDkzZWJlZDQ5ODA3NDQ2ZjQ4NWRkNTBlMjM5YTcwNDIxZTg5NzRmZmU2NDdjODk4IiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiI5MGU2ZjI0NjZjNTA5MjBhZTNkOTE4ZmE4ODU1Yzk3MzQ1M2QxNGZmY2EyYjU5YTIzYTQyZjUyYzFkZDJmY2JjIn0"
+        },
+        {
+          "resource": "repo://deploy/nginx/default.conf#L14-L48",
+          "version": "repo-lines-v1:sha256:d4b346c0742b929d5d4573209a3e56e782c80cd735a2bb2964d2cc186c2f8047:eyJzZWxlY3RlZExpbmVDb3VudCI6MzUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVkYWY3ZTJjN2RmZDg2NDU5MzY1MmU5YzQ2YzNkYTFlMmY3OTVmYmM0YjcwYjAwZWE5NzBhZTMzYTJkZTQ4MzYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQ5N2NlMDhjMWRiNzA5YjgxOTYyYWI2MWI2NTQxNGU2NzFjNTQ3MjRlZjcxZmQ1NWMzMWNhZjNmMDFlOTNhYTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImU3YjM5NGRlYWM4YzZmZmRkZTRkYjA3MDY5NTU0YTI3NjBlMThjYWY1MjkwMGE0ZTI2MWM0ZmIxYjFmODk1MWMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoyLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM3OTRkMDJhODEyMTk0NGQxNzZkMjY1ZTliYjljYzU5ZjZhYjg5MGJjYWRmOGFlZmRlYmRiYmI0ZjJlYTg0NDQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_ca8aa751ca6e42e0a2bdf5b6c93c6e6c",
+      "statement": "The global verification script requires `.env.local`, starts the Compose stack and waits for healthy services, runs Maven verification, frontend lint/Vitest/build, Playwright, API smoke checks, database predicates, authenticated Redis PING, and a sensitive-log scan.",
+      "evidence": [
+        {
+          "resource": "repo://scripts/verify-global-flow.sh#L1-L33",
+          "version": "repo-lines-v1:sha256:73f4a6054bf59aad451c87bb8fc8a145e230c6defc1d5c13beaf4b587b3dcc6c:eyJzZWxlY3RlZExpbmVDb3VudCI6MzMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFkOTVmYzA0YTgwYzk1MmY0OWNlNDE4ODYyN2M1M2IwZmJlOGM0NDA0MWI5NTJkNTkyYWNkMWRlOTk4NjE0NjYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjBhMzY5YzYyYTlhMzg0ZmQ1ODgwNmFjNGI0ZGVjZjc4YWFkYmNhN2IyMzc1ZTczOGRhM2E2YTQ5YzlkMWQyOTYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_2e144d6dee2d408da80eed3f70c01472",
+      "statement": "A Companion Town model attempt is split into reservation in a short WorldStore update, model I/O outside that transaction, and a separate authoritative validation/apply update; returned drafts can be rejected by expiry, evidence, conversation-operation, or domain legality checks.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/application/ResidentDirector.java#L174-L228",
+          "version": "repo-lines-v1:sha256:570c7c22428048e678a2773f183acc9de63bd92ed7466cd03cae5cb40d2c1c05:eyJzZWxlY3RlZExpbmVDb3VudCI6NTUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImI4MDY1MmQwNDBiNmRjMmY2ODhiOGRiZGM3ZmY3ZjM2YTYxOGY2M2VmMDM5MTA1Yjg1N2I0ODQ0OWViMmM5NDUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImUwYjhhODIyN2YxMWQxZmVkMWQ4YTgyMzY1YjM2OTZiMTU0M2U0NGEwNTRiY2YxMzAxMzJmODk4ZWU1ZDk0ZTIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImZmZDI2NWJhNTE2NzJlMjhiMzE1N2Y3ZDIwNzllZmMxN2RjMjVjZWM5MGI5MDU5YjIxYzM4YjA3Y2I4ZmU5MTIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImU3MzVmYWMzMTliNWExMzM5ZmIwYjJmOGMwMWVjNjE3ODI0ODA0MGZlOWVlNmYwNTcwM2QwNWExMmYyNzk0NmQifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/domain/ConversationLifecycle.java#L101-L114",
+          "version": "repo-lines-v1:sha256:9bb2a0d0fe11b8fe6ab9669144263662983623b8b34f50999cfb8d5c056bf9e1:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImRlYzNkM2Q4OWEwM2Q5YTVhYWJlOWEwNmIzYzU5NTkwN2QzZWYwZmRhZTIzMTU1NzJkYmYyYWQwODE0OGY5NDkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQwNGQ2Njc3ODRiZDA4YWM5MmVlNDY1OTY2OGFmNWEzM2YzOGU4YjQyZTM0Nzg4OGEzZjI4YzgxZjUyNjEzYmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImQ4MGVhYTY2ZTVlMzFjNjE1ODAyN2Q3NjQwYzdkYTRhMjNjNDhiNDM1NGQ1MWM1ZDk1YzExMDdkNDBhYTU2Y2YiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjRkMWZlNTBhOGMwYzA1YTI5ODYwMDE1NjEwMWY1YTQ3YjYyOTc2OWZlZWVmMDAwYjc0MzU3YjE3OGFmYjc4NGEifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/domain/ResidentSimulation.java#L900-L906",
+          "version": "repo-lines-v1:sha256:e5e0dcf71f5a172fa531eceaee202c67ed8566e2c2bcbb4ba487b82bf4d48bde:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNTgzMmVmNTJkMGVkZWIxZTRhN2I2ZWFjYzZiMmYzYWQ3NjUwNmYzYzA2M2IxYWYyZjZjMmRiYWY1NDQxODk1OSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNjAyOWRmMDIwODkxOTdmMDVhYjk2ZmUzYjIwNDdlNjZlZGMzYjg1Mjg2NDlkMGJiMWMyY2NlMGVjM2Q1OWUzNCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZWM5YTAyODYzNWVlOTRlNWRmOTU5Y2ZiOTYyZTU4OWQyNjBjNmUzMTgyZjM1YzgyMzZiYmI3Mjg5YjljMWI4OCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZmVkY2YzYjMyZDQ0NzljZTM5OWUxZjg3YjNhYmVlNjEwOTgxNmY5YTNhOTMxMzlhZWViY2VmNDZlZDViZDJiMCJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_ff6958aa8ed44a7badc7f3470e844c52",
+      "statement": "Resident seeds are hand-authored genesis data: `ResidentSeed.initialize` creates initial places, residents, projects, relationships, memories, and objects, while `addResident` is the sole route by which a resident can be added and is not invoked by the simulation.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/domain/ResidentSeed.java#L125-L168",
+          "version": "repo-lines-v1:sha256:85b62f07a638687361c2f4ffcb86ec87bcddf6299cb609943957b50b8e80d595:eyJzZWxlY3RlZExpbmVDb3VudCI6NDQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk5NDEwNTRmNjU1MTg2ZjY0NTMzNzdkNGRjMDY5YmY2MjFmZmVlYjhjNWY5ZjdmZGQ4N2E3Yjc1NmY4Zjg3NGIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFiZDQ2NTE1YTM0Nzc3YWYzODg5MzkyOWUyMjJmM2M5MzYzMzM2ZTc5M2NiZjc1NWZmOGI5NWRjMGIyM2E5NGYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImIyN2M2YzI1NWRmOWM4ZTdiMDcwOWRkZmUxYWJhYTNhY2UyMDdmNTlhYmFhYmNlZDRiNmZkYzRlOGRlNWFlNTIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjI5YjNhMmQyYTZhOWFiNDI0YjkzOTg4ODRhODQ1ZmZmMzFjMmI5OGU0MDU5ZGJhNmYzNDI5ZmUwNzNlY2E1MzQifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/domain/ResidentSeed.java#L13-L28",
+          "version": "repo-lines-v1:sha256:2737e5d7c98b0219463d12a377f3eea1e1ce3702d0495a7949792944b1ddcbab:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVhZjIyY2YwNzMyNTkyYzI0NzE0MWNiZTYxZWZhMTEwMTI2MTJmNWEzMTIyYjlhZjliYmFmNTJmNTcyNGQxOTQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImMxOTA5MjViNjI1YmIxNDJhZDVhZGQ5Y2U0N2Q0YmVlYzYwMTRiNzhkYTQyYTQzMThiNjdhNTk5MThmNDRjMzciLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImFhZmRjMzI4ZDFiZmQ5NThjYjFhYzFiZGVhMWFmZDE2OTkwYzBjN2E2MjcwOWVlZWNlY2MxMmQ0N2ExYTQ4OWUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjA5MjU0NmI2NTNjNjUyNmQ4NzA2ZWUwOTYyMzE1ZGYwNWQ5Y2MwOWU0NGMzZmI1MTgwZjlhMTJiMzExNTdjZTkifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_cdb08108a1754349be3c48112132e73f",
+      "statement": "`useTownWorld` is the shared frontend Town projection: it accepts only non-regressing revisions for the same world and uses a reference-counted, visibility-aware polling timer shared by multiple consumers, while server snapshots remain authoritative.",
+      "evidence": [
+        {
+          "resource": "repo://frontend/src/modules/companion/companion.store.ts#L132-L171",
+          "version": "repo-lines-v1:sha256:f5306ee040e50f526f54e016d0f3323ff21157841eaa1714ab044a1db7c35ccc:eyJzZWxlY3RlZExpbmVDb3VudCI6NDAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjYyODk0YmIzZDcxODgyMjNmZGVmYmMyMDZjZWFiMDljMTljN2JjZDMwODRjZTBlOWY3YjhjYjA3YzA1OTYzNTgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU1NGRhYzRkYWRmYjY3ZGY4OTVlNTBhMzIyMzYzZmUxNjA0NTlhOWUwMDRiMDcwNmNhNDcyZjFlOTEyYzgzMDEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImY2NTczY2U1ZDQ5ZmI1MTBhYzhjYzM1ZWVhYWE4M2Q5OGMxNDQ5MDM3YWRmYzA1NjFkYzMzOGM0ODAyODFjODQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjZiYjFiN2FiYTljOTNjMTZhNTI3YTcyOWFmMzZmMzdjMjc3YTk2Yzg5ZjBiZWMzMzgxZWQ3YTg1ZGViNzQ4ZGQifQ"
+        },
+        {
+          "resource": "repo://frontend/src/modules/companion/companion.store.ts#L60-L98",
+          "version": "repo-lines-v1:sha256:8e98d27411beacfd7f322db84cc34d25756bbcc334ab58a11d0be09ea890a7bb:eyJzZWxlY3RlZExpbmVDb3VudCI6MzksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjI3ZjY2MjUzMTQ5ODk2MzEzMTQwMTM3OGU1N2Y3NDJhY2FiYzcxYjExYjI2MDgwNTg0ZDkyMzVhYWQ1MDRhZDIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjI3ZTU3ODhkNWQ5ZDczZDI0YTgxZGJjMGE1YTc0YmZhODJjOWMzYjNhZjk5ZTUyYWY3OTZlOTBiNDY4YThhM2QiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE1NWFhNzMwM2U5OTVlZjc2OTc3MjdjMzkxYTUzMzY4YjQzZTkxODdlYzg0MTM3NjNhNDQxMjI4ZWQxNWQ0OGEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjAyMmQwN2E5NmU5NGIxYzViMmVkNTc0N2E3ZWMxZmUxMzQwODEyYmJjNTE2MDljMDJiN2Q0NTZjYWQ1ZDA2ZTEifQ"
+        },
+        {
+          "resource": "repo://frontend/src/modules/companion/companion.store.ts#L9-L14",
+          "version": "repo-lines-v1:sha256:b06315a0f1f0f4af75ba9836cc14b5f4983a3fbebbe3f53c00e35034a04c35e8:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZWFmMjJjZjA3MzI1OTJjMjQ3MTQxY2JlNjFlZmExMTAxMjYxMmY1YTMxMjJiOWFmOWJiYWY1MmY1NzI0ZDE5NCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDA4ZTg2MmQ3ZmE4MTYzMTExZGQ0ODZmYTE1NzI5NTI1MjE0MTQxNDEzNmQ3OWZhMjhkYzFkOGNiNzZiNjUzZCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYTAzNmVlMWE2ZGU4NThlN2JjM2IxOWRjN2MzMzU0MzhhZmE4MGIxNmUyMjc2Zjk2NmRkNmQxMzUxYWFlMGZmNyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMTcwOTNhM2FkMzc1YmE4Nzc4ODI3YzNjYTM4ZmFlNzlkZWI0Njg0YTYzMjAwOGQ3NmNlNGQyMmVjZDY5YjQ4ZiJ9"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.5.1",
+    "at": "2026-09-14T13:15:33.655Z"
+  }
+}

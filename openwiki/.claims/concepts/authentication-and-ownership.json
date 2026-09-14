@@ -1,0 +1,248 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:1dbff0d3b9fe571221f3645fdcc45cbb24d8e84334b2a067d9aeb93179dc9c83",
+  "claims": [
+    {
+      "id": "claim_f0d1491ae23043ada70db02776c9e36b",
+      "statement": "The API is stateless and authenticates the HttpOnly access-token JWT from a cookie; the JWT filter also queries the current account status and installs `CurrentUser` only for ACTIVE accounts, except that DELETION_PENDING accounts may access the privacy-deletion route.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/auth/JwtAuthenticationFilter.java#L36-L59",
+          "version": "repo-lines-v1:sha256:522099ec5523838bbe4e06bbbd2cf4800822ee1414a17faa7820aa9e43a2f547:eyJzZWxlY3RlZExpbmVDb3VudCI6MjQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZiZmI4MGJmMzMzMTgzMGU5OTY4N2U5YzljMmI4MDg0YzRkODk0ZjA5Y2Y4MTYwOTQxOGNlYzhlZjgxYzY1M2YiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRiMGZlOTU3Mjc0NTM2ZmVlNjRjYWNlODUwMmUzYzFjYTk0ODIzZTY5NDg2N2FmOGFkZmEzYjA5ZTBkY2M0ZjAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjIyMjkxNGFlMGIyZWE1ZDcxOWZjMzNjZmZkODBmOTllNjM3NTFjYTZmMDhkYzVjYzQxNDYxNzdmNTRkZGViNjQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImRmYWJkYmYwOTMxYjU3ODEyY2YyNWZiYWRlYjAzYmUyZDYzMDUyNDk3OWM3NGMwYzlkNDM1MDcyNjIyOWUxZDQifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/auth/JwtService.java#L38-L55",
+          "version": "repo-lines-v1:sha256:0e9ccff5241d8ebbce3bec9b9de3731d9597f58d526da07517b5982972f9dc48:eyJzZWxlY3RlZExpbmVDb3VudCI6MTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImYwNDUyNDM1NTMwZTViMDFlNzA1YThkZDk4NGZhYTdkNWQyNjMzYzNhMjEzMTFlMjYxN2Q1NTc0NzBjNTI4NmIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU2YjA0NDkxNDY5NzIyZTgzNjNhOTRlNDA0NDUzOGUwMTNhMmEyMTdlMzZiMWU1NjhiYTYwYWNiN2I0YzhmMmUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE1ZjgwZmJkZTFkNzFmNWM4YzJkNWJhNzdiZTM2MWFiOTljZWE1ZjI2OThiZGQzZTYwOTY3MzVhNjIwZjEwZmMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoyLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM3OTRkMDJhODEyMTk0NGQxNzZkMjY1ZTliYjljYzU5ZjZhYjg5MGJjYWRmOGFlZmRlYmRiYmI0ZjJlYTg0NDQifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/auth/SecurityConfig.java#L28-L51",
+          "version": "repo-lines-v1:sha256:ed8698fe953a8cc004b539551cceaa3bbdc1e971952c11172c94ddf9290d67da:eyJzZWxlY3RlZExpbmVDb3VudCI6MjQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImI1YmVhMWVmYzdhNzgyMjk0MmZhMmVjZWQ4NDM3MWY4YTg1OTk0YWJmZTlmZDc2M2ZjMmEyZTI5ZjAwOWE4ZWIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZjMjlmZTkwMTEwZTY0NGQyMWEzMTYxZGU4NWU0NjRjZjZjY2M1YWM5M2NiM2RlYmJhNTRkMjNjNmYyNDBlMzgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjdmMTRjYzk2MDAyODNjMDgwYTI1ODU0ZmUzNjYzMTZiMmYyZmE0ZTIzZGUwNTlkYjQ5NTJhZTQwOThjZjlmYzciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijc5NzU2ZGU0Yzk5YzQwOGJiZGFlZjNhNzEwOTg2MTQ1NTIyZTJlMWZkYTBkYTY2ZDkzMzhjMThjMmE5NGI4YjAifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_d528ad2e31324dd7b9a2089a79172f41",
+      "statement": "SecurityConfig permits only the public authentication recovery endpoints and health endpoint; all other requests require authentication and security failures are sent as 401 or 403.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/auth/SecurityConfig.java#L31-L51",
+          "version": "repo-lines-v1:sha256:f3cd64013715535c5dbd4eafd7619278f76b7589ebf5b6203ed53fb7d572b057:eyJzZWxlY3RlZExpbmVDb3VudCI6MjEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjczMDMzOTIxZWJkODc4NWIzOWZhOWMxYjRiYWQ0OTIxYjEwNmE2NmM5NGM5M2MwMDhlYzJhYWQ3YTY3MTkyNDciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZjMjlmZTkwMTEwZTY0NGQyMWEzMTYxZGU4NWU0NjRjZjZjY2M1YWM5M2NiM2RlYmJhNTRkMjNjNmYyNDBlMzgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijg5YzRhZWY5MmFmN2RlN2IzYzc5OTA0ZGRhYjFlNDdjM2Y4Yjk1OTAwM2JhMzkxOTE0N2Q2ZDZiMTc5YTlkMWQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijc5NzU2ZGU0Yzk5YzQwOGJiZGFlZjNhNzEwOTg2MTQ1NTIyZTJlMWZkYTBkYTY2ZDkzMzhjMThjMmE5NGI4YjAifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_1367ee378f00453d9220ff95a27dc469",
+      "statement": "Registration requires validated identity/profile inputs and exact current TERMS, PRIVACY, and AI consent versions; it transactionally creates an ACTIVE USER with an Argon2 password hash, records the three consents, and initializes user-owned preferences, notification preferences, system dimensions, and role progression.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/auth/AuthController.java#L58-L77",
+          "version": "repo-lines-v1:sha256:20903b7a452f66d4b86f9add3ceddc39d749747ed39674b615728a6db49389cd:eyJzZWxlY3RlZExpbmVDb3VudCI6MjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImMyM2VjZmQ2OWE1Y2QwNWM2Y2M1ODJhNzhiNDk4ZTZiNDI1MDRiN2JjMGExYWZhNTk4YjQyODI5MDhjNGVjMGUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjE4N2M5NTI0ODliYTFmM2Y5YTBiZGFkMTVmNjFiNTFmODQ4MWFiMDU3NTU5YTI1OGIzYjkyMWFhMzQxMDJjOWEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImNjMGNiMmZkMTgwZGE3NTljY2U1NDIxYmQ3MzIxNmE0YWJmYzgwMTk0ODVhMzg3OTBhNzZhNDFmNDBjNGMyNjciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijc1Njg3NzhiMTk1OGY3OWI3ZTE1OTIwOWYxZDgzOTUwODc1MTg0NmFlNWNhZDE0NWNmYzIxYjY1MGI4NjllNWYifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/auth/AuthService.java#L35-L37",
+          "version": "repo-lines-v1:sha256:d0f349a3a13bdafde6e10abb34582c1482b1779e1fe271f31b4f4ac7244de2e5:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYzI0OTc2MTQ5ZGE5MWQ3NmVkNWYwMGEwNDlmYzc2NzExOWQyY2I3NWIwMjNjYjgxNGU3NWEyNjUzN2JlY2VmOSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNThhZjZhNTQ3MDA2NGU1NmQxYTFkZjg1NzJiZTc1ZDY2NjZhMTE5ZmM0MDg5Mzc2ZWQ3MmUyNjY3MzE5NmQ3OCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiN2NkZWI5ZTc4ZjI1ZWVlYTgyNWMxYWEyNGFmMzM5Y2UzMmY2MDljYmNiODVlY2VkMTk0MGM5ZjA3MjI3MmZjNSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMTZhYmE4MjhlNGE4YjUwNTRkY2EwOGZjMDY2ZTY5MDViNDMxNTZkODFiOTM3ZjEwYWRhOTQ5Yzg5ZDNiYTE5NiJ9"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/auth/AuthService.java#L72-L129",
+          "version": "repo-lines-v1:sha256:3380ee6df07c11fc01fdbdb1ec09aa23d99e458f606239cde62ed56f7e22ba08:eyJzZWxlY3RlZExpbmVDb3VudCI6NTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc1MjYzMzA5MjNkNGUwYjVlZWYyNTkyMTEzMTJhY2U0ZWIxYjk5MDE3OGIyNjFhODVlOWViZDRhMWFlYjA5NjgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImExMjc5NDU3OWEyZTNmNjI3NGM1ZDk1ZmU5ZDQ2YzliZDNkNDI4YzdkZTNlMzRhNGQyNDQ3ZmVhY2IyODQ1ZjkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImE0NjkyOTM2MzFlNjhjNmE2ZGFmMzlmMTU1NjgwNGM0ZjA3MzhjMDViNjljZmMzODUzODUwNzlhZjE4YTU3M2IifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/auth/SecurityConfig.java#L17-L20",
+          "version": "repo-lines-v1:sha256:6ddca346221fca4a704f86695e82595f153f7b32dd05f282cde6c6230e2d4b87:eyJzZWxlY3RlZExpbmVDb3VudCI6NCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMzVlNTkwNjljM2YzODc3MTllZmVkMjU2YzZjNGJmMjE5Y2NjNGY2ZTRiNDFhYmZkNDQ3NjFkNDU0OTIxNGQwOSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDg5M2Y0MGUzNzgxZWI4OTZjODJkMDQ2YTA4MDY3YTExZTM1Y2RmMmYxZGZhZjI2ZmVhOTBiOGRiNjY3NjQxMyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZmU4NWE1M2IzMDAzZjg2ODFhMGY2N2NiMmY5NGNlMjljMmU5YzIyODU5ZjdkYmUzMGZhMDA4OGY2NTJjOTRmZCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNDhmNmUyODNlYjFlYTNiMDIwOGM2OTY3OWI2MjNhZWMyZDcxOTUyN2VmNDMxZDUxZTUwMmMxMzZiMzJmNGFhMiJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_48dc17c072b14d5db2546046178dc28e",
+      "statement": "Consent records are user-scoped, versioned records with a unique user/type/version constraint; authenticated consent updates only accept current supported versions and record withdrawal or re-grant timestamps.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/identity/IdentityController.java#L64-L79",
+          "version": "repo-lines-v1:sha256:81ea7e66eacfc43c81048be29bda9543ef390ca4b933393b338a403a8d7efbf5:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU3YWNlMjRjZjQyNjMyYjUzMDU5ZGJlZWU4Y2QzNTg3MWU1MzE1YWNjYmZhZjQ2NjUxOWU1MmNkMzdhMzA0Y2YiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjdkMjM0ZDNmMzc0NzVhZTliZGVhOGFmN2ZjNTYxMjkyODM1ODljYTFkM2Q0MmZjNDI0YjU2MTcyZDZhMDcwOTAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjMzMjcwMDVlOTExMjFiY2M2OWYyYmMxZjdmMWM3ZjU2ZDMwNGNhOTVjMTQ5ZDIwN2M1MmE0ZTAxZGFjYTEyYjkifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/identity/IdentityService.java#L151-L212",
+          "version": "repo-lines-v1:sha256:2c5eb28442a40ae38bd9869a8bf4041aafe493a093a36bf6be6064556459cfd7:eyJzZWxlY3RlZExpbmVDb3VudCI6NjIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ1NGJhOTc2ODA0NjhlNzZkNTFjNTUxNjM5Y2JlYTMyMGI3MzE5ZWYyMzY2ODE5MGRiYWRkYWRmMDMwYzc0ZWQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImYyZDgyOGEwMzdhYzFjODE1MzViMWQ1NTAwODMyMzIzYmZiYjg2NmEzYTNmODdlN2E2OGMxM2EyYmFlNTZmZmYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjY3NGM1M2U3Yzk0Y2U0YTgxOWIzMDM1YzdiMjY4YjdiMjIyZTAwYTNlOTI5YTBjZTM3MTBkYzJjNTNjN2FkYzUifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/resources/db/migration/V1__baseline.sql#L44-L57",
+          "version": "repo-lines-v1:sha256:231f4bbdb8f3cb80f826550f309e1cf882f0144938e934e03b36e65f4506c99f:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQwNmVlNTkzMDk3ZjI4Nzc0ODExMjgwOTYwNmEwNmE1MzQxMjBiMmI3N2JmOWRiZWI3NzIyOTNjZGFmNTNiMzQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk5YTNlOTViOTc5M2E0MzJmYzU1ZDBjMGI1MGZiYjU3ZDc5ODAwZjkwODY4NjBlMjZkNzdiMzE2NmQxMjIwZTAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjM1MzhlMzc4ZWQ2ODZiMDNkZGJmZmFmMDEzNDJhMGVmY2ZkYWRkYWNhY2YxNzUzOTA4OTllMTIxZmFhOGFjMzUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijk0Njg0M2NiYzk0NDBhMTdkMzRlZWEzZmZlOTFkMmIzN2U0NDg1NjVhNWU4ZGJlNTc0YzM2NDJhMjQ3MjNjMzMifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_fec13d0a8b784e21b0693599a3f336a1",
+      "statement": "Session issuance writes an HttpOnly access JWT at `/`, an HttpOnly refresh token restricted to `/api/v1/auth`, and a script-readable CSRF cookie; all use SameSite=Lax, configured access/refresh lifetimes, and the configurable Secure attribute, while cookie values are not returned in the JSON response.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/auth/CookieFactory.java#L14-L59",
+          "version": "repo-lines-v1:sha256:0e40c7ee1ec5e9c41fae290929364949327008d7eff43b01cb8e65714eb821af:eyJzZWxlY3RlZExpbmVDb3VudCI6NDYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZjZjkwYzNkYzI4MzExZDQ0OGNkMGFkYmY5YTEwOTE0MmI4YzFiMTRiOWE1ZGU3ZTQ4NjRlYTA3YmUwOTE3OTkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImMwYzA2NjgyNjgwZTY2N2Y1NzE5N2U0MTkwOTc0NTAxNzY5M2U1YmUyNTZjMTYzNTNjMTIxZWMwZDAzMTVjNDAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjQxMmIwNjQ0ZTY1ODg4MjJlZjAwOGQzYjEyYjgwZjg2MmZiMjA2MjNmNjk4OGI2NzUxOWMwM2Q0YjA2MjYyN2YiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoyLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM3OTRkMDJhODEyMTk0NGQxNzZkMjY1ZTliYjljYzU5ZjZhYjg5MGJjYWRmOGFlZmRlYmRiYmI0ZjJlYTg0NDQifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/resources/application.yml#L63-L69",
+          "version": "repo-lines-v1:sha256:5b437aa1425c37cc02af67a1eb1beb24d89fac50e2560c7ef8becc116791e907:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiOTY0MmMxZGJmYzYwYWQ0ZjE1NjNiYjhkNzUyYTI4ODU5YzFlNWNjMTZhYjRkNWQ3NGE0MzFlYmM2MmQyMDI0ZSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiOWRkMjVkNzg2ODgzZDhlNzcwNGRmY2RlYTAzMTMyMjhkM2M0ZjBkYjlkNjhiYTA1NTkzZTJlZjcyMDZkZGMxNSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYmUzYWZjZmM1MjA3OWFmZDYwYzZlNDI3MjIxMDA3YTRkNjg3YWU3NWE4NTRiOGQ0NDU1MjMwNmRhYjMzY2M3MCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYWNhZTkzMDYwZTE0MWU2MDgzZWQxYjFjZTg1YTIzMDk2Y2FmNDYyZjc0ZWQzZjk0MjdjZTBjNWQ4ODlhMjU3NyJ9"
+        },
+        {
+          "resource": "repo://backend/src/test/java/com/betterself/growth/auth/AuthFlowIT.java#L53-L70",
+          "version": "repo-lines-v1:sha256:74a3adad4ed031e449980cff745f4cf3ebb8a7a0dd2973a4427c0e8abeab568e:eyJzZWxlY3RlZExpbmVDb3VudCI6MTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjJiOTFlZjIwY2M0NGIxZjM3ZDBlNjEwYWYwNWNjY2Q0YjZhMjI3YmQzMzA5MDFhMDBhNzVhZTU0OTU3MmNlYjAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjVlZWJiZTkzM2QxM2QyNjExNzBkNDQ5YmViYzM1YTAwNDRkMTFhNjI3NTQwMzI2MmQyZGE5ZDNjYTZlNTY2OWUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUwNjY4ZDA3ZGRmODNhNGE1YzU3OGQ0OWEzYTViYWNmMzJjMzA5YjA4NWY3MGVkNGNmYmJlMzZjMGFkYzZjMGQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjYzZGFiZWU2ZGQ4NDhlMGJjMTY0YTA2OWNlMTRjNDZjY2Q1OTllNmJlOGE3MjljZmFkYmJiZDZlNjg4MTQ5NGUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_bae62c29dcce4002ba75d70fd707a756",
+      "statement": "Refresh sessions persist only SHA-256 refresh-token hashes and session metadata; rotation locks and consumes the current row, issues a replacement in the same family, and revokes the entire family when a rotated or revoked token is replayed.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/auth/DatabaseSessionService.java#L113-L148",
+          "version": "repo-lines-v1:sha256:e90bd605d4ae6d6e8f9c505a42d69519e2d2901d818458cbb364c2b2980c41c2:eyJzZWxlY3RlZExpbmVDb3VudCI6MzYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjhhMWI4NThjOWIxMGNlZDk0MThmNWMyNGU1MWQ5MjM2ODUxNGRlZTM3ZWE1OTUxZjc1NWI4N2U3NjQwZGIwNDUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFlNzVjNzBkOTQ2MzYyNWUxMDc5ZmQ4ZmM4ZWU2MmFkMmU5MmM0MmJlYWFiZmQ4NWI3OGQ4ZTBhNDk3OWI5NGEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImYyZDgyOGEwMzdhYzFjODE1MzViMWQ1NTAwODMyMzIzYmZiYjg2NmEzYTNmODdlN2E2OGMxM2EyYmFlNTZmZmYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQ3YjU1MzRlZmI2ZjZjNDA3Y2Y0YTMxNzcyMDZmZmFhNzI5ODUwMDA0NDM2MWMxZTNiMDU3NzliNzllZWU5ZTQifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/auth/DatabaseSessionService.java#L53-L88",
+          "version": "repo-lines-v1:sha256:7301875fd02a38bd2fa001895b8df9d34b0bd420ee804edb23056c9408fc7488:eyJzZWxlY3RlZExpbmVDb3VudCI6MzYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVkYzJiMzExYWJlODc1NzJlOGE3Y2MwZDk5NmE2NTg0NDA3NmU1MjMyZDIxYjdhODU0NzVmOWI0MDU1Yjc0OTIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImIzNjc4OGVlZWUxZjgyMDAxN2E3ODA3MWI5ODk0YjA2ZjJjZmQxMWI4MDc1M2Y2MmViMjZkZWMzYjg0ZmY5ZDYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjZiZWNhZTE4MWU4ODE0NzY0YzllZThmOTRhNWMyYWMzOTM2ZWMwZDE1OTBlZTU2MTQyYzRiZTQyYWI3Y2I0NjkifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/resources/db/migration/V1__baseline.sql#L23-L42",
+          "version": "repo-lines-v1:sha256:d499a270fbd4fa12fe0cc2ad9eb63dd0e196aa6fdcecc203b4ab1d36d546aea7:eyJzZWxlY3RlZExpbmVDb3VudCI6MjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZjZDA1ODM4YTVmZDU1ZjkxMjI1ZGI1MDgwNDBiOTIwNGRlOTYwMWExMWQwYWM1ZmE0YWM3Y2Q2MGM2YTQwOWMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk5YTNlOTViOTc5M2E0MzJmYzU1ZDBjMGI1MGZiYjU3ZDc5ODAwZjkwODY4NjBlMjZkNzdiMzE2NmQxMjIwZTAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImJmOTNmMTAxNjhkMmVmNGJjMDg3OWU3NDM2MGJmNDNmOGZjZjI3MDk3YWJlZTNhYWQyOGJiYTQ2NzRlMjVjY2MiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjU5N2Q5MDlhODdhYThhNWNhNjE4YmQ3YjMzZWE2YTNmNjYyZjk1ZDk0MmVmY2MyNDY2MDc4Zjc1YTFmNWM0NmIifQ"
+        },
+        {
+          "resource": "repo://backend/src/test/java/com/betterself/growth/auth/RefreshReplayIT.java#L47-L67",
+          "version": "repo-lines-v1:sha256:65dad855808693d6f10e2285a717e445900b2b6074bd685581e772d555488b3c:eyJzZWxlY3RlZExpbmVDb3VudCI6MjEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRjZjA5ZWIwYzU3NDRmYjk3MzMxYjk4ZmYzZmJmMDVhNjAyYmEzZjdmNjdlNWRhNWJlOTA5NTAzM2Y2MjU4MjUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE5ZjFmNTI1Y2E3YjBiZjExNGE1MDllODZmNzg5NTgyMWFiNGNhZDdmYzA4Y2NkMTM0Yjc3YjAwM2JjYmQ4YTEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_9012a35b7a9345d59a20674f20d78484",
+      "statement": "Password-reset tokens are random values stored only as hashes and are one-time, unrevoked, unexpired credentials; a successful reset revokes other reset tokens and all sessions, while authenticated password change verifies the current password and also revokes all sessions.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/auth/AuthController.java#L130-L151",
+          "version": "repo-lines-v1:sha256:f338d2dfc3820d166adf3016a587318894d4293d2f4d3a548346b3372d81f8af:eyJzZWxlY3RlZExpbmVDb3VudCI6MjIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdkMmIxYmQxYmE5YjU5ZTEwOWY0NWUyZmNlYjBlMDRiYTBjMDYwMzAwMzdlOTdjZjM5ZjllMmM5MmNjZmEyZGIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImNiMTIxYTc0OTE3ZWVmZjY0NTE0YTlmODdhMjY5YjYxMjU4MzYwNjk5YjNjY2MwNWI5ZDQ5NmM4M2YyNWMxNzAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjYxY2RlYjM5YTNmOGRlNGYzMGQxNjY4MmU5MzQ5YzQ0NmQzNTU4MDViYjhhNmVlOTg2OTBjODFjNGM1ZjM2OWEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjczMjkzZTdlMThlNjEwZDhmN2NlOTIwZGUwNDg1ZWYwNWY0OGMzMjBkNWI2OTM0N2FhNTFlYWM1YzE2NWQ5MTMifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/auth/AuthService.java#L169-L238",
+          "version": "repo-lines-v1:sha256:1cfc1980ff2c6f66c6af0a040f047ebfbfa65afc4894772a1a83a9c5b5ad7025:eyJzZWxlY3RlZExpbmVDb3VudCI6NzAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc1MjYzMzA5MjNkNGUwYjVlZWYyNTkyMTEzMTJhY2U0ZWIxYjk5MDE3OGIyNjFhODVlOWViZDRhMWFlYjA5NjgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjRiMmU4MjI4ZDBjNmMyMGU3Njk3MDlmYjUwMzYyZGUxOTYyZmVkMDc1YzBlZGUzOTYzOTBiOTFkZTQ3M2U0NTIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjkwMmZiNmI5N2RiNjdmZjI4YzU2NWVjZDU1YzhhMzFlYzlhMzIzYWUzYzZkNmZhYWQ5ODhhNDIzNDE2MWY0NmQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_6d93f8bbd4e4413b815c5fe6af7ada5e",
+      "statement": "Unsafe requests require the CSRF cookie value to match `X-CSRF-Token` in constant time, except named public auth/recovery routes; the frontend sends that header from the readable cookie with included credentials and retries once through refresh after a 401.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/auth/CsrfDoubleSubmitFilter.java#L19-L60",
+          "version": "repo-lines-v1:sha256:04aa909264f9eb5ebbc66893a6274875c0f4f442a6ea7a3235c9c02a470150a1:eyJzZWxlY3RlZExpbmVDb3VudCI6NDIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQ5MGY3MzgwNjdmZTA3NDhmNjUxYTMxNzU1ZTIyNTM3MjY2OTg0MzgxZTVhMmM5NjQzNzAyZDQ1YzBkMGQ4ZGIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFlNzVjNzBkOTQ2MzYyNWUxMDc5ZmQ4ZmM4ZWU2MmFkMmU5MmM0MmJlYWFiZmQ4NWI3OGQ4ZTBhNDk3OWI5NGEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjZmZmQ0YjE0YjhmZTMzYTdkMGZlYjhhYmIzYzViY2M4MjZiZjM3OTU4YjA1NDFiNzAyMWYzMDM0OWFjYmJmMjMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoyLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM3OTRkMDJhODEyMTk0NGQxNzZkMjY1ZTliYjljYzU5ZjZhYjg5MGJjYWRmOGFlZmRlYmRiYmI0ZjJlYTg0NDQifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/auth/SecurityConfig.java#L50-L51",
+          "version": "repo-lines-v1:sha256:0078e22da534d72f15217363b919c611ffac502de88b262f989adcb4b6c93f03:eyJzZWxlY3RlZExpbmVDb3VudCI6MiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNDljODEzYWJhOTFhOGExZGMxZTQwYWJmYzg3ZTA4ZDlhNzI3NDMxMDQwMWFhNWU5YzljYzNjMGM2MTdiMTYxYyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZmMyOWZlOTAxMTBlNjQ0ZDIxYTMxNjFkZTg1ZTQ2NGNmNmNjYzVhYzkzY2IzZGViYmE1NGQyM2M2ZjI0MGUzOCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiOWUwMTRlMTdjYWY5M2I5MWZiYzc2ZjhjMzUwZWJhNTVhNDJhZDUwNjlkZTQ3OWUwMzMwNzdkMjVkYWIwYzZiMCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNzk3NTZkZTRjOTljNDA4YmJkYWVmM2E3MTA5ODYxNDU1MjJlMmUxZmRhMGRhNjZkOTMzOGMxOGMyYTk0YjhiMCJ9"
+        },
+        {
+          "resource": "repo://frontend/src/shared/api/client.ts#L4-L26",
+          "version": "repo-lines-v1:sha256:3206269dc02c4bde8a9f5b1340c4419b74d40fa199a74bfd831eb266c81b18d8:eyJzZWxlY3RlZExpbmVDb3VudCI6MjMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjUyYThkNmFiZmVhN2U0ODk3ZTg0MWRkOGRmOTk2ZDk0MDQ1YTk3N2ZlYTE0M2YwY2Y2Yjg2M2VjMDA1NzAzNDYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjNlOGQ0N2ZjOTAxMGNiODEyNWRkMzZlYTIyNzAzYTRhMThiMGRkMWIzZGVkZjVmMzg5ODFjYWVhOTEwOTA2YjAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjgzOGNhMDBlNWY0NzIwYmE0ZWI4NjIwOTU2NmVlOWM1ZjE0YWIwNjEzZmQyM2E1ODMyNDQ2NWVlYjg4N2Q4OWMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImJmOTlhYzJmZmI4NWQ1ZDE2NTUxY2EyNjBmYTI4Mzk0MDBmOTY3NzM0MWMxZjg4NTNmYTkxMGEzNmQ3NzU3ZjUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_93597e3b9b694b2fadcc3f3f512c3fc7",
+      "statement": "Non-USER login returns MFA_PENDING without session cookies; MFA verification validates credentials and TOTP against an AES-GCM-encrypted stored secret, updates mfa_verified_at, and then issues the session.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/auth/AuthController.java#L154-L164",
+          "version": "repo-lines-v1:sha256:a16886187f0b0e68066fb25e443bc2fe2314e4658891a8622e568558e18abcf1:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ1OGY4YzBiOGMxNDhkMDA1NzA2NTgzNTUxYTY0YzBjZDIwNjQyODA1MDg1OWQwNGQzMjhiYzkxMzBiY2FhZWYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjEzYjMwZmU1Y2MzNzVjMTZlMTZkYmU1MjFiMmM4ZTNkN2VmMmExMWJiOGUzNzE0MGQyODU0OTUwNWM4N2FkMzkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImJjMzFhNjU5MDI2MDUzNmY3Y2EyODgwODliMzg4ZWQ3ODI0NzRlYmZhZjQxNDJmMDJmZGUzZWNiODk0YmVjMDEifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/auth/AuthController.java#L80-L94",
+          "version": "repo-lines-v1:sha256:82095988c596bb4e6a4683b3f9bae8d884d25384268cf67f28ae9223fbfc3617:eyJzZWxlY3RlZExpbmVDb3VudCI6MTUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjIxMDdmZWQwYzE3ODUxYzY3Mjc3MzlkMWMzYTQ2NGVhYzRiNDRjMGMwMjdjMTRmNzRhMTIyM2EzM2I5ODAyN2EiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImE3NWVjYThiOTEzNzY3OTM3MTQ0MGRkMGQ5ZjY4ODE0OTlhZjM3YzU5N2QzYjVlODI0NjNlZTQ1MzVhYzMyNmMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjVlMmZjMTQ2OTlhYjE3NTk4ZmRlM2Y2ZTg3YTkwZTJiYjNlNWNjNzIzNWZlMGRhMWE1YTliMzUzMDdhZGZiNjUifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/auth/AuthService.java#L152-L167",
+          "version": "repo-lines-v1:sha256:231c65ed3673dd2145f7c135c9deca8156aa86d5d703236efa68538b5402ec4f:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZkMzFlODRjOGM2NmNjZTM5MGE0ZDk1MTgwODJmNDIyMGEyYzk0MmE2NGZiMDVlYTBjYWJhYzYzNzU2NGI0NWQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImQzYzUyNmJiYjgxOGZmMjQxNTc4NDhlYWRiNWUxMjkxMTExNzAxZWI2YmQ0ZmMyM2I4NWNlZmQzYjhhM2IyMzAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjdhY2MyMTM2Yzc4NmNiNWJlNjY0OWJmN2RjMWEyNzQzNzlkMGIxZGQ1M2EzNzRiMTUyMDI3NzUwNjc0MTE3YjgifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/auth/MfaSecretCipher.java#L18-L75",
+          "version": "repo-lines-v1:sha256:163501b6fd3cc360512ebe652a0118bdde38904887227bda2615aa8b797669d0:eyJzZWxlY3RlZExpbmVDb3VudCI6NTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImIzMTEyZDgxOWI5MTJkODZkM2RiYjFmZTBjZWM0MzU5ZDA3MDYzZDZjYTBmYzNmMDI1Mzg0NGJkZmRlYjE1MGYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImEzYTE3YzgxOGM4YzEyYzJhOTczNDRjNmMxOWRkYjQ4MWM4YWJkYzdiM2ExNDgzYzUyZTQ5NjQ3ODhjYjA1ZWQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjZjY2VjMjE5NzQxMGQ0NDJjNWU1OWE5M2E0YjJjZGY1YWI4NWUwOGQwOTZjYzMwMjM5NmJkNTNmNTRiMzFjNDIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImI0YTM2NWE5MGVjMTFlOTA0MzI3NTJjZjkzNzZlYzVlZDM2YjgwYmE1ZThlNjg1NGZjZjk4OTcwZDMwNDQ0NjkifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/auth/MfaService.java#L16-L26",
+          "version": "repo-lines-v1:sha256:e8160c7477807f073ff3548c732bf3e7ccefc2ba6432cf0137d87d2929e98ec8:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjlmNmU1NmUxZmExM2NmOTAxODk3YTIwNDU4NjEyYzk2ZmViMjdlNGUxOTQyY2FmMWY1ZjBhY2I3ODI4NmUyM2QiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImI5Zjk5MTgyMjdlZmU4MDJiODIwOThjMTk5ZjcwNDkwN2RjYjkxZmM1MWVkZGI2OTYwYTM0MWZhZGE1MWI3OGQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjkzYmMyNGZiZDFmZjI3NTAyNzlhMWI3YTgxOTE2MzU1MjdiM2E4YmRhNzlhYmEzMjEwY2JkN2ZhODc1Njg4ODUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoyLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM3OTRkMDJhODEyMTk0NGQxNzZkMjY1ZTliYjljYzU5ZjZhYjg5MGJjYWRmOGFlZmRlYmRiYmI0ZjJlYTg0NDQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_4fed9a3dda79449e9ca24bd3add35021",
+      "statement": "Administrative authorization is an explicit role-to-permission policy, and prompt publication or rollback requires CONTENT_PUBLISH plus MFA verified within 15 minutes; publication also requires a different active ADMIN reviewer.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/admin/AdminAuthorizationService.java#L17-L43",
+          "version": "repo-lines-v1:sha256:d0447335ed1edb7322e6467971fa8d1f23730309d9b036a4fb386621e1fb3b28:eyJzZWxlY3RlZExpbmVDb3VudCI6MjcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjgyYjIzOGYwZjkxMDJlODllMzdjOTk5NTUyZTA5MmM3YWNjNjFiMTYyZjU3ZWNhNDM2YjhiZTUwZWFmYjQ2ZjAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImE2MDAxNjBlM2ViZDVlNjNhMWVhMjI2ZTk2M2QzMmIxMWZjZDdjMDQzZDZmNmExYjU3ZTFlM2FiZjY1YTI3OTciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/admin/ContentGovernanceService.java#L32-L51",
+          "version": "repo-lines-v1:sha256:98d2119012ba6c9c8fa4b00350a7a799a2e0fd35542c1fb12448a3eb624cc0c8:eyJzZWxlY3RlZExpbmVDb3VudCI6MjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc1MjYzMzA5MjNkNGUwYjVlZWYyNTkyMTEzMTJhY2U0ZWIxYjk5MDE3OGIyNjFhODVlOWViZDRhMWFlYjA5NjgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImNlZjQ1MTcwOTI5YWI5ODY0YzRmMzVjNmEwZTIxMTk2ZjdhNGE0MzFjMjY0MTA2NTg1ZGRjNTc1ZGU2OThlOWUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE1ZjgwZmJkZTFkNzFmNWM4YzJkNWJhNzdiZTM2MWFiOTljZWE1ZjI2OThiZGQzZTYwOTY3MzVhNjIwZjEwZmMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjNmNjM3OGJjMmNkMjI1ZmJkZmFiNmRhNGE1N2EyMGQyNjgyMzg5OTVmZGVkZDVhMGRhNzhhZjVjNGEyYTU1MmUifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/admin/ContentGovernanceService.java#L54-L66",
+          "version": "repo-lines-v1:sha256:d5cfd249c2c38f6e9bf67206995637415e6ef6388d95b270e638745643e04e7f:eyJzZWxlY3RlZExpbmVDb3VudCI6MTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc1MjYzMzA5MjNkNGUwYjVlZWYyNTkyMTEzMTJhY2U0ZWIxYjk5MDE3OGIyNjFhODVlOWViZDRhMWFlYjA5NjgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjkyMGJiYmRmZWI0MzIyMjU3NjExMzBmMGI0ZDhmYjdhMmNjZTQwZTVmZjZhM2EwZmQ4ZDg4ZDFjY2VhZGQwM2MiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjgyNTlhODRiZGI5MGY2YjJkYTYwNDU4YzY5ZTQ3YjI1MTllZTRhYWI2YWQzMGNhYzAzNGYwNWRjMjBjMjI3YmYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjZkYTI0NDg2NWEwMmJjMDE4YTg5YjMxYmIzM2JmMWMxNjY2NTJiZjZhYmY1Mjk3MmQ2YWM2OTUwOTBkZDk3NzMifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_9190dd277a6e449eab5f401d3ac8e434",
+      "statement": "Startup can bootstrap the first ADMIN only when no active admin exists and complete bootstrap credentials are supplied, generating/encrypting a TOTP secret; a separate direct-login bypass is confined to the local profile and configured local ADMIN.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/admin/AdminBootstrapRunner.java#L54-L116",
+          "version": "repo-lines-v1:sha256:66e07d8deac25d16fbd71824db58cfc3489013601874f78593c70843d8db8c2e:eyJzZWxlY3RlZExpbmVDb3VudCI6NjMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVkYzJiMzExYWJlODc1NzJlOGE3Y2MwZDk5NmE2NTg0NDA3NmU1MjMyZDIxYjdhODU0NzVmOWI0MDU1Yjc0OTIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU1YzFjZDJlMzFmMmQwY2E4OGRiMDMzN2Q3OGUxMjUyNDM4ZDU2ZjQ0NDVhMzE3ODRlMWZlMzI1ZGI2YjczMjMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImM1MGI1MjNjNzg4ZGNmMmU4N2Q4ZjYxYzcxZjBjNDI2MGUwNTY0ZjVlN2NlMGJlZmQ2NDAyMjQzNGZmNWUzNjUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjFhOTM5YTRlZmM0N2NjNDY2Y2Y4MDhkNmE3NWY5NmQxYzQ1ZTVhZGQwMTY0NjRmZGIyZTZjM2I0MjU3MzFlODAifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/admin/LocalAdminBootstrapRunner.java#L20-L89",
+          "version": "repo-lines-v1:sha256:92318e0a8bddf328ce565bc0c973dc96908d8404d52681461ca5ef8564081d00:eyJzZWxlY3RlZExpbmVDb3VudCI6NzAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY4ZmExZTlmNDQ5NDlmYTg5YTNiNDJiMDQ5MmRkYmRmZmEyZWI3NjQ4NDhkMzU3NzhjOWZiNTNjMjA3ZWJkYmQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImExYzcyZDA5YTVlZjA3YWZiYmJlY2NkN2E2MmI5YTIzY2UwYTJlZWQ2ZDM5Yjk2OThmMWQ0NzFiZmJmOTRlMmQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImEyMGEyZWYwZjc2YjYwYjQ4ZWJkNTUwNzMzNzY1YTBhNTg3YjhhZjI5NGI2ZThhYWE0YzFiNWJiNTdmZjJlNzgifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/auth/AuthController.java#L86-L92",
+          "version": "repo-lines-v1:sha256:eff4a1348399b15b92e32b2853cfb1f8764b4cd99fdfb3f48d094391c49af04e:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNWVmNjlmNDI5MWJhZjhhOTJhNGMzYTUxZjI0ZmY0OTU0ZjI0NTA3ZjNjNGRjNTEyMTdmNGMwNDJkMTI3MWY4YSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMDg0NTdkZTQ3MTIxZmJjMGM3OGMwNGRlYjRlZWM5NGExMmM1Nzc3YTcxZjE2ZGYxMTYwNWIwZjhlOGNmM2JlMCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiODg2ODIxY2VkYzJkMjIwM2E1OWQ3MDdkNjAxYjQzNTljYWZmZmExYjU0ZDNlM2M3Mjk3ZDFkNWU1YmY3Y2I3YSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYWZiYWU2YWFmMTBhOWZjMTUzMDNlMWM2YzVhMjVkZmEyYTUwZjU0YWZiNTBjMTczMjQ4MzU2ZmNkODY0OWI1OCJ9"
+        },
+        {
+          "resource": "repo://backend/src/main/resources/application.yml#L46-L69",
+          "version": "repo-lines-v1:sha256:42878749e13e6d398208c11b0777533e28ab567b124631ba3a32c853b15f72aa:eyJzZWxlY3RlZExpbmVDb3VudCI6MjQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZhMDc1MTg0YTI1YjQyNjBkZGNiOTYxOWRjMTMzZjg5MGFjYmVlMGI4Y2I3YmNkN2JiNzZkMDQwMTNkMTYzYTAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjlkZDI1ZDc4Njg4M2Q4ZTc3MDRkZmNkZWEwMzEzMjI4ZDNjNGYwZGI5ZDY4YmEwNTU5M2UyZWY3MjA2ZGRjMTUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjY2NDU2ZDdiZGIxYmRjOGJkNThjYjk0NjEyNTY1ODM4ZGQ4YmVkMmZhZjVjYzM4ODJkZDcxOTJiNWFmOGVjNTYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImFjYWU5MzA2MGUxNDFlNjA4M2VkMWIxY2U4NWEyMzA5NmNhZjQ2MmY3NGVkM2Y5NDI3Y2UwYzVkODg5YTI1NzcifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_aa957060397a40eaa46256c67e8fa59f",
+      "statement": "The endpoint ownership invariant is to take the authenticated internal user ID from CurrentUser and scope each owned lookup or mutation by it together with any public resource ID; controllers demonstrate this by forwarding the principal ID to goal and privacy services, while anonymous requests to representative owned resources return 401.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/goal/GoalController.java#L34-L104",
+          "version": "repo-lines-v1:sha256:862a5d1bac2d989aa3b04ee0fa5fa54a5db03f0edf7405661e87640c2975b914:eyJzZWxlY3RlZExpbmVDb3VudCI6NzEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk1NzFhODJiNjExYmQ4Y2Y3MzI5ZTI5MmFkNzA5Zjk2YWNlNjM3ZjVjNzNmYjA2NDUwYWQwM2VhMGY4MmU4YjgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjA3ODhhODAyZWZlMjY3MjNkOGNkMzI0OWJiYzQ3NTgzZjgwN2M0NGZkNzkzOTZjM2Y4NzQ3YzYzNzdlYWQ5YmQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE1ZjgwZmJkZTFkNzFmNWM4YzJkNWJhNzdiZTM2MWFiOTljZWE1ZjI2OThiZGQzZTYwOTY3MzVhNjIwZjEwZmMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjgzOWJmMWVkYzFiNTZjYzIwOWM5NGU3ZmI5YmI3NjE0NGJkNzA1ZDM5ZTMyNDM1OTYwOTUwMWQ4NzkzNThmNGMifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/privacy/PrivacyController.java#L42-L120",
+          "version": "repo-lines-v1:sha256:8b17d5c63cd9695b6bbe291cfb8b7da1615d7d2924a382fd835a56040c34f0d8:eyJzZWxlY3RlZExpbmVDb3VudCI6NzksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjBkNDFmZTFiYzVmZWI5MzE5NGExMjM2NTQyODdjMjk1MzI0YjY0M2U0OGZhYjAwOWI2NDlkZGFiZmMzZDM2YmUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc3YTEyNDdkZDQ3NDE1ODZkYmMyOWVjNWE3ZjI3NDdlYTRiNzJlODQ0Njg1ZjQ1NzY0NDlmYTE1NGFhMjY5MWUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE1ZjgwZmJkZTFkNzFmNWM4YzJkNWJhNzdiZTM2MWFiOTljZWE1ZjI2OThiZGQzZTYwOTY3MzVhNjIwZjEwZmMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjA2ZjgyMDU4NmZkNWNhMDQzNjU5ODkxODJjNjY4ZGZiM2MyOGQ4MjRlYzI4OGE3NGFmYzhhNDM4NDg5MDBiZTgifQ"
+        },
+        {
+          "resource": "repo://e2e/ownership.spec.ts#L3-L8",
+          "version": "repo-lines-v1:sha256:f2b15d672e74465c16d0b2d0ee1d762851aa56968ecda5f4a715ff4d49dd725a:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiM2IwYmE4NTI1Nzc4YWVjZDI4Zjc0M2FhMjI1N2Y0ZjcyZWMyNGJmNmY5OTgxODBhODk2YjJiYzliN2RhYmM0OSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiODU4MGI3NjUxOGRhZTk3OWZhZWJkMDIzNjdhMjkyOTJhNTBkOTc2MDkyMjUxYTM4YTZjZTMwODgwYmE0MjgyNSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjIsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNjE4MTAwZTZjMmM5NDI2ZjhlZTVhYWNiNmY2MzcyYzkwYjRjYjM5ODVhN2QwZGViY2I4OTBjZWUxOWRiZGYwYiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjAsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_c7b77ead3571402983ea8d71a0847b65",
+      "statement": "The frontend requires all three consent checkboxes before registration, sends the current versions, then loads the cookie-authenticated identity and routes to onboarding; the Playwright global flow verifies that this reaches onboarding.",
+      "evidence": [
+        {
+          "resource": "repo://e2e/global-flow.spec.ts#L3-L15",
+          "version": "repo-lines-v1:sha256:c81e0fc13e361d1b8f3e7fc10184ef490193e226ba478d7786e9657c294bb6d3:eyJzZWxlY3RlZExpbmVDb3VudCI6MTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFiY2E4MDhmYmVhZjk3ODBiMzJiNWE5MGVmMGQwNDVjMGY3Y2EzNmU5MGI5YmZiMjBjZDc5ZGM3OTkxMGUxYWQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY2ZjEzZjhhMzFmZWE2ZTMxYjUwZjUyODBjNzBlODRlZjg5ZjdlMjhiYTkwNGY2YTE3NDFjZGMzNzI2Nzg5YWEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjoyLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjYxODEwMGU2YzJjOTQyNmY4ZWU1YWFjYjZmNjM3MmM5MGI0Y2IzOTg1YTdkMGRlYmNiODkwY2VlMTlkYmRmMGIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijg1ODBiNzY1MThkYWU5NzlmYWViZDAyMzY3YTI5MjkyYTUwZDk3NjA5MjI1MWEzOGE2Y2UzMDg4MGJhNDI4MjUifQ"
+        },
+        {
+          "resource": "repo://frontend/src/modules/auth/AuthView.vue#L47-L59",
+          "version": "repo-lines-v1:sha256:f7992e41dc7ad031423544dcdd446f1dd5b6017e4520e47a287223eaa1d2bec4:eyJzZWxlY3RlZExpbmVDb3VudCI6MTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU2YjQwOWMxYTE2YWY3ZDU0NWQzMzdmYzJkMmQ3ZmFmZThlZWY0MWIzMzIwNWVlNTVkOGVlODY5NGI4ZjY5ODUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImYyYjlkYmQwNTE0OWIzNzNjNDI2ZjhjOTg4ODdlY2FlMTUyYWM5Y2M2ZjU3OGZmMDdlOTNhYWE2ZGMzM2ZhM2IiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjgwNDdlNTVkNmZjMGI4MTAwMDE0ZmFmZDliN2Q2NDI1Y2FiN2ZkNzQ2Y2NiNmQzOTgzMWE3MWY3ZGZmYmEwMGQifQ"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.5.1",
+    "at": "2026-09-14T13:15:33.655Z"
+  }
+}

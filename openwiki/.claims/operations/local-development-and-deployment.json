@@ -1,0 +1,270 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:34667028fcae405db8a8cefc45b6395c1a0eec7a37e7d3144592952f674f0449",
+  "claims": [
+    {
+      "id": "claim_7d6636c450d6425c9008bd9ce30f0e3f",
+      "statement": "The repository supports two mutually exclusive local development modes: host-run backend/frontend using the production-shaped Compose backing services, or a shared development Compose stack that containerizes both application ends; the modes reuse data volumes but collide on default ports.",
+      "evidence": [
+        {
+          "resource": "repo://README.md#L37-L63",
+          "version": "repo-lines-v1:sha256:e316195a48ceb41b64ac4d37a3fde53c785f221e44d64babb08649003efa2006:eyJzZWxlY3RlZExpbmVDb3VudCI6MjcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjE3Y2Q4NTY2ZjAwYTA3YzgwZWZhYzExNTI3M2E5NjgwZTVkYzllYTU4ZGIzYWIzNDk0MTY1MmQxNWQwNjgxMjUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ3YzA2YzU2MWQ1YzMyNzM0MzY4NTI2OGE0NmIzMzkxZjM5OThlZWU4OTBkMmJlNTFmMGQyMWNjNGE1M2FlNmQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjA4ODdmOTg3ZjQzYjIwZjRlZGQ1OGM4ODc2YmM0NGFmM2EzMGMyZTJkMjU3MGQ0OTkyNDljYzIxZGIxMjQwNjgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImVkMTY4MmYzYTkzODI4ZDQwYTg4MWY1NWEyYjE0ZDg3YzY4NGM0N2VlYTE4NjA2ZTI4NmRiZjExNGIyNjc2ZGMifQ"
+        },
+        {
+          "resource": "repo://README.md#L84-L101",
+          "version": "repo-lines-v1:sha256:8ab6e936366fdd61d061fbd64505b7aa7e76b6fed7174f3b1f9af1815e04a7b3:eyJzZWxlY3RlZExpbmVDb3VudCI6MTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjcwZmYwM2JhYzBkOTZmYWM5MzAzNzU1Mzc1ZTM1YjkzNzBmODM5MDMxODlhYzQxMDU2YTZjMmQxZjliYzBkNjkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc2ZWE5MDZiZjJmMTMwOTI0OGIyNzQ1MjAzYmU2ZWFmOGVhZjZjMTBmNGQ3OTZkNzYyY2I1NThmMDRmNzRlYzEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjgxOTVkOTc1MzBiODEyNWU3OGQwOWMxMTQ1YzhlYjUwMTMxZWExMjZiMDA4YzJhODkzZjQyZDJkMzE4MWUwOWYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImEwOWZhYzAwZDhkMDg5YTAzZWM2ZDcyNTM2NmQwMmJmNTlmZDBjMjJkNDNkM2UyNmE0ZjhkOWE1OWViYzQ0Y2MifQ"
+        },
+        {
+          "resource": "repo://deploy/compose.dev.yaml#L189-L205",
+          "version": "repo-lines-v1:sha256:290ce3346caa41a1257cbb841828ce120cda8cc632ad30027d7e6cb79770cac1:eyJzZWxlY3RlZExpbmVDb3VudCI6MTcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQ1ZTUxMDAzMWIzZDVjZmY4NjhiOTlhMjc1ZGQyNGQ3MmU0NWNiNTA2YjNjNGY1ODljZDA4ZGQ4MGU5ZmIyZWEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImE1MzllYTk0NTQxODhmNGJkNzJhMGFmNDFkODlkMjBmYzAwMmY3MmFmMmZjMjBhNTM0YWM4OWU2ODNjMmQ4MmYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjU4YjljMTZhZTY0NDM5ZmYyNTY0ZWRlZDdjMzJmZGM1ZDQwZjAxOWRkMmEyMTU3ZDZjZDA1ODEyNmRlMTk0MDMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        },
+        {
+          "resource": "repo://deploy/compose.yaml#L127-L133",
+          "version": "repo-lines-v1:sha256:9db2d189942015c0f1ac2d286a8cfc5bea8aafd49f3c861541f525c682a7a19c:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZDVlNTEwMDMxYjNkNWNmZjg2OGI5OWEyNzVkZDI0ZDcyZTQ1Y2I1MDZiM2M0ZjU4OWNkMDhkZDgwZTlmYjJlYSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMWQ3ZWFjOTgwZmQwODM1ODgzYzA0Y2ZhOGQ5YWZjNzg3NzY5MTQwMmM3YTY5N2M5OWJmMzVmOTgzZThmYzJkYyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMjFjMTU4OGMxODc2YTBkMmRiZDQ4NzNlMmM5Y2VjOTZiODZhN2RlZTZjMmU4YmYxMTc2MTk1MmI1YjljNGQyMyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjAsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_739b8a1f03c144c1a20d1a9bf4126c61",
+      "statement": "The shared development wrapper requires `.env.local`, preflights non-Docker listeners on its web, API, debug, and log ports, and uses `docker compose up -d` for restart so changed configuration or mounts can recreate a service.",
+      "evidence": [
+        {
+          "resource": "repo://scripts/dev-server.sh#L15-L30",
+          "version": "repo-lines-v1:sha256:63f37179768d44e928beaaa7672483e7b204a76508e16df357248a235d1d3389:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImE5ODMxMDZlYWJhYWZmMzkzZGQzMjE5ZWEwNTI0Nzc4MGYwMTg2NzliNzRiNDQ5MjZiNTNmNDRmZjhlM2UwNzciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVkY2Q3NzM0NTU1ZjM2MWQ4NmNkNDg0OTgzZDQwMmQ1NDI3NzQ0ZGZmYzI0NmY1NmFjZDA0NGE0YzQ4NmI5ODMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijk4OGE2ZmI1YTY4NGYwYzc3YTU3ZWE1NDU5YTMyM2ZmOWRhNWQxNjI2ODk1OTFlNzBhOTY2OWRhMTAxMmI1MDIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjYwN2M5MjE5NmRmYTczOGU3M2M0ODg2ODZlNDRlZGQ0MmJlZmY1ZTliNGE2NWViNmMxNWRjYWEwMTc3YmVjZmQifQ"
+        },
+        {
+          "resource": "repo://scripts/dev-server.sh#L46-L62",
+          "version": "repo-lines-v1:sha256:f17e88e9a1dcd79068057a98c473a2a4050636d4029d8c464e6a1197e69aa011:eyJzZWxlY3RlZExpbmVDb3VudCI6MTcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjljMWZkYzRiMDAwZDJjNDMwNTM2ZjEyMzZiOWQ1NGUyOTY0OGUxZDVjMTEzZmM3ZjI5OGY2Zjc0MmQxYTM1YjciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjY4YjJiZmExNDA3MmZiMzM5NzQwNDkzZDVlMWVjZmY0MzU2MGUzNDhlMjhkY2JjNTgxMjg1MWE5MmQ0MjYwZTkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjgwOTkwNmNkNmYxNTExMDZjZDY0YjgwNGRkZTJkMzAzNWUxNmE2OTI1ODkyMzc1Y2Y5YzQzYjc1MTM4MzQ4YzQifQ"
+        },
+        {
+          "resource": "repo://scripts/dev-server.sh#L94-L101",
+          "version": "repo-lines-v1:sha256:942d83ef639ca6996530954f132a956244a1d0afb06c9a235146cb20d1b9642b:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMzdkNjgxYmE1N2Y2YWFmOGZkN2FmY2QyMTkwZTQ4YjkwM2Q1ZTQxOWU0Yjc0ZTY2NjA1NDE2YzRmM2NhODIxOSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZGM0MjgwY2M4NDNhMGFiY2M1ODhlMTIwZTk0ZTZkNGU1YmZmNWYwYThlZDAwZWM1MDEyZjE3YTYzNTc5NWYyNyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYjU0MDMzZDZkYmU3MTcyNmY5MjhiZGQ5ZTlhODE2MmViZmIzYmYyZjY1ZTc5YzhkZjJhNDViZGRiYzQwZTM4ZSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiODE0ZTFkMzI4NDU3NTdlY2UzMzUyZWZjNmYzMzNlYzIxOGRiZTc2MTJlNDNiMmU4ZGViZTdhZTk0MjEwZjhlMCJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_94d31b50616349e98664e750a0beb6df",
+      "statement": "The shared development backend mounts source, isolates build output and Maven cache in volumes, waits for healthy MySQL and Redis, and its entrypoint polls sources, recompiles, and relies on DevTools restart while retaining the previous bytecode after a compile failure.",
+      "evidence": [
+        {
+          "resource": "repo://backend/pom.xml#L41-L50",
+          "version": "repo-lines-v1:sha256:ea3bf3c19f16ae954b4593229cafb7077e67de7a627cb1fb81ad0d53df695309:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjJjZThkZjNjMDVmODUzZGE2ZjBmZWQ1NzVlZmM2OWM4ZjdhOTQxN2NiZWEzMjFjODY1N2RmNWE4YzdlZWRkNzQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImMxNWU3NmRjNzEwODgzYmVlMDYwYjFhZDZiNTllYWQ5NDhmNDJiZmRiN2VhNWI4ZGI1ZDMwZDM1ZWEwZDBkYjIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjdiODc1NDllMDU0YzViNjhhNjhjMjRmODdhM2U2OTgzOTNjNjc3ZjMwNzViMjM3MTE4ZDJlNDQwNTQzZjBhZWUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjFmNDk0ODQ0MWVmNzg0ZjczYTEyZDMxYzVjMTJjNDRhNzUyZWQwOTVmNGU4NTE0NzE0ZTk5YjEyZjk2ZmUzNDMifQ"
+        },
+        {
+          "resource": "repo://deploy/compose.dev.yaml#L77-L148",
+          "version": "repo-lines-v1:sha256:af02f7279c3b00ac65381004c09da4e79bf7e26998e090248656cd6e7132ccb6:eyJzZWxlY3RlZExpbmVDb3VudCI6NzIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk2YzgyZWI0NzlhN2VlMWRjMmU4Y2QxMjZjZjA4NTg5ODc2ZjM4ZGFkYWI1NjVhYzMwZjQ0YmQ3OGY2YzMyYjUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjYyZTYxNmRkNDBkZGIyNjg1NjM5OGY2Yzk1NThiODIyNjJkMjhjMzk0YzkwNTQwMGU2OWQ5OTMxODYzOGVlZTUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjRlMmI5MzQ3OGFjNDY0ODM1NTVmZDA5ZGY4OGMxY2MwYmVjMTNiZmNkZWZhODI2YmI2NTQ2ZTlhYzllZWNlMWQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImY2YWM0NmRlM2IwM2M5OGRkYzRhZjgyZmIwYWI0NTFkYjY5MzlhNWY1MTc2NjUzY2MwMDFiZWM3NGQ2Y2I5M2IifQ"
+        },
+        {
+          "resource": "repo://deploy/dev/backend-entrypoint.sh#L1-L47",
+          "version": "repo-lines-v1:sha256:db30cbed5b3cb23aa47d96688dc15b80762062b6e4db2f5b5cd947732d9266a8:eyJzZWxlY3RlZExpbmVDb3VudCI6NDcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImE4MDc2ZDNkMjhkMjFlMDIwMTJiMjBlYWY3ZGJmNzU0MDlhNjI3NzEzNDQzOTAyNWYyODJlMzY4ZTMzMDVhYmYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImNiNDFmYTQxM2FlZTQzYTgxYThhNTBkMTMwMGJmODUxNDhmODQwYmEyOGU1M2VjZGJlZDBmZTk5NjlmNWJmOGEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_4024e3232d544595832e38156f69d5aa",
+      "statement": "The shared development frontend uses container-specific node_modules and Vite cache volumes, runs Vite on all interfaces, and enables polling HMR plus permissive host handling only when `VITE_DEV_CONTAINER=true`; `/api/v1` is proxied to the backend service.",
+      "evidence": [
+        {
+          "resource": "repo://deploy/compose.dev.yaml#L150-L175",
+          "version": "repo-lines-v1:sha256:068587b646c9144442d6d239f1aaf99787cad1d2f01e5b756c1d8b8cc6170988:eyJzZWxlY3RlZExpbmVDb3VudCI6MjYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk2OTAxODQxMDA2MTIxZDQwM2Q0ZTRhOTgwOWE3ZGFhODdlNTE2MWIzYzQyNGQwYjE5N2NhMDY0NWJmY2FlNjYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjNmZGUwMmQ1Yzc3YzNiNGIzNzc0M2FiZTg4YzZhYWQ4YWY2NDI2MGYxNzM4ZGVhODc1MTM2ODc2NmVmZDJhMzgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjJjODMyMWEzNTQ3M2E1NDc3OGZkODU5MGVjZmRjNDM3YzMwZWIyOWU1NzcyOTQzMDQ2YzczYTY3MDgzNzI0NDAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQ2ZWNmMmJhNzM0MDkzYmQyOGY4MjI0NjU1YjYxM2U1Y2U0ZWYyMTgyMmQxN2IwMTY4NmI5MTMyNGUyYmMxMTMifQ"
+        },
+        {
+          "resource": "repo://deploy/dev/frontend-entrypoint.sh#L1-L18",
+          "version": "repo-lines-v1:sha256:f6be6912203f4a48303ffb57ab10089e359f83eef042ed8a9264fd0867db1066:eyJzZWxlY3RlZExpbmVDb3VudCI6MTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImE4MDc2ZDNkMjhkMjFlMDIwMTJiMjBlYWY3ZGJmNzU0MDlhNjI3NzEzNDQzOTAyNWYyODJlMzY4ZTMzMDVhYmYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY5MjI3NmEwOTk3NjBmZDE1YmY3NjdkYTE4MWZjYzVlOTI1NDdmOWQyZmVhNGMwYTUzYWRmMTdmMGU4M2Q1YzciLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        },
+        {
+          "resource": "repo://frontend/vite.config.ts#L39-L56",
+          "version": "repo-lines-v1:sha256:5b3c6043ac5b2394e2777f512ef06593ff07da96ff1ea65a50f95a5f9500605c:eyJzZWxlY3RlZExpbmVDb3VudCI6MTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImIyY2VjYjE0NGE0NmY1ZGNmMTJhNjE2OWZjZWVkNzY5NWU4Mjk0YjA5MGRlNzZmMzY2MWNkZDAyNDkzMDAxNDciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRkNWNkMmZiNGYzZGY4ODQ1MTUyNTViMzk1MjNmMmY4YjU0NzJiZWVhOWY1NjZmZmNhMjA0ZGI4MDI1NjEwNDEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImZiNTgwZTk2NGY4M2E0NzNmNDNkNDQzODQ2Mjk0OWQ2OGI1NjAwZmRhNzg3ZjE2Mzc0NWQwMGRlODljYmYzNmEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImQyYTUwOTQ3Njg4MDJlODgxOGIxMDg1ZmFjMGFkNDhhZjQ4MDQwODQ0MjBiMzNmMzExY2I1NzFjMGQ3NzA1YTEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_ded2b49b225b4deabff888a2c5c5e9c6",
+      "statement": "The production-shaped Compose topology runs MySQL, Redis, MinIO, backend, and Nginx; backend startup depends on healthy MySQL and Redis, while Nginx serves the built SPA and proxies API and health traffic to the backend.",
+      "evidence": [
+        {
+          "resource": "repo://deploy/compose.yaml#L3-L125",
+          "version": "repo-lines-v1:sha256:1f8ea6726121f20cf33cc324cb2188b50f1e2c6e8929f1989c531d8146c13a58:eyJzZWxlY3RlZExpbmVDb3VudCI6MTIzLCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiJmYTczZmNjZGM5OWVhODM1OTY3YzdkZWU3ZWZiZWQxZjNjYTg3MjYwZDkyOTMxODUwZmRkNjZkYThjYjEyZjFkIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiIzZmRlMDJkNWM3N2MzYjRiMzc3NDNhYmU4OGM2YWFkOGFmNjQyNjBmMTczOGRlYTg3NTEzNjg3NjZlZmQyYTM4IiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MiwicHJlY2VkaW5nQ29udGV4dEhhc2giOiJjNDk3NjNkYmZhNzlkODI3ZDkzZWJlZDQ5ODA3NDQ2ZjQ4NWRkNTBlMjM5YTcwNDIxZTg5NzRmZmU2NDdjODk4IiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiI5MGU2ZjI0NjZjNTA5MjBhZTNkOTE4ZmE4ODU1Yzk3MzQ1M2QxNGZmY2EyYjU5YTIzYTQyZjUyYzFkZDJmY2JjIn0"
+        },
+        {
+          "resource": "repo://deploy/nginx/default.conf#L11-L39",
+          "version": "repo-lines-v1:sha256:a3e002f97162e392588a9235bb64e0a95a7e866fc6424817b88fa231ceb6e8a5:eyJzZWxlY3RlZExpbmVDb3VudCI6MjksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjExNWNkMGNkN2ZlNDk3OWY2ZThjNDI5MmZmNzJjMWUwZmVhY2NkODJkNTI5NjI2YjdhNTU3ZjVkNTJkYzc5MTgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImVjNGViOTY2YjI2MGFlNDgxNGQzOGIxNjg0ZDk0YWZkZjVhY2JiNjNiZDg1MGNkYzQ0Mjk0YTg1OTI4NjFhNDYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjFmMDVlMDZjZGMxZTIxZmFhNDc3MTVkMWU5ODZiNGRlZGRmMjQ3NWIxY2FhMDhhNDQ1MGFhY2I4ODZiMTZmZTIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_39f1348a8406423e8c43c6a15347bb6e",
+      "statement": "Production image builds require prebuilt backend and frontend artifacts because the backend Dockerfile copies `backend/target/growth-backend-0.0.1-SNAPSHOT.jar` and the Nginx Dockerfile copies `frontend/dist/`.",
+      "evidence": [
+        {
+          "resource": "repo://Dockerfile.backend#L1-L12",
+          "version": "repo-lines-v1:sha256:b457758942613ccb3519721a2cdf6bc04a5ce38ff2c48f2e017b83e70b942e93:eyJzZWxlY3RlZExpbmVDb3VudCI6MTIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVlYWU3ZTZhOGYwNGI2NTA0NjVmMjQwN2U2ZTBlNDlkZDk2MTRkODlmNTIzOTZiODEzYzdjODExOGU2ZTZkMmEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImQxODY1MWY3MWNiZDM1OGEyZGFiZmFjMGM3NWIyZjRmY2I3ZDcxZTc2NDIxYTVhY2RiODVmYTA2ZTFkMzRkNDYifQ"
+        },
+        {
+          "resource": "repo://Dockerfile.nginx#L1-L7",
+          "version": "repo-lines-v1:sha256:48a8e303318bc45aa9d1cec8ce7310bb4f01128107fad9feb41f44daff42d8a0:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNWRmOGQ5NDFlNDIyZWEwZDJkYjU5ODg2NTliMGZiNmM4ZjYwYzljNWVlNTJkODMwYTkyM2IzMzkwYjhkYjJmYyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNTAzYzEzNWU5ZmNkMGFlODg5ZWZiNjNiN2U2Yzg4YTY3YjAwNTM3YjhhOGQ1ZTVmNmRlMTM0NWY2ZmIwOTJkOCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjAsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjAsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSJ9"
+        },
+        {
+          "resource": "repo://frontend/package.json#L10-L18",
+          "version": "repo-lines-v1:sha256:9366e9bad0305c08c56e9fa3ce499fbc5edb421dbd89580b9ebfb68a22986dc3:eyJzZWxlY3RlZExpbmVDb3VudCI6OSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMzQ4MzNkNTk0OWMwM2E0MGNhOTUyNDkxNjEwYTY2NTk2NDRiM2FhNDY2MzYyZjc5OTAyMGRiZjE5ODE1NDdkYiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMWM5NDY1MzgyNDYwNzE4YmI3MWJiNjI1YjcwMjBlNWFjNDZjYjAxMTVkOWZmMmZlMWYzMDZmZmIyY2EyZTIzZCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNzI3MDExMjg3MzUwM2EwNzQ4ZTVlZjQwZWI5ZmVlNTJhNmM2ZGI1N2E3MzMxMjVmNDk0OGQxOGY0Y2MxN2I2NiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYjg1Y2MyYTg2MjVjOTI3OWUzZWFjZWY1ZWM3NzIwZjdkNjcxNzM2ZjQ1ODliNDM5Zjk4YzNhN2M1MGE4MTAyOSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_f075f23b00c04aca923b1c165c15e264",
+      "statement": "MySQL, Redis, and MinIO use named Compose volumes, but the production-shaped Compose file does not mount a named companion-memory volume even though the backend image declares its memory directory as a volume; a durable mount at that path is required to make companion-memory persistence across replacement an operational guarantee.",
+      "evidence": [
+        {
+          "resource": "repo://Dockerfile.backend#L6-L9",
+          "version": "repo-lines-v1:sha256:58ff9d08bb235cafaff335de21d0ef9f3cdf3224ebd8b674d672fcaeda8e4e09:eyJzZWxlY3RlZExpbmVDb3VudCI6NCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNDg4NDllMmYyZDJhOTI1ZDQ0MzdjYThlMjVjNGY1Yzg5NGZmZWJkOWQ3YzQwZTU3OGM2YTg5MmI3ZDFiNDUxNiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNWQ1ODgyMjk5ZTZhNGI2YTEwNmM2MGU0NmM5Njc4OGViNTIyMjFlMjMwOGEyMWQ5MDc2MTUyYzc1ZThiOTRjYyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNjgwZDRhNmU0MTdmZTkxMGU0MGViNGZjM2VjNDU0ZmU3ZjNmYTIzYzYxNDNhYTMzNzU3YTQ0N2QwNGZiYTY2ZCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMTlhN2MxZjllODI4MzFlNTk3MDcwYzUyMWE2NDhhMjM4YThlOGMwMDQxNmY0ZTZlN2M2YTA0ZDdmZjI5MGFlNSJ9"
+        },
+        {
+          "resource": "repo://deploy/compose.dev.yaml#L135-L143",
+          "version": "repo-lines-v1:sha256:a1f43a48d2a84e0403a0f7898ebe3adcf397ff8f9af975978e9313a20c31d424:eyJzZWxlY3RlZExpbmVDb3VudCI6OSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNDEzZjRkOTY2MWU5ZDJjM2UxYTI4OWU1ODMyMjk5YmVhMTRjZGI2NGJmODg2NjFkZjcxN2IxMmZhMDJkMDExZSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiOTYzNjJkNzk0MWI5NjAyNWNmYzFlNTczM2ZkNDQ0MjFiMWY4MGRkMzUxMDExYzc3ZWYzNjA1ZGQzYTJmODliMSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMjlmMTU5ZDVkMzYxYjE1ZjMxYjU5NGEyMjA0MjM5NmI0MDg5NmRkNTUxODU3OTE1NDVkYzg5NWE5YWI5MDJhMiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiODVjZDIzNGQ5ZTlmMTY4Njc3ODQ1ZTU0YTIxYzRlNjFmMzkxMTc5MTZjNWZjNjM3NDljYmMwY2VhOTYzYTk2YyJ9"
+        },
+        {
+          "resource": "repo://deploy/compose.yaml#L60-L133",
+          "version": "repo-lines-v1:sha256:ebdb2034914403516fcf471ae738ccce0ab6fd9a4edcc663b36af35b53063d0a:eyJzZWxlY3RlZExpbmVDb3VudCI6NzQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk2YzgyZWI0NzlhN2VlMWRjMmU4Y2QxMjZjZjA4NTg5ODc2ZjM4ZGFkYWI1NjVhYzMwZjQ0YmQ3OGY2YzMyYjUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFkN2VhYzk4MGZkMDgzNTg4M2MwNGNmYThkOWFmYzc4Nzc2OTE0MDJjN2E2OTdjOTliZjM1Zjk4M2U4ZmMyZGMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjRlMmI5MzQ3OGFjNDY0ODM1NTVmZDA5ZGY4OGMxY2MwYmVjMTNiZmNkZWZhODI2YmI2NTQ2ZTlhYzllZWNlMWQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_b95628cb301345b79f486524f7b6be54",
+      "statement": "Companion memories are authoritative Markdown files under the configured memory root, partitioned by user and resident; SQLite is a rebuildable metadata index, and the store test verifies persistence through a new store instance and user deletion of both files and index rows.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/adapters/FileMemoryStore.java#L18-L38",
+          "version": "repo-lines-v1:sha256:6a048bf60cb7c6bfe9a8f7e4dc3c3b142f0030bac621330f993c9ba8b5087f2e:eyJzZWxlY3RlZExpbmVDb3VudCI6MjEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVhZjIyY2YwNzMyNTkyYzI0NzE0MWNiZTYxZWZhMTEwMTI2MTJmNWEzMTIyYjlhZjliYmFmNTJmNTcyNGQxOTQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdkZjUwODgyOTVjYTMyOWQwNWZjYjIyZjczZDY0MWY3ODAzODdiYTNlNzk3NjgyNzc4YTVkNzVkYzJiZjI4NDEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjRiNzEwZTk1Njg1MWM2ZTc3YTM0MTQzYjMxZjA1NjRhMGZjNTQ0NWJjNzQ5M2M3NGNhZWQxYWIyNmQ2MGQ0MDciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjkzYTRlZjMyNTBlNTYwMjkzYzAyZGRmZmJlMjA4YjZiZjU1MWFjOGQ2NTQyNzgxN2Q2ZjI0ODI3NzgyN2E5NmIifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/town/companion/adapters/FileMemoryStore.java#L48-L65",
+          "version": "repo-lines-v1:sha256:a6c4635aca5ee94abc856f8cdf154dbe10e1270d54e2348c9f79237284ac1296:eyJzZWxlY3RlZExpbmVDb3VudCI6MTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM2NDNmOWRjZTMyZTJiZWZlYjFkMzE4NTc4NWJmMGVlOGMzYmFkZjFlYTlmYTZkN2M4NTQ5ZTU0MjlhN2JkZGUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjQwZTcxOGNjNjQ3ZDg3YjZmZDFhNWRmNzZiY2Y2NzliM2EwOGZjZGM1OTY2N2IxMjFjZjhjMzg2MTVjZGU1NTAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijc0ZTU1MWM0M2M3Y2MwZGI2Njg2M2NiOTE5MzE4MGJmMzEzYjMyMWVkMzY4NDIyN2Y1MzhmNjU1Y2MzMjc5MGYifQ"
+        },
+        {
+          "resource": "repo://backend/src/test/java/com/betterself/growth/town/companion/adapters/FileMemoryStoreTest.java#L21-L30",
+          "version": "repo-lines-v1:sha256:5b49d5fcc8cbfaaf10e6facf3ed59f2b739d5def62c04cd05caa7d3763ebbf5e:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjVmZTdmZDRjMzMxYzYxYmY1YjcxY2NjYzM5MTgzNTI0ZjYxODg3NDE4OTllMjhjMGU2MTVhMGU2NDZhNGEzMDEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRlNDYyYmQ4NWVhMzUyMjgyMmE5YWQzZWIyNDA5OWIwMzJhMWI2MjdiZWNmZDdjNTgzMWU5OTI3ZDRiYWM0MGUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjRkNzliY2QyNmFlYjUxNmE1YjZhM2FkOTBiNWU5ZDdjN2E4ZGU2ZTk3OTA4OTI5NDI2ZWI4OWIzMDVhNjdhYTMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjRlOWE3OGI0YmI5MTFlMTBhZWMzOGE5YWIwNTE1NmQ3NWM1MzA3ZmU4MTQ1ZjkyYjczMzZkZWI4MjJlM2Q1MzQifQ"
+        },
+        {
+          "resource": "repo://backend/src/test/java/com/betterself/growth/town/companion/adapters/FileMemoryStoreTest.java#L93-L107",
+          "version": "repo-lines-v1:sha256:12cf8f6fb672dbeba53c475ac73d02ad94002460f8c9a290e54ab7fe3ed3c0a5:eyJzZWxlY3RlZExpbmVDb3VudCI6MTUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjBkMTY4OTA0OWEyZGMyMzM2M2EwN2YxYTZiZTE0Y2E4ZGFlOWU4NWJjMjM2ZmQzYjU0NDQ5MTNmZGU4ZWVmMDciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImNkYTBiNjI0YmRiNWQ1OGQ5YmFmOWMwNGMyYTg0OTdkN2YyMWZkMDVhZTY0NDFiOGQ2ODIyMjRjYTk3OTFmZDkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijg3YzBiOTU0MWIwNmQzZDcyNzU2M2JkOTA2MzdjMTI4MDEzYTg0M2UwODRjMzdmNWFhOTdjMjA4ZDUzZGI3OWMifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_b3adf573ee3b4e8e85f3ff11ac8b64a1",
+      "statement": "Flyway is enabled against `classpath:db/migration` and Hibernate DDL generation is disabled; the migration integration test starts MySQL with Testcontainers and asserts successful versioned migration history and baseline data.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/resources/application.yml#L16-L34",
+          "version": "repo-lines-v1:sha256:33bf75df6d61681b5b87ac6d77506f64f72a9a617d80c634fbfc1c88234d3f08:eyJzZWxlY3RlZExpbmVDb3VudCI6MTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjVhYmI5ZWZiZjNlODg4MDY1MWNlYjg3NmY0NzYxMTQ5ZDhjMDZkNDAzODhiY2E3MjIwYmU4ZmZhZWUwODAzOWYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ5YjEzM2ZmZGRlODNlYTI1YWI2YTE4NTViNGRmNTUzMWI0YTNlOGU3N2VmYzE5MGU0ZGM4NmMxNDZiMDYxM2YiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImVjMzk3NTE2Y2EyN2NlOTkwM2FhNzJlZGYxMDRiODQwMGQwMTQ1YmU0YjY4NTg1Y2Y3M2FkMDdlMDQ3NGNhNzgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjFlZDBjNmFiZDQxZjUxOGEzODYxNWQ4NjlkN2M0ODcyZDM2ZjI4MzU0YzJkNmIxMjZkZjk2MmNjOWIyN2QxMmEifQ"
+        },
+        {
+          "resource": "repo://backend/src/test/java/com/betterself/growth/shared/DatabaseMigrationIT.java#L17-L32",
+          "version": "repo-lines-v1:sha256:66e624eae15b603e3c43bfa1effdc2133e236c387d141d31750dc6d11d9603aa:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImIzYjZhYTZiMmU0NzMzNDU1N2E2NGMyYjNiODFjNzRmNDNlODkwNjEzOWIxODdhODgwYTNlNTVkZjczMGUyNjAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjY5M2FhZjllYzNhOTUxYWViNzIwZTZkNjZhZjE5MzRmODhkYzc0MTYwNWNiM2UyYWQ5MzQ2YzlmMGMxODljYjYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjlmNDQ5MjhmMTAwNmQ2Nzk0ZDQzZjcyZDk5MWRmOWMzODlkZDM4ZTczZjUzMzRiNmMwMGRkZTY1YjEwNmM0YmYifQ"
+        },
+        {
+          "resource": "repo://backend/src/test/java/com/betterself/growth/shared/DatabaseMigrationIT.java#L37-L82",
+          "version": "repo-lines-v1:sha256:d21ae8314c0fe34a700a9e0d526e74bf2e3b79659187583b75b7beca73f6250d:eyJzZWxlY3RlZExpbmVDb3VudCI6NDYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRjZjA5ZWIwYzU3NDRmYjk3MzMxYjk4ZmYzZmJmMDVhNjAyYmEzZjdmNjdlNWRhNWJlOTA5NTAzM2Y2MjU4MjUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImJlN2E5MGJjZDJhNGQ5YmM4NzcyNGEwMGEwNTY5NGQ4YWJjMzViYTAwYWRlNGY2MDkxZjZjYzIxZTAwMDI4NDUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImRmYzNlZjA3NmZiNGM1M2E4MDE1NGU4ODA2YzE0YzY3ZmMyMDA3MzZjN2M5MWYwMDkzZTRkMWZkMDA5ODA0ODEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoyLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM3OTRkMDJhODEyMTk0NGQxNzZkMjY1ZTliYjljYzU5ZjZhYjg5MGJjYWRmOGFlZmRlYmRiYmI0ZjJlYTg0NDQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_8235d1b358fd44f0a0a39f3b99127329",
+      "statement": "The application exposes health and info management endpoints, enables health probes, permits unauthenticated health requests, and Nginx proxies `/actuator/health` to the backend.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/auth/SecurityConfig.java#L28-L52",
+          "version": "repo-lines-v1:sha256:be5f8ff712c910d77bd4306d27245faaad80e6fdc35589dff427ab4fddf91bbf:eyJzZWxlY3RlZExpbmVDb3VudCI6MjUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImI1YmVhMWVmYzdhNzgyMjk0MmZhMmVjZWQ4NDM3MWY4YTg1OTk0YWJmZTlmZDc2M2ZjMmEyZTI5ZjAwOWE4ZWIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjE4YjM2M2Y3MjU5MWI2OGVhYTA5OGZkN2ZhM2FmZTI1NzE0MjQ1M2VlMzdiMmZmN2UwYmQwNDNjOWQ5Y2Y5YjciLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjdmMTRjYzk2MDAyODNjMDgwYTI1ODU0ZmUzNjYzMTZiMmYyZmE0ZTIzZGUwNTlkYjQ5NTJhZTQwOThjZjlmYzciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoyLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM3OTRkMDJhODEyMTk0NGQxNzZkMjY1ZTliYjljYzU5ZjZhYjg5MGJjYWRmOGFlZmRlYmRiYmI0ZjJlYTg0NDQifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/resources/application.yml#L36-L44",
+          "version": "repo-lines-v1:sha256:a4783df60159c1fe7dde88da5af39640a9a8170313334a10c7b034c467369ffe:eyJzZWxlY3RlZExpbmVDb3VudCI6OSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYTQ5MGRmYjgxZWFkZTE2YWE4MmRhNmNiMDQ2MmE2MDU4NTE1MDUzZjFjOWQ0YzNmMmNmNmIyMTk3Nzg4MzYwNSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNWU5YzI5MmQ1NjM2NmRiMjM3NWU4ODFiOTA5NjI1ODJiYjgxMGI2M2ZkZWYwY2I5NDNlNThlMjc1NzM4YzE3NyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNDhhYTgxODI3ODA3ZmM2YmRkZTgzNzllY2VhMDM2Y2QyYWY4YjdhZTJmNDYwMTU5YTJhM2JmYjA3OGQ0NTk2YSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYjE3N2ZmOGNkOTc0NWU4YWE1YjJlYzM3ZTE0NTM5MDY2ODY3OThmYTEyNjQwMDVjNGQxZjE0NjgzODFmMTZlMCJ9"
+        },
+        {
+          "resource": "repo://deploy/nginx/default.conf#L14-L20",
+          "version": "repo-lines-v1:sha256:f061ac7cd35e8d9162ccb95422e82beda5c20d21edd02323194b5ac58a2b7d50:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZWRhZjdlMmM3ZGZkODY0NTkzNjUyZTljNDZjM2RhMWUyZjc5NWZiYzRiNzBiMDBlYTk3MGFlMzNhMmRlNDgzNiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDg5M2Y0MGUzNzgxZWI4OTZjODJkMDQ2YTA4MDY3YTExZTM1Y2RmMmYxZGZhZjI2ZmVhOTBiOGRiNjY3NjQxMyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTdiMzk0ZGVhYzhjNmZmZGRlNGRiMDcwNjk1NTRhMjc2MGUxOGNhZjUyOTAwYTRlMjYxYzRmYjFiMWY4OTUxYyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMjU3M2E5NThjZTMyNWVmNGNmODhkMjNkNzdjN2ZiNWI1YmM5Mzc2ZmIyMzg2NzM4MDY3MTg3ZjE3MzNkM2Y2OCJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_dcbc5de41dd9490ebe298b499e370f38",
+      "statement": "First-admin bootstrap creates an administrator only when no active administrator exists, requires email and password together with a minimum 12-character password, and generates/logs an MFA secret when one is not supplied; the local direct-admin mechanism is restricted to the `local` profile and validates its credentials when enabled.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/admin/AdminBootstrapRunner.java#L54-L79",
+          "version": "repo-lines-v1:sha256:9e86ae9ee314ef9fea14c7e89ae8837606bcb424a165785e407f9ed5e9b6d355:eyJzZWxlY3RlZExpbmVDb3VudCI6MjYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVkYzJiMzExYWJlODc1NzJlOGE3Y2MwZDk5NmE2NTg0NDA3NmU1MjMyZDIxYjdhODU0NzVmOWI0MDU1Yjc0OTIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQ0Nzk0ZjYwNzY5YzhlODYzMjljMWQ0YmE4ZWNlMWQyYmNmOTU0YjhjZWQ3M2UzNTViZTViMDkyZjI5OTBhNTIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImM1MGI1MjNjNzg4ZGNmMmU4N2Q4ZjYxYzcxZjBjNDI2MGUwNTY0ZjVlN2NlMGJlZmQ2NDAyMjQzNGZmNWUzNjUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjI5YTdjY2IzNzQ0YWNmNjA2YjcyY2Y0NzIxNTBkNTBmOGQ4ZDg3NWUxOWQ0MTY4M2I4MGY3YTJiN2I5MmY3MTYifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/admin/AdminBootstrapRunner.java#L81-L117",
+          "version": "repo-lines-v1:sha256:2c0ef62117a31d96f2b22cd6a556592c72bf0670a7578e76ff2ebd488c7c7b1c:eyJzZWxlY3RlZExpbmVDb3VudCI6MzcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImJhNzE3M2JjZGUwMzIzZjFiNjE2NjZlZGU5YzNlOTNkYjY0NTRiMmY5OWQ1MDg0YWY5OGI2ZGFkNGRjOTY4ODYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImI5NTJkZjJhNDc5YjBlYTEzYzU0MGY0N2QwMmIxYzUxMjAyMGJlMDA3YzI5YmQxNmE4ODc3ZGY1NWUzMzMyYTgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImM1ZjMzOGE5NzJlNjM2YjcwYzgwOTVkNGMxMmUwYzAzMmIyNzlmODk4MGRhYTVkZTZiMmIzMTBkMmU1ZDJjMWMifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/admin/LocalAdminBootstrapRunner.java#L20-L52",
+          "version": "repo-lines-v1:sha256:6d7fdef89d76be7b6a6bdbfc2a0d8d650c5aafaef2c6d02e04544fdcff9e097d:eyJzZWxlY3RlZExpbmVDb3VudCI6MzMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY4ZmExZTlmNDQ5NDlmYTg5YTNiNDJiMDQ5MmRkYmRmZmEyZWI3NjQ4NDhkMzU3NzhjOWZiNTNjMjA3ZWJkYmQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImExYzcyZDA5YTVlZjA3YWZiYmJlY2NkN2E2MmI5YTIzY2UwYTJlZWQ2ZDM5Yjk2OThmMWQ0NzFiZmJmOTRlMmQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQ2MWY3Yzg0MjJiMWE1MDgwNGFkYWY2N2UwYjc1ZjdlNjk1YWRlMDk5ZTYyMmZhMTg2ZGUxNTYzZDI3NDRkM2IifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/admin/LocalAdminLoginProperties.java#L20-L27",
+          "version": "repo-lines-v1:sha256:2a710119a710ecd8246c34682f70aaafe7ace7b11fe52b18da65cf2083fb2ddb:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiY2RkMjM3MjU0YjQ3NDU0NWRjNzhjNTcxZDU4Njk5NzFiMGYzZGZhMmU5M2NjZjY1N2E3YmNiNDAxNzljYWU0ZSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDg5M2Y0MGUzNzgxZWI4OTZjODJkMDQ2YTA4MDY3YTExZTM1Y2RmMmYxZGZhZjI2ZmVhOTBiOGRiNjY3NjQxMyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZDM1MWI3NWYwNWYwZWVmZmY3OGY2OGFiYTAwZTdiN2ZhMDFjYjczNDYwZjg2YmI3NTU2MGQ5N2Y2YWRmZGNiMiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMzBhZjBhZjQyODMxOTExZmNkZjYxNmYwNWNjNWVlMjc4NDVhZGNkODQzYmMxMDhjNjRhYTVmY2FmNjllOTlhNCJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_485f932123564ff1bfce834cb2e85f68",
+      "statement": "`QWEN_PROVIDER=mock` selects the built-in mock provider by default, while `qwen` selects the HTTP provider; automated acceptance is documented to default to mock mode, so it does not contact an external model.",
+      "evidence": [
+        {
+          "resource": "repo://README.md#L139-L143",
+          "version": "repo-lines-v1:sha256:11b1cbf59d2fef345ef95206a1ace2bc5471dad609303d14614476bb3cc0c9a7:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNWM0NjNhNzJlNWYzOGE0MDI5YWJlZTZhZTExYjNiOTE1MGE4M2YzYmFjNGM4OWU3ZWEwNzFlZTg0NzQ5MjEwZCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYzQ3NGU1NTMzOWZjM2I1NTgzZmExMTc0Yjk4ODcxOTkwY2UxOWM2ZWU0NmM3MDdkNGVmYjQ2MWFlZTU2YjAyYiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZmFhMmI4MzBhZTEyNDUxZjYzZTZmODdhMTI4YmE1MDdmNmE2OWUzMjgwNTAwMzAyYzEwODY2NGY5MjMyMjAxYyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYjVjYTAzMWU1YTgyY2NjYThlYjJiNGMxZmI3Y2UwYzU2Y2ZhOGE1MjQ0OWJkOWZiY2VkOTA5MTE2ZWQwNjA5MSJ9"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/ai/MockQwenProvider.java#L10-L16",
+          "version": "repo-lines-v1:sha256:844e1e6354634adc12a90b97cbb501b643c1c3075794ba7d043a402c4916d969:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiODY0Nzk3NWFmMjYxMDc1Mjc0NDczYzNjODU4ZjE1N2FlNzU5YWQxMzJjMzE1MGE2ZmQwNWZmM2JjMTBhYWIyYiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMjlhYzM2MmU5ZWJkMTNiMzRiODMzMDk1NGM2ZTU4YjU1Yzg0NjA5OWQwNGEyYjNkM2Y3Mjk4MzAwYzFjMjhhZiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMWVjMzY4NTZlNjIwYjgxZmRhODBkOGJkYmUyYzQ4MGM4ZDdlYjEyMTE1M2M4YjM0N2I4MGUzMWQxOGNkOGRmMiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMTc5YmI2YTAyZjllMjE2NGEzODMyZWEwY2Y1NWI5M2ZlNDBmYjU4NjgxNTFjMDVlNzEyMTIyMTM5NDdkMmY1MiJ9"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/ai/QwenHttpProvider.java#L27-L35",
+          "version": "repo-lines-v1:sha256:1198b5356829b0eda295be06cb3b5f9f7a64ead54f5ea1db115ed6658e55f384:eyJzZWxlY3RlZExpbmVDb3VudCI6OSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMzhlYjFlZWY1OWQ3NjUyY2QwZWZjMmE0N2Q5MDk0YTQ5NDMyZTMzY2JkN2U3N2QwMDU1ZWQ0Mjc5YjQ4ZWU4YSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiOWZmM2M5MzNmMmJiYTc3OWQwNmE0NTZjMmFiMThiOTI4OTZiZGZhODc4MjU5NGE3YmI2ZTU2ODU1N2MyZThiMSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiY2ZlMjBmZmUwMjM1NDM5NWVmYzJkZmRkODNiZTZmZjIzZGI5N2E1ZTFkNDk5MTliOTMwZWZjODI2YzIyM2NlZSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiN2U3NmY0MTBkOGMzNGEwNTc3OTRiZGQ0YmQxMWY3YWYzMmY4MmVjMzEyNWVjZDBhYjQ4YmEwZWYzNDExNmJkNiJ9"
+        },
+        {
+          "resource": "repo://backend/src/main/resources/application.yml#L77-L90",
+          "version": "repo-lines-v1:sha256:22af1f2318daf9a72cf0e3a77b302c65861ee937aca2e843b37843d7d757ac17:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImE1Y2IyY2U5MjRmNTc2YTE2OTg0N2RmZDE3Njk2YTFkMDMwMGQwYjIyNzRmZTA5Y2M4MmI1MTk0OWNmMmNlOGIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk2MWQxMGMxOGUyODVhN2QzNzE4ZmRhMjI4Mzg3N2RhNDZlYzRmYTExODdlNDZmYzkwNWRhOGJlNzFmZGIzNTgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjEzN2U4YTZiYzI4MDZhYmFjYjE5MmU5ZGE5MDM2ZDQ2ZjBkMzk3YTUyNzZmNjRhN2U0NTQ0OWJiNTg3ZWQ1NTEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQ3YjI3YTY0Njc2NDVjODVjZTAzM2YzMDk0ZjNlYTBiZjhlN2FkMDIzNzMwM2JhNDNiM2RiZWJlOWM0MGRkZmQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_8a6f3ed600644444b35c490a5cacef8f",
+      "statement": "Town assets are generated from purchased LimeZu packs and are intentionally excluded from version control because redistribution is forbidden; the application has a painted-ground fallback when the generated map files are missing.",
+      "evidence": [
+        {
+          "resource": "repo://.gitignore#L37-L40",
+          "version": "repo-lines-v1:sha256:c6d4f6c7d4590761c30788cc2abfd21b42aa5d3807fad78b0d860e7894b72aa8:eyJzZWxlY3RlZExpbmVDb3VudCI6NCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYWYxZGE1OWRmZDM4NWI2MzBmOWUzZGVkMzZjYWQyNzVhYjg5ZWJiYWY1MTEzMmZlZGZjY2Q3NGM0YTA4MzkwMyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMWE5YmExNDc5MzMxYzFlZTM1YWRkMDA5MTcxOThmYjQ3ZTJjNzVkZTJlMzllYWUyYzZlZDk5NjNmNGVjYTJjZCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNmQzZDhjYWEyM2RlNjcyNzJjNmE5ZTJiNzA2OTE5MTJkODY0OThjNWYwZWUxNGJmOWM2OTU3Y2RhNjkzZmM3YyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYTc2ZmFmZGEwNDRkYjlmMWI3YzVkOWFkOTRmZDQyYTVhMjFiMTJmNGRmZGQ2ZGZjZDIwMDU2Y2VmMmY3ODg0ZSJ9"
+        },
+        {
+          "resource": "repo://README.md#L65-L82",
+          "version": "repo-lines-v1:sha256:0572412b96b500d0505bad25bd2b5834d7c0f387768e39c0626d96d43a5025b6:eyJzZWxlY3RlZExpbmVDb3VudCI6MTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdkZDgzNmRmN2U0MTM2MTY4Zjc5NGJjOGZmYzk0MzNiNzAxMjYzMGUxYTdkZjQwOGZjZDIzNjdiODgyMmQ1NGEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFlNzZmZDJkY2IxM2ZjNGYyZGQxMjY1ODI5ZDBkY2I2NDM3YzdmM2M0M2EyODkxMGRhNGZjYWUwOWJmYmJkMmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImZiZmFmNzVhZWQxMzY5ZTkzNjljNzkyNmI1YTRjMzJhMGRjNjY5ZmNhZDI4M2M1YmJiYTZhZmM3MDVlYjYyNGEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImJlNTRiMWQwODI0OWIwYmM3MDA5YmNlNTA2ZDZhMjg4Y2JjMDFiY2UzNzUzM2RhY2VhYzhkZDE0YjRlOWIwMjMifQ"
+        },
+        {
+          "resource": "repo://frontend/public/assets/town/README.md#L3-L5",
+          "version": "repo-lines-v1:sha256:75feb3ab4b6c3b3ff144db5529e30ff72d21ef78e43047e665e3e7d54591aabb:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYzdhYzJjYWRhOTZlOGQxNzJjYTAxOTU0ODA3NmQxNzZlODJjYTg4NzQzODJjYjMxNmQ0Zjk5N2M5MDQ5MmIxOCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYmYxYTg0M2I2YmQ1OTU3ZDViZTI0ZDk0NWY0ZDliMzg3NWZiN2ZiNjYxYjM4MTRhZmZjMjU5NWYyODdiNzgzNiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjIsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYzkzMWMyMTcyZmQzY2Y3MjM4ZmZjODk0MzlkZGIxOWVhOGJmYjRkYmM4NmNkM2ZkYjZmN2Y3OTJiMGNjOWYyYyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYWM2ZDRjODFiMWJhYWRkZGY1N2VmNjhjODFhN2YyMmRlNTE3NzM1MzFjMzEzZjRmZjRkMTRmNTk1ZjlmNGRhZSJ9"
+        },
+        {
+          "resource": "repo://frontend/public/assets/town/README.md#L55-L72",
+          "version": "repo-lines-v1:sha256:8287aa59f0a9a84fcf9fa549e8f4b04afbe49b5a8c71864df0b5d882d23b789b:eyJzZWxlY3RlZExpbmVDb3VudCI6MTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImRjMjgyMjI0Nzc0ZTMwM2JmMjgwYTZjNjdhY2ZkNGJiNThkZmMwY2ZmZWQ1N2Q4YjNlOGQzMThhNjJiYjEwNjAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImE2MDVmOTYyOGRmYTM2NjBlNGRjNTdiODFkYmVhNDRlNzQyZjBjNzIwNmE3MzFmMzFmZTQ0OTE0Njc0OTVmYzUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImEwZDA0ZmZhNzZjZjdhNmJjNmE4N2E5YTQ4OTQ2ODA1Zjc4MGM1NmY3ZDRlYzIyODU3NzgxMGU1YTgyYjY1MDAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_5b71458bf4d24f21a9762ac5ae7ebc62",
+      "statement": "`verify-global-flow.sh` brings up the production-shaped Compose stack, waits for health, runs backend/frontend/browser tests and API smoke checks, verifies database and Redis conditions, and scans backend logs for sensitive values.",
+      "evidence": [
+        {
+          "resource": "repo://scripts/verify-global-flow.sh#L4-L33",
+          "version": "repo-lines-v1:sha256:b88562c77b2eed55643f1733eb5b733fb6f5998bbb5ff0900e0c7a6c8d8dd98d:eyJzZWxlY3RlZExpbmVDb3VudCI6MzAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjczZmFhMDYxODQyYTAxNTFmNzhhYWE3YWFkNDQzNWVmYjZiZmVkYTJhYTgwZTJiYmQyNjA4MzE3MDYwMTVkMmYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjBhMzY5YzYyYTlhMzg0ZmQ1ODgwNmFjNGI0ZGVjZjc4YWFkYmNhN2IyMzc1ZTczOGRhM2E2YTQ5YzlkMWQyOTYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjBmODE3ZTVlNWZkNzRjMWFmMWQ1MDBjNjFhZjhiNDM1ZTE5ZTU2MjNlMDdhYzljMTBjZjZhYTgyODgzYmE5NTMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.5.1",
+    "at": "2026-09-14T13:15:33.655Z"
+  }
+}

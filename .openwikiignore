@@ -1,0 +1,28 @@
+# Secrets and machine-local configuration
+.env
+.env.*
+!.env.example
+
+# Generated dependencies and build output
+**/node_modules/
+**/target/
+**/dist/
+**/.vite/
+**/.cache/
+.pnpm-store/
+
+# Large or transient test/experiment artifacts
+test-results/
+playwright-report/
+experiments/**/data/
+logs/
+
+# Generated binary/art assets are not architecture evidence. Keep the town asset
+# contract README readable because existing grounded claims cite it.
+frontend/public/assets/**
+!frontend/public/assets/town/
+!frontend/public/assets/town/README.md
+
+# Tool worktrees and repository internals
+.git/
+.claude/worktrees/

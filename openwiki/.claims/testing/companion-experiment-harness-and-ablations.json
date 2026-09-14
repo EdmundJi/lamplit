@@ -1,0 +1,242 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:fc893064ca3150d600b3fa99c90323aaa5ed643a2d001e701da7bb91a5c5d60f",
+  "claims": [
+    {
+      "id": "claim_d093c32a430641a7a20e6ec0911670e4",
+      "statement": "`AcceleratedTownRunner` 以 `InMemoryWorldStore`、`MutableClock`、`CompanionService` 和 `ResidentDirector` 组装一次隔离运行：新运行用调用者指定的固定 `worldId` 经 `CompanionRules.join` 建世界，续跑从快照读取并以本次模型开关覆盖快照设置；tick 通过 `service.advance`，脚本 avatar 意图通过 `service.submit`。",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/test/java/com/betterself/growth/town/companion/application/AcceleratedTownRunner.java#L154-L181",
+          "version": "repo-lines-v1:sha256:6b8eb682d66936a6b6b838b9e8db4461ae6bed2779bd2832001d6761320a550c:eyJzZWxlY3RlZExpbmVDb3VudCI6MjgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY5ZWViZjA4OWZmNzRlZmVkMjE2M2U3ZTEyNzc4ZTI3YzdkOTYxMWQwMjcxNzExZGMzMGM2NjZlYzNlMWM1MDQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg3MzJjNTRiYWRiMmYwYzY2OWI2ZTA4YWQ3Y2Y5Y2QwMGZkYmQ0NzZiMzRhYjFjNzM2NTE4YmY4OTRlMGE1ODgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijk5OWJkZWZlZWFjYTYzNDBlMDI5MGRjODZlODg5Yzg5ZDVlMTg5YWE1YmE0NGI1ODViM2I3MDczNGY0YTYyZDgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjVlODJlYzgzYzQ4MmQ2MDhlOTM3MGI1NGZiOWMyYjViZjY4ZmVjNGE4YTM1MmJkZTU1NTU4MDIwYzU4NzU2YzcifQ"
+        },
+        {
+          "resource": "repo://backend/src/test/java/com/betterself/growth/town/companion/application/AcceleratedTownRunner.java#L223-L244",
+          "version": "repo-lines-v1:sha256:5674f07c923c5e5d9fd447e34435878809bc924de960836bf22e4a19aab6ee16:eyJzZWxlY3RlZExpbmVDb3VudCI6MjIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjI3Yzg5MGQxYzM0NWQzM2FiN2VhY2QzZmE2MDhlZmUzNzI2ZTUzOGE1MzY2YWM1NmVhYTQ1YzY2OTRmMjhkYjIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImI3ODBjOTk4NWVlMjlmOGNhOGJlNDM0NGQ0YjY1NTE2ZWI1NTU5MTc2MDNhM2NmMGEyZmQwNWY4OTFkOWY2NGQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImMwZmNkY2IzMjZmZmZjODM5OTNkZTllNmQwM2U1NTk2NTNhODI1YWY5ZTc0YWEyMTQxZjRiZTU2OGMxYWFlMDEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjdmNTg5ZjA0Yzc0MjlkMjI1NGE0MWZhNmNhMzIxNTViMjFmMjg1N2Y5MzY3ODc3ZTI4YzhiMGUzNzQ5MTBiNWIifQ"
+        },
+        {
+          "resource": "repo://backend/src/test/java/com/betterself/growth/town/companion/application/AcceleratedTownRunner.java#L292-L310",
+          "version": "repo-lines-v1:sha256:23dc4ed9d161c13d3e9cc679bd75a53ce1d17bfc7a890c46cebd2a32c9f1ba5d:eyJzZWxlY3RlZExpbmVDb3VudCI6MTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY2NjFkMTYwYTBjYmY3NzczOTI5YzY5MjBkM2MyMDk0ZGIzMmRlN2FhZGI4NDZjYWVhNTJkOTQ4MTQ5NTNlNjMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijc5NjU2NDExMWEyNzZjNjEzMjViMzAxZWU4OTViYzIxMjVlZjgwMTNkZWRlOWRlM2YwNDlmZmI2N2FiZWFkOWYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjAyNTNkMjE4MTFiNzE5ZmU5ZGZiNTc5OGM2OTc4YzRlZDMyMGU1ZTBkZmUyYWM4NzJjOWI0Nzk2MDFhNmM3MmUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_d56a67dbe45944ad9d9b2ac56c253b2b",
+      "statement": "模型模式下 Harness 记录模型调用和应用 outcome，但不自行调度模型：它以 `modelSequence` 的变化触发有限的真实时间保护窗，结束时 seal wire budget、关闭 director 并 detach collector；该节流不给每个并发调用独立的完整时间保证。",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/test/java/com/betterself/growth/town/companion/application/AcceleratedTownRunner.java#L200-L220",
+          "version": "repo-lines-v1:sha256:8c05d8839cf857124f3bb6e6a577a39630af625d90677376b49a7668b80f773e:eyJzZWxlY3RlZExpbmVDb3VudCI6MjEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjEyYmNhNDI0NjA1Y2Y4MmM4MmM3N2ZlYTQ4NTg0YmUzNjU3YjM5MTk1ZWVjNmMzM2NhMmY3MzMyMWY3MDczYWEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRlNDYyYmQ4NWVhMzUyMjgyMmE5YWQzZWIyNDA5OWIwMzJhMWI2MjdiZWNmZDdjNTgzMWU5OTI3ZDRiYWM0MGUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjZhYjI5MWI0NGVhNTMxZmViNzNjMmVjNWI2ZGQ2MjBlMDA2ODY1MTE2N2ZkMDE4MTNiYTA5OWZlYWIyZTA5OTEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImQ4NzhmMTljMzRlNmNlZTYwODY2Zjc0NzdiYWY1OWEyODJkYjI0YWJhNDlhMDkyMWVjMTY5NmUyOGFjZTY5MGEifQ"
+        },
+        {
+          "resource": "repo://backend/src/test/java/com/betterself/growth/town/companion/application/AcceleratedTownRunner.java#L246-L278",
+          "version": "repo-lines-v1:sha256:a764b7cc81ce90a4b2aaa2bdc6f8fc825fed3ad20a37035ba401bb4435b5cc48:eyJzZWxlY3RlZExpbmVDb3VudCI6MzMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU2YTY4NWY0Zjc1NDI5OTYyNDY2MzM4OGNkYzU2MWM2MGRlMjNjODk5MjEwYmI1OGZkMDU2YjBhMDg0ZmE1ZDEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImUxNGNlMTI4NmIyYjc5NmFkZDliYjllZjcyOWRjZjgzMjE4ZDNhN2M2MThlMmVjYjA4ZmRmNDQzZjA4MTY3NDEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE3MTIzMTE3NWM3YjlhODFmZGYzZTY5Zjk1NmY3OWQ5MTRkMjNjZTQyNmY1Y2RlNzI1MDY5YTI0ZWM2MDZmMjYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImFhZDkwNjc0MTY3YzdjYTRhMmI0NGFkNzE3MjViMjVkNGE3NmE2NDExMzFlM2IzODg1NGFlYzVlNDJiYTEzZmIifQ"
+        },
+        {
+          "resource": "repo://backend/src/test/java/com/betterself/growth/town/companion/application/AcceleratedTownRunner.java#L42-L80",
+          "version": "repo-lines-v1:sha256:2defa34c164191735c9a427f92e3d089b4fd6649bbff8673c44e755a612fdd33:eyJzZWxlY3RlZExpbmVDb3VudCI6MzksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQzOWE2YjQzOTk0YTA4ZTFjNzQwYzZiNDQ0MzFlYzUxOWFmMzg3YTIxZDIzNWU1ODU2Mzg5MmQwYzZmNjViZjUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU5OWRiMDQ1N2RkYjQyODU2NTlmM2VhZjFlZGY0MGE3NDA5YTQ3Mjk2OGVlMmVjNTUxYmYyZDY1OGRkMGFmODAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImI3OWVmMTliZmU0OTQ1ZDZiYTIwODcyNWM5YTRkYzUwYmI1OWFlY2MyZjJhNDQ1ZThmYjljNTI2NzM4YzIzYTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjRkOTIxMWY5MWQwZTEyNjVmNzhjNjE4OTc2ZGFmN2M0ODdiNmMwYTY3NWRmMWM3ZmNiOWM2NmQ1MDZhNjY1NTkifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_f41154b5b9354f09a01f3d5f9a17ed3c",
+      "statement": "模型运行必须明确选择 `qwen` 或 `deepseek` 并提供所选 provider 的端点、密钥和模型；Harness 不提供 fallback，`RecordingMind` 只导出规范输入、结构化结果和失败类别而不导出凭据或 HTTP headers。",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/test/java/com/betterself/growth/town/companion/application/AcceleratedTownRunner.java#L321-L345",
+          "version": "repo-lines-v1:sha256:137e3574d33ff01b37a6c78892f25e4fefe8708594ac6a1423fcfa09dbe088d4:eyJzZWxlY3RlZExpbmVDb3VudCI6MjUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjhlOTFmOGE2ZjEwM2ZhNDI4Y2Y3NDBlYjZlYmZlMzk3YzAyOGFmZDFjYzRhNDk2MmQ4NDY1ZWFhOTQxZmNhMzUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM4ZDQyZDVhNGUzMDM4ZTg4YjE2NDRmNmVmMDA1MGQxZTE4OGNkZGZmZTQ4N2IzOWY0ZGEzYWJjMGIyNGFlMDUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImM4MDg4M2RjYzQ1NWNiNGUwODk3NDkxNzMwZmVhYmQzOWM3MTRhYTRmYTUzZTc4MzA1YThkN2ViMWQyZjYxZmYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijg3ZmU2YzRjMjBhZDFkNmY1YzcyNzVkOTNlYWEwMGRlYjU1MmExNjQzMDdkOWE4NWMyOTY3YmI0NWY1YWFjYmQifQ"
+        },
+        {
+          "resource": "repo://backend/src/test/java/com/betterself/growth/town/companion/application/AcceleratedTownRunner.java#L429-L465",
+          "version": "repo-lines-v1:sha256:ed2ea3787e48ae3ea94b3825887e5af0a95fbe2f701f893cd7834b5bc7d3b85b:eyJzZWxlY3RlZExpbmVDb3VudCI6MzcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAyNzI4NjI3NmRlZGQ0YWVjMWUxNzBlYzZjNjU5ZTM4YmVkYjEzZjNjNDk5ODM2MDRjZjMwZjQ3MTQ0NGI4YWQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImRkYWFiYWY4MWIyMDg0MmUzMDY4ZTU4NThjMGUyMjk3ZTY2NTM2Y2YxNmVkMzU4OTM0NWY3ZjRiNjg0YzRiNjAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImM3ZGVjM2Y2NjAyMjUyOGQwZGEyZGI4MGE4ZThlOWZlNjljNGFhN2YxNmI1NDgyN2FlMWMxNThjYjVkNmVkNDIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImE4Y2M2YmE2MTRkNzE4OGM2MWY3ZWE3NTlkOGMzZmNiYWUxYWFlYWQyYTM1YjQ0ZmYxYjY0MDlhMDJlYjE3MTMifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_e4507d2156924b539ce481fe00ef619d",
+      "statement": "`AcceleratedTownRunnerIT` 是由 `COMPANION_RUN=true` 显式启用的命令入口，配置从环境读取；它验证核心导出存在，模型运行还校验调用数与预算边界，规则运行达到两天时检查 25 人世界的结构完整性。",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/test/java/com/betterself/growth/town/companion/application/AcceleratedTownRunnerIT.java#L12-L40",
+          "version": "repo-lines-v1:sha256:818d78bf6ab2f8ddc7c0ad7ec5040f849d5cb34e9bd9be66d79510730fc08be4:eyJzZWxlY3RlZExpbmVDb3VudCI6MjksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVhZjIyY2YwNzMyNTkyYzI0NzE0MWNiZTYxZWZhMTEwMTI2MTJmNWEzMTIyYjlhZjliYmFmNTJmNTcyNGQxOTQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjNhMGM3ZWQ0YmViOGI1ZWY3NTRiZTVmYzZhMjlmMzZjOGJhZGU3MTFmN2EzNDZlMDM5ZjZkMWM0YTkzMTVhYTQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjY5M2FhZjllYzNhOTUxYWViNzIwZTZkNjZhZjE5MzRmODhkYzc0MTYwNWNiM2UyYWQ5MzQ2YzlmMGMxODljYjYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjFlYzdiYWY2M2NlMjdlYjdlMTQxZTU3NTg4ZTJhNGFmOTEzZGI1NjhjZGE4MTdlOTBkZGJlY2QyMzRhNGMxMTAifQ"
+        },
+        {
+          "resource": "repo://backend/src/test/java/com/betterself/growth/town/companion/application/AcceleratedTownRunnerIT.java#L42-L129",
+          "version": "repo-lines-v1:sha256:660fb6ac4a529aca9278d947c1e4c1630ae619f9086e850a22bd8caab4e672a2:eyJzZWxlY3RlZExpbmVDb3VudCI6ODgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjhjYjhiOTJiM2EwMWRjNjFiMzU4MWMwNDgyNWE4ZTBmZjYzOWE5Njk5ODk0MGRiYmJmYzVlOGJkMjYwMzUwY2MiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU2YjA0NDkxNDY5NzIyZTgzNjNhOTRlNDA0NDUzOGUwMTNhMmEyMTdlMzZiMWU1NjhiYTYwYWNiN2I0YzhmMmUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjA3ZWRmMGVjY2I4MmU5ZjVmMWMzZDMzOGQ0MmQ3ZTRiNGJjNWU1ZjkwNzUwMDhmNTdiZDcwM2E3ODY2MTVlNzkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoyLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM3OTRkMDJhODEyMTk0NGQxNzZkMjY1ZTliYjljYzU5ZjZhYjg5MGJjYWRmOGFlZmRlYmRiYmI0ZjJlYTg0NDQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_8d5102b1178444bb81969bc4c38fc1ba",
+      "statement": "一次运行会写 manifest、时间线、usage、模型逻辑/wire 调用、应用 outcome、按行动审计、两类盲测、metrics、norms 和 world snapshot；manifest 记录模型、并发度、预算、输入阈值、盲测参数及模拟时间等可比性字段。",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/test/java/com/betterself/growth/town/companion/application/AcceleratedTownRunner.java#L558-L660",
+          "version": "repo-lines-v1:sha256:a3c79494e33293b3736cb2269c7b1cf18411e41f1b6707931a006aa148101c29:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAzLCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiJlNTZiMTZkODJiMjFkNTBkN2JlY2Q2NzhmYzk5YzVlOTVlZTIxODcyZGIyY2FkOGUzNGJiNWY5MzZkMGY5YTgxIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiI0MmYwYmRkYTdjYzU1ZTEwZWIxYzc5ZGNkZWZjZDY1NDMxYWEwMmYwMmMzZGFkNDdiMzM4MmNkYTU0N2U2MmViIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiIzNTExMTBhMzJmYzY5MGVhMWMwN2Q4ZDg2NmZiZTk3ZmM1Y2ExMDFmY2RkMDljYjRmODAzNjk2ZGU2MDQ1MGFlIiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MiwiZm9sbG93aW5nQ29udGV4dEhhc2giOiIzNzk0ZDAyYTgxMjE5NDRkMTc2ZDI2NWU5YmI5Y2M1OWY2YWI4OTBiY2FkZjhhZWZkZWJkYmJiNGYyZWE4NDQ0In0"
+        }
+      ]
+    },
+    {
+      "id": "claim_2d3613e417a541639aa086d8038a915d",
+      "statement": "行动审计以实际调用菜单和 `OutcomeListener` 的应用结论计数：decision/react 的 offered 来自各调用的菜单，consider 同时提供 occasion key 与 `none`，没有菜单的 call type 保留 `*` 汇总；测试覆盖菜单外选项不会虚增 offered。",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/test/java/com/betterself/growth/town/companion/application/AcceleratedTownRunner.java#L482-L557",
+          "version": "repo-lines-v1:sha256:6b4812714310e7aaeebea8efdd1d86c58ec925726767acfcac05573390c17f72:eyJzZWxlY3RlZExpbmVDb3VudCI6NzYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjNhNmNhZjhiZGM0M2JlMWUyYTlmZDg5OTJiZTRiNmQ5NDcxOTM4YjhjNTI5MDFiZWE5NjhjMTU5MTRmMzA0MmMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjdhODE4OTZjMWU4Njk3YzdlNmFhYTI2YjQ2ZGQ0OGE4NjY2NDI0ZjJjYTAwNzc3ZDQ0Y2QxNzU5NzJmMTFlMWYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUxYTJhNWM1YThiMGE4ZWU5ZDJmYjZjYjkyYTc1YzY4OGMyNDUzZDM0MDYwMzA4MGUyNDhmNzU4ZTgyMDNiMWUifQ"
+        },
+        {
+          "resource": "repo://backend/src/test/java/com/betterself/growth/town/companion/application/AcceleratedTownRunnerActionAuditTest.java#L118-L139",
+          "version": "repo-lines-v1:sha256:785ddd7c8587e966961b95ee557a883294e4f8425adb1c65cc2740b58241586b:eyJzZWxlY3RlZExpbmVDb3VudCI6MjIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjA1YzI4MTVhNTYwNDIxNzRjNDJlMmFhYmNkNjA2NjJlNmYwNzY2YWUxNzlhOTJlOGI1NWNhODNjYmY4OTNiZWEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjYzNWZmY2VhZjdlZjRlNzUxNGM5NjM2ZTFkNGZiYzhlZTRlNWQ0NDljNWZkNTdlNmRjYTVmMDU2MTgwNTgzZTgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijk0YThmMjc2ZjdmZWMyMDUxODZkZGY5MzBhM2I2OWI1OWU2NzRkNTU4M2UwNDg2MzQ5ZmRhNzgzZWFlMGZlYjcifQ"
+        },
+        {
+          "resource": "repo://backend/src/test/java/com/betterself/growth/town/companion/application/AcceleratedTownRunnerActionAuditTest.java#L34-L116",
+          "version": "repo-lines-v1:sha256:0c970e5bc903ee68d285de7e559b7863be99b1e28bfc7d15c066eddc9e10770b:eyJzZWxlY3RlZExpbmVDb3VudCI6ODMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImRhNTMyZTA1ODZkMGRmZmQ3ZWU0Y2Y5ZTY3MDgyZmVjNTk1MzhmNWU3M2NlOTNhYmEwNDk2MThkZWU1MmMwMDAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjI5ZWY4Zjg0NTI2MWFmNTc2MGVmZWQ5MWJhMWFmZTQ4ZDhhODQwNTdmNWYwZmYyOWUyOTQ4MDY4YzVmYzg2MDQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImFhNWViY2EwZWRiYzMyNzk4YzNjZjQ0YzMxNDFhZTlmODQ2YTcyYTY1NmUwNjFjMzdkZjRmYmVmYTY5ODY2MGUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_f2e53bd69b1347d2a766ba3329077c44",
+      "statement": "`TimelineCollector` 每次捕获都会去重保存世界滚动窗口中的 diary、事件、记忆、对话和关系变化，并维护完整 `seat_state` 转移流；结束时必须 detach，以防同 JVM 中复用 world id 的下一运行串入座位记录。",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/test/java/com/betterself/growth/town/companion/tools/TimelineCollector.java#L123-L136",
+          "version": "repo-lines-v1:sha256:cfbcc23e604dee69280e460ae891ac998e3295d262cd54c30d7b0f77eebc82bc:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImRkOGJmMDhjY2UyMjc5OTQxNmEyYmQ4ZDNlNGVhOWJjNDE1Mzc4YWI5MzdmZTcwZGM3OTBmMDFkMTNkZTYxMmYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImI4ZDc0YjFkNGVmMWVhMzViYTIwZjQ5MGE5MzJiNDgxOWExMTYzZTEwODNlMjA0ZmM3NTdhMTgzMjIyZjNiM2QiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjhhNTA5NmE4MzQ1YjU5MTFlZmZmOTE4OTRhZjEyZDg2OWYyYWY1ZDU4MGM1NmJiODIyNjdiM2YyZTlkMTViYzQifQ"
+        },
+        {
+          "resource": "repo://backend/src/test/java/com/betterself/growth/town/companion/tools/TimelineCollector.java#L18-L28",
+          "version": "repo-lines-v1:sha256:1325f810d06fdd755190a87125d13eaaf211bc67657c7a915bf4f85b3cdbcd5b:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVhZjIyY2YwNzMyNTkyYzI0NzE0MWNiZTYxZWZhMTEwMTI2MTJmNWEzMTIyYjlhZjliYmFmNTJmNTcyNGQxOTQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk3MmE0MjkzODJiMmUxNDcxOGUwZTM3YjA1NzBhOGExNzAyOTkxZmNkODQ5OGNkODQwNjBhOGJmNGYwNTAxN2IiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjMzOGY0ODgzMDMzYTA4ODMyMDk0M2YwYWM1NmRiYjY2ZTc0ODJhOTE2ZmU0Mzk1M2Q2ZjVkMjk4Y2NhMTI5MzIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijk0M2QwZWUyZDJlNzRlY2MwMTA2N2FjNTc0NjAyYjc5MjYxNjdiYTk3NTczN2Y2ZDc1ODQ1MTBiMTU0YmY0MDUifQ"
+        },
+        {
+          "resource": "repo://backend/src/test/java/com/betterself/growth/town/companion/tools/TimelineCollector.java#L305-L340",
+          "version": "repo-lines-v1:sha256:008df90766001f5b07e9aa57f95ae0d3c7967a1f7b37dd141af15f17a9cf5284:eyJzZWxlY3RlZExpbmVDb3VudCI6MzYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImIxN2Y4MjU4MGZmMTY0NDBiZGEzODMzOWNhYTQ4NTRjZDJiYzRjMjA1Y2I4MWUwY2YxZjYxNjdhZjQwNzg2MjAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImYyYjYwMTI5NGRjNjljYjA3NTA2NGVjOTY5YTY5MzhkZWQ2OWJkZTc2Y2JlZjE0NzViYmJiN2U3ODRkMTdjOTEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImU4MGExY2Q2NzdmOWEyY2NjZmZkNjU4YjQxN2NkM2E1NjAzNTA4M2ZiOTBlMDA0NDMwYzM0MmE1YjJkZGY1YjkifQ"
+        },
+        {
+          "resource": "repo://backend/src/test/java/com/betterself/growth/town/companion/tools/TimelineCollector.java#L73-L91",
+          "version": "repo-lines-v1:sha256:9d015151e879a0b811f9939a8cba331ff029b31da6a3e78d974a2afe842f5d36:eyJzZWxlY3RlZExpbmVDb3VudCI6MTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ2NWJkMTlhZDM4ODQ1ZTFmZTMwYTVhMGY2OGM4ODAwN2U3MWUwYzUxNDlkMzc3YjVjODg4Njg5M2Q4OTU5M2EiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijg1ZDY4NWI2N2RjMzA3ZTQyYWI4ZDliYWE0ODZhMDU0MTg3MTYzNmZiYjI3MTI5NTE1ZDRmM2U2OTAyZTM5NjciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImQ2MGRjNjIyZGY2MWEzZDUxZTNiMjVmYmEyMWM2ODhmMmNkYTAyNzg1OTVlNTU3YWQ4NmZiM2E1MDM3NTk2ZTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_f3baa8b4f4924d0ab3ea9b575a63ef93",
+      "statement": "`MetricsExporter` 仅从记录的 timeline、collector 与终态世界计算指标，并要求无触发机制显式报 0；共同活动只把持续至少五分钟的非 `sameActivity` episode 计入 chosen 总数，且把每个模拟本地日期纳入分母。",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/test/java/com/betterself/growth/town/companion/tools/MetricsExporter.java#L16-L25",
+          "version": "repo-lines-v1:sha256:2232b60ec57758e11de27b47b4059f4e225c8946b787e6e70e753645a24d130d:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVhZjIyY2YwNzMyNTkyYzI0NzE0MWNiZTYxZWZhMTEwMTI2MTJmNWEzMTIyYjlhZjliYmFmNTJmNTcyNGQxOTQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImIzMzc4NjNiM2I3ODJmY2Q3ZTAyZDE0MGJhNGRlZTFlZGE1ZGI1M2M4MjNhY2U5ZDg2ZGZlZWZjZDExODUxMmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjYyNDg2YjMxODk4OWNhZTFiODZlYzY2ZWRjYWFjMmNkYzhhYmNhY2QxMDIzY2JkY2Y1MTcxMmZlODk4MWJiYzIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjYyZmQwYzFjZjBiZjdiZjY4MGIzNTYzMmExZjMwMjE4ODM3OTZiOGEwZDU4ZGYzNTVkZDhmZjA1NjMzOTg4YzcifQ"
+        },
+        {
+          "resource": "repo://backend/src/test/java/com/betterself/growth/town/companion/tools/MetricsExporter.java#L259-L327",
+          "version": "repo-lines-v1:sha256:4c356d7f7319a07cb33dfc22c0add5c07c67d92355e18e79bff36a23826f72d5:eyJzZWxlY3RlZExpbmVDb3VudCI6NjksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjMyNmM4ODQzY2RmMTVlMWUwMDE3OWVkZTAyNjE1NTQ3YTIyYThjYThjNDBmNWNhOTIzNTA1ZjBhNjMzNDk0OTciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjIyNWRjMDI2YTc4MTE2ZmZkMDkzMTZhOWQ3ZTQ1NTZkZDM5M2EwNzQzZmM0NDBlZWI5NWEyNzNmODRhMDQwZjEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImI5NjI1NGVjZjg1YTQzM2M0ZGQ4OTY0ZDliMGM2N2ViM2FhMTk1MzVjYTdhNWE4NTczYTBiMWZiOTczNTNmYTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImJmN2NlYjExMGUwNTk4Yjc5ZTlkZTQ3MTYyNmZlZTY1N2I0OWFiMDc5MDlkOWFjYzE5Y2UzNjRmYjE4NzdlNzQifQ"
+        },
+        {
+          "resource": "repo://backend/src/test/java/com/betterself/growth/town/companion/tools/MetricsExporter.java#L37-L50",
+          "version": "repo-lines-v1:sha256:5c0fcb57eaa16b0745c1f4088293deead0301b957032f60241dc3db79a858ebc:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImI4OTY0MWNkM2QwMjg5MzhmOTI0YzFjODVhN2U2YmNjYmY0ZWFlYjljNzIwN2Q2NDgxZGY5MDlkMWNjMWU0YTQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ0NjE2MDFhNmQ4ZjZjY2Y0NGRkNmU2Nzk1Yjg5ZDkwZDI1NzFiZDE5OTc4NzUyY2MyYTE4MzNjNzMyMzlkM2YiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjQ5N2RhNmZlZmIyNmZiNmM2Mzk0NDc3MjNmMjEzZDc4MDJkN2NjNTNkNmY3ODcwNzQ2ZjY1MjFkYTQ5YjU5YWEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijc2ZjJmNzkxMmQ2ZjkwNDJmMDE4OGYxMGNjYzFmMzMzNTg1NmVmMjI3NGVjYWJhOWZjMDA5YzU1MWUwZWQzZjEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_e187131b22f946b9b52cc364a56b449b",
+      "statement": "当前 Runner 对 `NormDetector` 调用只传入 worldId、排序 timeline 与 timezone；因此其 `norms.json` 不包含需要 memories 或 positions 参数的信念独立性和座位目录测量。",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/test/java/com/betterself/growth/town/companion/application/AcceleratedTownRunner.java#L635-L641",
+          "version": "repo-lines-v1:sha256:eacca40ced6e5c3dbb092967b9d588d6875e5d7e7acd8ae4047d65358465bf09:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiOTg0ODkxZWViYWYyYjUyNWUwMWM5MDIzZWI3YWRhNzYxNGRlNTMyNzdhMWNlMTBkMDgzY2I0Mjc4MmRhOTM2OCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMDA5ZGM5ZmE2ODQ3MWVmZGNhYTY2MDMyMmYyNWQzNmIzZjA3MzRhYThmNTdkYmUxYmQwYzZjMjBhNGY3MjhkMCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZDNhOWY3OThiMjI5OTYyZTM2OWMxZDU4ZGVjZTE1NjYwNDlkYTkxNmYyYTEwYzY4NmQwOGJkNTlkZTBjYWExZiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYmVjMzA0ODgwMDg3NmQ3NjllYTc4NDlkZjQzMWIzYzM3OGMxYjJkNjdhNTFjMTFlMjFkMjhhZjQ4OWVhZDE4NSJ9"
+        },
+        {
+          "resource": "repo://backend/src/test/java/com/betterself/growth/town/companion/tools/NormDetector.java#L197-L240",
+          "version": "repo-lines-v1:sha256:a1a5412987c893e9c4fffa981b85b4d1fddc290d1ca694485eccbebcae4d48e4:eyJzZWxlY3RlZExpbmVDb3VudCI6NDQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImE3YTc3OWJjNjYyYTVmNmUzYTM0Njk1OWNlNmUwOThiZDk5MDhhNTYzNWM5ODk3YTZlNDk2YTQ0NGRlNzY1MmYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImExMDdhNzc3NzRlZmNhY2VjMmY1NDJhNWIwNTVjMWM1N2Y5NjgwMTE1OGRhZGJmM2FhMzFlOTNhNGJlNDNjZGMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjVlMTFhZGY0ZmI2ZDhhYjUwODQ5M2Q1NzdlMzdiZTgwZGZlZTAyYjk5YzZmMWNlNjdkN2I1N2M1OTNiNTA0ZWMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjUxYjc3MWFjZjZlMTYzODc2NTY3YmEzNzlmM2FkMTczYzU2ODdmZDgyYWVkZGRkNWJiMjEzNmFlYTIwOGQ5ODQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_33c699e31bd74736861f79f0a74ddbeb",
+      "statement": "`NormDetector` 只将跨至少两天、支持数达到按实际居民数缩放的下限、强度至少 1.5 且非 clock-like 的候选保留；它排除 avatar，并在完整座位记录缺失或有 gap 时拒绝回答 `spotRespect`，而不是把不确定性当作零。",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/test/java/com/betterself/growth/town/companion/tools/NormDetector.java#L108-L125",
+          "version": "repo-lines-v1:sha256:a3028794b23e963474bcf77c84e69b8bb931e124c4f1d06b4d67ab5150d9fca5:eyJzZWxlY3RlZExpbmVDb3VudCI6MTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk3ZmEzYTk3OTU1NjNkZGNhMjUwNDQ3NmFjNTAwMmU3NjMwNTRiY2ZiOTQ3YjY1NjU3MWU2NmQwNDJjNDRmYTgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImI4ODUyOTY5YzhiMjIyYjhkY2YyMTRlNTBmZWJlZWZlYTYwMzc0MGE4NzhhYzcwMjM4OTE2OTQyZWE4MGFiOGQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjJjOWY5ZjA5NGMyNDM5MGZiOTE4MmRhZmRmZjZkOWZiZDM4MjMzOWJlODlhZjQ4ZjkxNzA4ZDZhMGRjOWY1MzQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjIwNTZhNTIxZTk5YjI4MTMyMzI3ZDk3OGZiZTJiNjMwMWU0YzU4ZmVhMmRhMWM2ODU0YzlkNmYwYjRjNmU2NWUifQ"
+        },
+        {
+          "resource": "repo://backend/src/test/java/com/betterself/growth/town/companion/tools/NormDetector.java#L252-L275",
+          "version": "repo-lines-v1:sha256:abc0342f10092f0228bb9f2ead93f9f8fcac82f3d0ffdd1084468a65a62942b4:eyJzZWxlY3RlZExpbmVDb3VudCI6MjQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVmMWQyYmJmZTg2MjdhYTQ5NDk1MGYzNDZkYzZkNWM0NDU1MjkyNmU4M2Q5MDM2YWU5MDhmZjBmNGU5NTVlZjciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjViNDBjNWE2MGNkZmIxNmI0MDVmMDI5ODFhNjhhYmEzM2M2MmQ0YmQ0NTI5YmUzYmQxYzRhNDNmN2VhMjE1MTQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjZmOWJmM2IwYzMxY2IzYTcyOWI0M2YxNDM2ZTJkODczZjU2MjNmZmEzZTYxYTA2Y2I0MzIwMDFkYjE3YTU5YzEifQ"
+        },
+        {
+          "resource": "repo://backend/src/test/java/com/betterself/growth/town/companion/tools/NormDetector.java#L59-L94",
+          "version": "repo-lines-v1:sha256:4e8a95d0b6864cfc0bade37277e8b43d272e634599498e8c1270302531d5aa7c:eyJzZWxlY3RlZExpbmVDb3VudCI6MzYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk1ZjZmYjAzMDUxOTk4YWMwNmJkNDZlZWRkY2JlNDhmYzAyYjNjN2QxODY1MjViMTM1OWNmYmJmY2M0YzlhYWEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImY2ZTVkNjVhNDczOWRkNTE0OWQ0M2ExMjExZjEyMjQ1NzZhMWFkZjIxOTdlZWYwNzRjYzIwMzIyMWYwMzlmZDIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjBiYTVhZDZiYThmMjUzOTE1M2NiMTk0MzM5YzQyOTA1ZGE2YjQ3MDk2NDI4MTU3N2JhNjgwY2I0MGE4ZTk4MDkifQ"
+        },
+        {
+          "resource": "repo://backend/src/test/java/com/betterself/growth/town/companion/tools/NormDetector.java#L840-L867",
+          "version": "repo-lines-v1:sha256:e229833e4d39f6c9a57b31518287a78cdddc9b67d819e734ea7bfa8206376008:eyJzZWxlY3RlZExpbmVDb3VudCI6MjgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjI1NDgwMmRmNTEwNTAxYzA0YTljMjEwNjE2YTc3NTk4YjU2ZGU0ZWUwM2NiNWZhNjQ4MTBmZTQxNTE2NDBlZGQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImUzMTljNDMwY2FmMjVjZjdlYTZkYTljNDM4YWUyNjZkZDVmZTA0ZTc3ZmI2Y2U5YzBiYmUyOTRiOWIwOTg4NzYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijk4YzE2ODNhN2JiNGE0NTg1ZDE0MDI0ODM2N2YwMmI0ZTk1NDU4ZGVkZGNkZDUyMDhkN2VjZmNhNGQyNGJjMTciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjYwNjMxYzU3MDhkMzhlZmViOTE2OTVlNzZjYjBhMGNlYTQ2MGQxNmQ1ZGExZDgwYjM5NWQxY2ZiYzI4MDI1MTkifQ"
+        },
+        {
+          "resource": "repo://backend/src/test/java/com/betterself/growth/town/companion/tools/NormDetector.java#L903-L987",
+          "version": "repo-lines-v1:sha256:54109d29e84c7e513e245ac86dba2e909c4fb5f96adbef9cf00255f0265a328d:eyJzZWxlY3RlZExpbmVDb3VudCI6ODUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImExYTVhMWIxYzcxZTcxN2Y0ODVjNmQzY2NjNzcxNTgzODAxZTQxNTJlMzI5ZjIwYzJkNDcyOTVhY2YwMTQ2NTciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjFkMDZhMjJhZmEzMzEyZTAyMjQ3NWVlOWUxNDkyOWVjZTUwYTNhODUwYWEwNmMwNWQ3NjM4MmVhZjY0N2RjMzUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjFhNDRlYWUxOGU3NzE4ZGJhNjNkYmIxNjJiMWU4NGQ4ODI5ZTI1NTM1OGEyNmU4OTlkMDk5MzJlNDY0YWFlNDUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_55f54e93cf5e49deb31ec3068362199f",
+      "statement": "规范验收将模型运行候选减去同 dimension/key 的 rule-only control；两次剩余候选相同判为 seed 驱动，不同才进入 `AWAITING_SPOKEN_CHECK`，且 `MET` 只能由外部盲读结果调用 `withSpokenBy` 达成。",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/test/java/com/betterself/growth/town/companion/tools/NormDetector.java#L1025-L1083",
+          "version": "repo-lines-v1:sha256:ed68f18db8afbe0800ab9453fd98b11f0c33e2eefdc2421b4891513ce256b757:eyJzZWxlY3RlZExpbmVDb3VudCI6NTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFiYjBjMTZhOTNiYTZlMjBhYzU1MTRlM2Q5NzcwNWQ5M2U4ZjUyY2NkNzkyYTVjNWU5NjM0YjEyMzA4MWI4ZGUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijk4YzE2ODNhN2JiNGE0NTg1ZDE0MDI0ODM2N2YwMmI0ZTk1NDU4ZGVkZGNkZDUyMDhkN2VjZmNhNGQyNGJjMTciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImNhYWQ2N2I4NDNlODY2N2UxNDczMzU5ZjFjOGE5MjIyMTUxYTYyMWFmM2JlMzdlZmJiN2IxMWM1YzFmYTUyNGQifQ"
+        },
+        {
+          "resource": "repo://backend/src/test/java/com/betterself/growth/town/companion/tools/NormDetectorTest.java#L135-L210",
+          "version": "repo-lines-v1:sha256:a4c3051b7b3b3e4d1dbfda8dfe9b109a0e321a33f6f298756be8e6582357b239:eyJzZWxlY3RlZExpbmVDb3VudCI6NzYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRjZjA5ZWIwYzU3NDRmYjk3MzMxYjk4ZmYzZmJmMDVhNjAyYmEzZjdmNjdlNWRhNWJlOTA5NTAzM2Y2MjU4MjUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFiMTZjZWE0ZjM1YTM4MTIyNzcwOGRjNTU3OTI5ZWJmYmY5ZmM0OWEzZjQ0MDhlOGFkYzkzMDk1ZmYxOWE4OTYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijc1NTY1OGU4M2Y0YTRjODMyZDA0YTYwYzRhMDZjZDg4ZmFkY2NjNjUyYjk5NGU3Mzg1ZjU4ZmU3YjY2MGUyYWMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImU4ZWFmM2UxZGIyODRmNmE2ZmQ0ZTA2NmFlMmZiNjU0YWU2OGZkZmNmM2U3ZTRkY2E0YzJkZDIxNGE0OWI5ZDAifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_5e8589b493844437879a6683eff821b1",
+      "statement": "人格盲测只从模型来源的非 avatar 对话中按 seed 去重和分层抽样，题面与答案分离；社会盲测向读者呈现可见社会轨迹而不呈现居民 belief，并允许“没有”作为真实答案。",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/test/java/com/betterself/growth/town/companion/tools/NormBlindTestTest.java#L32-L76",
+          "version": "repo-lines-v1:sha256:29cbccb2e77999f2a0c8a6f674976d65ef58ed07eb19b68b35f8783a1acd1a4c:eyJzZWxlY3RlZExpbmVDb3VudCI6NDUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRjZjA5ZWIwYzU3NDRmYjk3MzMxYjk4ZmYzZmJmMDVhNjAyYmEzZjdmNjdlNWRhNWJlOTA5NTAzM2Y2MjU4MjUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImY1ZjdjNWY1OWZjYzc0MmNjNDEwYzQzZTA2NjJjZTFjMWU2OWI5NTRkMjAzNmQ0MWFjMTcxMDQwODQyYjJhODciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEifQ"
+        },
+        {
+          "resource": "repo://backend/src/test/java/com/betterself/growth/town/companion/tools/TimelineExporter.java#L105-L196",
+          "version": "repo-lines-v1:sha256:2094740fc0f4d190e306a1bf1c7089879f376980e13b7569fad8d9c92ad429f2:eyJzZWxlY3RlZExpbmVDb3VudCI6OTIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjBkYWQ4NDUwZWQ4YjM5MzE4NjVlZWRiYTVmODcwMzZlYjZlMjVhODhjZjM1MjQxZDIzMjIwNWU4MTUxYjJkNjkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImE4ZTNlMWZlNWJiYjI3ZDcyYzdiYzU5M2RlZjM1YzM1Zjc2YWJlMmE5NDM0YTZhZjU3NTE4MmI1NjU2MzU2ZWUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImNlODgzYTkzNWVlODI5NDc5OTgyM2E5MmU3MGVhOTI2YjllZmQ3NTBmNzM4MGE2Y2ZiZWM5ZjIzYmI3ODRmZTIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImEzOWU1ZmQ3NmE5NDA5NDNiMzE3MjUyYTBjMDY0ZWZlN2NmYmIyNDg4YTA2N2E4NWMzM2M0NWFkOTgzMzdlOTUifQ"
+        },
+        {
+          "resource": "repo://backend/src/test/java/com/betterself/growth/town/companion/tools/TimelineExporter.java#L202-L290",
+          "version": "repo-lines-v1:sha256:2f7f73221aff47212f707102744ee4de59d02633faf49d8a103056fe8133c861:eyJzZWxlY3RlZExpbmVDb3VudCI6ODksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM5Y2JiYzY1NDY5ZGIxY2EyODQyZWZkOTdkZjdlZTJjZTZjYzE1NzE0ODJkMDFhMThiNzkwYTEwYzdjNTEwZjMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjI5N2UxMTFjNjEyMTJmZmI1ZGY0ODQ5YWUzZGEwM2NjZDlkMDQxYTUwMWY3NTY1YTI2ODVkZTNjNDk2YjJmMWQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjJhOTcxYzA2ZjkyOGNjMjgzYTUwYTcyMjcyMTczOGRmMDFiMGU5MDUyNjRjYjBlZGUwZmYzZWUzM2EyZTM0ZTcifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_05a73b83ff79471191d88afa38a02d3f",
+      "statement": "实验目录约定将可引用数字的真模型、纯规则对照和盲扫记录在 `experiments/`；README/results 入 Git、原始 data 被忽略，且不同模型版本的数字不得混合比较。",
+      "evidence": [
+        {
+          "resource": "repo://experiments/README.md#L1-L24",
+          "version": "repo-lines-v1:sha256:113986a352b9305968e029a7ab7e5e2fb29782a3e1ccef21ccdb0d0e298d3434:eyJzZWxlY3RlZExpbmVDb3VudCI6MjQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFkMjY2OTA1MzM4YjczZGFiYTVmZjllY2NkODFhMDhhYTkzZTk4NGMzNDk3NTNhMGEwMDFiZWEyYzhkZmU2NDYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjJmOTk1ZWQzNmY1NzY0ZDNiYmQyNTNjYjI3MjU1ZDQ5MDM5OTFlYWU5YzQ3ZmYzODYxMDlmZDY0NmNlZjA2NDciLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjIwZGM0NDE5ZDU1NjExOTI4ZjE4Yzg2NGU3YTU1YTFkMzliZTNiOTllZDM2ZDk4NzI2N2VjY2VjYjI3OGMwZjAifQ"
+        },
+        {
+          "resource": "repo://experiments/README.md#L26-L37",
+          "version": "repo-lines-v1:sha256:58a38134a57d595ab17a7c02ab71cf3c6650bbda867cae5ceca11d94ae515ec5:eyJzZWxlY3RlZExpbmVDb3VudCI6MTIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdmMGMwYmMzN2IwM2MxZDYxYjEyMDRiN2QxMjQ3YWNmMDRlYzViMGI4YTViYTRmM2Y1MWYwOGIyZTAwODk0NTgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZiZjhiMDk1NTg1OGY2OGZjZGY3ZDcwYzUwODgwODMyYTZmNWI3YmFmMjc5NzdiNjNkNmUyOWE1NDAxM2NlYzgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjA5ZTljNDU3NTM4NzFmYTFjN2RlYzdjY2YzMGJlZGM4OGFhNGE5ZmMxZDQxYTljYzQ5YTE4ZDlkNGE0ZjIyMzUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_8f22d12c149644d4841119cd045b9269",
+      "statement": "已提交的 2026-09-14 v2 rules acceptance README 将其界定为 25 人两天纯规则结构验收（2,880 ticks、0 模型调用），并明确它不是社会涌现证据；persona blind review README 将盲扫用途限定为列出预写社会预期、命中者不算涌现。",
+      "evidence": [
+        {
+          "resource": "repo://experiments/2026-09-14-persona-blind-review/README.md#L1-L5",
+          "version": "repo-lines-v1:sha256:080cc892115741f84970a5c57eb4d550319fbc76e6d133eb3e9c5cd556a7d5fb:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYTY4MmUyN2JjYjdiZWQwNzA0NDhhMGQ2OTVlNGFjYTBiZDA4YTA1MzZjOTU5MjUzMmI3YWM3MTA5NDhiYjAxNiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNmZlNTQzMDE3ODFkY2NlZWEzMjc5MGYwODI2NmVmNDVmZGQ0ZmUzYTc0MGQ5ZDljOTVlNmIwM2JmMDQ2MDYwYyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjAsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjAsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSJ9"
+        },
+        {
+          "resource": "repo://experiments/2026-09-14-v2-rules-acceptance/README.md#L1-L7",
+          "version": "repo-lines-v1:sha256:a65b9d6828519873b3ea1b57cca4fe98870e7ffc56a212c9bd44b18ec8e3aee3:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZTJiZDM5YWU4M2YyMWM3NjJjNDY0YzI0NTE3Y2ZkZmE1MzAxZmEzMGEyYjhmMTFiMTliNDk3OTUyMzliMDgxNSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMzkyZDIxMWM2NDA5NjdjMTg2MjU2NWQ1ZjE1ODZmOWEzZTgxYWQ4ZmMzY2QxZDU3YTRhMzJhMjdkMWQyMDc2NCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjAsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjAsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSJ9"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.5.1",
+    "at": "2026-09-14T13:15:33.655Z"
+  }
+}

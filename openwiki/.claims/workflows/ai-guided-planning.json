@@ -1,0 +1,260 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:3fba62bcb17ba5e62b7cabecdc0544b7bd2c82c3b56e99d4a694e763649b8fcb",
+  "claims": [
+    {
+      "id": "claim_0a51d04f09d04e1e84aa7da25fc4401f",
+      "statement": "All AI workflow endpoints are grouped under `/api/v1/ai` and derive the owner from the authenticated `CurrentUser`, including session, message-stream, goal-template, suggestion, and adoption operations.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/ai/AiController.java#L24-L121",
+          "version": "repo-lines-v1:sha256:e0cf7826dada5aa24011d7e3e1da496547a40fea96fe673fff14649cbd15ac60:eyJzZWxlY3RlZExpbmVDb3VudCI6OTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjgwMmI1ZjJkZmE2OTM5MDYxOGY2NmFkYjZiNzk2YzM0NjYyMzIxYzc3YjQwZjAzZGFiZTUwYmUyMTg3ZmU3ZTgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImFhYzlkNjI5YTVhOGI1N2RkNTIzNTQyOTYwMzIyOTZhNjI0OWZlOTI0NjA2Y2M2YWVhM2MyYzI4NjFiZmExZmUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjAwNzE1MzZjMTQxNzk5NDIwNjg0Y2VhNDAxMGY0OGQyZjdhM2U5YmY0NGRkZTA1YjdkYWU1MjhkYjU4N2Q4M2YifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_21923fa773ab42c49628761c660ac330",
+      "statement": "AI sessions are created as scene-specific active records with a 90-day expiry, while session lookup, history, and message retrieval are scoped to the owner; history returns up to 30 active sessions and excludes soft-deleted messages.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/ai/AiService.java#L271-L280",
+          "version": "repo-lines-v1:sha256:383142de8d44cbae488d70ae26eae710767dc68b6dc7c98c9b693adfbe4db5ac:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY0ZDRjYTlkZTJlOTUyZjQ2YWZjNmY2NjRmNDA5ZGIwMDg2YzE1OWJhNWE5NGZiNDBiNzlkNGZhY2VjYmMyZWMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ3ODVlNDllMWY0NDc0M2I1MWUzNGMxOGRhZjZiMjU5MGY4MWJjNjQwZjVkMGU5ZDc3ZWQzNzYyNzdkMTZiMDgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjQ1ZDBmMmY3YzhjMGMwMDU4YzE0MjE5YjRiMzRlMjYyMTgwYWJjMmFlYTY0YTE1ZjFkYTYyZGE5MWJjNzk4M2IiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijg0ZGE0NzQ2ZjE5ZTAxZDNhOWU0MjRhYzc1YmY2OWVmNDVhMjdmZjUwYTg4NDcwMzZlNGE1N2FkMDhmYWEzMGMifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/ai/AiService.java#L53-L140",
+          "version": "repo-lines-v1:sha256:7d473afeaacdbe4c9874152b62750c87a18d34bb1be8558fb81f1645e686eba3:eyJzZWxlY3RlZExpbmVDb3VudCI6ODgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc1MjYzMzA5MjNkNGUwYjVlZWYyNTkyMTEzMTJhY2U0ZWIxYjk5MDE3OGIyNjFhODVlOWViZDRhMWFlYjA5NjgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFlNzVjNzBkOTQ2MzYyNWUxMDc5ZmQ4ZmM4ZWU2MmFkMmU5MmM0MmJlYWFiZmQ4NWI3OGQ4ZTBhNDk3OWI5NGEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjExMjMxYTYxYjlmMmNiOTExNDcwNGFmNjlhMTk4ZmRhNjlhMTUyZmYxM2M2ODliMGYxZTVmZmVhZmMxM2EyNjYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjZhZmI4NjlhMjQ3NmJiMTBmMTA5MTQ0MGNkNGZjODg0MjAzMzk2N2U4OTE0YzFjNGM3OWE0ZTEwZWFlNGY3YWYifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/ai/AiService.java#L64-L77",
+          "version": "repo-lines-v1:sha256:88e3028069f76aef13fbd64bb4d54d75543049fc6e337249155861c8e7c0e2d3:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM1NjE1ODI1YWRmZjc1YjYxOGI3YzJjMGQ0YmQwOTM4Y2U3Y2JkYzNjYTZkMGEwMTgwODA3YTdjNDY5NjliNTYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFlNzVjNzBkOTQ2MzYyNWUxMDc5ZmQ4ZmM4ZWU2MmFkMmU5MmM0MmJlYWFiZmQ4NWI3OGQ4ZTBhNDk3OWI5NGEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImZkYmQyZGI0OTY2MTY0NjJmMDEzMzNjODc0MjI3ZGU0ZGM0NDFkMWJiMDU0M2E0MzI0M2EzNjYzMDk1YmY4MjUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImM4NWMxMDM4ZDQxZGRjOThkMDllMzY3OTUxMmQ3MjM1ZmJhOWE2MDgzODRkN2YzMzFlNzE4NDhjMjg5MTMyMTYifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_faa11e6121c7407cb9b02a1342acfca3",
+      "statement": "For a normal chat reply, `AiService` collects provider chunks, safety-checks and persists the assembled assistant message, then emits SSE `meta`, ordered `delta` events, and `done`; it does not relay provider chunks directly to the browser.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/ai/AiService.java#L180-L207",
+          "version": "repo-lines-v1:sha256:3de133785278d2efe1e1eb4b90cd1b4d9dc486757db4855b597cae1ec87c3ca0:eyJzZWxlY3RlZExpbmVDb3VudCI6MjgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjE2YWNhOWYxMzViNGVkN2I0Y2IxZmZiYWIxZmI5OGI5OGFmOWQ3M2YyZWZiNDJlOWU5Mjk5ODM1NGU1ODc1NzYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjBhZTE1YjVhNTM4ZjBkMTAyZDEzOGMzNTU2NTljNTMzZGZiZGVkNjY1ZmEwY2EwYzgzYmFhYWQxMDFlZDg4MjAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImFkY2U1NDM1OTEwOTk2NTA1ODU1ZmMwNjU5N2VkOTg1OTg3MGIwZDVhZjAzNjU1NmExMjBhNTAwMGNlNmUyOTIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM4OWI4MWVkMjc2ODMwYjJhMWI1NGIwZmVjYjIwODZjZjQ5YTZmNGRlNGIwMzg0NzMzN2I2ZGQ3OWY5OWVjYjgifQ"
+        },
+        {
+          "resource": "repo://backend/src/test/java/com/betterself/growth/ai/AiFlowIT.java#L59-L69",
+          "version": "repo-lines-v1:sha256:0047953c451ffac417bc18bfb566262748d18b7b70bdca7b40ec24b7ecead8ba:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjgwZjQyZjEyZGQ2MTZiZWU0ODEwZTUyNGRlMTU1NzIxN2NkNzIzMjA4NTQ0ZGU4ZmQ0YjhiMWMyYzFhYTFhNDMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjM0YjBhMzExZjdjZDYxM2RmYjlmMmEyNzQwMmRmM2E3ZDIzYTk1N2ZmMDdmYmE4MDU0NWU2ZDI0NjYxNDU2NDUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjVjMjFjMGY5MDdjNWRjY2JjOGM2ZmE0NDliZGVlNzhlNmYyODRmMDM4ZTY1MDMyZmZiMDIyNTZjNGE2MGJiMmUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_30c0ced0cb3146ec87ce7d5dac66c288",
+      "statement": "Chat input is limited to 1–4,000 characters, is persisted before generation handling, requires a published scene prompt for generation, and incorporates the latest daily status into that prompt when available.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/ai/AiService.java#L148-L157",
+          "version": "repo-lines-v1:sha256:326b9fb31a6e95e07a65aeaa37f6f22d5ee51a820cfb847682eeefa54cf6e406:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc1MjYzMzA5MjNkNGUwYjVlZWYyNTkyMTEzMTJhY2U0ZWIxYjk5MDE3OGIyNjFhODVlOWViZDRhMWFlYjA5NjgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImM4NzhhMDdmNWU3MGFhMjU1NTZlYTAwYWVkZmVhNGRmOWVmOTllZTg2ZDI3NDI3NWUwM2I3ZTk3YjRmY2FkNDIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImMwYjVkOTZjMDg0YzBkMzM3NGUzM2I1NzBkYzlmYjI3YmVkYzBkNWRlMjY4MmRhN2YyYzIzN2Y3NmU4MTdlMjkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImU1NjgzYTVlNzQzNGFlYjMxNWJlNDQzMjE5NTliMTZmMzUzMzA4ZDZlMjg1ZTQ3OTI1NjRlNmRlNjFiOThjN2QifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/ai/AiService.java#L283-L312",
+          "version": "repo-lines-v1:sha256:f5c1932e857f3a815682d9bf8eb10f599ae5f73df28f2813a6b91f228c6b55d8:eyJzZWxlY3RlZExpbmVDb3VudCI6MzAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjJmMjZkMDQyNDc3Y2IyMzM5OTVlZGJhNjFjNWRlMTQwZTJmOTQwNjVlMmQwMjlhZTdhZmQzYzcxNDBhMTE5MTciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjBlZDUzODQ0OTg3Njc0ODJiZjkwOTM4NWQzNmJlYjg1NWRiOTlmMTgyN2Y2MDU4ZTUwOTc4MzVkNzRhYWU3M2YiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjdhZjliMjZlZTY4NTNhYmM3MWVkOTUyMzU5M2ZhYTMzYjhlODRhNTg1OWRmZjFhYWE5ZWIyNzc0MDlkNTZkZmQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImZiMDNlYzZhYjk3MTMzN2JhNWMyMmMwNzk5OGRhOGU1YjMxNzE5Njk5ZGI2YTk0YWI2ZTVkYzQ4MGY0MjllNGIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_28ad2e11aed2429592d15e05bbf323bb",
+      "statement": "Safety permits generation only below L2: L2 and L3 inputs result in persisted blocked replies and safety/done SSE events, L3 uses the crisis response, and generated output is independently checked before any response deltas are emitted.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/ai/AiService.java#L155-L207",
+          "version": "repo-lines-v1:sha256:84505b4b7caf3016d1852d1ecc057a576638dcbc19e0d9277e5be585f9d908fa:eyJzZWxlY3RlZExpbmVDb3VudCI6NTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU4N2UyODRkOWM5ZTlkNzViODNmNjg2M2UxMjZkOGY4Yjk0MDM1MTgxMDhkZjNmNjQ3NWEwZTFhODQzZTBkNDUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjBhZTE1YjVhNTM4ZjBkMTAyZDEzOGMzNTU2NTljNTMzZGZiZGVkNjY1ZmEwY2EwYzgzYmFhYWQxMDFlZDg4MjAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE3NDJkZmVhNmUwM2Y5Njk1ZWM5ZGY1NjcwYTI3NDUxMjc2NGY0N2NiOThhZWYxNjQ2YzJkNmQyNzEzNDQwZGMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM4OWI4MWVkMjc2ODMwYjJhMWI1NGIwZmVjYjIwODZjZjQ5YTZmNGRlNGIwMzg0NzMzN2I2ZGQ3OWY5OWVjYjgifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/safety/SafetyService.java#L16-L31",
+          "version": "repo-lines-v1:sha256:1cb18b4176d95afd1aeb721698b0cc5bff834870da6fcf5834078a1f5e942d09:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImE3ZDYyYjRmYjBmZDBlYjc2OGVlMTZjM2I0ZWI4MDQzMmVhMTY1NjkzMDg4OWYxYjBlNzEyODRkMjg4YTA0NTMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImNhMDAzNWE5YTNiOGQyMTMwZGVjYzJhNTQxNTUxN2RhMDczY2YzZGI2ZTM2NjA2NDI5MmIwMzM4MDgwZmNiNjciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjFiNTQyZDlmYmY3OTg5NDk0YWZmZWQ5YWY2YTM2MWY3MzVmZTRiMmE5NGJlZWMzNDdlMTMzNTQxODA3MWMzM2MifQ"
+        },
+        {
+          "resource": "repo://backend/src/test/java/com/betterself/growth/ai/AiFlowIT.java#L102-L112",
+          "version": "repo-lines-v1:sha256:549975f4e53524db1210b5e8a0fa579fa29e1933a33b373165014687c5896423:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjJmYTk5NDI1OTMwMzZiMmE3NDVmNGMxNWU3NjQ5NWQwMDM0NjIzZTAyNTM1N2YzN2Y4Y2Y2YzQxZmFiMTZmNjQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjkxNmNjMTUxZmIxNTE2MmVlMDdmOWZiODhhOTBkODcxNGE5Y2Q0YjBmYzY3ODI1NzBiMjRiZGFkZjRlNWI4OTQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImI1OTAzZGIwODUwZjJjY2Q5YWM2YTljNWY2MGY1M2UwNmVmNGUwY2E4MzMyNTY0MzBjMTUxMTRmNTI2ZWI0OWQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjU5NjNhN2IxMTk3ZWViMzY0Y2IxNjZhMWIxNTNlNDNjMDg0OTIwZjZiNjQzNWYzNzYxYjE3ZWY0MmY1N2I2NjgifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_0af3657364fb469883b121daefe8d811",
+      "statement": "AI messages persist model/request/token/latency metadata when available and expire according to the user's AI retention preference, defaulting to 30 days when that preference is null.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/ai/AiService.java#L238-L269",
+          "version": "repo-lines-v1:sha256:481960691ce5f684208b5e0c9cd6f0a38385fe8ba8fe8aa7731ad9e3612519ab:eyJzZWxlY3RlZExpbmVDb3VudCI6MzIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY1Nzg4OGQwYTQ2ZTlkZTAwYzcyZGFmMzQ5YjEzZjcxMWIxZTdkNjQ1MmJmNzU4Yjc1NWEzMTllNjlmOTAxNDciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjlmNDYzNzU5MjZlYzlhYTVhZjIxZTdjYTMyNjc4NjRhN2M4MGM1Y2NhMDQxY2UyOTUyNzBhOTYwNzYyOGY5YzAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijk2MzdjODM4OGU0M2JkNGEyMTdmMDJiMjc1MWYyNzI4MTU4ZDVhYTUwYjAxMWUxYjc3YjM0MjNiMGY2ZWNmMWMifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/resources/db/migration/V1__baseline.sql#L338-L365",
+          "version": "repo-lines-v1:sha256:3c87c3539d18a89c00e431b5bbe76c35fba7e95cda8eef552b7dc7af22969026:eyJzZWxlY3RlZExpbmVDb3VudCI6MjgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ3ZTllMGZjZGE4OTUxN2RjZTI4YWFiZTFkYTUwOTJkOWMxNjdkNTIyMjhjM2Y0Mjc5YTEyMTVmZTU1ZTVhYTQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk5YTNlOTViOTc5M2E0MzJmYzU1ZDBjMGI1MGZiYjU3ZDc5ODAwZjkwODY4NjBlMjZkNzdiMzE2NmQxMjIwZTAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImJjMTU0NDJiNmRhMDE4MDQwNWI3NGI5YmIxMGFjMzUwNDhkMjliOTg4MTJjYjcwMTBmOTAyYjE5NzY0NjdmNmMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjJhYmQ3NjM4MjU1NGVmNWVmMzZkYzM2YjI5NzQyODlkZjRlZDQ3MGJjZTA0YjdmNTJjMjZlM2Y2ZDM0NzJmMTEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_ad698237f712499884446ded8f55ef3c",
+      "statement": "`QwenProvider` separates streaming chat from structured generation; the default configuration uses the mock provider, while the qwen HTTP provider validates key/base URL/model and sends authenticated OpenAI-compatible requests to `/chat/completions`.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/ai/QwenHttpProvider.java#L171-L198",
+          "version": "repo-lines-v1:sha256:349f113f92dce4eff15621b8c72bb694c1213ee7d2835746718338cff86bbd5d:eyJzZWxlY3RlZExpbmVDb3VudCI6MjgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjlkYjJkMGE2NDhiNGEyNzRmMGVhMTZjOWE2NDYzOWQwNDBiMmE1ZDY4ODUyOGMxNTg4ZDdlY2NlZDhlN2UwZWYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAyNTA5Y2VjYzczNGFjZTgxNTQ4ZjA0YjUwZjEwZTU0NWVlYTNiNjdhYjU0N2ZhNGI4MDQzNjgwZGU2MjIxMzEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjU4YzJhYjNmNDZmOTA2YzQzYTA1N2NiM2U4MDUzOTU0OThlZjkzNWViNzc1MDgxMzk2YWYwZmY5NTk2NDdjZTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM2OTQ2ZTEwMWU1ZTc4ZDkwYTUxMGM2OWYyNjZlZjc2NTQwZDMwOWIxYjgyMjY5NWI1MzE3MmVkMmNhYTAyNTkifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/ai/QwenHttpProvider.java#L360-L387",
+          "version": "repo-lines-v1:sha256:5b08f12c9622598c68fe870c09dcac1498a537c1f1bde23db461936bde29c681:eyJzZWxlY3RlZExpbmVDb3VudCI6MjgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjJkM2MxYTEwMTllNWE1ZTRhZmEwMzczZGQ0OWZiMDg0MWJhYzUwNTE0YzZkNDM2MjJhMWI3N2VhNzYyYjg5MWQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjkzOTBhZDc3ZTczMjc5YWVhZWIxYzQ4ZjlhNGQwMTRjNTg1MWE2NWM1YmRkYjFjZWExNTFiYzY2ZjIyYTQ2NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImNkMTUyMDAwMjBlYzVhYmQ0YjM1NjgxYWMwMmNlMTQ3Yjk4ZGVmN2FmZjczOGRlYmRkYThjMDYzNzRjZjZiMDciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImI4ZjAwYjMwYmY2ZjIyYjU0MjA3NWVlM2YxMDgyOTllNmQ5MDFjZjYzMmQ4YzI0MjNiNGUwMGNlYjlkMjA1NDYifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/ai/QwenProvider.java#L7-L13",
+          "version": "repo-lines-v1:sha256:9246d66c9b40e773c7c3da575adc6fa1d37bf77ea7bc7cb4415689524dcc620e:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZDY4YTAxNjdhYTViMmRjZDQxN2QwNTE0M2E5MTcyNjIxZDdlZmRmYzFjYzc4MTc0NDFkMmUxZDRmZDViYWQwYiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMzEzM2RjOWE1ZjE1YWJkMDVmODJhN2FiNzE5ZjI5Y2E5MTc3ZmJlYzdlMDEwMTc3NTA4MTU3Yzc4ODMxNTdiNSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMWVjMzY4NTZlNjIwYjgxZmRhODBkOGJkYmUyYzQ4MGM4ZDdlYjEyMTE1M2M4YjM0N2I4MGUzMWQxOGNkOGRmMiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZDg4OGQ2YTVlNDQ4NWQwZTliYmFhNmFiYjEwNjRkYjk4Y2E1NDdlZDkyY2VhMDU1NmYwOTcyN2VkMjNhOWVjNSJ9"
+        },
+        {
+          "resource": "repo://backend/src/main/resources/application.yml#L77-L90",
+          "version": "repo-lines-v1:sha256:22af1f2318daf9a72cf0e3a77b302c65861ee937aca2e843b37843d7d757ac17:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImE1Y2IyY2U5MjRmNTc2YTE2OTg0N2RmZDE3Njk2YTFkMDMwMGQwYjIyNzRmZTA5Y2M4MmI1MTk0OWNmMmNlOGIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk2MWQxMGMxOGUyODVhN2QzNzE4ZmRhMjI4Mzg3N2RhNDZlYzRmYTExODdlNDZmYzkwNWRhOGJlNzFmZGIzNTgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjEzN2U4YTZiYzI4MDZhYmFjYjE5MmU5ZGE5MDM2ZDQ2ZjBkMzk3YTUyNzZmNjRhN2U0NTQ0OWJiNTg3ZWQ1NTEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQ3YjI3YTY0Njc2NDVjODVjZTAzM2YzMDk0ZjNlYTBiZjhlN2FkMDIzNzMwM2JhNDNiM2RiZWJlOWM0MGRkZmQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_cb358113e7464fa38c493bd54cc47296",
+      "statement": "The HTTP provider rejects empty successful streams, maps provider status failures to safe application codes without exposing provider response bodies, and structured generation attempts one JSON repair after invalid JSON.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/ai/QwenHttpProvider.java#L201-L234",
+          "version": "repo-lines-v1:sha256:6d9f1d0134b02064e2614e3bd227ff4ff628a3b35c7d1c5e24fe14842f39b489:eyJzZWxlY3RlZExpbmVDb3VudCI6MzQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVkYzJiMzExYWJlODc1NzJlOGE3Y2MwZDk5NmE2NTg0NDA3NmU1MjMyZDIxYjdhODU0NzVmOWI0MDU1Yjc0OTIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjhhMzdjNWFiYzllODE1YmZkNzAyNzU1OGE0NjdmZDQyMmM5ZDY4MzFjMjI0MmVjZmEyZGM0ODJiYzQ1MGRjYTgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjgxMzRkNjAzNmNjYzU5OGE5YTQ3MTNhZGU3ZmNkMDNlYjhmNGQwMmVhYzQ3NGQxNzU0NmI1MDZmZDg5ZTNhZDcifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/ai/QwenHttpProvider.java#L272-L315",
+          "version": "repo-lines-v1:sha256:2426e5b0debe7e43f4ee3f3b671c33e3b1940082e4fdb2232ce4905b777f6cf6:eyJzZWxlY3RlZExpbmVDb3VudCI6NDQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVkYzJiMzExYWJlODc1NzJlOGE3Y2MwZDk5NmE2NTg0NDA3NmU1MjMyZDIxYjdhODU0NzVmOWI0MDU1Yjc0OTIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijk5OWJkZWZlZWFjYTYzNDBlMDI5MGRjODZlODg5Yzg5ZDVlMTg5YWE1YmE0NGI1ODViM2I3MDczNGY0YTYyZDgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjNlNWQ3OWM2ZTExNmYyMTY4Y2FjMmMyNTQ0ZDRhZDhjNDhiNTQ4ZDNmMzkzOTdhNmZmZGViZjM5ZjQ5ZDY5NWUifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/ai/QwenHttpProvider.java#L439-L450",
+          "version": "repo-lines-v1:sha256:130db2289bc207e2662a8ab3cf43b082335cc176f88334af3a1b4fb00eab9591:eyJzZWxlY3RlZExpbmVDb3VudCI6MTIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZiMGJkOTY1YWMxYmY4NjU5NjMxNDRiYzg2NjkwMjNlYWJiNzAzMTcyOTQzNjNmYjFhZWViMmM5MmIyMzRmMzMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijk5OWJkZWZlZWFjYTYzNDBlMDI5MGRjODZlODg5Yzg5ZDVlMTg5YWE1YmE0NGI1ODViM2I3MDczNGY0YTYyZDgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEifQ"
+        },
+        {
+          "resource": "repo://backend/src/test/java/com/betterself/growth/ai/QwenContractTest.java#L295-L326",
+          "version": "repo-lines-v1:sha256:b19dfb3c5808cd123f080cca46ccda01144ee8ba88c95766e48f2cc6a064daa5:eyJzZWxlY3RlZExpbmVDb3VudCI6MzIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRjZjA5ZWIwYzU3NDRmYjk3MzMxYjk4ZmYzZmJmMDVhNjAyYmEzZjdmNjdlNWRhNWJlOTA5NTAzM2Y2MjU4MjUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjcwMTg1MDc0MTU1ZmU1OWJhMGVlNTAyNDczMzE3YmZlMzkzYTViZGI0MWYyZDhhMzcyZDlkNzQzMzEyYmNlNDEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjkxZTkzMTczNjcwYjFiZTNiNDAyOGE0MzkxY2NmMzExMzllNDVhNWYxNGJlZGQ1NjE2ZjJiN2RlNzViOTI5NTIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImU4ZWFmM2UxZGIyODRmNmE2ZmQ0ZTA2NmFlMmZiNjU0YWU2OGZkZmNmM2U3ZTRkY2E0YzJkZDIxNGE0OWI5ZDAifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_6fbe491e227d4dffbca4c4e021e608bc",
+      "statement": "Goal-template generation requires an owned non-deleted session with completed messages, uses at most the latest 12 messages capped to 12,000 characters, safety-checks the conversation, and validates a structured provider result.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/ai/GoalTemplateService.java#L117-L144",
+          "version": "repo-lines-v1:sha256:9199880dfc8a5f96a0fc31f57c96a0308cac01c2fc1c041aab6e80376696661d:eyJzZWxlY3RlZExpbmVDb3VudCI6MjgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImIxYjFlODNmNDM5MTE4MzU0MjA0M2I2MDFiNjc2ODQ4OWFlOTNlZmY2YzlhODRmZDIyZWMxOGFjMjRhYWJmNTgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjM3N2U1MmU2ZGFkM2U3MzJlOWMzMGQ4YTg5MjI2NmE0MGE1MDEzMGE1MWQ3Mzk2ZmQ0ZTFjODkwM2FiMDczZmMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjcxNjIzNDlhZjlmOGM0ZmJiM2NlMDExMmY0NTBhMDBmYjJlODNhODM4NzE0MTFmODIyMTE3NzBjMGQxMjE0MWQifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/ai/GoalTemplateService.java#L59-L103",
+          "version": "repo-lines-v1:sha256:9a250b917dba9e44bb8526c4bab1b0058656d26f9c86def0d0e8fe8e9be69817:eyJzZWxlY3RlZExpbmVDb3VudCI6NDUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdmMmZiY2RhOTdhYjU2M2ViM2QwMmZjOTRmOGMxNTZhZjQzZmYwZjJmZjA4ZDk4MGQxYzg1NGJkZTk4OWY5YzQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImM2ZWVlOWUyY2QyM2U4MTRhOGFjMTE5OWYzY2Q1ZmViNzVkZWU1MDBjMGZjNjA0NjZmNWY1NmIzMjBlZDg1NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImNiNzQ5YTE1MjYwZjEwOGMwMjlmZTFkMDMxNTk4ZTM3YWVkMzNjNDNkNTFhOTQ2ZmUxZmE2ODM4ZmE1OWIxNjAifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_b2ebf247c13d4a17915cd50e02f996bf",
+      "statement": "Goal-template parsing normalizes supported dimension aliases and clamps duration to 14–84 days, starter-task minutes to 5–60, and difficulty to 1–3; invalid output fails as `AI_INVALID_GOAL_TEMPLATE`.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/ai/GoalTemplateService.java#L117-L180",
+          "version": "repo-lines-v1:sha256:154c90a4b53a155768c79f47f2c414c15d9bd7486f0ef7272f77c64960c929be:eyJzZWxlY3RlZExpbmVDb3VudCI6NjQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImIxYjFlODNmNDM5MTE4MzU0MjA0M2I2MDFiNjc2ODQ4OWFlOTNlZmY2YzlhODRmZDIyZWMxOGFjMjRhYWJmNTgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjM3N2U1MmU2ZGFkM2U3MzJlOWMzMGQ4YTg5MjI2NmE0MGE1MDEzMGE1MWQ3Mzk2ZmQ0ZTFjODkwM2FiMDczZmMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImU1NzU4MTQxYjcyNDAzYzkxNTdiNDAzYmI0Y2QwM2VlYjE4ZjhjNjc0YTY0YWQ2YWY0MDJkMGE4Y2UxNWE0NmUifQ"
+        },
+        {
+          "resource": "repo://backend/src/test/java/com/betterself/growth/ai/GoalTemplateNormalizeTest.java#L15-L57",
+          "version": "repo-lines-v1:sha256:716d2ca1d9d626c0cd3e56b078664fd76ee9b12a227b8b8103b8357d8393325b:eyJzZWxlY3RlZExpbmVDb3VudCI6NDMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRjZjA5ZWIwYzU3NDRmYjk3MzMxYjk4ZmYzZmJmMDVhNjAyYmEzZjdmNjdlNWRhNWJlOTA5NTAzM2Y2MjU4MjUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijk2OWZlN2M1NmJhYWI0YmUwMzczNzFhODk2NDBkMDE5MTkxODcyZmU3NDQ2ZjhiOTE1MmUxMTRkNzZiZjc4MjIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_cadb0d88840e447c919ac773ee36151c",
+      "statement": "The AI goal draft is editable client state stored in `sessionStorage` and consumed once by the goal module; only after user goal creation does the client create starter tasks through the ordinary `/tasks` API.",
+      "evidence": [
+        {
+          "resource": "repo://frontend/src/modules/ai/AiView.vue#L197-L214",
+          "version": "repo-lines-v1:sha256:03aa8247a650d293dc67eebe07fece057ef27b6e37a1770b5112a263b47160ed:eyJzZWxlY3RlZExpbmVDb3VudCI6MTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImYxY2RjMGQ3MGY3NzYwYWMxNDA5NGI0NDVjMDQxMzIxOTQ4ZTczZjIzYjg5ZDBkMmI2NzVkZDM1ZTgyZDkwOTAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImZiNTgwZTk2NGY4M2E0NzNmNDNkNDQzODQ2Mjk0OWQ2OGI1NjAwZmRhNzg3ZjE2Mzc0NWQwMGRlODljYmYzNmEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImE1YTM1MWI0YmFiYTlkYWJiZmFiZGYxMWFiMGVkMTk1Y2NhNzhiNTFlZjFkYzc4ZTZjZWZiNzdiNzlmZmM3NzgifQ"
+        },
+        {
+          "resource": "repo://frontend/src/modules/ai/goal-draft.ts#L19-L49",
+          "version": "repo-lines-v1:sha256:95c283d134b7f53e266be17b148473511fe56675ca787d7c625196ab1c870854:eyJzZWxlY3RlZExpbmVDb3VudCI6MzEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjNlNjRkMzExMTlhNTEyMWNjMGU1Y2YxOTBlNmI1YTAxNGQzNzUxZTg5YWUxZmNjZjIyOGQ2YzgyY2UxYzdhNzUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjI3ZTU3ODhkNWQ5ZDczZDI0YTgxZGJjMGE1YTc0YmZhODJjOWMzYjNhZjk5ZTUyYWY3OTZlOTBiNDY4YThhM2QiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjUzYjkzMDQ2NTViNjIxZTczZjAwMDMwNDQ2ZjY5ZjhiNzNiODkwNzQ3MTYwY2I4Y2UyYzQ0OTljM2YyOTAwYTgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEifQ"
+        },
+        {
+          "resource": "repo://frontend/src/modules/goals/goals.logic.ts#L454-L519",
+          "version": "repo-lines-v1:sha256:f1d12c217a90e8133403930807fdbe22d0e9398acb215daa70e90c83a496afc5:eyJzZWxlY3RlZExpbmVDb3VudCI6NjYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdmM2UwODlkNzQzMGViOTBhYjE4ZWIzZGQ5ZTQ5Y2JlMWQ2NzllM2ZiMGQzYWFhMzkxYjQ5YmQwZWZjNWMyNzAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjgyNmY1ZDRhY2Q2Yjc3OTIyZTA4MGM2N2VkNjZiMGQ5MjI1ZGRlZTBmMDBhOTA3MzljNTlkYWMzMjM2NWE5YWUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImE4MDVkYWQyNWYxMzNjOTRhNWM4YTAzMjc5ZjFhZjZhNGE5YjZhZjk0NDllMGQ0MjFiNjQzZmE4MGU5YjY3OGUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjcxYzhiYmYxYmVlNDY3ZTAzZDc0ZDJmYzM1NzBkNWU4NjNiNGIwNzVkMmI2NGQ2MmMxNWYyZjM5ZmMyMzJiYTIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_1ea7c4090bcb4166a8e2a1501975fbcd",
+      "statement": "Suggestion generation requires a safe prompt and an owned active goal, validates model items against active user dimensions and quiet hours, and persists a `CONFIRMED` suggestion set with a 30-minute expiry and provider metadata.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/ai/SuggestionService.java#L253-L301",
+          "version": "repo-lines-v1:sha256:f08c673e4f27da1f6ef84ff92161cded1cd1ae69d74ef4333accdba079f48f2c:eyJzZWxlY3RlZExpbmVDb3VudCI6NDksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY2MmMzYTM4MmQ3ZGM2NzI5MjMwM2VjYzA3OWZjMjA3NjliOGUyMzJmM2E4ZTMyYmI3MTg0M2RlZTYwNDNmMTciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImZlOTE4MDg5ZTE5MzMwMDcwNzVlZTc2N2NhNmQ2M2ViYmY5ZWYxNzIwODYyNzU0YzgwYWI5Y2U1ZGI2NDIzMTAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImVlZThkZmU3MWM5NGFmZmE3ZTQwMGRiZjdkOTVjNWEzMGIzNzFkNGQyODgyMjJiMTk3M2Q4MjQwODVlNjVjMGIifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/ai/SuggestionService.java#L94-L134",
+          "version": "repo-lines-v1:sha256:92ca4b8ace9bd3113cb8f6195af104b548f586bca085a72aa3e516d6c1c1b5e0:eyJzZWxlY3RlZExpbmVDb3VudCI6NDEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc1MjYzMzA5MjNkNGUwYjVlZWYyNTkyMTEzMTJhY2U0ZWIxYjk5MDE3OGIyNjFhODVlOWViZDRhMWFlYjA5NjgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE1ZjgwZmJkZTFkNzFmNWM4YzJkNWJhNzdiZTM2MWFiOTljZWE1ZjI2OThiZGQzZTYwOTY3MzVhNjIwZjEwZmMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjU0Y2M4ZDljNTIwNzMzZTJkY2EyMWJlMmQzNWZlZjRjNzBlYmU1NDhhYmVkNzRmZjEzNTdlNzM2ZTBkZGU3MTcifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/resources/db/migration/V2__support_tables.sql#L15-L60",
+          "version": "repo-lines-v1:sha256:5eba61fc338a93fb8b1c0bb6ca162845694f3f0891b4dc706101265b44f863b8:eyJzZWxlY3RlZExpbmVDb3VudCI6NDYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImNmZjA1MDRhNmE4OGNkMTBlMDk1ODQ4NmY1MzlmZTI0ZjhmNWI1YWY3MWE1NmZjYzYwZjNmNjIwMWU2ZTgxNDEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk5YTNlOTViOTc5M2E0MzJmYzU1ZDBjMGI1MGZiYjU3ZDc5ODAwZjkwODY4NjBlMjZkNzdiMzE2NmQxMjIwZTAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImQzNGEyYjJlNjkwNzhkN2IyNzI2Y2NiZTAxNDIyMTk1Zjg3NGEzNDFiN2ExYTFlMWMzOWQ0MmZkNDFkNWU3MzEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImNhYWNmMzIyMTE5M2JkNDBjNDQ2ZTFjOTQzN2NlZTYwYTBmZjIyYTQ4ZTFkMjRmYTkwOGU5NmQwZTZkODliNzMifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_a9c264b07cfe41b59cc814c05843fd9c",
+      "statement": "Suggestion retrieval and adoption are ownership-scoped; adoption locks the owned set, requires an idempotency key and weekly plan, converts selected or all suggestion items through `PlanningService.createTask`, links adopted items, and marks the set adopted.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/ai/SuggestionService.java#L136-L222",
+          "version": "repo-lines-v1:sha256:2f75e73a6e073a3c625c3726f1cff31c96a4ceeb990aaf273248036c1f9ad1c3:eyJzZWxlY3RlZExpbmVDb3VudCI6ODcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ3NzRmZDFmN2I2MDNkOGRjMzEyNGZmYWE4OGFmNGQ5M2I2OGI5YjFmMDI2NGZiOGU5Y2Q1OGU2NDAxNzVjYTAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjVkMDkwNTIxMDIzZGYwZjQzZmEyZWIzZjVlOWVjNmNhZjlkYjg4NjU0NWNmNjVmMDg5MDNkY2U3M2Y1N2MxYjkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjlmNmMyMTBhMjQ1MmRkOTgwZTgwMDhhZjJjZTdhODQwYTRlMTQwYzQyY2VmZjllZThlY2QxYTQ2Mzk3NjlmMGEifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/goal/PlanningService.java#L9-L50",
+          "version": "repo-lines-v1:sha256:1100dae4d731b728d6dec938d76b941b587988799b98f10592877b5bd9866bd7:eyJzZWxlY3RlZExpbmVDb3VudCI6NDIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFmMzNjMWZkZWQ5NGU0ODNjMzMyMWJhNmI5ZDY1MjU3YzJlYTRlOGRjZTFiOTllMzYwOGI5ZTBjYzZjNDA2NDkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImExYTNjYmZjYmE3ZGRiYjZkMDNlY2EwNmU0ZGM1NTYzZmUwMDFiZDJiYTFiM2UxYzY4YzNiYmM3YjRiYWI0MGEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjA3MDc4YjI2OTU3YzhhMzg0YTVhZjM0NTQ4ZTIxNTI1NTZjMjIxOGI1NDg0NDMxMGQzZGU4YmE4MTU4MmUwZGYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzMDEyNmUxZWYxZjMwNjIxOTQ0ZTVmNTlmZjQxYTc3NzAwZjFmMGNkMDA0YjYxYmE5MDBlNmMyMDRiNmVhNTcifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_1195963feeed4f86971c264de6380c53",
+      "statement": "Suggestion adoption replay is safe: idempotency records are keyed by user, operation, and key with a canonical request hash and 24-hour expiry; an identical completed request returns its stored result, while a changed body or in-progress original request conflicts.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/ai/SuggestionService.java#L172-L221",
+          "version": "repo-lines-v1:sha256:51f4747318da1643ac0a44fc2f5a8ef5181bab467336113b4509e335526df389:eyJzZWxlY3RlZExpbmVDb3VudCI6NTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc1MjYzMzA5MjNkNGUwYjVlZWYyNTkyMTEzMTJhY2U0ZWIxYjk5MDE3OGIyNjFhODVlOWViZDRhMWFlYjA5NjgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRhY2YyMTk0MzIxZmY4Y2ZhOGJjMjE5ZDdlYzY0NjJmNzc5MDA4Y2FkNzg1OTJhYTM4ODc4OWFiZjgyZjJjNmMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImYyZDgyOGEwMzdhYzFjODE1MzViMWQ1NTAwODMyMzIzYmZiYjg2NmEzYTNmODdlN2E2OGMxM2EyYmFlNTZmZmYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImI4NDhmZWZlYTY3N2Q4ZTNkZWM0N2Y5NjE0MjdhZjAxNzE2MWFmMGI4MWE0Mzk4NmM5MDc4MTg5MDk2MGU1MzUifQ"
+        },
+        {
+          "resource": "repo://backend/src/main/java/com/betterself/growth/execution/IdempotencyService.java#L32-L75",
+          "version": "repo-lines-v1:sha256:fa30604fac82fba653023524fa7f3c90f7f0a87db3ca78fe996770f55200f842:eyJzZWxlY3RlZExpbmVDb3VudCI6NDQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFiNTVmYjFjNjVlNGVlOGQ1YTdhODNhMzk5NGY2MTc4ZTFmMmJmNmIyOWQ5NWNlYTk0YTQ0YjIwZTY0ZDU5YWQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE1ZjgwZmJkZTFkNzFmNWM4YzJkNWJhNzdiZTM2MWFiOTljZWE1ZjI2OThiZGQzZTYwOTY3MzVhNjIwZjEwZmMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjZjOTNjYjlmYjFkZjNmOGJhOGEyNGYyZDA0NWE0YWQ4ZjkwZGMyMThkZmMwMjhhMGRjMjZiZmUzM2ZiMjNhOTEifQ"
+        },
+        {
+          "resource": "repo://backend/src/test/java/com/betterself/growth/ai/AiFlowIT.java#L126-L144",
+          "version": "repo-lines-v1:sha256:15fcbad660e5df2bc4fc5ab332d0d63507b886dd5cfdf9a4717fd544c97efb3c:eyJzZWxlY3RlZExpbmVDb3VudCI6MTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjBhYTcxNTEwZTNiYmZkMTJlNGVmNDZhZjhiYmI5MzFhOGIyMWRmNThhMGU3OTRlZTg0YjhjNzllOGMxMDFmNjIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjNmNzI4MjMwMmQ2MGMxZWVkZDY4ODBiZmE1NTcxYzQ2M2JkODIwMDM2OTQ5MGRjNDNmZjVhYWE1MjM5NjIwMmEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImU0OWY0OTk2YTA5MGU4ZDNhNGY3NmI3OTZkZmRiOWExNzJmZDFhZGZmOTZjN2Y2NDE5ZjhkMzM0NTE0YThkMzEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjJmZWExMmZmNzRhYTZhYjM5N2Q0ZWFkYjUyZWE2ZDg5ZjVhZGQ1Nzg2YTI3YjVlMDc2ZGM2OWZmOTQxNTc2NDgifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_46c7f39327d748539d8817b4c8f19831",
+      "statement": "Focused coverage spans MySQL-backed AI flow integration with the mock provider, frontend AI safety/history/draft rendering, browser authenticated SSE acceptance, and the global verification script's backend/frontend/browser/API/database/Redis/log checks.",
+      "evidence": [
+        {
+          "resource": "repo://backend/src/test/java/com/betterself/growth/ai/AiFlowIT.java#L27-L34",
+          "version": "repo-lines-v1:sha256:290a4df35cae5c339ea52098252d811a025687eebfca6a14744b52c6b281fc6f:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYjNiNmFhNmIyZTQ3MzM0NTU3YTY0YzJiM2I4MWM3NGY0M2U4OTA2MTM5YjE4N2E4ODBhM2U1NWRmNzMwZTI2MCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYzQ3OGI1ZGFjZThlM2I3NDE2Zjk4MWRjMzZlY2Q0YTIyYzU3MzdmNjBiM2E3N2JjNThmMWIwYzFjMTRhMmJiMiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNjNhMjYxMWIwMzViOTJhYWU3OGVmM2UwNmVkN2JlOGE3ZjhmY2UyZjQyMzIyMzUxMzA0MTJkYWRiNzk5N2M5NyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYmE0ZGMyNGVhZWNlNjYxMTc2NWFmYTExYmZmNTFkMmNhNWE5ODYyYWQxMzM1YzIwMGY1MTU4ZjhmOGYzMTg5YiJ9"
+        },
+        {
+          "resource": "repo://e2e/ai-assistant.spec.ts#L3-L22",
+          "version": "repo-lines-v1:sha256:994ab900a93aabee0f6c4cd684d6f27e19e110fece9fffa7d664e79a78390dfb:eyJzZWxlY3RlZExpbmVDb3VudCI6MjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjYzODBmZTFkMTA3OWUwODc0YjIyNWU3MDE3NDc4ZTBmMDk1OGMyZjE2OGQ0MTZmY2IxOGY0YmQyMDdkZTRhZmQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg1ODBiNzY1MThkYWU5NzlmYWViZDAyMzY3YTI5MjkyYTUwZDk3NjA5MjI1MWEzOGE2Y2UzMDg4MGJhNDI4MjUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjoyLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjYxODEwMGU2YzJjOTQyNmY4ZWU1YWFjYjZmNjM3MmM5MGI0Y2IzOTg1YTdkMGRlYmNiODkwY2VlMTlkYmRmMGIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        },
+        {
+          "resource": "repo://frontend/src/modules/ai/AiView.test.ts#L13-L124",
+          "version": "repo-lines-v1:sha256:ca333ace53444ce1e558de4e3ade8f094c6b45b9d7616f238ab03a1a6ab77c59:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEyLCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiI3MDA4NDgwNjY2ODhiMzc2MTAxYjE0Yjk1ZjcxOGRiNTVhNTBiYjI2YjljNzk4N2M4MzVmOTZhZjU5NTIyYTQyIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiJiMjM1MjU4OWMzNGQzYzYwNjg1OTMxYjZlY2M0ZDUwOTkxYTdjNTZjOGZiYTI4OTQxMTQ2NTc2OTAyNzJjYWMzIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiJjZjYxMDNkM2NhZDJhZWMzNmE1ODczMmE3Nzc1ZWFkMzYwNjY2NGMzMTkxNjMxY2Y5NWQ5OGMzYjIzMzg1NjQwIiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MSwiZm9sbG93aW5nQ29udGV4dEhhc2giOiI4NTgwYjc2NTE4ZGFlOTc5ZmFlYmQwMjM2N2EyOTI5MmE1MGQ5NzYwOTIyNTFhMzhhNmNlMzA4ODBiYTQyODI1In0"
+        },
+        {
+          "resource": "repo://scripts/verify-global-flow.sh#L6-L32",
+          "version": "repo-lines-v1:sha256:4ddfa345f424e5f55dfb6663a1192c10b4fcb508ab70682fa1b24df82cbeeb80:eyJzZWxlY3RlZExpbmVDb3VudCI6MjcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjE1M2EzNGU0ZGJmNDdiYTY0ZDEwZTQ3ZDhmNDA0MmIwN2E5ODI5OTg2NDUyOWZkNzI4MGE3MmE3NDNiOGRhOTMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM3NjlkMjM3Y2Q0MjBiOWQzOGI5ODFhMGE0ZjY3NzAxOTBhNGE4M2RjYTFmZTU2YzRmNWJhMWUyY2JjMGVmNzYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjdmOThmODM4ODI4ZDk3YmZjNzg2MTI0NDkxN2I2NTA2M2RlNjFhZGQ5Njk0MmY5NGYwMDdhYTZhYmVlMmJlNDAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjBhMzY5YzYyYTlhMzg0ZmQ1ODgwNmFjNGI0ZGVjZjc4YWFkYmNhN2IyMzc1ZTczOGRhM2E2YTQ5YzlkMWQyOTYifQ"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.5.1",
+    "at": "2026-09-14T13:15:33.655Z"
+  }
+}

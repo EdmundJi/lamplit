@@ -1,0 +1,187 @@
+{
+  "schemaVersion": 1,
+  "pages": {
+    "/openwiki/architecture/companion-architecture-hotspots-and-seams.md": {
+      "pageVersion": "sha256:88b5aa90c06be1aa1cadf5ec70df51b43919f47e799b9f2434975b342466ed9d",
+      "completedBy": "openwiki/0.5.1",
+      "completedRunId": "db7099cf-0e42-4ec5-8f8a-918a7de827d2",
+      "gitHead": "273076b3b4cf96ad12d639987a726b5bc7dbbaab",
+      "sourceFingerprint": "sha256:74445d3cb98bfc5deda513cac87c70e4d34a4256d5209b4d174c00279ab2d63b"
+    },
+    "/openwiki/architecture/companion-harness-overview.md": {
+      "pageVersion": "sha256:196672ebe82259b4c827e0b9d93573ad804da7ff96edfaeb11b865cff7740c1d",
+      "completedBy": "openwiki/0.5.1",
+      "completedRunId": "db7099cf-0e42-4ec5-8f8a-918a7de827d2",
+      "gitHead": "273076b3b4cf96ad12d639987a726b5bc7dbbaab",
+      "sourceFingerprint": "sha256:74445d3cb98bfc5deda513cac87c70e4d34a4256d5209b4d174c00279ab2d63b"
+    },
+    "/openwiki/architecture/companion-state-ownership-and-concurrency.md": {
+      "pageVersion": "sha256:7b2ea1929172a7932597b07d44e165e5cdb7b7979e78c7dc98ef4cf53c57523b",
+      "completedBy": "openwiki/0.5.1",
+      "completedRunId": "db7099cf-0e42-4ec5-8f8a-918a7de827d2",
+      "gitHead": "273076b3b4cf96ad12d639987a726b5bc7dbbaab",
+      "sourceFingerprint": "sha256:74445d3cb98bfc5deda513cac87c70e4d34a4256d5209b4d174c00279ab2d63b"
+    },
+    "/openwiki/architecture/persistence-and-api-contracts.md": {
+      "pageVersion": "sha256:3a381fb9db2b5c7cf4c206ebf79b8db33abc1416af0e743ac3ae16ec9f21997a",
+      "completedBy": "openwiki/0.5.1",
+      "completedRunId": "db7099cf-0e42-4ec5-8f8a-918a7de827d2",
+      "gitHead": "273076b3b4cf96ad12d639987a726b5bc7dbbaab",
+      "sourceFingerprint": "sha256:74445d3cb98bfc5deda513cac87c70e4d34a4256d5209b4d174c00279ab2d63b"
+    },
+    "/openwiki/architecture/system-overview.md": {
+      "pageVersion": "sha256:0201bfcb6a637138ba17f6ae57735404a7f8a9c485d659f4ec70b069366c7260",
+      "completedBy": "openwiki/0.5.1",
+      "completedRunId": "db7099cf-0e42-4ec5-8f8a-918a7de827d2",
+      "gitHead": "273076b3b4cf96ad12d639987a726b5bc7dbbaab",
+      "sourceFingerprint": "sha256:74445d3cb98bfc5deda513cac87c70e4d34a4256d5209b4d174c00279ab2d63b"
+    },
+    "/openwiki/concepts/ai-coaching.md": {
+      "pageVersion": "sha256:0e792a542f44c2ddedee8a308ad310f3eb5a671a80ba8e32523312d2a52f1899",
+      "completedBy": "openwiki/0.5.1",
+      "completedRunId": "db7099cf-0e42-4ec5-8f8a-918a7de827d2",
+      "gitHead": "273076b3b4cf96ad12d639987a726b5bc7dbbaab",
+      "sourceFingerprint": "sha256:74445d3cb98bfc5deda513cac87c70e4d34a4256d5209b4d174c00279ab2d63b"
+    },
+    "/openwiki/concepts/authentication-and-ownership.md": {
+      "pageVersion": "sha256:1dbff0d3b9fe571221f3645fdcc45cbb24d8e84334b2a067d9aeb93179dc9c83",
+      "completedBy": "openwiki/0.5.1",
+      "completedRunId": "db7099cf-0e42-4ec5-8f8a-918a7de827d2",
+      "gitHead": "273076b3b4cf96ad12d639987a726b5bc7dbbaab",
+      "sourceFingerprint": "sha256:74445d3cb98bfc5deda513cac87c70e4d34a4256d5209b4d174c00279ab2d63b"
+    },
+    "/openwiki/concepts/companion-town.md": {
+      "pageVersion": "sha256:9585a691ac4276d86e0a95a4466bd5cbb9299e78fa4deb364e03825476426413",
+      "completedBy": "openwiki/0.5.1",
+      "completedRunId": "db7099cf-0e42-4ec5-8f8a-918a7de827d2",
+      "gitHead": "273076b3b4cf96ad12d639987a726b5bc7dbbaab",
+      "sourceFingerprint": "sha256:74445d3cb98bfc5deda513cac87c70e4d34a4256d5209b4d174c00279ab2d63b"
+    },
+    "/openwiki/concepts/events-perception-memory-and-belief.md": {
+      "pageVersion": "sha256:20f5006676c0f9926f49333c6eff865217dd176359410569640a00dfbb407fe8",
+      "completedBy": "openwiki/0.5.1",
+      "completedRunId": "db7099cf-0e42-4ec5-8f8a-918a7de827d2",
+      "gitHead": "273076b3b4cf96ad12d639987a726b5bc7dbbaab",
+      "sourceFingerprint": "sha256:74445d3cb98bfc5deda513cac87c70e4d34a4256d5209b4d174c00279ab2d63b"
+    },
+    "/openwiki/concepts/growth-planning-and-execution.md": {
+      "pageVersion": "sha256:e27f8cfd31f2b4d987b189a12ba176329ae2f82b6e2a6ce787243cd6eea100e9",
+      "completedBy": "openwiki/0.5.1",
+      "completedRunId": "192540b2-41ff-47f5-8618-0c5a65a54438",
+      "gitHead": "273076b3b4cf96ad12d639987a726b5bc7dbbaab",
+      "sourceFingerprint": "sha256:74445d3cb98bfc5deda513cac87c70e4d34a4256d5209b4d174c00279ab2d63b"
+    },
+    "/openwiki/concepts/privacy-and-retention.md": {
+      "pageVersion": "sha256:ca00def7bb9557c8653299dbda9f8935a1a6a8c03d833835375d0771790a744d",
+      "completedBy": "openwiki/0.5.1",
+      "completedRunId": "9cd1aacb-b17b-4cd0-86aa-785bbeaa3985",
+      "gitHead": "273076b3b4cf96ad12d639987a726b5bc7dbbaab",
+      "sourceFingerprint": "sha256:74445d3cb98bfc5deda513cac87c70e4d34a4256d5209b4d174c00279ab2d63b"
+    },
+    "/openwiki/concepts/resident-context-and-bounded-knowledge.md": {
+      "pageVersion": "sha256:8c36ef5db98be2410222d2c1da60da973352b7cbf76a3f0a784b9cda1925efe0",
+      "completedBy": "openwiki/0.5.1",
+      "completedRunId": "db7099cf-0e42-4ec5-8f8a-918a7de827d2",
+      "gitHead": "273076b3b4cf96ad12d639987a726b5bc7dbbaab",
+      "sourceFingerprint": "sha256:74445d3cb98bfc5deda513cac87c70e4d34a4256d5209b4d174c00279ab2d63b"
+    },
+    "/openwiki/concepts/scenario-seeds-and-resident-genesis.md": {
+      "pageVersion": "sha256:d60d2dac4969deda7c0e863ac826dbe8818aa35817e0e1195fd7c631b7ef52ae",
+      "completedBy": "openwiki/0.5.1",
+      "completedRunId": "db7099cf-0e42-4ec5-8f8a-918a7de827d2",
+      "gitHead": "273076b3b4cf96ad12d639987a726b5bc7dbbaab",
+      "sourceFingerprint": "sha256:74445d3cb98bfc5deda513cac87c70e4d34a4256d5209b4d174c00279ab2d63b"
+    },
+    "/openwiki/concepts/social-and-reward-systems.md": {
+      "pageVersion": "sha256:b2e429d6e5caab2bb6484112531ac9b72f957ac907702bd448924675a80b20ec",
+      "completedBy": "openwiki/0.5.1",
+      "completedRunId": "db7099cf-0e42-4ec5-8f8a-918a7de827d2",
+      "gitHead": "273076b3b4cf96ad12d639987a726b5bc7dbbaab",
+      "sourceFingerprint": "sha256:74445d3cb98bfc5deda513cac87c70e4d34a4256d5209b4d174c00279ab2d63b"
+    },
+    "/openwiki/integrations/ai-and-object-storage.md": {
+      "pageVersion": "sha256:aa0606fb7704638075178f46e453dd12db111b72910d9c4fbcea2be706d2d30d",
+      "completedBy": "openwiki/0.5.1",
+      "completedRunId": "db7099cf-0e42-4ec5-8f8a-918a7de827d2",
+      "gitHead": "273076b3b4cf96ad12d639987a726b5bc7dbbaab",
+      "sourceFingerprint": "sha256:74445d3cb98bfc5deda513cac87c70e4d34a4256d5209b4d174c00279ab2d63b"
+    },
+    "/openwiki/operations/local-development-and-deployment.md": {
+      "pageVersion": "sha256:34667028fcae405db8a8cefc45b6395c1a0eec7a37e7d3144592952f674f0449",
+      "completedBy": "openwiki/0.5.1",
+      "completedRunId": "db7099cf-0e42-4ec5-8f8a-918a7de827d2",
+      "gitHead": "273076b3b4cf96ad12d639987a726b5bc7dbbaab",
+      "sourceFingerprint": "sha256:74445d3cb98bfc5deda513cac87c70e4d34a4256d5209b4d174c00279ab2d63b"
+    },
+    "/openwiki/quickstart.md": {
+      "pageVersion": "sha256:de9160f357c821c720eec397da8c4ca4b138e9a6899bbf4601591366664671bd",
+      "completedBy": "openwiki/0.5.1",
+      "completedRunId": "db7099cf-0e42-4ec5-8f8a-918a7de827d2",
+      "gitHead": "273076b3b4cf96ad12d639987a726b5bc7dbbaab",
+      "sourceFingerprint": "sha256:74445d3cb98bfc5deda513cac87c70e4d34a4256d5209b4d174c00279ab2d63b"
+    },
+    "/openwiki/testing/companion-experiment-harness-and-ablations.md": {
+      "pageVersion": "sha256:fc893064ca3150d600b3fa99c90323aaa5ed643a2d001e701da7bb91a5c5d60f",
+      "completedBy": "openwiki/0.5.1",
+      "completedRunId": "db7099cf-0e42-4ec5-8f8a-918a7de827d2",
+      "gitHead": "273076b3b4cf96ad12d639987a726b5bc7dbbaab",
+      "sourceFingerprint": "sha256:74445d3cb98bfc5deda513cac87c70e4d34a4256d5209b4d174c00279ab2d63b"
+    },
+    "/openwiki/testing/verification-strategy.md": {
+      "pageVersion": "sha256:72e7bfa51a4a24c14d30ad958ab04f9e0ace53e9917b35c115976ac6db40f2b3",
+      "completedBy": "openwiki/0.5.1",
+      "completedRunId": "db7099cf-0e42-4ec5-8f8a-918a7de827d2",
+      "gitHead": "273076b3b4cf96ad12d639987a726b5bc7dbbaab",
+      "sourceFingerprint": "sha256:74445d3cb98bfc5deda513cac87c70e4d34a4256d5209b4d174c00279ab2d63b"
+    },
+    "/openwiki/workflows/account-lifecycle.md": {
+      "pageVersion": "sha256:d80bb601f16689387ab86a428710b5274b8738e332dc2772f9e143229394b448",
+      "completedBy": "openwiki/0.5.1",
+      "completedRunId": "db7099cf-0e42-4ec5-8f8a-918a7de827d2",
+      "gitHead": "273076b3b4cf96ad12d639987a726b5bc7dbbaab",
+      "sourceFingerprint": "sha256:74445d3cb98bfc5deda513cac87c70e4d34a4256d5209b4d174c00279ab2d63b"
+    },
+    "/openwiki/workflows/action-legality-and-world-commit.md": {
+      "pageVersion": "sha256:6183e2ec4b9b9764cad6dc2960341e0d2fd260bb31070333e4af88a3b0054e00",
+      "completedBy": "openwiki/0.5.1",
+      "completedRunId": "db7099cf-0e42-4ec5-8f8a-918a7de827d2",
+      "gitHead": "273076b3b4cf96ad12d639987a726b5bc7dbbaab",
+      "sourceFingerprint": "sha256:74445d3cb98bfc5deda513cac87c70e4d34a4256d5209b4d174c00279ab2d63b"
+    },
+    "/openwiki/workflows/ai-guided-planning.md": {
+      "pageVersion": "sha256:3fba62bcb17ba5e62b7cabecdc0544b7bd2c82c3b56e99d4a694e763649b8fcb",
+      "completedBy": "openwiki/0.5.1",
+      "completedRunId": "db7099cf-0e42-4ec5-8f8a-918a7de827d2",
+      "gitHead": "273076b3b4cf96ad12d639987a726b5bc7dbbaab",
+      "sourceFingerprint": "sha256:74445d3cb98bfc5deda513cac87c70e4d34a4256d5209b4d174c00279ab2d63b"
+    },
+    "/openwiki/workflows/companion-intents-and-focus.md": {
+      "pageVersion": "sha256:d0573fa4c2c17f6ffa2b8223ee17779521aeb8042390d0512e14bab9b34a6748",
+      "completedBy": "openwiki/0.5.1",
+      "completedRunId": "db7099cf-0e42-4ec5-8f8a-918a7de827d2",
+      "gitHead": "273076b3b4cf96ad12d639987a726b5bc7dbbaab",
+      "sourceFingerprint": "sha256:74445d3cb98bfc5deda513cac87c70e4d34a4256d5209b4d174c00279ab2d63b"
+    },
+    "/openwiki/workflows/plan-and-complete-work.md": {
+      "pageVersion": "sha256:7e03a9baf590d751cbadd4170ec3694f35cc3586038a73c12c2a04a4b6d9703e",
+      "completedBy": "openwiki/0.5.1",
+      "completedRunId": "db7099cf-0e42-4ec5-8f8a-918a7de827d2",
+      "gitHead": "273076b3b4cf96ad12d639987a726b5bc7dbbaab",
+      "sourceFingerprint": "sha256:74445d3cb98bfc5deda513cac87c70e4d34a4256d5209b4d174c00279ab2d63b"
+    },
+    "/openwiki/workflows/resident-attempt-loop.md": {
+      "pageVersion": "sha256:83c5a4f9362954a9ba0484e3c8a3389d7a8e0c9a6809423f889ccfc044e74605",
+      "completedBy": "openwiki/0.5.1",
+      "completedRunId": "db7099cf-0e42-4ec5-8f8a-918a7de827d2",
+      "gitHead": "273076b3b4cf96ad12d639987a726b5bc7dbbaab",
+      "sourceFingerprint": "sha256:74445d3cb98bfc5deda513cac87c70e4d34a4256d5209b4d174c00279ab2d63b"
+    },
+    "/openwiki/workflows/resident-trigger-and-scheduling-catalog.md": {
+      "pageVersion": "sha256:b941875260bf228f0aae242a8256282492cb5637558356d5036e76b818bea662",
+      "completedBy": "openwiki/0.5.1",
+      "completedRunId": "db7099cf-0e42-4ec5-8f8a-918a7de827d2",
+      "gitHead": "273076b3b4cf96ad12d639987a726b5bc7dbbaab",
+      "sourceFingerprint": "sha256:74445d3cb98bfc5deda513cac87c70e4d34a4256d5209b4d174c00279ab2d63b"
+    }
+  }
+}
