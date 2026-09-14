@@ -51,3 +51,22 @@ python3 scripts/build-companion-character.py tmp/moderninteriors-win.zip --defau
 需要试验新搭配时仍可传 `--spec` JSON（每个角色一条 `{id, body, outfit, hairstyle, accessory, eyes}`）；
 `compose()` 在拼层前会先比较每层的真实像素尺寸，任何一层不一致就直接报错退出，
 不会悄悄拼出错位的角色（已用合成的假图层验证过这条报错路径，见 PR/会议记录）。
+
+小镇地面同样是生成的，不是手绘的。`scripts/build-town-map.py` 读
+`frontend/src/modules/companion/town-layout.json`（陪伴小街建筑/道路坐标的唯一来源，
+`companion-scene.ts`/`pathfinding.ts` 也读它）把地面画成一张 Tiled 地图：
+
+```bash
+python3 scripts/build-town-map.py [--exteriors tmp/modernexteriors-win.zip] [--preview out.png]
+```
+
+同样需要 Pillow 和上面这份已购的 LimeZu Modern Exteriors zip。产物同样被 Git 忽略、不得再分发：
+
+- `maps/town.tmj`：Tiled JSON 地图，`ground`/`paths`/`water`/`fences` 四个瓦片图层，外加一个
+  `decor` 物件图层（树、灌木等）
+- `maps/town-tiles.png`：实际用到的瓦片图集，已做色调分级——先 HLS 去饱和再混入暖色，
+  草地、人行道两类瓦片的平均色再各自对齐回纯色兜底用的 0x96a486（草坪）/0xc5bfa8（步道），
+  只加纹理，整体色调和纯色版保持一致
+
+`companion-scene.ts` 的 `buildGround()` 在这两个文件缺失时返回 `undefined`，
+`companion-stage.ts` 就会走 `painted`（纯色画地面/道路）分支，因此不跑这个脚本场景也能正常使用。

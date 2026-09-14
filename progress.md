@@ -3,6 +3,108 @@
 当前分支 `master`。这一页只记两件事：**量出来的现状**，和**知道但还没做的**。
 定过的原则在 [docs/04](docs/04-decisions.md)，测法和教训在 [docs/05](docs/05-notes.md)。
 
+## 对话出口 + 物品使用状态 + 头顶动作 emoji：进行中（2026-09-14 下午，未提交）
+
+用户在线上看到学院里顾雁和时安聊了几轮"（翻过一页，没抬头）嗯。"，问物品状态怎么更真实、斯坦福小镇怎么做。调研结论（agent 读源码+论文，主线抽查）：
+- 我们：对话是否结束全靠模型自愿 `leave=true`，8 轮硬顶；"不照抄上一轮"挡不住换词复述；搭话 prompt 明确说"对方在看书不是不打招呼的理由"（保留，它治的是没人开口）。
+  居民动作与物件是两套数据：`Position` 有 occupantIds/capacity/condition 但居民看不到；前端家具纯装饰；没有"谁在用什么"。
+- 斯坦福小镇：每个格子挂事件四元组（物件, 正在…），动作选定物件后写回、下一步清回 idle；感知按视野半径取最近几条进记忆；
+  对话 8 轮上限 + 两人冷却 800 步；物件没有视觉变化，只有头顶 emoji。论文 §7.2 自认"浴室多人进""5 点后进店"——纯文本状态没有容量/营业时间。
+  我们已有结构化占用，这两类错在规则层就挡住了。
+
+用户拍板"全部做完"，顺序：
+1. 对话出口（**已完成，已验收**）：
+   - **规则**：`ConversationLifecycle.isTokenAcknowledgement`（去掉括号里的动作和标点后 ≤4 字，且原文无问号）与 `isNearDuplicate`。同一人自己的最近两轮都是敷衍或近似重复，就走和 `leave=true` 同一个 `finish()` 结束，`endReason` 为"对方接连只是应一声，不再多问，各自去忙"。
+   - **冷却**：不另加，沿用现有两层：`encounterCooldowns`（40/20 分钟）和 `lastSocialAt` + 15 分钟社交恢复期；`finish()` 对所有结束方式都会写 `lastSocialAt`。
+   - **prompt**：对话 prompt 补了一句"对方明显在忙、只用一两个字应付，就收尾 leave=true"；搭话 prompt 第 317 行保留。
+   - **测试**：`ConversationLifecycleTest` 新增 4 项（线上原话逐句）；`ResidentDirectorDialogueTest` 新增 1 项（真实 director 管线里假模型始终 leave=false，第 5 轮若被请求就断言失败）。
+   - **全量**：后端 664 项，0 失败、0 错误、9 跳过。
+   - **决定**：已写入 docs/04。
+2. 物品使用状态（**已完成，已验收**）：
+   - **只加一个字段**：`ResidentState.activitySince`，在 `replaceActor` 活动名变化时写入；22 处生产调用都传了时间，仅测试用的 5 参重载不写。
+   - **使用视图是现算的**：`ResidentSimulation.positionUses(w,id,now)` 从 `Position.occupantIds`、`activitySince`、`WorldObject.holderId` 算出 `PositionUseView(positionId,label,occupantId,occupantName,activity,minutesSoFar,heldObjectLabel)`。
+     - 范围：同屋（沿用 `sameRoom`，含街上听得见的距离）。
+     - 上限 8 条，自己用着的那条总保留。
+   - **进 perspective**：所有模型调用的 perspective 都带上它，但只有搭话 prompt 加了一行说明。
+   - **容量**：已有的容量规则在测试里确认生效，一人位不会显示第二个人。
+   - **前端**：世界 JSON 新增 `residentStates[].activitySince`。
+   - **测试**：`PositionUseViewTest` 4 项；director 管线测试 1 项，断言假模型收到"阿禾 在那张长桌 看书 40分钟"。
+   - **全量**：后端 669 项，0 失败、9 跳过。
+   - **已知局限**：被拉进对话后活动变成 talk、`activitySince` 重置，"看了 40 分钟书"只在搭话之前可见。对话里的敷衍由规则 1 兜底。
+3. 前端：头顶动作 emoji（**已完成**）。原来 `residentStatus()` 算出 emoji 却没用上，现在 `actionEmoji()` 覆盖后端全部活动名，`CompanionScene.vue` 在头顶显示 20px 小徽标：
+   - 已经在显示对话 emoji 的人不重复显示；`chrome:false` 的街道条模式隐藏；减少动效时不上下浮动。
+   - 首轮截图家家头顶都是 ☕，像全镇在喝咖啡，打回修正：只有在咖啡馆里的 rest 才用 ☕，其他地方的 rest 用 🛋️；`observe` 用 👀，`water` 用 💧。
+   - 验收：前端 263 项通过，vue-tsc 通过，town-v2 浏览器测试 4/4。
+   - **用户看后撤回**："所有小人都显示 emoji 状态太乱了，恢复原本的样子"。已派 agent 只移除头顶徽标，地图回到 HEAD 的样子（只在说话时显示对话气泡）；其他未提交改动保留。
+     **教训**：25 人同屏时，人人头顶常驻标记就是噪音。斯坦福小镇只有 25 人且没有房间墙体，照搬不合适；以后若要，只在选中或悬停时显示。
+4. 物件使用画面（**已完成，已验收**）：
+   - `companion-position-props.ts`：纯函数 `positionUseProps` 从已有数据推导出三种效果，签名比对后才重建：
+     - 学院书桌前看书 → 桌上摊开的书（沿用现有程序化书本图标；图集里只有竖放的书脊和整个书柜，不合适）；
+     - 真睡着（`visibleActivity==='sleep'`）→ 床上盖冷蓝色被子；
+     - 咖啡馆营业且有人在柜台 tend/prepare → 咖啡机冒热气（减少动效时静止）。
+   - `CompanionView.vue` 人物面板在当前动作后显示"已经 N 分钟"。
+   - 验收时打回两次：
+     - 被子起初是脚下的灰椭圆，像影子，而且白天坐在床边 rest 的人也画；改为只给睡着的人画，并盖在床上。
+     - 睡着的人头画在墙上。这是原来就有的 bug：睡姿统一偏移 -40，没对床的几何校准。新增 `sleepSpriteOffset(positionId)`（合住户 -4，其余 -15），裁图确认头枕在枕头上。
+   - 存档里没有正在看书或睡觉的人，所以书、热气、被子是用临时 Playwright 探针加单元测试验证的（探针已删）。
+   - 前端 broad 范围 284 项通过，vue-tsc 通过，浏览器测试 4/4。
+   - 前端全量曾有 1 项失败：寻路可达性测试在 72 个文件并行时 5.8s，超过 5s 上限（单独跑 2.0s）。原因已量清（420 次整镇寻路，瓶颈在逐矩形碰撞检测），给这一项单独设 30s 超时并写明原因。
+
+**收尾验收（2026-09-14 17:30）：**
+- 头顶徽标已移除：`CompanionScene.vue` 与 HEAD 一致，`companion-presentation.ts/.test.ts` 整体恢复到 HEAD（`actionEmoji` 已无调用方）。截图确认 25 人头顶无徽标。
+- 前端全量 `npx vitest run` 72 文件 450 项全过（emoji 测试随之删除，所以比 507 少）；vue-tsc 通过；town-v2 浏览器测试 4/4。
+- 后端最近一次全量 669 项 0 失败（物件使用状态之后后端没有再改）。
+- 全部未提交。
+这些都改变行为，是新基线，不混进进行中的对照实验；决定写入 docs/04。
+
+## 地图重做 M1–M2：进行中（2026-09-14 夜，未提交）
+
+用户选了"先地图、完全脚本生成"。对照斯坦福小镇（Tiled 地图同时是渲染和环境树的来源），我们走三步：
+
+**A 步 已完成（纯重构，零行为变化）。** 新增 `frontend/src/modules/companion/town-layout.json`（建筑原点、16 户住宅、
+小巷 walkways/paths），`town-layout.ts` 的 `shift(building,x,y)` 让原本写死绝对坐标的咖啡馆/花园/街前广场内部
+随建筑整体平移。`companion-art/navigation/stage/scene/geometry` 改为读布局。验收：布局等于旧坐标时前端 190 测试全绿、
+距离一致性测试通过（距离一个数没变）。
+
+**B 步 已完成。** 世界 2048×1408 → 2560×1856：西区核心 (+128,+96)、东区学院/公告板/健身房 (+288,+96)、
+商店 (+384,+96)、南巷第一排 (+128,+192)、第二排 (+128,+256)，所有门与小巷连通逐一核对。
+用 `TOWN_PRINT_DISTANCES=1` 在真实寻路器上重生 `TownDistances.java` 253 条：组内距离完全不变，跨组平均 +128px。
+测试里的旧字面坐标改为 `west(x,y)`；`TownDistancesTest` 的回退值改为按最长距离计算。
+后端 `TownDistancesTest/StreetEncounterDistanceTest/ResidentDutiesTest/ResidentSimulationTest` 15 项全绿。
+
+**C 步 进行中。** `scripts/build-town-map.py` 从布局 + LimeZu Modern Exteriors 生成 `public/assets/town/maps/town.tmj`
+（ground/paths/water 瓦片层 + decor 对象层）与 `town-tiles.png`（统一调暖、降饱和）。瓦片坐标由 agent 逐个验证过无缝，
+存档在 `tmp/handoff/terrain-palette.json`。场景 `buildGround()` 读地图，读不到就退回纯色底。
+**C 步第一轮迭代（compact 后，改文件交 sonnet agent，主线验收）：**
+- 看了瓦片版截图，发现两个问题：默认镜头按宽度适配后，多出的高度越过地图上沿，露出约 200px 空底；草地 (110,144,109) 偏冷、偏暗。
+  - 修法：`frameCamera()` 在非总览模式下把中心夹在世界范围内。
+  - 生成器新增 `MATCH`，把草地和人行道的平均色平移到纯色画法原来的 0x96a486 / 0xc5bfa8；池塘岸边的草与草地同用一个偏移。
+- 生成器新增东南角带铁栅栏的公园：x 1792–2464、y 896–1760，11×6 池塘，泥土环路与通向门口的小径，长椅、花坛、鸭子，瓦片层 `fences`。
+  - 装饰按离建筑的远近分级：地图边缘成林，开阔草坪零星种树，房屋附近只放小草和花。
+  - 抽查：装饰落在建筑或人行道上 0 个。池塘和围栏按 3 倍放大裁图看过，没有缝。
+  - 公园小径只是装饰，寻路不知道它，居民不会进公园。
+- 寻路超时。agent 实测，查询数没变，一直是 105 个位置 × 4 = 420 次，变慢全因世界变大；开放集每步整体重排是已有的低效。
+  - 修法：`shared/scene/pathfinding.ts` 改为最小堆，按 (score 升序, 插入序号降序) 出队，与原来"稳定排序后 pop"的平局规则逐位一致。
+  - 验证：1048 条路径改前改后 JSON 完全相同，`companion-walk-parity` 通过。
+  - 该测试单独跑 2.55s → 2.0s，只快了约 20%，说明主要开销在 `collision.ts` 的逐矩形检测；目前余量够，暂不再动。
+
+**实测（2026-09-14 15:20 左右）：**
+- vue-tsc 通过。
+- 前端 `src/modules/companion src/shared/scene src/app` 206/206 通过。
+- 后端 `mvn -o clean test` 659 项，0 失败、0 错误、9 跳过。
+- town-v2 浏览器测试 desktop + mobile 4/4 通过，截图已看，默认镜头不再越界。
+
+**第二轮装饰修整（已验收）：**
+- `grass_*` 全部 22 帧其实是不透明的草–泥过渡地形瓦片，不是植物，所以画成了深绿方块；已从种植列表移除，小植物改用透明底的 `flowers_1..5` 和 `shrub_1`。
+- 路灯改为沿长巷每 340–380px 放一盏，放在巷边而不是巷上，避开墙和门口，共 17 盏。
+- 公园南侧两角补了树和花坛，门两侧各一盏灯。
+- 所有装饰的坐标夹在世界范围内。
+- 抽查：装饰落在建筑内 / 人行道上 / 越界都是 0，共 314 个。
+- town-v2 浏览器测试 4/4 通过；我看了桌面总览和默认视角截图，方块消失，路灯沿巷排列，镜头不越界。
+
+C 步到此可以收：地面、公园和种植都由脚本生成，风格和原来的纯色画法一致。剩下的是生成说明文档（已派 agent）和决定是否提交。
+下一阶段 M3：建筑外墙和屋顶（拉近时淡出），住宅做 3–4 种模板。
+
 ## 午饭、午休与计划提示（2026-09-14 夜）
 
 **线上看到的：** 12:26 有 11 人在家、5 人在睡。7 人是模型自己排的"在家补觉/午休"——种子里中午是空档；
