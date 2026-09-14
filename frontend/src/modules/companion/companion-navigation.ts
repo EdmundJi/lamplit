@@ -1,7 +1,9 @@
 import type { CollisionWorld, Point, Rect } from '../../shared/scene/collision'
 import { canStand, nearestStandable } from '../../shared/scene/collision'
 import { findPath } from '../../shared/scene/pathfinding'
-import { CAFE_TABLES, CAFE_WINDOW_SEATS, CAFE_ROOM, CAFE_WINDOW_ROOM, HOME_ROOMS, HOUSEHOLD_MEMBERS, GARDEN_OFFSET_X, ACADEMY_ROOM, GYM_ROOM, BOARD_AREA, SHOP_ROOM, type ScenePlaceId } from './companion-art'
+import { CAFE_TABLES, CAFE_WINDOW_SEATS, CAFE_ROOM, CAFE_WINDOW_ROOM, HOME_ROOMS, HOUSEHOLD_MEMBERS, GARDEN_OFFSET_X, gardenY, ACADEMY_ROOM, GYM_ROOM, BOARD_AREA, SHOP_ROOM, type ScenePlaceId } from './companion-art'
+import { TOWN_LAYOUT, shift } from './town-layout'
+const cafeRect = (x: number, y: number, width: number, height: number): Rect => ({ ...shift('cafe', x, y), width, height })
 /** Feet navigation mirrors the cutaway floors, open doorways and actual furniture footprint. */
 const HOME_INTERIORS = Object.values(HOME_ROOMS).map(room => ({ x: room.x + 8, y: room.y + 32, width: room.w - 16, height: room.h - 32 }))
 const HOME_DOORS = Object.values(HOME_ROOMS).map(room => ({ x: room.door.x - 16, y: room.y + room.h, width: 32, height: 40 }))
@@ -25,8 +27,8 @@ export const COMPANION_COLLISION: CollisionWorld = {
     ...HOME_INTERIORS, ...HOME_DOORS,
     { x: CAFE_ROOM.x + 8, y: CAFE_ROOM.y + 32, width: CAFE_ROOM.w - 16, height: CAFE_ROOM.h - 32 },
     { x: CAFE_WINDOW_ROOM.x + 8, y: CAFE_WINDOW_ROOM.y + 32, width: CAFE_WINDOW_ROOM.w - 16, height: CAFE_WINDOW_ROOM.h - 32 },
-    { x: 848, y: 44, width: 40, height: 284 }, // open connection between the main room and window wing
-    { x: CAFE_ROOM.doorX - 16, y: 328, width: 32, height: 40 },
+    cafeRect(848, 44, 40, 284), // open connection between the main room and window wing
+    { x: CAFE_ROOM.doorX - 16, y: CAFE_ROOM.y + CAFE_ROOM.h - 4, width: 32, height: 40 },
     { x: ACADEMY_ROOM.x + 8, y: ACADEMY_ROOM.y + 32, width: ACADEMY_ROOM.w - 16, height: ACADEMY_ROOM.h - 32 },
     { x: GYM_ROOM.x + 8, y: GYM_ROOM.y + 32, width: GYM_ROOM.w - 16, height: GYM_ROOM.h - 32 },
     { x: SHOP_ROOM.x + 8, y: SHOP_ROOM.y + 32, width: SHOP_ROOM.w - 16, height: SHOP_ROOM.h - 32 },
@@ -34,24 +36,12 @@ export const COMPANION_COLLISION: CollisionWorld = {
     { x: GYM_ROOM.doorX - 16, y: GYM_ROOM.y + GYM_ROOM.h - 4, width: 32, height: 48 },
     { x: SHOP_ROOM.doorX - 16, y: SHOP_ROOM.y + SHOP_ROOM.h - 4, width: 32, height: 48 },
     { x: BOARD_AREA.x, y: BOARD_AREA.y, width: BOARD_AREA.w, height: BOARD_AREA.h },
-    { x: 32, y: 364, width: 816, height: 96 }, { x: 746 + GARDEN_OFFSET_X, y: 230, width: 184, height: 240 },
-    { x: 816, y: 424, width: 32, height: 168 }, { x: 816, y: 560, width: 256, height: 32 }, { x: 1040, y: 424, width: 32, height: 168 },
-    // The lower houses are reachable through a modest side lane rather than teleporting through
-    // their walls. These three paths are deliberately plain pavement; room identity stays in the
-    // backend location id, not in a fake job-specific destination.
-    // The alley's horizontal leg is widened (640 -> 1170px) to also pass under fixer's new house
-    // in the bottom-right corner (doorstep at x:1186-1218) instead of stopping at the old x=688 -
-    // matched pixel-for-pixel in companion-stage.ts's drawn path so the walkway and the collision
-    // rect never disagree (the known "invisible wall" hazard).
-    { x: 48, y: 416, width: 32, height: 320 }, { x: 48, y: 708, width: 1170, height: 32 }, { x: 656, y: 416, width: 32, height: 320 },
-    // Second-version town spine: the old lower lane continues through the shop, then turns south
-    // between the two five-house rows. Every new front door meets one of the two cross streets.
-    { x: 1218, y: 708, width: 782, height: 32 },
-    { x: 952, y: 708, width: 32, height: 672 },
-    { x: 32, y: 1052, width: 1556, height: 32 },
-    { x: 32, y: 1348, width: 1556, height: 32 },
-    { x: ACADEMY_ROOM.doorX - 16, y: 256, width: 32, height: 228 },
-    { x: GYM_ROOM.doorX - 16, y: 436, width: 32, height: 276 },
+    { x: 746 + GARDEN_OFFSET_X, y: gardenY(230), width: 184, height: 240 },
+    // Streets, lanes and alleys come from the shared layout, the same rectangles the map generator
+    // paints, so a drawn walkway and its collision box cannot disagree.
+    ...TOWN_LAYOUT.walkways.map(w => ({ x: w.x, y: w.y, width: w.w, height: w.h })),
+    { x: ACADEMY_ROOM.doorX - 16, y: ACADEMY_ROOM.y + ACADEMY_ROOM.h - 4, width: 32, height: GYM_ROOM.y + 4 - (ACADEMY_ROOM.y + ACADEMY_ROOM.h - 4) },
+    { x: GYM_ROOM.doorX - 16, y: BOARD_AREA.y + BOARD_AREA.h - 4, width: 32, height: GYM_ROOM.y + GYM_ROOM.h + 12 - (BOARD_AREA.y + BOARD_AREA.h - 4) },
   ],
   obstacles: [
     ...SHARED_HOME_WALLS,
@@ -66,20 +56,20 @@ export const COMPANION_COLLISION: CollisionWorld = {
       ...table.seats.map(seat => ({ x: seat.x - 12, y: seat.y - 24, width: 24, height: 18 })),
     ]),
     // The service counter is a real barrier; staff reach its rear via the left end.
-    { x: 622, y: 147, width: 224, height: 32 },
-    { x: 630, y: 55, width: 208, height: 25 },
-    { x: 589, y: 46, width: 32, height: 32 }, { x: 394, y: 72, width: 31, height: 27 },
+    cafeRect(622, 147, 224, 32),
+    cafeRect(630, 55, 208, 25),
+    cafeRect(589, 46, 32, 32), cafeRect(394, 72, 31, 27),
     // Joined window desktops are one solid edge, with a separate aisle behind the chairs.
-    { x: 976, y: 105, width: 45, height: 414 },
+    cafeRect(976, 105, 45, 414),
     ...CAFE_WINDOW_SEATS.map(seat => ({ x: seat.x - 12, y: seat.y - 24, width: 24, height: 18 })),
-    ...[798, 859].flatMap(x => [248, 328].map(y => ({ x: x + GARDEN_OFFSET_X, y, width: 49, height: 40 }))),
+    ...[798, 859].flatMap(x => [248, 328].map(y => ({ x: x + GARDEN_OFFSET_X, y: gardenY(y), width: 49, height: 40 }))),
     // Public equipment clusters stay solid; their named position anchors sit next to the object.
     { x: ACADEMY_ROOM.x + 112, y: ACADEMY_ROOM.y + 130, width: 76, height: 32 },
     { x: GYM_ROOM.x + 32, y: GYM_ROOM.y + 66, width: 150, height: 34 },
     { x: SHOP_ROOM.x + 330, y: SHOP_ROOM.y + 178, width: 70, height: 30 },
   ],
 }
-const STAFF_AISLE: Rect = { x: 622, y: 80, width: 224, height: 67 }
+const STAFF_AISLE: Rect = cafeRect(622, 80, 224, 67)
 const inStaffAisle = (point: Point) => point.x >= STAFF_AISLE.x && point.x <= STAFF_AISLE.x + STAFF_AISLE.width && point.y >= STAFF_AISLE.y && point.y <= STAFF_AISLE.y + STAFF_AISLE.height
 export function companionPath(from: Point, to: Point) {
   // A trip to/from the machine can use its working aisle. Seat-to-seat and guest entry paths
@@ -98,9 +88,9 @@ export function companionPath(from: Point, to: Point) {
  */
 const PLACE_STANDING_AREA: Record<ScenePlaceId, Rect> = {
   home: { x: HOME_ROOMS.owner!.x + 18, y: HOME_ROOMS.owner!.y + HOME_ROOMS.owner!.h - 20, width: HOME_ROOMS.owner!.w - 36, height: 8 },
-  cafe: { x: 554, y: 210, width: 222, height: 108 },
-  garden: { x: 760 + GARDEN_OFFSET_X, y: 244, width: 156, height: 212 },
-  street: { x: 54, y: 378, width: 776, height: 70 },
+  cafe: cafeRect(554, 210, 222, 108),
+  garden: { x: 760 + GARDEN_OFFSET_X, y: gardenY(244), width: 156, height: 212 },
+  street: { ...shift('street', 54, 378), width: 776, height: 70 },
   academy: { x: ACADEMY_ROOM.x + 22, y: ACADEMY_ROOM.y + 62, width: ACADEMY_ROOM.w - 44, height: ACADEMY_ROOM.h - 88 },
   gym: { x: GYM_ROOM.x + 22, y: GYM_ROOM.y + 62, width: GYM_ROOM.w - 44, height: GYM_ROOM.h - 88 },
   board: { x: BOARD_AREA.x + 18, y: BOARD_AREA.y + 24, width: BOARD_AREA.w - 36, height: BOARD_AREA.h - 42 },

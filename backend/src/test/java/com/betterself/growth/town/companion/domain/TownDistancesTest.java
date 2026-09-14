@@ -64,7 +64,7 @@ class TownDistancesTest {
     }
 
     @Test void longestAndShortestMeasuredTripsLandInTheirActualComputedSeconds(){
-        // home-fixer to garden is the single longest entry in the whole table: 1500px, measured by
+        // home-fixer to garden is a long walk inside the west block (unchanged when the block moved): 1500px, measured by
         // walking the frontend's real pathfinder between the exact points travelAnchor() returns
         // (see TownDistances' doc comment) - at WALK_PIXELS_PER_SECOND (32px/s) that is 1500/32 = 46
         // (integer division truncates the .87).
@@ -88,6 +88,7 @@ class TownDistancesTest {
         // entry at all: distancePixels returns null, and travelSeconds must not throw or silently
         // return an implausibly short trip for it.
         assertThat(TownDistances.distancePixels("home-owner", "bathhouse")).isNull();
-        assertThat(ResidentSimulation.travelSeconds("home-owner", "bathhouse")).isEqualTo(79);
+        // The longest measured walk in town, whatever the current map makes that.
+        assertThat(ResidentSimulation.travelSeconds("home-owner", "bathhouse")).isEqualTo(TownDistances.LONGEST_MEASURED_PIXELS/TownDistances.WALK_PIXELS_PER_SECOND);
     }
 }

@@ -2,28 +2,32 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('phaser', () => ({ default: { Scene: class {} } }))
 import { residentPosition, scenePlace, visibleActivity, conversationPosition, conversationPositionInRoom, rainFallsOutside, isSpeaking, visibleSceneLabels } from './companion-scene'
 import type { SceneLabel } from './companion-scene'
+import { shift } from './town-layout'
+// Points authored against the original west block (cafe, street, garden, first homes) move with it.
+const west = (x: number, y: number) => shift('street', x, y)
+const rain = (x: number, y: number) => { const p = west(x, y); return rainFallsOutside(p.x, p.y) }
 
 describe('authoritative activity presentation', () => {
   it('keeps rain outdoors while retaining it on the street and in the garden', () => {
-    expect(rainFallsOutside(130, 220)).toBe(false) // owner home
-    expect(rainFallsOutside(560, 220)).toBe(false) // cafe interior
-    expect(rainFallsOutside(500, 420)).toBe(true) // public street
-    expect(rainFallsOutside(850, 440)).toBe(true) // outdoor beside the window wing
-    expect(rainFallsOutside(910, 480)).toBe(false) // the long wing is roofed
-    expect(rainFallsOutside(700, 480)).toBe(true) // L-shape courtyard is not its bounding box
+    expect(rain(130, 220)).toBe(false) // owner home
+    expect(rain(560, 220)).toBe(false) // cafe interior
+    expect(rain(500, 420)).toBe(true) // public street
+    expect(rain(850, 440)).toBe(true) // outdoor beside the window wing
+    expect(rain(910, 480)).toBe(false) // the long wing is roofed
+    expect(rain(700, 480)).toBe(true) // L-shape courtyard is not its bounding box
   })
   it('places a focused resident at a visible desk and a gardener next to a planted bed', () => {
-    expect(residentPosition('cafe', 0, 'focus')).toEqual({ x: 438, y: 176 })
-    expect(residentPosition('home-owner', 0, 'read')).toEqual({ x: 136, y: 276 })
+    expect(residentPosition('cafe', 0, 'focus')).toEqual(west(438, 176))
+    expect(residentPosition('home-owner', 0, 'read')).toEqual(west(136, 276))
     const garden = residentPosition('garden', 4, 'garden')
-    expect(garden.x).toBeGreaterThan(790)
-    expect(garden.y).toBeLessThan(445)
-    expect(garden.x + 54).toBeLessThan(1220)
+    expect(garden.x).toBeGreaterThan(west(790, 0).x)
+    expect(garden.y).toBeLessThan(west(0, 445).y)
+    expect(garden.x + 54).toBeLessThan(west(1220, 0).x)
   })
   it('gives four NPCs distinct sleeping corners and the avatar a living room seat', () => {
     const positions = Array.from({ length: 4 }, (_, index) => residentPosition('home', index + 1, 'sleep'))
     expect(new Set(positions.map(p => `${p.x}:${p.y}`)).size).toBe(4)
-    expect(residentPosition('home-owner', 0, 'rest')).toEqual({ x: 170, y: 312 })
+    expect(residentPosition('home-owner', 0, 'rest')).toEqual(west(170, 312))
   })
   it('uses distinct visible actions and close conversation positions', () => {
     expect(visibleActivity('sleep', '睡着了')).toBe('sleep')
@@ -43,7 +47,7 @@ describe('authoritative activity presentation', () => {
     expect(visibleActivity('create', '给花写一首诗', 'poster')).toBe('create')
     expect(visibleActivity('create', '带一株新芽回家', 'flowers')).toBe('garden')
     expect(visibleActivity('observe', '看看新开的花')).toBe('idle')
-    expect(residentPosition('cafe', 1, 'rest')).toEqual({ x: 522, y: 176 })
+    expect(residentPosition('cafe', 1, 'rest')).toEqual(west(522, 176))
     expect(conversationPosition('cafe', 1).x - conversationPosition('cafe', 0).x).toBe(42)
   })
   it('maps subplaces while keeping unknown server places safely on the shared street', () => {
@@ -71,7 +75,7 @@ describe('unknown places are loud, not silently redrawn as somewhere real (task:
   it('warns once per positionId that POSITION_SLOTS has no pixel for, but still returns a real, standable point', () => {
     const first = residentPosition('cafe', 0, 'focus', '', 'bathhouse-tub')
     residentPosition('cafe', 0, 'focus', '', 'bathhouse-tub')
-    expect(first).toEqual({ x: 438, y: 176 }) // falls through to the same heuristic as before
+    expect(first).toEqual(west(438, 176)) // falls through to the same heuristic as before
     expect(console.warn).toHaveBeenCalledTimes(1)
     expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('"bathhouse-tub"'))
   })
@@ -92,8 +96,8 @@ describe('unknown places are loud, not silently redrawn as somewhere real (task:
 
 describe('positionId-authoritative placement (TownPlaces two-layer place model)', () => {
   it('prefers a recognised positionId outright, ignoring the place+index guess entirely', () => {
-    expect(residentPosition('home-owner', 3, 'sleep', '', 'home-owner-bed')).toEqual({ x: 112, y: 252 })
-    expect(residentPosition('anything', 99, 'idle', '', 'home-student-bed')).toEqual({ x: 248, y: 252 })
+    expect(residentPosition('home-owner', 3, 'sleep', '', 'home-owner-bed')).toEqual(west(112, 252))
+    expect(residentPosition('anything', 99, 'idle', '', 'home-student-bed')).toEqual(west(248, 252))
   })
   it('gives each resident\'s own bed a distinct, non-overlapping spot - including fixer\'s new house and weaver\'s bed inside artist\'s shared room', () => {
     const beds = ['home-owner-bed', 'home-student-bed', 'home-artist-bed', 'home-gardener-bed', 'home-self-bed', 'home-fixer-bed', 'home-weaver-bed']
@@ -105,12 +109,12 @@ describe('positionId-authoritative placement (TownPlaces two-layer place model)'
     expect(new Set(seats.map(p => `${p.x}:${p.y}`)).size).toBe(4)
   })
   it('clamps an occupant index beyond capacity instead of returning an undefined slot', () => {
-    expect(residentPosition('cafe', 0, '', '', 'cafe-window-seat', 7)).toEqual({ x: 964, y: 292 })
+    expect(residentPosition('cafe', 0, '', '', 'cafe-window-seat', 7)).toEqual(west(964, 292))
   })
   it('falls back to the place+index heuristic for an unrecognised positionId (old save, or unplaced position)', () => {
-    expect(residentPosition('cafe', 0, 'focus', '', 'some-future-position-id')).toEqual({ x: 438, y: 176 })
-    expect(residentPosition('cafe', 0, 'focus', '', null)).toEqual({ x: 438, y: 176 })
-    expect(residentPosition('cafe', 0, 'focus')).toEqual({ x: 438, y: 176 })
+    expect(residentPosition('cafe', 0, 'focus', '', 'some-future-position-id')).toEqual(west(438, 176))
+    expect(residentPosition('cafe', 0, 'focus', '', null)).toEqual(west(438, 176))
+    expect(residentPosition('cafe', 0, 'focus')).toEqual(west(438, 176))
   })
 })
 
@@ -127,7 +131,7 @@ describe('room-aware home placement', () => {
     const artistHome = conversationPositionInRoom('home-artist', 0, 'home-artist-common')
     const fixerHome = conversationPositionInRoom('home-fixer', 0, 'home-fixer-room-fixer')
     expect(artistHome).not.toEqual(fixerHome)
-    expect(artistHome.x).toBeLessThan(300)
+    expect(artistHome.x).toBeLessThan(west(300, 0).x)
     expect(fixerHome.x).toBeGreaterThan(1000)
   })
   it('spreads non-positioned residents in one common room across its real table slots', () => {

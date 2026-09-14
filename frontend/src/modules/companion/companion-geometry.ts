@@ -10,7 +10,7 @@
 import type { Point } from '../../shared/scene/collision'
 import { nearestStandable } from '../../shared/scene/collision'
 import { COMPANION_COLLISION, freeStandPosition } from './companion-navigation'
-import { POSITION_SLOTS, CAFE_SERVICE, CAFE_SEATS, GARDEN_OFFSET_X, HOME_ROOMS, CAFE_ROOM, CAFE_WINDOW_ROOM, ACADEMY_ROOM, GYM_ROOM, SHOP_ROOM, PLACE_FRAMES, STAGE_PLACES } from './companion-art'
+import { POSITION_SLOTS, CAFE_SERVICE, CAFE_SEATS, GARDEN_OFFSET_X, gardenY, HOME_ROOMS, CAFE_ROOM, CAFE_WINDOW_ROOM, ACADEMY_ROOM, GYM_ROOM, SHOP_ROOM, PLACE_FRAMES, STAGE_PLACES } from './companion-art'
 import type { SceneResident } from './companion-scene'
 
 type RainShelter = { x: number; y: number; width: number; height: number }
@@ -203,7 +203,7 @@ export function residentPosition(location: string, index: number, activity = '',
     // The native stream lands about 50px to the right and 10px below the feet.
     // Keep its whole silhouette inside the default camera, including the last resident.
     const plots = [{ x: 770, y: 276 }, { x: 849, y: 276 }, { x: 770, y: 356 }, { x: 849, y: 356 }, { x: 842, y: 421 }]
-    return { x: plots[slot]!.x + GARDEN_OFFSET_X, y: plots[slot]!.y }
+    return { x: plots[slot]!.x + GARDEN_OFFSET_X, y: gardenY(plots[slot]!.y) }
   }
   if (room && /focus|study|read|work|make|专注|学习|读书|工作|制作/i.test(activity + action)) return room.desk
   return freeStandPosition(place === 'home' ? location : place, residentId ?? `${location}#${index}`, occupied)

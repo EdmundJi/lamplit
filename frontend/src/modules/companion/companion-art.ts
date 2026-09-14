@@ -1,3 +1,4 @@
+import { TOWN_LAYOUT, shift } from './town-layout'
 /**
  * The single walking speed every actor in the scene moves at (companion-scene.ts's per-frame
  * stepTowardPoint call). This number MUST equal `WALK_PIXELS_PER_SECOND` in the backend's
@@ -28,25 +29,33 @@ export const ACTION_FRAME = { width: 96, height: 96, originX: 32 / 96, originY: 
 export const RESIDENT_ART = [1, 3, 6, 9, 12, 4, 7, 2, 5, 8, 10, 11, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 'postman'] as const
 export type CafeSeat = { x: number; y: number; facing: 'left' | 'right' }
 /** Compact two-tops with real opposing seats. All coordinates are residents' foot anchors. */
-export const CAFE_TABLES = [
-  { x: 480, y: 176, seats: [{ x: 438, y: 176, facing: 'right' }, { x: 522, y: 176, facing: 'left' }] },
-  { x: 480, y: 282, seats: [{ x: 438, y: 282, facing: 'right' }, { x: 522, y: 282, facing: 'left' }] },
-] as const
+const cafe = (x: number, y: number) => shift('cafe', x, y)
+export const CAFE_TABLES = [176, 282].map(y => ({ ...cafe(480, y), seats: [{ ...cafe(438, y), facing: 'right' as const }, { ...cafe(522, y), facing: 'left' as const }] }))
 export const CAFE_WORK_SEATS = CAFE_TABLES.flatMap(table => [...table.seats])
 /** Six joined window worktops. Keep the original owned position id; added positions are public. */
-export const CAFE_WINDOW_SEAT: CafeSeat = { x: 964, y: 292, facing: 'right' }
-export const CAFE_WINDOW_SEATS: CafeSeat[] = [CAFE_WINDOW_SEAT, ...[154, 223, 361, 430, 499].map(y => ({ x: 964, y, facing: 'right' as const }))]
-export const CAFE_WINDOW_TABLES = [174, 243, 312, 381, 450, 519].map(y => ({ x: 998, y }))
+export const CAFE_WINDOW_SEAT: CafeSeat = { ...cafe(964, 292), facing: 'right' }
+export const CAFE_WINDOW_SEATS: CafeSeat[] = [CAFE_WINDOW_SEAT, ...[154, 223, 361, 430, 499].map(y => ({ ...cafe(964, y), facing: 'right' as const }))]
+export const CAFE_WINDOW_TABLES = [174, 243, 312, 381, 450, 519].map(y => cafe(998, y))
 /** The original public room joins a long, quiet window wing without moving the service counter. */
-export const CAFE_ROOM = { x: 384, y: 12, w: 480, h: 320, doorX: 682 } as const
-export const CAFE_WINDOW_ROOM = { x: 864, y: 12, w: 160, h: 536 } as const
+const CAFE_BUILDING = TOWN_LAYOUT.buildings.cafe
+export const CAFE_ROOM = { x: CAFE_BUILDING.x, y: CAFE_BUILDING.y, w: CAFE_BUILDING.w, h: CAFE_BUILDING.h, doorX: CAFE_BUILDING.x + CAFE_BUILDING.doorX! }
+export const CAFE_WINDOW_ROOM = { ...cafe(864, 12), w: 160, h: 536 }
 export const CAFE_SERVICE = {
-  entry: { x: 682, y: 350 }, operator: { x: 730, y: 123 }, staffEntry: { x: 598, y: 123 },
-  order: { x: 682, y: 215 }, pickup: { x: 798, y: 215 },
-  waiting: [{ x: 740, y: 257 }, { x: 782, y: 257 }, { x: 704, y: 295 }, { x: 746, y: 295 }],
-  conversation: { x: 632, y: 276 },
-} as const
-export const GARDEN_OFFSET_X = 288
+  entry: cafe(682, 350), operator: cafe(730, 123), staffEntry: cafe(598, 123),
+  order: cafe(682, 215), pickup: cafe(798, 215),
+  waiting: [cafe(740, 257), cafe(782, 257), cafe(704, 295), cafe(746, 295)],
+  conversation: cafe(632, 276),
+  // The espresso machine's own top edge (companion-stage.ts draws 'cafe_espresso' at cafe(730, 55)
+  // with origin (.5,1) and a 30px-tall frame, so its top sits around local y=25) - where
+  // companion-position-props.ts anchors the tending steam wisp. Kept as its own named point rather
+  // than reusing `operator` (the resident's own foot position at the counter, well below the
+  // machine) so the wisp rises from the machine, not from the barista's feet.
+  machine: cafe(730, 27),
+}
+/** Garden interiors were authored as `x + GARDEN_OFFSET_X, y`; the offset now also carries the
+ * garden's current origin, and `gardenY` its vertical move. */
+export const GARDEN_OFFSET_X = shift('garden', 288, 0).x
+export const gardenY = (y: number) => shift('garden', 0, y).y
 export const CAFE_SEATS: CafeSeat[] = [...CAFE_WORK_SEATS, ...CAFE_WINDOW_SEATS]
 export function cafeSeatAt(point: { x: number; y: number }) {
   return CAFE_SEATS.find(seat => Math.abs(seat.x - point.x) < .5 && Math.abs(seat.y - point.y) < .5)
@@ -57,7 +66,7 @@ export function cafeSeatAt(point: { x: number; y: number }) {
 // CAFE_SEATS, POSITION_SLOTS, RAIN_SHELTERS) keeps its exact old coordinates; the three new
 // buildings below live entirely past the old x=1248 right edge, in the newly added strip, so
 // nothing already drawn had to shift.
-export const COMPANION_WORLD_SIZE = { width: 2048, height: 1408 } as const
+export const COMPANION_WORLD_SIZE = TOWN_LAYOUT.world
 export interface HomeRoom {
   x: number; y: number; w: number; h: number
   /** An open standing point, the front doorstep, and the owned bed's foot anchor. */
@@ -81,18 +90,10 @@ function homeRoom(x: number, y: number, w: number, h: number): HomeRoom {
  * side, never past the canvas edge. `weaver` (阿满) is deliberately absent here: she shares
  * 知夏's `artist` room as a flat-mate rather than getting a new building - see her bed/desk in
  * POSITION_SLOTS below, placed inside this same room but clear of its furniture. */
-export const HOME_ROOMS: Record<string, HomeRoom> = {
-  owner: homeRoom(80, 108, 128, 224), student: homeRoom(216, 108, 128, 224),
-  artist: homeRoom(96, 492, 160, 208), gardener: homeRoom(288, 492, 160, 208),
-  self: homeRoom(480, 492, 160, 208), fixer: homeRoom(1080, 480, 160, 224),
-  // 南巷的十户组成第二版居住区。年轻人的房子会容纳三到四个独立卧室角，年长居民
-  // 独居或两人同住；位置 id 仍属于后端，这里只给每张床和桌子一个稳定像素。
-  barista: homeRoom(48, 816, 280, 220), botanist: homeRoom(360, 816, 280, 220),
-  messenger: homeRoom(672, 816, 280, 220), baker: homeRoom(984, 816, 280, 220),
-  florist: homeRoom(1296, 816, 280, 220), scholar: homeRoom(48, 1112, 280, 220),
-  tailor: homeRoom(360, 1112, 280, 220), masseur: homeRoom(672, 1112, 280, 220),
-  broker: homeRoom(984, 1112, 280, 220), trader: homeRoom(1296, 1112, 280, 220),
-}
+// 南巷的十户组成第二版居住区。年轻人的房子会容纳三到四个独立卧室角，年长居民
+// 独居或两人同住；位置 id 仍属于后端，这里只给每张床和桌子一个稳定像素。
+export const HOME_ROOMS: Record<string, HomeRoom> = Object.fromEntries(
+  Object.entries(TOWN_LAYOUT.homes).map(([id, r]) => [id, homeRoom(r.x, r.y, r.w, r.h)]))
 /**
  * Three new buildings east of the original 1248-wide canvas (the new strip runs x=1248..1548).
  * Academy and gym are real rooms drawn with the same `room()` helper as the homes/cafe; the board
@@ -103,13 +104,14 @@ export const HOME_ROOMS: Record<string, HomeRoom> = {
  * doorway, down to the street's main bottom path - see the connecting `path()` calls in
  * companion-stage.ts.
  */
-export const ACADEMY_ROOM = { x: 1268, y: 40, w: 260, h: 220, doorX: 1398 } as const
-export const GYM_ROOM = { x: 1268, y: 480, w: 260, h: 220, doorX: 1398 } as const
-export const BOARD_AREA = { x: 1268, y: 300, w: 200, h: 140 } as const
-export const SHOP_ROOM = { x: 1580, y: 448, w: 420, h: 260, doorX: 1790 } as const
+const room = (id: 'academy' | 'gym' | 'shop') => { const b = TOWN_LAYOUT.buildings[id]; return { x: b.x, y: b.y, w: b.w, h: b.h, doorX: b.x + b.doorX! } }
+export const ACADEMY_ROOM = room('academy')
+export const GYM_ROOM = room('gym')
+export const BOARD_AREA = { ...TOWN_LAYOUT.buildings.board }
+export const SHOP_ROOM = room('shop')
 export const PLACE_FRAMES = {
-  home: { x: 36, y: 96, w: 1552, h: 1260 }, cafe: { x: 372, y: 0, w: 664, h: 576 },
-  garden: { x: 1036, y: 192, w: 184, h: 274 }, street: { x: 32, y: 344, w: 816, h: 132 },
+  home: TOWN_LAYOUT.homeFrame, cafe: { ...cafe(372, 0), w: 664, h: 576 },
+  garden: { ...TOWN_LAYOUT.buildings.garden }, street: { ...TOWN_LAYOUT.buildings.street },
   academy: { x: ACADEMY_ROOM.x, y: ACADEMY_ROOM.y, w: ACADEMY_ROOM.w, h: ACADEMY_ROOM.h },
   gym: { x: GYM_ROOM.x, y: GYM_ROOM.y, w: GYM_ROOM.w, h: GYM_ROOM.h },
   board: { x: BOARD_AREA.x, y: BOARD_AREA.y, w: BOARD_AREA.w, h: BOARD_AREA.h },
@@ -139,25 +141,25 @@ export type StagePlace = {
 export const STAGE_PLACES: Record<string, StagePlace> = {
   // Real places: camera targets point at the actual room/seat, not each frame's geometric centre,
   // so the docked strip's short, wide window reads as a different corner of town per destination.
-  street: { id: 'street', label: '门前小街', target: { x: 440, y: 410 }, frame: PLACE_FRAMES.street, scenePlace: 'street', status: 'ready' },
-  home: { id: 'home', label: '归家小屋', target: { x: 560, y: 596 }, frame: PLACE_FRAMES.home, scenePlace: 'home', status: 'ready' },
-  cafe: { id: 'cafe', label: '慢慢咖啡', target: { x: 640, y: 190 }, frame: PLACE_FRAMES.cafe, scenePlace: 'cafe', status: 'ready' },
-  garden: { id: 'garden', label: '门前花园', target: { x: 1128, y: 329 }, frame: PLACE_FRAMES.garden, scenePlace: 'garden', status: 'ready' },
+  street: { id: 'street', label: '门前小街', target: shift('street', 440, 410), frame: PLACE_FRAMES.street, scenePlace: 'street', status: 'ready' },
+  home: { id: 'home', label: '归家小屋', target: { x: HOME_ROOMS.self!.x + 80, y: HOME_ROOMS.self!.y + 104 }, frame: PLACE_FRAMES.home, scenePlace: 'home', status: 'ready' },
+  cafe: { id: 'cafe', label: '慢慢咖啡', target: cafe(640, 190), frame: PLACE_FRAMES.cafe, scenePlace: 'cafe', status: 'ready' },
+  garden: { id: 'garden', label: '门前花园', target: shift('garden', 1128, 329), frame: PLACE_FRAMES.garden, scenePlace: 'garden', status: 'ready' },
   // The board is an open-air plaza (BOARD_AREA), not a room - target points at the two mounted
   // boards themselves, not the plaza's geometric centre (which would frame mostly empty paving).
-  board: { id: 'board', label: '公告板广场', target: { x: 1373, y: 360 }, frame: PLACE_FRAMES.board, scenePlace: 'board', status: 'ready' },
+  board: { id: 'board', label: '公告板广场', target: shift('board', 1373, 360), frame: PLACE_FRAMES.board, scenePlace: 'board', status: 'ready' },
   // Target points at the study desk/blackboard corner (ACADEMY_ROOM), the part of the room that
   // actually has content, rather than the room's own geometric centre.
-  academy: { id: 'academy', label: '梧桐学院', target: { x: 1398, y: 180 }, frame: PLACE_FRAMES.academy, scenePlace: 'academy', status: 'ready' },
+  academy: { id: 'academy', label: '梧桐学院', target: shift('academy', 1398, 180), frame: PLACE_FRAMES.academy, scenePlace: 'academy', status: 'ready' },
   // Target points at the mirror/rack equipment cluster (GYM_ROOM), same reasoning as academy.
-  gym: { id: 'gym', label: '河岸健身房', target: { x: 1358, y: 620 }, frame: PLACE_FRAMES.gym, scenePlace: 'gym', status: 'ready' },
-  shop: { id: 'shop', label: '南巷商店', target: { x: 1790, y: 590 }, frame: PLACE_FRAMES.shop, scenePlace: 'shop', status: 'ready' },
+  gym: { id: 'gym', label: '河岸健身房', target: shift('gym', 1358, 620), frame: PLACE_FRAMES.gym, scenePlace: 'gym', status: 'ready' },
+  shop: { id: 'shop', label: '南巷商店', target: shift('shop', 1790, 590), frame: PLACE_FRAMES.shop, scenePlace: 'shop', status: 'ready' },
   // A virtual place, not a building: "wherever the avatar currently is". /today binds here instead
   // of a fixed 'street' target, because the street itself is usually empty (everyone is inside a
   // home or the cafe) - TownStage.vue overrides both `target` and `label` every render from the
   // live world (world.avatar's resolved position/place, via companion-scene.ts's residentTarget()
   // and scenePlace()); the values below are only the static fallback used before a world loads.
-  avatar: { id: 'avatar', label: '门前小街', target: { x: 440, y: 410 }, scenePlace: 'street', status: 'ready' },
+  avatar: { id: 'avatar', label: '门前小街', target: shift('street', 440, 410), scenePlace: 'street', status: 'ready' },
 }
 const warnedStagePlaceIds = new Set<string>()
 /**
@@ -203,16 +205,16 @@ export const POSITION_SLOTS: Record<string, { x: number; y: number }[]> = {
   'cafe-window-5': [{ x: CAFE_WINDOW_SEATS[4]!.x, y: CAFE_WINDOW_SEATS[4]!.y }],
   'cafe-window-6': [{ x: CAFE_WINDOW_SEATS[5]!.x, y: CAFE_WINDOW_SEATS[5]!.y }],
   // Public street bench (capacity 4).
-  'street-bench': [{ x: 274, y: 454 }, { x: 306, y: 454 }, { x: 484, y: 454 }, { x: 516, y: 454 }],
+  'street-bench': [shift('street', 274, 454), shift('street', 306, 454), shift('street', 484, 454), shift('street', 516, 454)],
   // Public garden bench (capacity 3), distinct from the tended plots.
-  'garden-bench': [{ x: 1109, y: 439 }, { x: 1137, y: 439 }, { x: 1165, y: 439 }],
+  'garden-bench': [shift('garden', 1109, 439), shift('garden', 1137, 439), shift('garden', 1165, 439)],
   // The gardener's own tended plot (capacity 1) - a specific bed of soil, not the shared bench.
-  'garden-plot': [{ x: 1137, y: 356 }],
-  'academy-desk-1': [{ x: 1330, y: 220 }],
-  'academy-desk-2': [{ x: 1398, y: 220 }],
-  'academy-desk-3': [{ x: 1466, y: 220 }],
-  'gym-bench': [{ x: 1320, y: 672 }, { x: 1370, y: 672 }, { x: 1420, y: 672 }],
-  'shop-workbench': [{ x: 1897, y: 666 }],
+  'garden-plot': [shift('garden', 1137, 356)],
+  'academy-desk-1': [shift('academy', 1330, 220)],
+  'academy-desk-2': [shift('academy', 1398, 220)],
+  'academy-desk-3': [shift('academy', 1466, 220)],
+  'gym-bench': [shift('gym', 1320, 672), shift('gym', 1370, 672), shift('gym', 1420, 672)],
+  'shop-workbench': [shift('shop', 1897, 666)],
   // Each resident's own bed, in their own home - the fix for "everyone sleeps in the same bed":
   // every id below is now a distinct, non-overlapping spot.
   'home-owner-bed': [HOME_ROOMS.owner!.bed],
@@ -277,6 +279,37 @@ for (const [homeId, room] of Object.entries(HOME_ROOMS)) {
     { x: room.x + room.w * .64, y: room.y + room.h - 18 }, { x: room.x + room.w - 20, y: room.y + room.h - 18 },
   ]
   POSITION_SLOTS[`home-${homeId}-bathroom`] ??= [{ x: room.x + room.w / 2, y: room.y + room.h - 16 }]
+}
+
+// Every resident id the shared-household POSITION_SLOTS loop above placed a bed for. Used only by
+// sleepSpriteOffset() below to tell the two independently-authored bed-drawing conventions apart.
+const SHARED_HOUSEHOLD_RESIDENT_IDS = new Set(Object.values(HOUSEHOLD_MEMBERS).flat())
+/**
+ * How far above a sleeping resident's own occupancy pixel (their `home-<id>-bed` POSITION_SLOTS
+ * entry) the sleep sprite should sit, so its own foot lands on the bed sprite's foot instead of
+ * floating somewhere between the bed and the ceiling.
+ *
+ * companion-stage.ts authored beds two different ways with two different gaps between the bed
+ * image's own bottom edge and the occupancy pixel used here and in sync():
+ *  - the six solo homes (`!members` branch, `image(x + 32, y + 129, ...)`) and 阿满's own bed
+ *    inside 知夏's shared room (`image(x + 104, y + 118, ...)`) both leave a 15px gap - their
+ *    bed image sits 15px above where the occupant actually stands (`homeRoom()`'s `y + 144`, or
+ *    the weaver's own hand-placed `y + 133`);
+ *  - the shared-household loop above (`image(bed.x, bed.y - 4, ...)`) leaves only a 4px gap.
+ * A single sprite offset tuned for one of these (the old flat `-40`, well past either gap) put
+ * every sleeping resident's head above their own room's wall - see docs/... (task: "head poking
+ * out of the wall"). `-gap` instead lands the sprite's own foot exactly on the bed image's foot in
+ * both conventions; the sprite is a fixed 64px tall regardless of branch, so a small shared-home
+ * bed (its image is only ~52px tall at that branch's own .68 scale) still has the sleeper's head
+ * overshoot its own pillow a little - the shared beds are simply shorter than a standing character
+ * is tall, a furniture-scale mismatch no single offset can fully hide - but only by a few px, not
+ * a whole room's height. Falls back to the solo/15px gap for anything that is not a recognised
+ * `home-<id>-bed` positionId (an old save, or a fallback `room.bed` placement, which uses the same
+ * `homeRoom()` geometry as the solo branch anyway).
+ */
+export function sleepSpriteOffset(positionId?: string | null): number {
+  const residentId = positionId?.match(/^home-(.+)-bed$/)?.[1]
+  return residentId && SHARED_HOUSEHOLD_RESIDENT_IDS.has(residentId) ? -4 : -15
 }
 
 export const RESIDENT_ACTIONS = {

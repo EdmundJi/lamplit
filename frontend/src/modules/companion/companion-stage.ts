@@ -1,8 +1,10 @@
 import type Phaser from 'phaser'
-import { CAFE_TABLES, CAFE_WINDOW_SEATS, CAFE_WINDOW_TABLES, CAFE_ROOM, CAFE_WINDOW_ROOM, CAFE_SERVICE, COMPANION_WORLD_SIZE, HOME_ROOMS, HOUSEHOLD_MEMBERS, GARDEN_OFFSET_X, ACADEMY_ROOM, GYM_ROOM, BOARD_AREA, SHOP_ROOM, POSITION_SLOTS } from './companion-art'
+import { CAFE_TABLES, CAFE_WINDOW_SEATS, CAFE_WINDOW_TABLES, CAFE_ROOM, CAFE_WINDOW_ROOM, CAFE_SERVICE, COMPANION_WORLD_SIZE, HOME_ROOMS, HOUSEHOLD_MEMBERS, GARDEN_OFFSET_X, ACADEMY_ROOM, GYM_ROOM, BOARD_AREA, SHOP_ROOM, POSITION_SLOTS, gardenY } from './companion-art'
+import { TOWN_LAYOUT, shift } from './town-layout'
 
 /** A small cutaway street, using the locally licensed LimeZu furniture at one human scale. */
-export function buildCompanionStage(scene: Phaser.Scene) {
+export type StageGround = { tiledGround: boolean; decor: { x: number; y: number; frame: string; scale: number }[] }
+export function buildCompanionStage(scene: Phaser.Scene, tiled?: StageGround) {
   const objects: Phaser.GameObjects.GameObject[] = []
   // Every small in-canvas place name ("点单"/"取餐"/"门前花园", numbered doorsteps, "慢慢咖啡") drawn
   // by label() below, kept separately so CompanionStreetScene can hide them all together for the
@@ -27,46 +29,39 @@ export function buildCompanionStage(scene: Phaser.Scene) {
     const t = scene.add.text(x, y, text, { fontFamily: 'system-ui', fontSize: small ? '8px' : '10px', resolution: 3, color: '#4f594b', backgroundColor: '#e8e3d0', padding: { x: 5, y: 2 } }).setOrigin(.5).setDepth(750)
     objects.push(t); signage.push(t)
   }
-  const plant = (x: number, y: number, frame: string, scale = 1) => image(x >= 736 ? x + GARDEN_OFFSET_X : x, y, frame, scale, 'town')?.setTint(0xb8c0a5)
+  // Planting was authored in absolute pixels: x >= 736 belonged to the garden (drawn at x + 288),
+  // everything else to the street block. Each part now moves with its own block.
+  const plant = (x: number, y: number, frame: string, scale = 1) => {
+    const p = x >= 736 ? { x: x + GARDEN_OFFSET_X, y: gardenY(y) } : shift('street', x, y)
+    return image(p.x, p.y, frame, scale, 'town')?.setTint(0xb8c0a5)
+  }
   const path = (x: number, y: number, w: number, h: number) => {
     // Let connected patches merge; outlining every rectangle draws false seams at junctions.
     rect(x, y, w, h, 0xc5bfa8)
     tile(x, y, w, h, 'sidewalk_25', 'town', 0xddd5bd, .32)
   }
-  rect(0, 0, COMPANION_WORLD_SIZE.width, COMPANION_WORLD_SIZE.height, 0x96a486)
-  // Sparse ground texture and grouped planting leave people as the highest contrast detail.
-  for (let i = 0; i < 760; i++) rect(i * 137 % COMPANION_WORLD_SIZE.width, i * 97 % COMPANION_WORLD_SIZE.height, 2, 1, i % 3 ? 0xc2c8a7 : 0x788e71, .3)
-  path(32, 364, 816, 96)
-  path(816, 424, 32, 168)
-  path(816, 560, 256, 32)
-  path(1040, 424, 32, 168)
-  path(752 + GARDEN_OFFSET_X, 224, 40, 236)
-  path(48, 424, 32, 312)
-  // Widened to also pass under fixer's new house doorstep (x:1186-1218) - kept identical to the
-  // matching walkable rect in companion-navigation.ts so the drawn path and the collision box
-  // never disagree.
-  path(48, 708, 1170, 32)
-  path(656, 424, 32, 312)
+  // With the generated Tiled map (scripts/build-town-map.py) the ground, lanes and doorsteps are
+  // tiles already; without it, the flat painted fallback below keeps the scene usable.
+  const painted = !tiled?.tiledGround
+  if (painted) {
+    rect(0, 0, COMPANION_WORLD_SIZE.width, COMPANION_WORLD_SIZE.height, 0x96a486)
+    // Sparse ground texture and grouped planting leave people as the highest contrast detail.
+    for (let i = 0; i < 760; i++) rect(i * 137 % COMPANION_WORLD_SIZE.width, i * 97 % COMPANION_WORLD_SIZE.height, 2, 1, i % 3 ? 0xc2c8a7 : 0x788e71, .3)
+    for (const p of TOWN_LAYOUT.paths) path(p.x, p.y, p.w, p.h)
+  }
   // A shallow curb gives the street an edge without walling it off in hedges.
-  rect(82, 459, 572, 4, 0xe0d6bd, 1, structure)
-  for (const home of Object.values(HOME_ROOMS)) path(home.door.x - 16, home.y + home.h, 32, home.y < 400 ? 34 : 24)
-  path(CAFE_ROOM.doorX - 16, 332, 32, 32)
-  // East wing, past the old x=1248 edge: a single vertical corridor connects academy's own
-  // doorway, through the open-air board plaza, into the gym's doorway, down to the same bottom
-  // path fixer's house already uses - see ACADEMY_ROOM/GYM_ROOM/BOARD_AREA in companion-art.ts.
-  // The bottom path itself is extended flush to the new world edge (old end 1218 -> new end 1548).
-  path(1218, 708, 330, 32)
-  path(ACADEMY_ROOM.doorX - 16, ACADEMY_ROOM.y + ACADEMY_ROOM.h, 32, BOARD_AREA.y - (ACADEMY_ROOM.y + ACADEMY_ROOM.h))
-  path(BOARD_AREA.x, BOARD_AREA.y, BOARD_AREA.w, BOARD_AREA.h)
-  path(GYM_ROOM.doorX - 16, BOARD_AREA.y + BOARD_AREA.h, 32, GYM_ROOM.y - (BOARD_AREA.y + BOARD_AREA.h))
-  path(GYM_ROOM.doorX - 16, GYM_ROOM.y + GYM_ROOM.h, 32, 24)
-  // 南巷把新增十户接回旧街区。两条横巷经过每扇门，中间的窄路负责把两个街区连起来；
-  // 与 companion-navigation.ts 的 walkable 矩形逐项一致。
-  path(1218, 708, 782, 32)
-  path(952, 708, 32, 672)
-  path(32, 1052, 1556, 32)
-  path(32, 1348, 1556, 32)
-  path(SHOP_ROOM.doorX - 16, SHOP_ROOM.y + SHOP_ROOM.h, 32, 32)
+  { const c = shift('street', 82, 459); rect(c.x, c.y, 572, 4, 0xe0d6bd, 1, structure) }
+  if (painted) for (const home of Object.values(HOME_ROOMS)) path(home.door.x - 16, home.y + home.h, 32, home.y < 400 ? 34 : 24)
+  if (painted) path(CAFE_ROOM.doorX - 16, CAFE_ROOM.y + CAFE_ROOM.h, 32, 32)
+  // East wing: a single vertical corridor connects academy's doorway, through the open-air board
+  // plaza, into the gym's doorway, down to the bottom lane (see ACADEMY_ROOM/GYM_ROOM/BOARD_AREA).
+  if (painted) {
+    path(ACADEMY_ROOM.doorX - 16, ACADEMY_ROOM.y + ACADEMY_ROOM.h, 32, BOARD_AREA.y - (ACADEMY_ROOM.y + ACADEMY_ROOM.h))
+    path(BOARD_AREA.x, BOARD_AREA.y, BOARD_AREA.w, BOARD_AREA.h)
+    path(GYM_ROOM.doorX - 16, BOARD_AREA.y + BOARD_AREA.h, 32, GYM_ROOM.y - (BOARD_AREA.y + BOARD_AREA.h))
+    path(GYM_ROOM.doorX - 16, GYM_ROOM.y + GYM_ROOM.h, 32, 24)
+    path(SHOP_ROOM.doorX - 16, SHOP_ROOM.y + SHOP_ROOM.h, 32, 32)
+  }
 
   function room(x: number, y: number, w: number, h: number, doorX: number | undefined, warm = false, openRight = false, openLeftUntil = y) {
     rect(x + 8, y + 12, w + 2, h + 1, 0x52634d, .23)
@@ -182,21 +177,30 @@ export function buildCompanionStage(scene: Phaser.Scene) {
   })
 
   room(CAFE_ROOM.x, CAFE_ROOM.y, CAFE_ROOM.w, CAFE_ROOM.h, CAFE_ROOM.doorX, false, true)
-  room(CAFE_WINDOW_ROOM.x, CAFE_WINDOW_ROOM.y, CAFE_WINDOW_ROOM.w, CAFE_WINDOW_ROOM.h, undefined, false, false, 332)
-  label(624, 27, '慢慢咖啡')
+  // Cafe, garden and street interiors keep the pixels they were authored at and move with their
+  // building (see town-layout.ts); depths that were absolute y-values move with them.
+  const at = (b: 'cafe' | 'garden' | 'street', x: number, y: number) => shift(b, x, y)
+  const dy = (b: 'cafe' | 'garden' | 'street') => shift(b, 0, 0).y
+  const imageIn = (b: 'cafe' | 'garden' | 'street', x: number, y: number, frame: string, scale = 1, atlas = 'interior', depth?: number) => {
+    const p = at(b, x, y); return image(p.x, p.y, frame, scale, atlas, depth === undefined ? p.y : depth + dy(b))
+  }
+  const rectIn = (b: 'cafe' | 'garden' | 'street', x: number, y: number, w: number, h: number, color: number, alpha = 1, g = ground) => { const p = at(b, x, y); rect(p.x, p.y, w, h, color, alpha, g) }
+  const labelIn = (b: 'cafe' | 'garden' | 'street', x: number, y: number, text: string, small = false) => { const p = at(b, x, y); label(p.x, p.y, text, small) }
+  room(CAFE_WINDOW_ROOM.x, CAFE_WINDOW_ROOM.y, CAFE_WINDOW_ROOM.w, CAFE_WINDOW_ROOM.h, undefined, false, false, CAFE_ROOM.y + CAFE_ROOM.h)
+  labelIn('cafe', 624, 27, '慢慢咖啡')
   // A back worktop and a customer counter enclose an actual staff aisle, open at the left.
-  image(734, 80, 'cafe_counter', 1.3)
-  image(730, 55, 'cafe_espresso', 1, 'interior', 81)
-  image(790, 59, 'cafe_moka', .8, 'interior', 81)
-  image(605, 78, 'fridge_1', .55)
-  image(734, 178, 'cafe_counter', 1.4)
-  image(671, 153, 'cafe_pastries', .8, 'interior', 179)
-  image(800, 160, 'coffee_cup', .75, 'interior', 179)
-  image(409, 98, 'office_books', .6, 'companion')
-  image(411, 315, 'plant_2', .65)
+  imageIn('cafe', 734, 80, 'cafe_counter', 1.3)
+  imageIn('cafe', 730, 55, 'cafe_espresso', 1, 'interior', 81)
+  imageIn('cafe', 790, 59, 'cafe_moka', .8, 'interior', 81)
+  imageIn('cafe', 605, 78, 'fridge_1', .55)
+  imageIn('cafe', 734, 178, 'cafe_counter', 1.4)
+  imageIn('cafe', 671, 153, 'cafe_pastries', .8, 'interior', 179)
+  imageIn('cafe', 800, 160, 'coffee_cup', .75, 'interior', 179)
+  imageIn('cafe', 409, 98, 'office_books', .6, 'companion')
+  imageIn('cafe', 411, 315, 'plant_2', .65)
   // Minimal counter signs make the order/pickup relationship readable without floor arrows.
-  label(CAFE_SERVICE.order.x, 185, '点单', true)
-  label(CAFE_SERVICE.pickup.x, 185, '取餐', true)
+  label(CAFE_SERVICE.order.x, at('cafe', 0, 185).y, '点单', true)
+  label(CAFE_SERVICE.pickup.x, at('cafe', 0, 185).y, '取餐', true)
   const sideChair = (seat: { x: number; y: number; facing: 'left' | 'right' }) => {
     image(seat.x, seat.y - 3, 'chair_2', 1, 'interior', seat.y - 1)?.setFlipX(seat.facing === 'right')
   }
@@ -209,47 +213,51 @@ export function buildCompanionStage(scene: Phaser.Scene) {
   // chairs belong to independent capacity-one positions, separate from the discussion tables.
   // Use only the licensed tabletop region, excluding the legs that otherwise create a gap
   // between modules. Six 69px panels share a continuous edge and a pair of end supports.
-  rect(975, 104, 47, 417, 0x756858, 1, structure)
-  rect(977, 106, 43, 413, 0xcab18d, 1, structure)
+  rectIn('cafe', 975, 104, 47, 417, 0x756858, 1, structure)
+  rectIn('cafe', 977, 106, 43, 413, 0xcab18d, 1, structure)
   for (const table of CAFE_WINDOW_TABLES) {
     image(table.x, table.y - 69, 'dining_table_1', 1, 'interior', table.y - 21)
       ?.setOrigin(.5, 0).setCrop(0, 0, 60, 76).setScale(.75, 69 / 76)
   }
-  rect(980, 521, 4, 5, 0x756858, 1, structure)
-  rect(1013, 521, 4, 5, 0x756858, 1, structure)
+  rectIn('cafe', 980, 521, 4, 5, 0x756858, 1, structure)
+  rectIn('cafe', 1013, 521, 4, 5, 0x756858, 1, structure)
   CAFE_WINDOW_SEATS.forEach(sideChair)
-  rect(1017, 76, 8, 452, 0x7d806c, 1, structure)
-  rect(1019, 78, 4, 448, 0xb8cfca, 1, structure)
-  for (const y of [150, 223, 292, 361, 430, 499]) rect(1019, y, 4, 2, 0xe5dac0, 1, structure)
+  rectIn('cafe', 1017, 76, 8, 452, 0x7d806c, 1, structure)
+  rectIn('cafe', 1019, 78, 4, 448, 0xb8cfca, 1, structure)
+  for (const y of [150, 223, 292, 361, 430, 499]) rectIn('cafe', 1019, y, 4, 2, 0xe5dac0, 1, structure)
 
-  label(853 + GARDEN_OFFSET_X, 211, '门前花园')
+  label(853 + GARDEN_OFFSET_X, gardenY(211), '门前花园')
   // The public bench is separate from the working plot.
   for (const [x, y, frame] of [[823, 287, 'farm_lettuce'], [885, 287, 'farm_carrots'], [823, 366, 'farm_tomatoes'], [885, 366, 'farm_lettuce']] as const) {
-    rect(x + GARDEN_OFFSET_X - 26, y - 37, 52, 39, 0x7f7256)
-    tile(x + GARDEN_OFFSET_X - 24, y - 35, 48, 35, 'farm_soil', 'companion')
-    image(x + GARDEN_OFFSET_X, y, frame, .9, 'companion')?.setTint(0xd3d0ac)
+    const gy = gardenY(y)
+    rect(x + GARDEN_OFFSET_X - 26, gy - 37, 52, 39, 0x7f7256)
+    tile(x + GARDEN_OFFSET_X - 24, gy - 35, 48, 35, 'farm_soil', 'companion')
+    image(x + GARDEN_OFFSET_X, gy, frame, .9, 'companion')?.setTint(0xd3d0ac)
   }
-  path(801 + GARDEN_OFFSET_X, 390, 104, 63)
-  image(849 + GARDEN_OFFSET_X, 433, 'gardenbench_1', 1, 'town')?.setTint(0xd2c5a7)
+  path(801 + GARDEN_OFFSET_X, gardenY(390), 104, 63)
+  image(849 + GARDEN_OFFSET_X, gardenY(433), 'gardenbench_1', 1, 'town')?.setTint(0xd2c5a7)
   plant(918, 440, 'flowers_3', .7)
-  for (const x of [290, 500]) image(x, 448, 'gardenbench_1', 1, 'town')?.setTint(0xd2c5a7)
+  for (const x of [290, 500]) imageIn('street', x, 448, 'gardenbench_1', 1, 'town')?.setTint(0xd2c5a7)
   plant(357, 454, 'flowerbush_4', .65)
   plant(565, 456, 'flowerbush_4', .65)
-  image(362, 359, 'lamp_5', .7, 'town')
-  image(796 + GARDEN_OFFSET_X, 457, 'lamp_5', .7, 'town')
+  imageIn('street', 362, 359, 'lamp_5', .7, 'town')
+  image(796 + GARDEN_OFFSET_X, gardenY(457), 'lamp_5', .7, 'town')
   // Grouped foliage frames corners and open lawn, rather than repeated hedge borders.
   // Two entries that used to sit in the open lawn below-right of the garden ([928,667,1.35] tree,
   // [781,738,.8] tree) were removed/moved - that lawn is now fixer's house footprint (HOME_ROOMS.
   // fixer). [781,738] is nudged to clear open ground instead of grazing the new building's corner.
-  for (const [x, y, scale] of [[26, 164, 1], [357, 93, .75], [936, 181, 1.2], [20, 352, 1], [947, 380, 1], [17, 614, 1.2], [718, 608, .95], [700, 700, .8]] as const) plant(x, y, 'tree_2', scale)
+  // The generated map carries its own planting (open lawns only, clear of every lane and door).
+  for (const d of tiled?.decor ?? []) image(d.x, d.y, d.frame, d.scale, 'town')?.setTint(0xb8c0a5)
+  if (painted) for (const [x, y, scale] of [[26, 164, 1], [357, 93, .75], [936, 181, 1.2], [20, 352, 1], [947, 380, 1], [17, 614, 1.2], [718, 608, .95], [700, 700, .8]] as const) plant(x, y, 'tree_2', scale)
   // Two entries that used to sit in the same now-built-on lawn ([789,657,.8], [883,726,1]) were
   // dropped rather than relocated - they were background filler, not load-bearing detail.
-  for (const [x, y, scale] of [[37, 44, .8], [75, 39, .9], [111, 47, .7], [755, 88, .8], [794, 96, 1], [839, 87, .8], [899, 53, 1], [936, 51, .8], [34, 487, .8], [747, 665, .9]] as const) plant(x, y, 'bush_2', scale)
+  if (painted) for (const [x, y, scale] of [[37, 44, .8], [75, 39, .9], [111, 47, .7], [755, 88, .8], [794, 96, 1], [839, 87, .8], [899, 53, 1], [936, 51, .8], [34, 487, .8], [747, 665, .9]] as const) plant(x, y, 'bush_2', scale)
   // The flowerbush and the third (purely decorative, unpositioned) garden bench that used to sit
   // here were dropped for the same reason - fixer's house now occupies that ground.
   // The chicken survives, moved up next to the farm beds it always belonged near.
-  const chicken = image(1195, 405, 'farm_chicken_0', 1, 'companion')
-  if (chicken) scene.tweens.add({ targets: chicken, y: 403, duration: 1100, yoyo: true, repeat: -1 })
+  const chickenAt = at('garden', 1195, 405)
+  const chicken = image(chickenAt.x, chickenAt.y, 'farm_chicken_0', 1, 'companion')
+  if (chicken) scene.tweens.add({ targets: chicken, y: chickenAt.y - 2, duration: 1100, yoyo: true, repeat: -1 })
 
   // --- East wing: academy, board plaza, gym - the three places past the old x=1248 canvas edge
   // (see ACADEMY_ROOM/GYM_ROOM/BOARD_AREA in companion-art.ts). Academy and gym reuse the same
@@ -307,7 +315,7 @@ export function buildCompanionStage(scene: Phaser.Scene) {
       scene.anims.create({ key: 'street-pigeon-peck', frames: [1, 2, 3, 4, 5, 6].map(n => ({ key: 'town', frame: `pigeon_${n}` })), frameRate: 3, repeat: -1 })
     }
     // Well clear of the benches (x 290/500) and the lamp (362,359) so nothing overlaps.
-    for (const [x, y] of [[140, 412], [612, 420]] as const) {
+    for (const [x, y] of [[140, 412], [612, 420]].map(([px, py]) => { const p = at('street', px!, py!); return [p.x, p.y] as const })) {
       const pigeon = scene.add.sprite(x, y, 'town', 'pigeon_1').setScale(.55).setDepth(y)
       objects.push(pigeon)
       pigeon.play('street-pigeon-peck')
@@ -316,7 +324,7 @@ export function buildCompanionStage(scene: Phaser.Scene) {
     }
   }
   // A couple of leaves drifting over open lawn - cheap graphics, no extra art asset needed.
-  for (const [x, y] of [[905, 300], [1005, 350]] as const) {
+  for (const [x, y] of [[905, 300], [1005, 350]].map(([px, py]) => [px! + GARDEN_OFFSET_X - 288, gardenY(py!)] as const)) {
     const leaf = scene.add.graphics().setDepth(150)
     leaf.fillStyle(0x8a9a5b, .8).fillEllipse(0, 0, 5, 3)
     leaf.setPosition(x, y)

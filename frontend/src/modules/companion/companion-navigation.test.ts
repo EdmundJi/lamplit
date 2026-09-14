@@ -5,6 +5,8 @@ import { residentPosition } from './companion-scene'
 import { canStand } from '../../shared/scene/collision'
 import { clearSegment } from '../../shared/scene/pathfinding'
 import { CAFE_SERVICE, CAFE_TABLES, CAFE_SEATS, CAFE_WINDOW_SEATS, CAFE_WINDOW_TABLES, POSITION_SLOTS, HOME_ROOMS, HOUSEHOLD_MEMBERS } from './companion-art'
+import { shift } from './town-layout'
+const west = (x: number, y: number) => shift('street', x, y)
 
 it('every customer route connects entry, order, pickup and all ten seats without entering the staff aisle', () => {
   const stops = [CAFE_SERVICE.entry, CAFE_SERVICE.order, CAFE_SERVICE.pickup, ...CAFE_SERVICE.waiting, ...CAFE_SEATS].map(({ x, y }) => ({ x, y }))
@@ -32,20 +34,20 @@ it('the window row has six independent single seats facing joined desktops, clea
   for (const [index, id] of ids.entries()) {
     expect(POSITION_SLOTS[id]).toHaveLength(1)
     expect(CAFE_WINDOW_SEATS[index]!.facing).toBe('right')
-    expect(canStand({ x: 924, y: CAFE_WINDOW_SEATS[index]!.y }, COMPANION_COLLISION)).toBe(true)
-    expect(clearSegment({ x: 924, y: CAFE_WINDOW_SEATS[index]!.y }, CAFE_WINDOW_SEATS[index]!, COMPANION_COLLISION)).toBe(true)
+    expect(canStand({ x: west(924, 0).x, y: CAFE_WINDOW_SEATS[index]!.y }, COMPANION_COLLISION)).toBe(true)
+    expect(clearSegment({ x: west(924, 0).x, y: CAFE_WINDOW_SEATS[index]!.y }, CAFE_WINDOW_SEATS[index]!, COMPANION_COLLISION)).toBe(true)
   }
   // Native vertical tables at .75 scale are 69 px deep and meet edge to edge.
   expect(CAFE_WINDOW_TABLES).toHaveLength(6)
   for (let index = 1; index < 6; index++) expect(CAFE_WINDOW_TABLES[index]!.y - CAFE_WINDOW_TABLES[index - 1]!.y).toBe(69)
-  expect(clearSegment(CAFE_SERVICE.pickup, { x: 924, y: 215 }, COMPANION_COLLISION)).toBe(true)
+  expect(clearSegment(CAFE_SERVICE.pickup, west(924, 215), COMPANION_COLLISION)).toBe(true)
 })
 
 it('staff reach the machine by going around the end of the real counter, never through it', () => {
   expect(clearSegment(CAFE_SERVICE.order, CAFE_SERVICE.operator, COMPANION_COLLISION)).toBe(false)
   const path = companionPath(CAFE_SERVICE.order, CAFE_SERVICE.operator)
   expect(path.length).toBeGreaterThan(1)
-  expect(path.some(point => point.x < 622)).toBe(true)
+  expect(path.some(point => point.x < west(622, 0).x)).toBe(true)
   expect(path.at(-1)).toEqual(CAFE_SERVICE.operator)
   let previous: { x: number; y: number } = CAFE_SERVICE.order
   for (const next of path) { expect(clearSegment(previous, next, COMPANION_COLLISION)).toBe(true); previous = next }
@@ -65,7 +67,7 @@ it('two-person tables have opposing seated orientations with a table between the
 })
 
 it('every life destination is reachable through doors without crossing furniture', () => {
-  const entrance = { x: 535, y: 396 }
+  const entrance = west(535, 396)
   for (const place of ['home', 'cafe', 'garden', 'street']) {
     for (const activity of ['study', 'garden', 'rest', 'sleep', 'create', 'drink']) {
       for (let index = 0; index < 5; index++) {
@@ -90,11 +92,14 @@ it('changing desks inside the cafe does not send a resident out into the street'
   const to = residentPosition('cafe', 2, 'study')
   const path = companionPath(from, to)
   expect(path.length).toBeGreaterThan(0)
-  expect(path.every(point => point.y < 330)).toBe(true)
+  expect(path.every(point => point.y < west(0, 330).y)).toBe(true)
 })
 
+// This exercises every positionId × occupant, i.e. 420 full A* queries over the whole town, so it
+// runs well past the 5s default under a CPU-contended parallel `vitest run` even though it takes
+// ~2s alone — give it real headroom instead.
 it('every TownPlaces positionId (backend two-layer place model) lands on standable, reachable ground', () => {
-  const entrance = { x: 535, y: 396 }
+  const entrance = west(535, 396)
   const positionIds = Object.keys(POSITION_SLOTS)
   for (const positionId of positionIds) {
     // Exercise every occupant slot the position offers, not just the first.
@@ -107,10 +112,10 @@ it('every TownPlaces positionId (backend two-layer place model) lands on standab
       expect(path.at(-1), label).toEqual(destination)
     }
   }
-})
+}, 30_000)
 
 it('all ten second-version households and all four new public places are reachable without a street fallback', () => {
-  const entrance = { x: 535, y: 396 }
+  const entrance = west(535, 396)
   for (const homeId of Object.keys(HOUSEHOLD_MEMBERS)) {
     const room = HOME_ROOMS[homeId]!
     const target = { x: room.door.x, y: room.door.y }
@@ -169,7 +174,7 @@ const RESIDENT_IDS = ['owner', 'student', 'artist', 'gardener', 'avatar', 'fixer
 const homeLocation = (id: string) => `home-${id === 'avatar' ? 'self' : id === 'weaver' ? 'artist' : id}`
 
 it('free-stands every resident on standable, reachable ground in every place', () => {
-  const entrance = { x: 535, y: 396 }
+  const entrance = west(535, 396)
   for (const place of ['home', 'cafe', 'garden', 'street']) {
     for (const id of RESIDENT_IDS) {
       const location = place === 'home' ? homeLocation(id) : place
@@ -230,7 +235,7 @@ it('an existing resident keeps their exact spot when a newcomer with a lexicogra
 
 it('residentPosition threads a resident id and occupied points into the free-standing case, keeping the named-slot cases exact', () => {
   // Untouched: a recognised furniture-anchored activity still gets its exact old pixel.
-  expect(residentPosition('cafe', 0, 'focus', '', undefined, 0, 'owner')).toEqual({ x: 438, y: 176 })
+  expect(residentPosition('cafe', 0, 'focus', '', undefined, 0, 'owner')).toEqual(west(438, 176))
   // New: two different resident ids idling ('idle' matches no furniture-anchored branch) in the
   // same place, one already occupying a point, land on distinct, spread pixels.
   const first = residentPosition('street', 0, 'idle', '', undefined, 0, 'owner', [])

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { COMPANION_WORLD_SIZE, RESIDENT_ART, STAGE_PLACES, resolveStagePlace } from './companion-art'
+import { COMPANION_WORLD_SIZE, HOME_ROOMS, POSITION_SLOTS, RESIDENT_ART, STAGE_PLACES, resolveStagePlace, sleepSpriteOffset } from './companion-art'
 
 describe('stage place registry', () => {
   it('provides one distinct appearance for 25 residents and the player avatar', () => {
@@ -40,6 +40,37 @@ describe('stage place registry', () => {
   it('falls back an unknown id entirely to street', () => {
     expect(resolveStagePlace('unknown-place')).toEqual(STAGE_PLACES.street)
     expect(resolveStagePlace(undefined)).toEqual(STAGE_PLACES.street)
+  })
+  describe('sleepSpriteOffset: lands the sleep sprite\'s own foot on the bed image\'s foot', () => {
+    it('uses the solo-home gap (15px) for a hand-placed bed, not the shared-household one', () => {
+      expect(sleepSpriteOffset('home-fixer-bed')).toBe(-15)
+      expect(sleepSpriteOffset('home-owner-bed')).toBe(-15)
+      // 阿满 shares 知夏's room as a flat-mate but is not a HOUSEHOLD_MEMBERS entry - her bed was
+      // hand-placed the same way the solo homes were (companion-stage.ts's `id === 'artist'`
+      // branch), so she takes the same 15px gap, not the household one.
+      expect(sleepSpriteOffset('home-weaver-bed')).toBe(-15)
+    })
+    it('uses the shared-household gap (4px) for a HOUSEHOLD_MEMBERS bed', () => {
+      expect(sleepSpriteOffset('home-trainer-bed')).toBe(-4)
+      expect(sleepSpriteOffset('home-scholar-bed')).toBe(-4)
+    })
+    it('falls back to the (majority) solo gap for anything that is not a recognised bed positionId', () => {
+      expect(sleepSpriteOffset(undefined)).toBe(-15)
+      expect(sleepSpriteOffset(null)).toBe(-15)
+      expect(sleepSpriteOffset('cafe-counter')).toBe(-15)
+      expect(sleepSpriteOffset('home-unknown-resident-bed')).toBe(-15)
+    })
+    it('lands the sleeping sprite\'s own 64px-tall frame close to the bed image\'s real footprint, for a solo and a shared home alike', () => {
+      // companion-stage.ts draws the solo bed's own image bottom at `y + 129`, 15px above the
+      // occupancy pixel (`homeRoom()`'s `bed: { y: y + 144 }`) - and the sleep sprite's own foot
+      // should now land there too (`occupancy.y + sleepSpriteOffset(...)`).
+      const fixerRoom = HOME_ROOMS.fixer!
+      const fixerBed = POSITION_SLOTS['home-fixer-bed']![0]!
+      expect(fixerBed.y + sleepSpriteOffset('home-fixer-bed')).toBe(fixerRoom.y + 129)
+      // The shared-household loop draws each member's bed image bottom at `bed.y - 4`.
+      const trainerBed = POSITION_SLOTS['home-trainer-bed']![0]!
+      expect(trainerBed.y + sleepSpriteOffset('home-trainer-bed')).toBe(trainerBed.y - 4)
+    })
   })
   describe('dev-only warning', () => {
     beforeEach(() => { vi.spyOn(console, 'warn').mockImplementation(() => undefined) })

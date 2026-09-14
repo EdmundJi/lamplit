@@ -43,6 +43,11 @@ export type ResidentState = {
   // The position (bed, desk, plot, ...) this resident currently holds, if any; null/absent while
   // travelling or on a save from before the two-layer place model.
   positionId?: string | null
+  // When the resident's current plan.action last changed (an ISO instant), so the street can show
+  // how long they have actually been at it ("已经 N 分钟") instead of a client-side guess. Absent on
+  // an old save or while there is no current plan; see activityDurationLabel() in
+  // companion.presentation.ts.
+  activitySince?: string | null
   plan: { id: string; action: string; place: string; targetId: string | null; reason: string; startedAt: string; endsAt: string } | null
   relationships: Record<string, number>; revision: number
 }
