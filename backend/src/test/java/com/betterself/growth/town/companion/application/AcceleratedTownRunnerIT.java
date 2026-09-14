@@ -2,6 +2,7 @@ package com.betterself.growth.town.companion.application;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -55,7 +56,9 @@ class AcceleratedTownRunnerIT {
         var cfg = new AcceleratedTownRunner.RunConfig(
             worldId, base.avatarName(), base.timezone(),
             startEnv == null || startEnv.isBlank() ? base.start() : java.time.Instant.parse(startEnv), days, base.tickSeconds(),
-            modelEnabled, Integer.parseInt(System.getenv().getOrDefault("COMPANION_RUN_MODEL_BUDGET", String.valueOf(base.dailyModelBudget()))), base.userId(), outDir, base.realPaceMillisPerTick(),
+            modelEnabled, Integer.parseInt(System.getenv().getOrDefault("COMPANION_RUN_MODEL_BUDGET", String.valueOf(base.dailyModelBudget()))),
+            Integer.parseInt(System.getenv().getOrDefault("COMPANION_RUN_TOTAL_MODEL_BUDGET",String.valueOf(base.totalModelBudget()))),
+            Long.parseLong(System.getenv().getOrDefault("COMPANION_RUN_INPUT_TOKEN_STOP",String.valueOf(base.inputTokenStop()))),base.userId(), outDir, base.realPaceMillisPerTick(),
             Integer.parseInt(System.getenv().getOrDefault("COMPANION_RUN_DRAIN_TICKS",String.valueOf(base.drainTicks()))), base.blindTestSeed(), base.blindTestSize(), base.scriptedAvatarIntents(),
             resumeFromEnv == null || resumeFromEnv.isBlank() ? null : Path.of(resumeFromEnv));
 
@@ -63,6 +66,8 @@ class AcceleratedTownRunnerIT {
         String modelName=modelEnabled?AcceleratedTownRunner.modelName(System.getenv()):"none";
         System.out.println("[accelerated-run] starting: days=" + days + " modelEnabled=" + modelEnabled
             + " modelProvider="+modelProvider+" model="+modelName
+            + " dailyBudget="+cfg.dailyModelBudget()+" totalBudget="+cfg.totalModelBudget()
+            + " inputTokenStop="+cfg.inputTokenStop()
             + " outDir=" + outDir.toAbsolutePath() + " resumeFrom=" + cfg.resumeFrom());
         var result = AcceleratedTownRunner.run(cfg);
         System.out.println("[accelerated-run] done: " + result);
@@ -75,6 +80,7 @@ class AcceleratedTownRunnerIT {
         assertThat(Files.exists(outDir.resolve("manifest.json"))).isTrue();
         assertThat(Files.exists(outDir.resolve("usage.json"))).isTrue();
         assertThat(Files.exists(outDir.resolve("model-calls.json"))).isTrue();
+        assertThat(Files.exists(outDir.resolve("model-wire-requests.json"))).isTrue();
         assertThat(Files.exists(outDir.resolve("model-application-outcomes.json"))).isTrue();
         assertThat(Files.exists(outDir.resolve("world-snapshot.json"))).isTrue();
         assertThat(Files.exists(outDir.resolve("metrics.json"))).isTrue();
@@ -90,10 +96,36 @@ class AcceleratedTownRunnerIT {
         // never actually lived, which is exactly what this tool exists to catch.
         assertThat(result.diaryCount() + result.eventCount() + result.memoryCount() + result.dialogueTurnCount()).isGreaterThan(0);
         if (modelEnabled) {
-            assertThat(result.totalModelCalls()).isBetween(1L,(long)cfg.dailyModelBudget());
-            System.out.println("[accelerated-run] model usage: calls=" + result.totalModelCalls()
+            // The allowance is per local calendar day, not per invocation. A run that starts at
+            // 08:00 local and lasts exactly 24 hours touches the next date on its final tick, so it
+            // may legitimately spend from two daily allowances (this happened in the first 25-person
+            // probe: 60 + 60 calls). Count the inclusive dates the simulation actually covered.
+            var zone=java.time.ZoneId.of(cfg.timezone());
+            long coveredLocalDays=java.time.temporal.ChronoUnit.DAYS.between(
+                result.simulatedFrom().atZone(zone).toLocalDate(),
+                result.simulatedTo().atZone(zone).toLocalDate())+1;
+            assertThat(result.totalModelCalls()).isBetween(1L,coveredLocalDays*cfg.dailyModelBudget());
+            assertThat(result.logicalModelCallsStarted()).isGreaterThanOrEqualTo(result.totalModelCalls());
+            assertThat(result.wireModelRequestsStarted()).isBetween(1L,(long)cfg.totalModelBudget());
+            System.out.println("[accelerated-run] model usage: logicalCalls=" + result.totalModelCalls()
+                + " logicalCallsStarted=" + result.logicalModelCallsStarted()
+                + " wireRequestsStarted=" + result.wireModelRequestsStarted()
                 + " inputTokens=" + result.totalInputTokens() + " outputTokens=" + result.totalOutputTokens()
                 + " pacedTicks=" + result.pacedTicks() + " fastTicks=" + result.fastTicks());
+        } else if(days>=2){
+            // Structural acceptance for the second-version town. This is deliberately attached to
+            // the opt-in runner rather than every unit-test build: it advances all 25 residents for
+            // two whole days and then checks the exported, reloadable artifact rather than a seed.
+            var snapshot=new ObjectMapper().findAndRegisterModules().readTree(outDir.resolve("world-snapshot.json").toFile());
+            assertThat(snapshot.path("residents").size()).isEqualTo(25);
+            assertThat(snapshot.path("residentStates").size()).isEqualTo(26); // 25 residents + autonomous-capable avatar state
+            assertThat(snapshot.path("locations").size()).isGreaterThanOrEqualTo(23);
+            assertThat(snapshot.path("rooms").size()).isGreaterThanOrEqualTo(66);
+            assertThat(snapshot.path("positions").size()).isGreaterThanOrEqualTo(108);
+            var roomIds=new java.util.HashSet<String>();snapshot.path("rooms").forEach(room->roomIds.add(room.path("id").asText()));
+            snapshot.path("residentStates").forEach(state->assertThat(state.path("roomId").asText(null)).as(state.path("id").asText()).isIn(roomIds));
+            snapshot.path("positions").forEach(position->assertThat(position.path("roomId").asText(null)).as(position.path("id").asText()).isIn(roomIds));
+            snapshot.path("objects").forEach(object->assertThat(object.path("roomId").asText(null)).as(object.path("id").asText()).isIn(roomIds));
         }
     }
 }

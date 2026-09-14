@@ -105,7 +105,7 @@ class DecisionPromptRelevanceTest {
     void joinExplanationAbsentWhenNotOffered() {
         String prompt = promptFor(ordinaryStreetResident(List.of("none", "observe", "rest")));
         assertThat(prompt).doesNotContain("join表示走过去挨着某个熟人坐下");
-        assertThat(prompt).doesNotContain("create/help 的 targetId 必须是 knownProjects 之一且 place 匹配");
+        assertThat(prompt).doesNotContain("选create/help时用decisionOptions中targetId对应knownProjects的一条");
     }
 
     @Test
@@ -113,7 +113,7 @@ class DecisionPromptRelevanceTest {
     void joinExplanationPresentWhenOffered() {
         String prompt = promptFor(ordinaryStreetResident(List.of("none", "observe", "join")));
         assertThat(prompt).contains("join表示走过去挨着某个熟人坐下");
-        assertThat(prompt).contains("create/help 的 targetId 必须是 knownProjects 之一且 place 匹配");
+        assertThat(prompt).contains("选create/help时用decisionOptions中targetId对应knownProjects的一条");
     }
 
     // ---- cafe-operator cluster --------------------------------------------------------------------
@@ -147,15 +147,15 @@ class DecisionPromptRelevanceTest {
     // ---- the permanent section ---------------------------------------------------------------------
 
     @Test
-    @DisplayName("常驻段：action必须严格照抄availableActions那一大段，在任何 context 下都在")
-    void theActionMustCopyAvailableActionsParagraphIsAlwaysPresent() {
+    @DisplayName("常驻段：availableActions与decisionOptions的合法性说明在任何context下都在")
+    void theLegalDecisionOptionsParagraphIsAlwaysPresent() {
         String narrow = promptFor(ordinaryStreetResident(List.of("none", "observe", "rest")));
         String broad = promptFor(context(
             List.of("none", "observe", "rest", "celebrate", "propose", "join", "create", "help",
                 "continue", "resume", "tend", "request_drink", "open_cafe", "continue_home"),
             "cafe", "artist", List.of("我是当前经营者"), true, "open"));
 
-        String signature = "action必须严格照抄availableActions这次实际给出的字符串之一";
+        String signature = "availableActions是这次真能做的动作名，decisionOptions是它们对应的完整地址与目标";
         assertThat(narrow).contains(signature);
         assertThat(broad).contains(signature);
     }

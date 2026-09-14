@@ -42,7 +42,12 @@ class DailyRhythmTest {
         assertThat(legacy.cafeCloseMinute).isEqualTo(1260);
         assertThat(legacy.cafeStatus).isEqualTo("open");
         assertThat(legacy.residentStates).filteredOn(r->!"self".equals(r.id)).allMatch(r->r.energyUpdatedAt!=null);
-        assertThat(legacy.residentStates).filteredOn(r->!"self".equals(r.id)).allMatch(r->r.sleepScheduleSeeded&&r.usualSleepMinute==1380&&r.usualWakeMinute==420);
+        // An old save heals to a usual clock: each resident's own from ResidentDuties where one was
+        // planted, the plain 23:00/07:00 default otherwise.
+        assertThat(legacy.residentStates).filteredOn(r->!"self".equals(r.id)).allMatch(r->{
+            var seed=ResidentDuties.SEEDS.get(r.id);
+            return r.sleepScheduleSeeded&&(seed==null?r.usualSleepMinute==1380&&r.usualWakeMinute==420:r.usualSleepMinute==seed.sleepMinute()&&r.usualWakeMinute==seed.wakeMinute());
+        });
         for(String id:TownPlaces.RESIDENT_IDS)assertThat(TownPlaces.position(legacy,TownPlaces.homeOf(id)+"-desk")).isNotNull();
     }
 

@@ -1,6 +1,7 @@
 package com.betterself.growth.town.companion.application;
 
 import com.betterself.growth.town.companion.domain.*;
+import com.betterself.growth.town.companion.tools.MutableClock;
 import org.junit.jupiter.api.Test;
 import java.time.*;
 import java.util.ArrayList;
@@ -77,6 +78,87 @@ class ResidentDirectorTest {
         var unavailable=oneAtATime(failedStore,new ResidentMind(){public boolean enabled(){return true;}public Decision decide(Context c){throw new IllegalStateException("network unavailable");}},Clock.fixed(now,ZoneOffset.UTC));
         try{unavailable.consider(1,failedStore.world);assertThat(failedStore.finished.await(2,TimeUnit.SECONDS)).isTrue();assertThat(failedStore.world.residentStates.stream().filter(r->!r.id.equals("self")).map(r->r.plan==null?null:r.plan.id()).toList()).containsExactlyElementsOf(plansBeforeFailure);assertThat(failedStore.world.modelStatus).contains("习惯");}
         finally{unavailable.close();}
+    }
+    @Test void everyModelResultExpiresAgainstTheSnapshotItWasAskedFrom()throws Exception {
+        var world=CompanionRules.join("expired-explanation","我","Asia/Shanghai",now,true);
+        world.conversations.clear();world.pendingEncounters.clear();world.pendingOccasions.clear();
+        var owner=ResidentSimulation.state(world,"owner");owner.unexplainedDeeds.clear();
+        for(int i=0;i<3;i++)ResidentSimulation.recordDeed(world,"owner","tidy","cafe","擦了第"+i+"张桌子",now.minusSeconds(30-i));
+        var deedIds=owner.unexplainedDeeds.stream().map(d->d.id).toList();
+        var started=new CountDownLatch(1);var release=new CountDownLatch(1);var clock=new MutableClock(now);
+        ResidentMind mind=new ResidentMind(){
+            public boolean enabled(){return true;}
+            public Decision decide(Context c){throw new AssertionError("an explanation was due");}
+            public ExplainDraft explain(ExplainRequest request){
+                started.countDown();try{release.await(2,TimeUnit.SECONDS);}catch(InterruptedException e){throw new RuntimeException(e);}
+                return new ExplainDraft(deedIds,"就是顺手收拾一下。",List.of());
+            }
+        };
+        var store=new FakeStore(world);var director=oneAtATime(store,mind,clock);
+        List<String> outcomes=Collections.synchronizedList(new ArrayList<>());
+        director.setOutcomeListener((kind,resident,action,outcome)->outcomes.add(kind+":"+outcome));
+        try{
+            director.consider(10,world);assertThat(started.await(2,TimeUnit.SECONDS)).isTrue();
+            clock.advanceTo(now.plusSeconds(91));release.countDown();
+            assertThat(store.finished.await(2,TimeUnit.SECONDS)).isTrue();
+        }finally{release.countDown();director.close();}
+        assertThat(owner.unexplainedDeeds).extracting(d->d.id).containsExactlyElementsOf(deedIds);
+        assertThat(world.memories).noneMatch(m->"就是顺手收拾一下。".equals(m.text()));
+        assertThat(outcomes).containsExactly("explain:rejected");
+    }
+
+    @Test void aPreviousDaysFailureCannotRefundOrConsumeTheNewDaysBudget()throws Exception {
+        var world=CompanionRules.join("budget-midnight","我","Asia/Shanghai",now,true);
+        world.conversations.clear();world.pendingEncounters.clear();world.pendingOccasions.clear();
+        var owner=ResidentSimulation.state(world,"owner");owner.plan=null;
+        for(var r:world.residentStates)if(!Set.of("owner","self").contains(r.id))r.plan=new CompanionWorld.Plan("park-"+r.id,"sleep","home-"+r.id,null,"睡着",now,now.plusSeconds(600));
+        var started=new CountDownLatch(1);var release=new CountDownLatch(1);var clock=new MutableClock(now);
+        ResidentMind mind=new ResidentMind(){
+            public boolean enabled(){return true;}
+            public Decision decide(Context c){
+                started.countDown();try{release.await(2,TimeUnit.SECONDS);}catch(InterruptedException e){throw new RuntimeException(e);}
+                throw new IllegalStateException("late failure");
+            }
+        };
+        var store=new FakeStore(world);var director=oneAtATime(store,mind,clock,1,(userId,day,callType,inputTokens,outputTokens)->{});
+        try{
+            director.consider(11,world);assertThat(started.await(2,TimeUnit.SECONDS)).isTrue();
+            String nextDay=now.plusSeconds(86_400).atZone(ZoneId.of(world.timezone)).toLocalDate().toString();
+            clock.advanceTo(now.plusSeconds(86_400));
+            store.update(11,null,w->{w.modelBudgetDay=nextDay;w.modelCallsToday=1;w.modelFailuresToday=0;return w;});
+            release.countDown();assertThat(store.finished.await(2,TimeUnit.SECONDS)).isTrue();
+        }finally{release.countDown();director.close();}
+        assertThat(world.modelCallsToday).as("yesterday's failed reservation must not refund today's allowance").isEqualTo(1);
+        assertThat(world.modelFailuresToday).as("yesterday's request is not one of today's failures").isZero();
+    }
+    @Test void aMindWithoutReactionCapabilityDoesNotMakeTheRulesGreetForIt()throws Exception {
+        var world=CompanionRules.join("neutral-react-fallback","我","Asia/Shanghai",now,true);
+        world.conversations.clear();world.pendingEncounters.clear();world.pendingOccasions.clear();
+        var owner=ResidentSimulation.state(world,"owner");var artist=ResidentSimulation.state(world,"artist");
+        for(int i=0;i<world.residents.size();i++){
+            var actor=world.residents.get(i);
+            if(actor.id().equals("owner"))world.residents.set(i,new CompanionWorld.Actor(actor.id(),actor.name(),actor.role(),"street","observe","看看街上",actor.x(),actor.y(),now.plusSeconds(300)));
+            if(actor.id().equals("artist"))world.residents.set(i,new CompanionWorld.Actor(actor.id(),actor.name(),actor.role(),"street","observe","看看街上",actor.x(),actor.y(),now.plusSeconds(300)));
+        }
+        owner.plan=new CompanionWorld.Plan("owner-observe","observe","street",null,"看看街上",now,now.plusSeconds(300));
+        artist.plan=new CompanionWorld.Plan("artist-observe","observe","street",null,"看看街上",now,now.plusSeconds(300));
+        var pending=new CompanionWorld.PendingEncounter();pending.id="pending-neutral";pending.residentId="owner";
+        pending.otherId="artist";pending.place="street";pending.at=now;pending.residentRevision=owner.revision;
+        world.pendingEncounters.add(pending);
+        int conversationsBefore=world.conversations.size(),eventsBefore=world.events.size(),memoriesBefore=world.memories.size();
+        var done=new CountDownLatch(1);var store=new FakeStore(world);
+        ResidentMind noReaction=new ResidentMind(){
+            public boolean enabled(){return true;}
+            public Decision decide(Context c){throw new AssertionError("the encounter was first");}
+        };
+        var director=oneAtATime(store,noReaction,Clock.fixed(now,ZoneOffset.UTC));
+        director.setOutcomeListener((kind,resident,action,outcome)->{if("react".equals(kind)&&"unsupported".equals(outcome))done.countDown();});
+        try{director.consider(12,world);assertThat(done.await(2,TimeUnit.SECONDS)).isTrue();}
+        finally{director.close();}
+        assertThat(world.pendingEncounters).noneMatch(p->p.id.equals("pending-neutral"));
+        assertThat(world.conversations).hasSize(conversationsBefore);
+        assertThat(world.events).hasSize(eventsBefore);
+        assertThat(world.memories).hasSize(memoriesBefore);
     }
     @Test void avatarIsPerceivedByNearbyResidentsButNeverCarriesUserText()throws Exception {
         var world=CompanionRules.join("avatar-nearby","我","Asia/Shanghai",now);
@@ -404,6 +486,46 @@ class ResidentDirectorTest {
         try{director.consider(82,world);assertThat(store.finished.await(2,TimeUnit.SECONDS)).isTrue();}
         finally{director.close();}
         assertThat(outcomes).containsExactly("decision:fly:rejected");
+    }
+    @Test void actionPlaceRoomAndTargetMustComeFromTheSameLegalOption()throws Exception {
+        var world=CompanionRules.join("reject-cartesian-product","我","Asia/Shanghai",now,true);
+        world.conversations.clear();world.pendingEncounters.clear();world.pendingOccasions.clear();world.serviceRequests.clear();
+        var owner=ResidentSimulation.state(world,"owner");owner.plan=null;
+        for(var r:world.residentStates)if(!Set.of("owner","self").contains(r.id))r.plan=new CompanionWorld.Plan("park-"+r.id,"sleep","home-"+r.id,null,"睡着",now,now.plusSeconds(600));
+        var store=new FakeStore(world);
+        ResidentMind mind=new ResidentMind(){
+            public boolean enabled(){return true;}
+            public Decision decide(Context c){
+                assertThat(c.decisionOptions()).noneMatch(option->option.action().equals("sleep")&&option.place().equals("gym"));
+                return new Decision("sleep","gym","gym-training-room","gym-equipment","把合法字段拼错试试","",List.of(),null,null);
+            }
+        };
+        var director=oneAtATime(store,mind,Clock.fixed(now,ZoneOffset.UTC));
+        List<String> outcomes=Collections.synchronizedList(new ArrayList<>());
+        director.setOutcomeListener((kind,resident,action,outcome)->outcomes.add(kind+":"+action+":"+outcome));
+        try{director.consider(84,world);assertThat(store.finished.await(2,TimeUnit.SECONDS)).isTrue();}
+        finally{director.close();}
+        assertThat(owner.plan).isNull();
+        assertThat(outcomes).containsExactly("decision:sleep:rejected");
+    }
+
+    @Test void aPerspectiveOnlySeesPeopleAndObjectsInItsCurrentRoom() {
+        var world=CompanionRules.join("room-limited-context","我","Asia/Shanghai",now,true);
+        var owner=ResidentSimulation.state(world,"owner");var artist=ResidentSimulation.state(world,"artist");
+        owner.roomId="cafe-counter-room";artist.roomId="cafe-main";
+        for(int i=0;i<world.residents.size();i++){
+            var actor=world.residents.get(i);
+            if(Set.of("owner","artist").contains(actor.id()))world.residents.set(i,new CompanionWorld.Actor(actor.id(),actor.name(),actor.role(),"cafe","observe","在屋里",actor.x(),actor.y(),now.plusSeconds(300)));
+        }
+        world.objects.add(new CompanionWorld.WorldObject("counter-note","note","cafe","cafe-counter-room","吧台便签","摊开",null,null,null));
+        world.objects.add(new CompanionWorld.WorldObject("table-note","note","cafe","cafe-main","桌上便签","摊开",null,null,null));
+        var director=new ResidentDirector(new FakeStore(world),new ResidentMind(){public boolean enabled(){return false;}public Decision decide(Context c){throw new UnsupportedOperationException();}},Clock.fixed(now,ZoneOffset.UTC));
+        try{
+            var context=director.perspective(world,"owner",now,List.of());
+            assertThat(context.currentRoomId()).isEqualTo("cafe-counter-room");
+            assertThat(context.nearby()).extracting(ResidentMind.ActorView::id).doesNotContain("artist");
+            assertThat(context.visibleObjects()).extracting(ResidentMind.WorldObjectView::id).contains("counter-note").doesNotContain("table-note");
+        }finally{director.close();}
     }
     @Test void outcomeListenerReportsFailedOnARealModelException()throws Exception {
         var store=new FakeStore(CompanionRules.join("outcome-failed","我","Asia/Shanghai",now));

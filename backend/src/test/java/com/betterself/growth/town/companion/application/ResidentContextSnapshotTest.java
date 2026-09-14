@@ -20,7 +20,7 @@ class ResidentContextSnapshotTest {
         Instant now=Instant.parse("2026-09-09T06:00:00Z");
         var world=CompanionRules.join("context-snapshot","体验审阅","Asia/Shanghai",now,true);
         world.conversations.clear();world.serviceRequests.clear();
-        world.objects.add(new CompanionWorld.WorldObject("ledger-draft","paper","cafe","账本草稿","progress-75",null));
+        world.objects.add(new CompanionWorld.WorldObject("ledger-draft","paper","cafe","cafe-main","账本草稿","progress-75",null,null));
         var owner=ResidentSimulation.state(world,"owner");
         owner.suspendedAction=null;
         owner.plan=new CompanionWorld.Plan("ledger-work","work","cafe",null,"把账本最后一页写完",now.minusSeconds(120),now.plusSeconds(600));

@@ -23,6 +23,11 @@ import static org.assertj.core.api.Assertions.*;
 class ResidentExplainReflectDispatchTest {
     private final Instant now = Instant.parse("2026-09-08T06:00:00Z"); // 14:00 in Asia/Shanghai - outside the morning day-plan window
 
+    private ResidentDirector oneAtATime(WorldStore store,ResidentMind mind){
+        return new ResidentDirector(store,mind,Clock.fixed(now,ZoneOffset.UTC),100000,
+            (userId,day,callType,inputTokens,outputTokens)->{},8,64,12,1);
+    }
+
     private CompanionWorld world() {
         CompanionWorld w = CompanionRules.join("explain-reflect", "住客", "Asia/Shanghai", now, true);
         w.conversations.forEach(c -> c.status = "ended"); // no active/summarizable conversation to outrank explain/reflect
@@ -61,7 +66,7 @@ class ResidentExplainReflectDispatchTest {
                 return new ExplainDraft(request.deeds().stream().map(DeedView::id).toList(), "桌子确实脏了，顺手都擦了。", List.of());
             }
         };
-        var director = new ResidentDirector(store, mind, Clock.fixed(now, ZoneOffset.UTC));
+        var director = oneAtATime(store,mind);
         try {
             director.consider(1, w);
             await(() -> store.updates.get() >= 2);
@@ -117,7 +122,7 @@ class ResidentExplainReflectDispatchTest {
                 return new VentureDraft("把街口那盏灯修好", "street", "poster", "总有人晚上看不清路", List.of(evidenceId));
             }
         };
-        var director = new ResidentDirector(store, mind, Clock.fixed(now, ZoneOffset.UTC));
+        var director = oneAtATime(store,mind);
         try {
             director.consider(1, w);
             await(() -> store.updates.get() >= 2);
@@ -152,7 +157,7 @@ class ResidentExplainReflectDispatchTest {
             public boolean enabled() { return true; }
             public Decision decide(Context c) { throw new AssertionError("no ordinary decision should be needed here"); }
         };
-        var director = new ResidentDirector(store, mind, Clock.fixed(now, ZoneOffset.UTC));
+        var director = oneAtATime(store,mind);
         try {
             director.consider(1, w);
             await(() -> store.updates.get() >= 1);
@@ -184,7 +189,7 @@ class ResidentExplainReflectDispatchTest {
                 return new ReflectDraft("反复想过之后，觉得确实是这样。", List.of(evidenceId), key);
             }
         };
-        var director = new ResidentDirector(store, mind, Clock.fixed(now, ZoneOffset.UTC));
+        var director = oneAtATime(store,mind);
         try {
             director.consider(1, w);
             await(() -> store.updates.get() >= 2);
@@ -246,7 +251,7 @@ class ResidentExplainReflectDispatchTest {
             public Decision decide(Context c) { throw new AssertionError("no ordinary decision should be needed here"); }
             public ReflectDraft reflect(ReflectRequest request) { captured[0] = request; return null; }
         };
-        var director = new ResidentDirector(store, mind, Clock.fixed(now, ZoneOffset.UTC));
+        var director = oneAtATime(store,mind);
         try {
             director.consider(1, w);
             await(() -> captured[0] != null);
@@ -276,7 +281,7 @@ class ResidentExplainReflectDispatchTest {
             public Decision decide(Context c) { decideCalls.incrementAndGet(); return new Decision("observe", c.self().place(), null, "先看看四周", "", List.of(), null, null); }
             public ReflectDraft reflect(ReflectRequest request) { throw new AssertionError("reflect must never preempt a due ordinary decision"); }
         };
-        var director = new ResidentDirector(store, mind, Clock.fixed(now, ZoneOffset.UTC));
+        var director = oneAtATime(store,mind);
         try {
             director.consider(1, w);
             await(() -> store.updates.get() >= 2);

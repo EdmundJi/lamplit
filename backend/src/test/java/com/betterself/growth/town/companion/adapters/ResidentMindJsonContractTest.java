@@ -102,7 +102,7 @@ class ResidentMindJsonContractTest {
         // never actually be in availableActions, so schema-contains-close_cafe was never protecting
         // anything real. none takes its place - the one entry this schema must always carry.
         assertThat(captured.get().schemaJson()).contains("continue","resume","sleep","request_drink","open_cafe","continue_home","none");
-        assertThat(captured.get().instruction()).contains("只能在两人当面的结构化对话回合里协商","必须严格照抄availableActions这次实际给出的字符串","不要猜测或要求任何隐藏数值");
+        assertThat(captured.get().instruction()).contains("只能在两人当面的结构化对话回合里协商","availableActions是这次真能做的动作名","不要猜测或要求任何隐藏数值");
     }
 
     /** Direct regression test for the dominant real cause found behind the reject-rate exam: with a
@@ -136,6 +136,6 @@ class ResidentMindJsonContractTest {
         String actionEnum=captured.get().schemaJson();
         assertThat(actionEnum).doesNotContain("continue_home").doesNotContain("\"continue\"").doesNotContain("propose").doesNotContain("tend");
         assertThat(actionEnum).contains("\"observe\"","\"rest\"","\"study\"","\"sleep\"","\"away\"");
-        assertThat(captured.get().instruction()).contains("这次没列出就是这次真的做不到","不要选continue或continue_home");
+        assertThat(captured.get().instruction()).contains("这次没列出的就是真的做不到","这时改选实际列出的选项");
     }
 }

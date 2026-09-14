@@ -24,15 +24,14 @@ import static org.assertj.core.api.Assertions.assertThat;
  * never see.
  */
 class ResidentPersonaContextTest {
-    private static final List<String> RESIDENT_IDS = List.of("owner", "student", "artist", "gardener", "fixer", "weaver");
-
-    @Test void sixResidentsCarryDistinctPersonaTextAndTheAvatarCarriesNone() {
+    @Test void allTwentyFiveResidentsCarryDistinctPersonaTextAndTheAvatarCarriesNone() {
         Instant now = Instant.parse("2026-09-09T06:00:00Z");
         var world = CompanionRules.join("persona-context", "体验审阅", "Asia/Shanghai", now, true);
         var director = new ResidentDirector(new SnapshotStore(world), new DisabledMind(), Clock.fixed(now, ZoneOffset.UTC));
         try {
             Set<String> distinctPersonas = new HashSet<>();
-            for (String id : RESIDENT_IDS) {
+            var residentIds=world.residents.stream().map(CompanionWorld.Actor::id).toList();
+            for (String id : residentIds) {
                 var persona = director.perspective(world, id, now, List.of()).persona();
                 assertThat(persona).as("persona for %s", id).isNotNull();
                 // Round-trips ResidentSeed's own authored text verbatim - never rewritten, never guessed.
@@ -44,7 +43,7 @@ class ResidentPersonaContextTest {
                 assertThat(persona.looseningNote()).isEqualTo(narrative.looseningNote());
                 distinctPersonas.add(String.join("|", persona.wantSelf(), persona.oughtSelf(), persona.actingSelf(), persona.memoryBias(), persona.looseningNote()));
             }
-            assertThat(distinctPersonas).as("all six residents must have distinct personality text").hasSize(RESIDENT_IDS.size());
+            assertThat(distinctPersonas).as("all twenty-five residents must have distinct personality text").hasSize(residentIds.size());
 
             // The avatar ("self") is not one of the six hand-authored residents: no persona text was ever
             // written for it, and none may be guessed - see ResidentSeed.narrative's own contract.
@@ -90,6 +89,23 @@ class ResidentPersonaContextTest {
         } finally {
             director.close();
         }
+    }
+
+    @Test void everyOfferedActionHasAtLeastOneExactFourLevelOptionForAllResidents(){
+        Instant now=Instant.parse("2026-09-09T06:00:00Z");
+        var world=CompanionRules.join("all-resident-options","体验审阅","Asia/Shanghai",now,true);
+        var director=new ResidentDirector(new SnapshotStore(world),new DisabledMind(),Clock.fixed(now,ZoneOffset.UTC));
+        try{
+            for(var actor:world.residents){
+                var context=director.perspective(world,actor.id(),now,List.of());
+                assertThat(context.decisionOptions()).as(actor.id()).isNotEmpty();
+                assertThat(context.decisionOptions()).extracting(ResidentMind.DecisionOptionView::id).doesNotHaveDuplicates();
+                Set<String> optionActions=context.decisionOptions().stream().map(ResidentMind.DecisionOptionView::action).collect(java.util.stream.Collectors.toSet());
+                assertThat(optionActions)
+                    .as("every available action must have a selectable address for "+actor.id())
+                    .containsExactlyInAnyOrderElementsOf(context.availableActions());
+            }
+        }finally{director.close();}
     }
 
     private static final class DisabledMind implements ResidentMind {

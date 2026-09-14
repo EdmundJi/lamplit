@@ -42,6 +42,14 @@ class TownDistancesTest {
             }
     }
 
+    @Test void everyPairInTheExpandedTwentyFiveResidentTownIsMeasured(){
+        CompanionWorld w=CompanionRules.join("distance-v2","我","Asia/Shanghai",java.time.Instant.parse("2026-09-14T06:00:00Z"),false);
+        List<String> places=w.locations.stream().map(CompanionWorld.Location::id).toList();
+        assertThat(places).hasSize(23);
+        for(int i=0;i<places.size();i++)for(int j=i+1;j<places.size();j++)
+            assertThat(TownDistances.distancePixels(places.get(i),places.get(j))).as("%s to %s",places.get(i),places.get(j)).isNotNull();
+    }
+
     @Test void sharedHomeCollapsesToTheSamePlaceIdNotAZeroDistanceEntry(){
         // The artist and the weaver share one physical room (TownPlaces.HOME_SHARED_WITH), so
         // homeOf("weaver") already resolves to the literal id "home-artist" - there never is a
@@ -79,7 +87,7 @@ class TownDistancesTest {
         // A hypothetical future building (academy, gym - not yet part of the town) has no measured
         // entry at all: distancePixels returns null, and travelSeconds must not throw or silently
         // return an implausibly short trip for it.
-        assertThat(TownDistances.distancePixels("home-owner", "academy")).isNull();
-        assertThat(ResidentSimulation.travelSeconds("home-owner", "academy")).isEqualTo(46);
+        assertThat(TownDistances.distancePixels("home-owner", "bathhouse")).isNull();
+        assertThat(ResidentSimulation.travelSeconds("home-owner", "bathhouse")).isEqualTo(79);
     }
 }

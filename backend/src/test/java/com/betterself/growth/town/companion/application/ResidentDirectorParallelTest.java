@@ -134,6 +134,59 @@ class ResidentDirectorParallelTest {
         } finally { release.countDown(); director.close(); }
     }
 
+    @Test void allTwentyFiveResidentsGetOneDecisionBeforeAnybodyGetsASecond() throws Exception {
+        CompanionWorld w=sixReadyResidents();
+        var store=new Store(w);List<String> order=Collections.synchronizedList(new ArrayList<>());
+        ResidentMind mind=new ResidentMind(){
+            public boolean enabled(){return true;}
+            public Decision decide(Context c){
+                order.add(c.residentId());
+                return new Decision("none",c.self().place(),null,"眼下先不另做安排","",List.of(),null,null);
+            }
+        };
+        ModelUsageRecorder noRecorder=(userId,day,callType,inputTokens,outputTokens)->{};
+        var director=new ResidentDirector(store,mind,Clock.fixed(now,ZoneOffset.UTC),100000,noRecorder,1,8,0,1);
+        try{
+            for(int expected=1;expected<=25;expected++){
+                director.consider(1,w);
+                int count=expected;await(()->order.size()>=count);
+            }
+        }finally{director.close();}
+        assertThat(order).hasSize(25).doesNotHaveDuplicates();
+        assertThat(order).containsExactlyInAnyOrderElementsOf(w.residentStates.stream()
+            .filter(r->!"self".equals(r.id)).map(r->r.id).toList());
+    }
+
+    @Test void aSaturatedTownReservesOneLaneForReflectionInsteadOfStarvingItBehindDecisions() throws Exception {
+        CompanionWorld w=sixReadyResidents();
+        for(ResidentState r:w.residentStates){
+            if("self".equals(r.id))continue;
+            r.lastReflectionAt=now.minusSeconds(4*3600);
+            w.memories.add(new Memory("fresh-"+r.id,r.id,r.id,"observed",now.minusSeconds(60),
+                "今天发生了一件值得回想的事",null,List.of(),24));
+        }
+        var store=new Store(w);List<String> kinds=Collections.synchronizedList(new ArrayList<>());
+        CountDownLatch sixStarted=new CountDownLatch(6);CountDownLatch release=new CountDownLatch(1);
+        ResidentMind mind=new ResidentMind(){
+            public boolean enabled(){return true;}
+            private void block(String kind){
+                kinds.add(kind);sixStarted.countDown();
+                try{release.await(3,TimeUnit.SECONDS);}catch(InterruptedException e){throw new RuntimeException(e);}
+            }
+            public Decision decide(Context c){block("decision");return new Decision("none",c.self().place(),null,"先不另做安排","",List.of(),null,null);}
+            public ReflectDraft reflect(ReflectRequest request){
+                block("reflect");return new ReflectDraft("今天这件事还需要再想想",List.of(request.source().getFirst().id()),null);
+            }
+        };
+        ModelUsageRecorder noRecorder=(userId,day,callType,inputTokens,outputTokens)->{};
+        var director=new ResidentDirector(store,mind,Clock.fixed(now,ZoneOffset.UTC),100000,noRecorder,8,64,0,6);
+        try{
+            director.consider(1,w);
+            assertThat(sixStarted.await(3,TimeUnit.SECONDS)).isTrue();
+            assertThat(kinds).containsOnlyOnce("reflect").filteredOn("decision"::equals).hasSize(5);
+        }finally{release.countDown();director.close();}
+    }
+
     private static void await(BooleanSupplier condition) throws Exception {
         long deadline = System.nanoTime() + Duration.ofSeconds(3).toNanos();
         while (!condition.getAsBoolean() && System.nanoTime() < deadline) Thread.sleep(5);

@@ -94,7 +94,9 @@ class OccasionsTest {
             ResidentSimulation.advance(w, at);
             for (CompanionWorld.PendingOccasion p : w.pendingOccasions)
                 if (seen.add(p.id)) raised.merge(p.key, 1, Integer::sum);
-            assertThat(w.pendingOccasions.size()).as("没人回答时也不许堆积").isLessThanOrEqualTo(12);
+            // One slot per resident, not the six-person town's 12: a whole town waking from a long
+            // absence reaches its junction in the same tick (see OccasionPopulationTest).
+            assertThat(w.pendingOccasions.size()).as("没人回答时也不许堆积").isLessThanOrEqualTo(ResidentSimulation.populationCap(w, 12));
         }
         int residents = w.residentStates.size();
         for (Occasions.Definition d : Occasions.ALL) {

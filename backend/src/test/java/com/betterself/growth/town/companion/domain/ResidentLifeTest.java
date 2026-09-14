@@ -174,12 +174,15 @@ class ResidentLifeTest {
         assertThat(w.memories).noneMatch(m->!m.ownerId().equals("gardener")&&m.text().contains("邻镇买点种子"));
     }
 
-    @Test void dayPlanIsCoarseAndAMissedSegmentLeavesAReflectionRatherThanASilentSuccess(){
-        // Item 4: three or four qualitative segments, never a time-slotted schedule; abandonable.
+    @Test void dayPlanNamesTimesAndPlacesAndAMissedSegmentLeavesAReflectionRatherThanASilentSuccess(){
+        // A few stretches with a rough time and a real place; abandonable.
         CompanionWorld w=CompanionRules.join("day-plan","住客","Asia/Shanghai",now,true);
         ResidentState owner=ResidentSimulation.state(w,"owner");
         List<String> evidence=w.memories.stream().filter(m->m.ownerId().equals("owner")).map(Memory::id).limit(1).toList();
-        assertThat(ResidentSimulation.applyDayPlan(w,"owner",owner.revision,List.of("上午整理吧台","下午画一版新海报","傍晚陪读书会的人聊聊"),evidence,now)).isTrue();
+        assertThat(ResidentSimulation.applyDayPlan(w,"owner",owner.revision,List.of(
+            new ResidentSimulation.PlannedSegment(9*60,12*60,"cafe","work","上午整理吧台"),
+            new ResidentSimulation.PlannedSegment(14*60,16*60,"home","make","下午画一版新海报"),
+            new ResidentSimulation.PlannedSegment(18*60,19*60,"cafe","observe","傍晚陪读书会的人聊聊")),evidence,now)).isTrue();
         assertThat(owner.dayPlan).isNotNull();
         assertThat(owner.dayPlan.segments).hasSize(3);
         assertThat(owner.dayPlan.segments).allMatch(s->"pending".equals(s.status));

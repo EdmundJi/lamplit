@@ -111,7 +111,7 @@ class WorldTreeTest {
         assertThat(common.kind()).isEqualTo("common");
         assertThat(common.residentIds()).containsExactlyInAnyOrder("artist", "weaver");
         assertThat(TownPlaces.position(w, "home-weaver-bed").roomId).isEqualTo(weaverRoom.id());
-        assertThat(TownPlaces.roomsAt(w, home)).hasSize(3); // artist's room, weaver's room, the shared common room
+        assertThat(TownPlaces.roomsAt(w, home)).hasSize(4); // two bedrooms, shared common room, one capacity-one bathroom
     }
 
     @Test void anOlderSaveWithNoRoomsAtAllSelfHealsOnTheNextSeedCall() {

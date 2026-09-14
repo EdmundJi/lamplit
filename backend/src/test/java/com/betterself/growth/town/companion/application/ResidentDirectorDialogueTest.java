@@ -10,6 +10,9 @@ import java.util.function.*;
 import static org.assertj.core.api.Assertions.*;
 
 class ResidentDirectorDialogueTest {
+    private static ResidentDirector oneAtATime(WorldStore store,ResidentMind mind,Clock clock){
+        return new ResidentDirector(store,mind,clock,100000,(userId,day,callType,inputTokens,outputTokens)->{},8,64,12,1);
+    }
     @Test void routesEverySpeakerAndEachRecollectionThroughIndependentModelOperations()throws Exception {
         var clock=new MutableClock(Instant.parse("2026-09-08T06:00:00Z"));
         var world=CompanionRules.join("generated-dialogue","私密用户名字","Asia/Shanghai",clock.instant(),true);
@@ -35,12 +38,12 @@ class ResidentDirectorDialogueTest {
                 return new ConversationLifecycle.Recollection("我记住了和"+request.partnerName()+"讨论的那张空白书签。还没做出来，但对方的话让我想认真试试。","期待",List.of(request.conversationMemories().getFirst().id()));
             }
         };
-        var director=new ResidentDirector(store,mind,clock);
+        var director=oneAtATime(store,mind,clock);
         try {
-            await(()->{director.consider(1,world);return c.turns.size()==1;});
+            driveUntil(director,1,world,()->c.turns.size()==1);
             clock.now=clock.now.plusSeconds(7);
-            await(()->{director.consider(1,world);return c.status.equals("ended");});
-            await(()->{director.consider(1,world);return c.summarizedParticipants.size()==2;});
+            driveUntil(director,1,world,()->c.status.equals("ended"));
+            driveUntil(director,1,world,()->c.summarizedParticipants.size()==2);
             assertThat(speakers).containsExactly("owner","artist");
             assertThat(turns).hasValue(2);assertThat(summaries).hasValue(2);
             assertThat(c.turns).extracting(Turn::text).containsExactly("我想留一张空白书签，让来的人写一句没说完的话。","我愿意帮忙画书签。现在先去找纸，回头见。");
@@ -74,13 +77,13 @@ class ResidentDirectorDialogueTest {
                 return new ConversationLifecycle.Utterance("我愿意接手，但会按自己的节奏试一阵。",true,"认真","none",null,List.of(),"☕🎨","accept_work",offer.id());
             }
         };
-        var director=new ResidentDirector(store,mind,clock);
+        var director=oneAtATime(store,mind,clock);
         try{
-            await(()->{director.consider(1,world);return world.workArrangements.size()==1;});
+            driveUntil(director,1,world,()->world.workArrangements.size()==1);
             var offer=world.workArrangements.getFirst();assertThat(offer.status).isEqualTo("proposed");
             assertThat(ResidentSimulation.cafeOperatorId(world)).isEqualTo("owner");
             clock.now=clock.now.plusSeconds(7);
-            await(()->{director.consider(1,world);return "active".equals(offer.status);});
+            driveUntil(director,1,world,()->"active".equals(offer.status));
             assertThat(calls).hasValue(2);
             assertThat(ResidentSimulation.cafeOperatorId(world)).isEqualTo("artist");
             assertThat(ResidentSimulation.state(world,"artist").occupation).isEqualTo("经营咖啡馆");
@@ -99,9 +102,9 @@ class ResidentDirectorDialogueTest {
             public Decision decide(Context context){throw new AssertionError();}
             public ConversationLifecycle.Utterance generateTurn(DialogueRequest request){return new ConversationLifecycle.Utterance("我已经把店送给他了。",false,"笃定","none",null,List.of(),null,"invent_agreement","artist");}
         };
-        var director=new ResidentDirector(store,mind,clock);
+        var director=oneAtATime(store,mind,clock);
         try{
-            await(()->{director.consider(2,world);return "fallback".equals(conversation.mode);});
+            driveUntil(director,2,world,()->"fallback".equals(conversation.mode));
             assertThat(world.workArrangements).isEmpty();
             assertThat(conversation.turns).isEmpty();
             assertThat(ResidentSimulation.cafeOperatorId(world)).isEqualTo("owner");
@@ -134,12 +137,12 @@ class ResidentDirectorDialogueTest {
             }
             public ConversationLifecycle.Recollection summarizeConversation(SummaryRequest request){return new ConversationLifecycle.Recollection("刚才说自己太困，先回去了。","困倦",List.of(request.conversationMemories().getFirst().id()));}
         };
-        var director=new ResidentDirector(store,mind,clock);
+        var director=oneAtATime(store,mind,clock);
         try{
-            await(()->{director.consider(3,world);return "ended".equals(conversation.status);});
-            await(()->{director.consider(3,world);return conversation.summarizedParticipants.size()==2;});
+            driveUntil(director,3,world,()->"ended".equals(conversation.status));
+            driveUntil(director,3,world,()->conversation.summarizedParticipants.size()==2);
             clock.now=clock.now.plusSeconds(13);
-            await(()->{director.consider(3,world);var plan=ResidentSimulation.state(world,"owner").plan;return decisions.get()==1&&plan!=null&&Set.of("travel","sleep").contains(plan.action());});
+            driveUntil(director,3,world,()->{var plan=ResidentSimulation.state(world,"owner").plan;return decisions.get()==1&&plan!=null&&Set.of("travel","sleep").contains(plan.action());});
             var owner=ResidentSimulation.state(world,"owner");
             assertThat(owner.plan.action()).isIn("travel","sleep");
             if("travel".equals(owner.plan.action()))assertThat(owner.desiredAction).isEqualTo("sleep");
@@ -182,9 +185,14 @@ class ResidentDirectorDialogueTest {
         // how many calls are in flight; concurrency has its own test (ResidentDirectorParallelTest).
         var director=new ResidentDirector(store,mind,clock,100000,(userId,day,callType,inputTokens,outputTokens)->{},8,64,12,1);
         try{
-            await(()->{director.consider(51,world);return "closing".equals(world.cafeStatus);});
+            driveUntil(director,51,world,()->"closing".equals(world.cafeStatus));
+            // The second half asks specifically what the interrupted artist does. With 25 residents,
+            // park the now-finished operator and every other neighbour so this remains that test,
+            // rather than depending on the six-person roster order it was originally written for.
+            for(var r:world.residentStates)if(!Set.of("artist","self").contains(r.id))
+                r.plan=new Plan("park-after-close-"+r.id,"sleep",TownPlaces.homeOf(r.id),null,"睡着",clock.instant(),clock.instant().plusSeconds(600));
             clock.now=clock.now.plusSeconds(13);
-            await(()->{director.consider(51,world);return decisions.get()==1&&Set.of("travel","make").contains(artist.plan.action());});
+            driveUntil(director,51,world,()->decisions.get()==1&&Set.of("travel","make").contains(artist.plan.action()));
             assertThat(world.cafeStatus).isEqualTo("closing");
             assertThat(artist.plan.place()).isIn("home-artist","cafe");
             if("travel".equals(artist.plan.action())){assertThat(artist.desiredAction).isEqualTo("make");assertThat(artist.desiredDurationSeconds).isEqualTo(587);}
@@ -201,13 +209,16 @@ class ResidentDirectorDialogueTest {
             public boolean enabled(){return true;}
             public Decision decide(Context context){assertThat(context.cafeStatus()).isEqualTo("closed");assertThat(context.availableActions()).contains("open_cafe");return new Decision("open_cafe","cafe",null,"去把门打开","",List.of(),null,null);}
         };
-        var director=new ResidentDirector(store,mind,clock);
-        try{await(()->{director.consider(52,world);return owner.plan!=null&&Set.of("travel","open_cafe").contains(owner.plan.action());});}
+        var director=oneAtATime(store,mind,clock);
+        try{driveUntil(director,52,world,()->owner.plan!=null&&Set.of("travel","open_cafe").contains(owner.plan.action()));}
         finally{director.close();}
         assertThat(owner.desiredAction==null?owner.plan.action():owner.desiredAction).isEqualTo("open_cafe");
     }
 
     private static void move(CompanionWorld world,String id,String place,String activity,String label,Instant until){for(int i=0;i<world.residents.size();i++){var actor=world.residents.get(i);if(id.equals(actor.id()))world.residents.set(i,new Actor(actor.id(),actor.name(),actor.role(),place,activity,label,actor.x(),actor.y(),until));}}
+    private static void driveUntil(ResidentDirector director,long userId,CompanionWorld world,BooleanSupplier condition)throws Exception{
+        await(()->{if(condition.getAsBoolean())return true;director.consider(userId,world);return condition.getAsBoolean();});
+    }
     private static void await(BooleanSupplier condition)throws Exception{long deadline=System.nanoTime()+Duration.ofSeconds(3).toNanos();while(!condition.getAsBoolean()&&System.nanoTime()<deadline)Thread.sleep(5);assertThat(condition.getAsBoolean()).isTrue();}
     static class MutableClock extends Clock {
         volatile Instant now;MutableClock(Instant now){this.now=now;}

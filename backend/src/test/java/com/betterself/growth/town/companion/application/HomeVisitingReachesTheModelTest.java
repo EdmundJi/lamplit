@@ -59,7 +59,7 @@ class HomeVisitingReachesTheModelTest {
             .contains("invite_home");
         String prompt = promptFor(w, "owner");
         assertThat(prompt).as("invite_home 要被解释").contains("invite_home是请眼前这个人以后来自己家坐坐");
-        assertThat(prompt).as("targetId 是人的id，和 lend/gift 的物件id正好相反").contains("targetId填nearby中那个人的id");
+        assertThat(prompt).as("targetId 是人的id，和 lend/gift 的物件id正好相反").contains("targetId是nearby那个人id的一条");
     }
 
     @Test

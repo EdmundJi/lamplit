@@ -233,11 +233,22 @@ class AcceleratedTownRunnerAutonomyIT {
             }
         };
         var director = new ResidentDirector(store, mind, clock, 32, new InMemoryModelUsage());
+        var outcomes=java.util.Collections.synchronizedList(new java.util.ArrayList<String>());
+        director.setOutcomeListener((kind,resident,action,outcome)->outcomes.add(kind+":"+resident+":"+action+":"+outcome));
         try {
+            assertThat(ResidentSimulation.mayTend(world,"artist")).isTrue();
+            assertThat(world.serviceRequests).anyMatch(candidate->"qa-request".equals(candidate.id)&&"waiting".equals(candidate.status));
+            assertThat(world.positions).filteredOn(position->"cafe-counter".equals(position.id)).singleElement()
+                .satisfies(position->assertThat(position.condition).isEqualTo("usable"));
+            var context=director.perspective(world,"artist",clock.instant(),List.of());
+            assertThat(context.availableActions()).contains("tend");
+            assertThat(context.decisionOptions()).anyMatch(option->"tend".equals(option.action())&&"qa-request".equals(option.targetId()));
             director.consider(41L, world);
-            await(() -> artist.plan != null && "tend".equals(artist.plan.action()));
+            await(()->!outcomes.isEmpty());
         } finally { director.close(); }
 
+        assertThat(outcomes).containsExactly("decision:artist:tend:applied");
+        assertThat(artist.plan).isNotNull();assertThat(artist.plan.action()).isEqualTo("tend");
         assertThat(request.status).isEqualTo("preparing");
         assertThat(ResidentSimulation.endWorkArrangement(world, "artist", arrangementId, "ended", NOW.plusSeconds(7))).isTrue();
         assertThat(ResidentSimulation.mayTend(world, "artist")).isFalse();

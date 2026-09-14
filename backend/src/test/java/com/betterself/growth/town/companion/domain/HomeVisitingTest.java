@@ -184,6 +184,7 @@ class HomeVisitingTest {
     @Test void anArrivingGuestGivesThePresentHostOneChanceToReact() {
         CompanionWorld w = town();
         at(w, "owner", TownPlaces.homeOf("owner")); // host already home
+        ResidentSimulation.state(w,"owner").roomId=TownPlaces.homeOf("owner")+"-common";
         DoorService.invite(w, "owner", "student", now);
         w.pendingEncounters.clear();
         ResidentState student = ResidentSimulation.state(w, "student");
