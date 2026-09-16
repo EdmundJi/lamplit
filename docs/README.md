@@ -2,6 +2,9 @@
 
 这是兴趣项目，文档说清楚想法就够了。具体分工、流程和实现讨论放在会议与 PR。
 
+可搜索的项目架构与 Harness Wiki：[Online](https://wiki-site-delta.vercel.app) ·
+[Repository source](../openwiki/index.md)。
+
 | 文档 | 说什么 |
 | --- | --- |
 | [01 · 我们想做的小镇](01-requirements.md) | 第一版体验、地图、**第二版（二十五个人）的完整计划**、社会怎么长出来、验收判据、还欠着的 |

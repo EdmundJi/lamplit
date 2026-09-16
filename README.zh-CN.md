@@ -74,6 +74,10 @@ scripts/dev-server.sh urls    # 打印发给其他开发者的访问地址
 scripts/dev-server.sh logs    # 跟日志，也可以 logs backend
 ```
 
+项目架构与多 Agent 小镇 Harness 的只读 Wiki 已独立托管在
+<https://wiki-site-delta.vercel.app>。它不依赖共享开发机端口；更新 `openwiki/`
+后运行 `scripts/export-openwiki-site.sh`，再到 `wiki-site/` 执行 `vercel deploy --prod`。
+
 它和上面「本地启动」是**二选一**的关系：两套用的是同一批数据卷，数据互通，但端口会打架。
 切过去之前先停掉本机的 `pnpm dev` 和 `mvnw spring-boot:run`。
 

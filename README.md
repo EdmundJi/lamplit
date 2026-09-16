@@ -93,6 +93,12 @@ scripts/dev-server.sh urls    # print the addresses to hand out
 scripts/dev-server.sh logs    # follow logs, or `logs backend`
 ```
 
+The read-only project architecture and multi-agent town harness Wiki is hosted
+independently at <https://wiki-site-delta.vercel.app>. It does not depend on a
+shared development-machine port. After updating `openwiki/`, run
+`scripts/export-openwiki-site.sh`, then run `vercel deploy --prod` from
+`wiki-site/`.
+
 This and "Running locally" above are **mutually exclusive**: they share data volumes, so
 the data carries over, but the ports collide. Stop your local `pnpm dev` and
 `mvnw spring-boot:run` before switching.

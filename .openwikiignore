@@ -17,11 +17,28 @@ playwright-report/
 experiments/**/data/
 logs/
 
-# Generated binary/art assets are not architecture evidence. Keep the town asset
-# contract README readable because existing grounded claims cite it.
-frontend/public/assets/**
-!frontend/public/assets/town/
-!frontend/public/assets/town/README.md
+# Scratch notes, working migration drafts and ad-hoc research files are not
+# evidence: they're where we think out loud, not where decisions or code live.
+tmp/
+
+# Generated review/QA screenshots and markdown snapshots (e.g. artifacts/companion-art-review,
+# artifacts/checklist-*.png) — visual QA byproducts, not architecture or decision evidence.
+artifacts/
+
+# Generated experiment/town-run byproducts (screenshots, per-run subfolders under
+# output/town-v2, output/town-life-review) — same category as experiments/**/data/ above,
+# just a different output root.
+output/
+
+# Exported static OpenWiki visualization site (wiki-site/public/graph.json etc., produced by
+# scripts/export-openwiki-site.sh) — a generated product of this very wiki, not a source of it.
+wiki-site/
+
+# Reference papers cited by references/README.md. The PDFs themselves are binary and not
+# line-citable (`repo://references/*.pdf#Lx-Ly` is meaningless), so exclude them; keep the
+# README that explains what they are and why they're cited — it's already used as evidence.
+references/**
+!references/README.md
 
 # Tool worktrees and repository internals
 .git/
