@@ -3,9 +3,6 @@ type: 工程快速开始与改动路由
 title: Lamplit 工程快速开始与改动路由
 description: 提供 Lamplit 的本地启动、配置检查与分层验证入口，并把全局产品改动和 Companion Town harness 改动路由到相应专题。
 tags: [quickstart, contributor-guide, development, companion-town, testing]
-verified:
-  - by: openwiki/0.5.1
-    at: 2026-09-14T13:15:33.655Z
 sources:
   - id: openwiki-source-cc9ac771b9086a58897b0e1c
     resource: repo://backend/pom.xml
@@ -21,6 +18,8 @@ sources:
     resource: repo://backend/src/main/java/com/betterself/growth/town/companion/domain/ResidentSimulation.java
   - id: openwiki-source-2203842ad674d103faccd84b
     resource: repo://backend/src/main/resources/application.yml
+  - id: openwiki-source-1208e557efdb960c8f8bef30
+    resource: repo://deploy/compose.dev.yaml
   - id: openwiki-source-4b571b39f042df3a80e17d02
     resource: repo://deploy/compose.yaml
   - id: openwiki-source-094485633ffa4398bb8dd91d
@@ -35,9 +34,14 @@ sources:
     resource: repo://frontend/src/shared/api/client.ts
   - id: openwiki-source-23775c3de52f3ab95a13cb8b
     resource: repo://README.md
+  - id: openwiki-source-8e5d43a0e996b801214d5aa2
+    resource: repo://scripts/dev-server.sh
   - id: openwiki-source-b162d4e3c9dd4a9c513097a1
     resource: repo://scripts/verify-global-flow.sh
-generated: { by: "openwiki/0.5.1", at: "2026-09-14T13:15:33.655Z" }
+generated: { by: "openwiki/0.5.1", at: "2026-09-15T18:20:12.903Z" }
+verified:
+  - by: openwiki/0.5.1
+    at: 2026-09-15T18:20:12.903Z
 ---
 
 # Lamplit 工程快速开始与改动路由
@@ -60,7 +64,7 @@ cp .env.example .env.local
 
 ### 选择一种开发模式
 
-**A. 宿主机运行应用。** 仅启动依赖服务，避免 `deploy/compose.yaml` 中的 `backend` 与 `nginx` 占用宿主机的 `8080`/`80`：
+README 的“Running locally”原样启动的是完整的 `deploy/compose.yaml`：它会运行 MySQL、Redis、MinIO、`backend` 和 `nginx`。这表达的是**完整容器拓扑**的文档意图；它同时映射宿主机 `8080` 与 `80`，所以不能再在宿主机启动默认端口的 Spring Boot。若目标是宿主机调试后端和 Vite，实际可执行的做法是只选择 Compose 中的基础设施服务：
 
 ```bash
 docker compose --env-file .env.local -f deploy/compose.yaml up -d mysql redis minio
@@ -82,24 +86,28 @@ pnpm install
 pnpm dev
 ```
 
-Vite 将 `/api/v1` 代理到宿主机后端。`application.yml` 以环境变量配置 MySQL、Redis、Flyway、调度、安全、对象存储、AI 及 companion memory/model routing；不要将凭据硬编码到源码。[^config] [^frontend]
+`application.yml` 默认把后端绑定到 `8080`，并从环境读取 MySQL、Redis、Flyway、调度、安全、对象存储、AI 及 companion memory/model routing；不要把凭据写入源码。[^config] 前端的 `dev` 就是 Vite；其 `/api/v1` 代理目标应与正在运行的后端相匹配。[^frontend] [^package]
 
-**B. 共享容器开发服务器。** 让所有服务以源码挂载的开发 Compose 栈运行：
+**共享容器开发服务器。** 当一台机器要让协作者访问、且前后端都不在宿主机安装/运行时，使用 `scripts/dev-server.sh`。它固定使用 `deploy/compose.dev.yaml`，把源码挂入容器：后端以 devtools 和 JDWP 运行，前端是带 HMR 的 Vite，另有 Dozzle 日志面板。该脚本支持 `up`、`down`、`restart [service]`、`logs [service]`、`status`、`urls`、`seed`、`town`、`db` 和二次确认的 `reset-db`；`town` 会删除小镇日运行锁，供下一次 cron 重跑，不能把它当作无副作用的查看命令。[^dev-server] [^compose-dev]
 
 ```bash
 scripts/dev-server.sh up
 scripts/dev-server.sh urls
-scripts/dev-server.sh logs
+scripts/dev-server.sh logs backend
+# 停止但保留数据卷
+scripts/dev-server.sh down
 ```
 
-这两种模式共享具名数据卷且默认端口冲突，切换前先停止另一种模式的宿主机进程。`deploy/compose.yaml` 本身是生产形态拓扑，包含 MySQL、Redis、MinIO、backend 与 Nginx；若要完整构建该形态，先产生 JAR 和 `frontend/dist`，再执行 `docker compose ... up -d --build`。小镇记忆目录必须另行配置为持久且已备份的挂载，不能只依赖容器可写层。[^operations] [^memory]
+两套 Compose 都以 `COMPOSE_PROJECT_NAME`（默认 `growth`）命名 MySQL、Redis 和 MinIO 卷，因此会复用这些数据；开发 Compose 还持久化 companion memory、Maven cache、`target`、`node_modules` 和 Vite cache。默认共享开发端口是 Web `5173`、API `8080`、JDWP `5005` 和日志 `9999`，并且数据库与对象存储也映射各自的默认端口。`up` 只预检前四个端口是否被**非 Docker**宿主机进程占用；这正是它要求先停掉 `pnpm dev` / `mvnw spring-boot:run`，或改 `DEV_WEB_PORT`、`DEV_API_PORT`、`DEV_DEBUG_PORT`、`DEV_LOGS_PORT` 的原因。切换模式前还应主动检查 MySQL、Redis、MinIO 与 Nginx 的端口占用，不能把脚本预检误解为完整冲突检测。[^dev-server] [^compose] [^compose-dev]
+
+`deploy/compose.yaml` 是构建产物形态：`backend` 和 `nginx` 分别从 `Dockerfile.backend` 与 `Dockerfile.nginx` 构建；其 Docker build context 为仓库根目录。README 将其列为本地完整栈入口。若只是在修改 Wiki，Wiki 站点独立于共享开发机端口：先运行 `scripts/export-openwiki-site.sh`，再在 `wiki-site/` 执行 `vercel deploy --prod`。小镇记忆目录须配置为持久且备份过的挂载，不能只依赖容器可写层。[^readme] [^compose] [^memory]
 
 ## 运行时入口：从浏览器到服务端
 
 - `frontend/src/main.ts` 创建一个 Pinia、hydrate 外观偏好、安装 router 并挂载 `App`。`frontend/src/app/router.ts` 懒加载页面；它初始化认证，未认证访问非 public route 时转至 `/auth`，非管理员不能进入 `/admin`。[^frontend]
 - 用户界面的主入口包括 `/today`、`/town`、`/goals`、`/partners`、`/friends`、`/attributes`、`/insights`、`/ai`、`/profile` 与 `/settings`；`/town/debug` 是脱离 `UserLayout` 的开发调试视图，不应当作普通产品路径。[^frontend]
 - `frontend/src/shared/api/client.ts` 是常用浏览器 API 边界：请求使用 `/api/v1` 和 cookie；不安全请求在可用时携带 `X-CSRF-Token`，遇到 `401` 最多 refresh 后重试一次。服务端授权仍是安全边界，路由守卫只改善导航体验。[^client]
-- 后端从 `GrowthApplication` 启动。直接检查健康状态可访问 `http://localhost:8080/actuator/health`；Nginx 前置时同一路径以及 `/api/v1` 会被代理，API 代理禁用缓存和缓冲以支持流式响应。[^config] [^compose]
+- 后端从 `GrowthApplication` 启动。直接检查健康状态可访问 `http://localhost:8080/actuator/health`；Nginx 前置时同一路径以及 `/api/v1` 会被代理，API 代理禁用缓存和缓冲以支持流式响应。[^config] [^nginx]
 
 ## “我要改 X，应从哪里开始”
 
@@ -158,11 +166,15 @@ Surefire 同时包含 `*Test` 和 `*IT`，并在测试中关闭应用调度。�
 
 [^system]: 模块化单体与存储角色：repo://README.md#L27-L35；后端依赖：repo://backend/pom.xml#L51-L94
 [^config]: 环境驱动运行配置：repo://backend/src/main/resources/application.yml#L1-L119；本地示例与 mock 默认值：repo://.env.example#L2-L76
-[^operations]: 两种模式、生产 Compose 与记忆挂载注意事项：repo://openwiki/operations/local-development-and-deployment.md#L11-L16；repo://openwiki/operations/local-development-and-deployment.md#L89-L125
+[^readme]: README 的完整本地栈、共享开发服务器与 Wiki 导出/部署步骤：repo://README.md#L37-L63；repo://README.md#L84-L107
+[^compose]: 完整 Compose 的服务、端口、构建和共享数据卷：repo://deploy/compose.yaml#L1-L15；repo://deploy/compose.yaml#L60-L133
+[^compose-dev]: 开发 Compose 的源码挂载、运行时和具名卷：repo://deploy/compose.dev.yaml#L7-L15；repo://deploy/compose.dev.yaml#L77-L175；repo://deploy/compose.dev.yaml#L189-L205
+[^dev-server]: 共享开发服务器命令、端口预检与操作副作用：repo://scripts/dev-server.sh#L1-L12；repo://scripts/dev-server.sh#L27-L61；repo://scripts/dev-server.sh#L81-L140
+[^package]: 前端 Node/pnpm 约束与 Vite 命令：repo://frontend/package.json#L6-L18
 [^memory]: 记忆文件、SQLite 索引与 world store 的 hydrate/persist 边界：repo://backend/pom.xml#L88-L95；repo://backend/src/main/resources/application.yml#L92-L119
-[^frontend]: 前端 bootstrap 与路由：repo://frontend/src/main.ts#L1-L13；repo://frontend/src/app/router.ts#L4-L59
+[^frontend]: 前端 bootstrap、路由与开发代理：repo://frontend/src/main.ts#L1-L13；repo://frontend/src/app/router.ts#L4-L59；repo://frontend/vite.config.ts#L39-L55
 [^client]: 浏览器 API 客户端：repo://frontend/src/shared/api/client.ts#L1-L40
-[^compose]: Compose 服务拓扑：repo://deploy/compose.yaml#L3-L125；Nginx 代理：repo://deploy/nginx/default.conf#L14-L48
+[^nginx]: Nginx 代理：repo://deploy/nginx/default.conf#L14-L48
 [^seed]: 手工种子及唯一新增入口：repo://backend/src/main/java/com/betterself/growth/town/companion/domain/ResidentSeed.java#L13-L28；初始化：repo://backend/src/main/java/com/betterself/growth/town/companion/domain/ResidentSeed.java#L125-L168
 [^projection]: 服务端快照、revision guard 和共享轮询：repo://frontend/src/modules/companion/companion.store.ts#L9-L14；repo://frontend/src/modules/companion/companion.store.ts#L60-L98；repo://frontend/src/modules/companion/companion.store.ts#L132-L171
 [^town]: 小镇边界与 Todo 约束：repo://README.md#L9-L19；repo://openwiki/concepts/companion-town.md#L17-L30

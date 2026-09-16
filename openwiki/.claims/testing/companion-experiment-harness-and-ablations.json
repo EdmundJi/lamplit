@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "pageVersion": "sha256:fc893064ca3150d600b3fa99c90323aaa5ed643a2d001e701da7bb91a5c5d60f",
+  "pageVersion": "sha256:36e5ada7dad583aa8c9f419e176a5e801f3704e00546dcea1bdde7cbc46877ca",
   "claims": [
     {
       "id": "claim_d093c32a430641a7a20e6ec0911670e4",
@@ -230,13 +230,23 @@
         },
         {
           "resource": "repo://experiments/2026-09-14-v2-rules-acceptance/README.md#L1-L7",
-          "version": "repo-lines-v1:sha256:a65b9d6828519873b3ea1b57cca4fe98870e7ffc56a212c9bd44b18ec8e3aee3:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZTJiZDM5YWU4M2YyMWM3NjJjNDY0YzI0NTE3Y2ZkZmE1MzAxZmEzMGEyYjhmMTFiMTliNDk3OTUyMzliMDgxNSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMzkyZDIxMWM2NDA5NjdjMTg2MjU2NWQ1ZjE1ODZmOWEzZTgxYWQ4ZmMzY2QxZDU3YTRhMzJhMjdkMWQyMDc2NCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjAsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjAsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSJ9"
+          "version": "repo-lines-v1:sha256:39b49877c596a45c27207bbf680475128ac4bc28da6f1a9dd91efd81c641694c:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZTJiZDM5YWU4M2YyMWM3NjJjNDY0YzI0NTE3Y2ZkZmE1MzAxZmEzMGEyYjhmMTFiMTliNDk3OTUyMzliMDgxNSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMzkyZDIxMWM2NDA5NjdjMTg2MjU2NWQ1ZjE1ODZmOWEzZTgxYWQ4ZmMzY2QxZDU3YTRhMzJhMjdkMWQyMDc2NCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjAsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjAsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_964b3e98aca24782a07394f9e0a64220",
+      "statement": "已提交的 `2026-09-14-v2-model-choice-probe` README 记录：从规则验收快照续跑 0.02 天，使用 `qwen3.7-flash-2026-07-15`、4 并发，产生 24 次逻辑调用，其中 20 次应用、4 次拒绝；同时明确该探针没有 `decision`，且无法由产物回溯 wire 请求数。",
+      "evidence": [
+        {
+          "resource": "repo://experiments/2026-09-14-v2-model-choice-probe/README.md#L1-L7",
+          "version": "repo-lines-v1:sha256:f181a2cd4aefcfa585676937795e979ced154c0f875719977fa5131f5e864cff:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZDQ4NDMwY2Y2YWQ1NjFkZTJlZTQyZGQyYThiMGU2ZGNjMmFkMDNkNWRjZjMzMTU1OTJjMTQwMzJhMmJlNTNmMyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMDJjMWQ2M2M3Yzg1MjEwYjI4M2ZiOTEyNDQ0NzFjYjI0ZjFmMmM5NDJlZWI1MjhmMjE2ODdmNWM5N2EzNDJhZCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjAsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjAsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSJ9"
         }
       ]
     }
   ],
   "verification": {
     "by": "openwiki/0.5.1",
-    "at": "2026-09-14T13:15:33.655Z"
+    "at": "2026-09-15T18:20:12.903Z"
   }
 }

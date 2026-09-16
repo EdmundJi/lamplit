@@ -1,4 +1,4 @@
-# 架构
+# 文件
 
 - [小镇架构热点与渐进拆分接缝](companion-architecture-hotspots-and-seams.md) - 基于现有模拟、编排、状态存储和模型适配代码，说明保持现有行为时可先抽取的边界、契约与回归测试。重点是以权威状态、提交语义和模型输入输出校验为护栏的渐进拆分，而非重写。
 - [小镇 Harness 总览与稳定边界](companion-harness-overview.md) - 说明 HTTP/poll 如何推进小镇世界，并划清规则模拟、异步居民心智、持久化记忆、前端投影与加速实验 Harness 的职责和一致性边界。

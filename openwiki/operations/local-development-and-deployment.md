@@ -3,9 +3,6 @@ type: 运维指南
 title: 本地开发与部署
 description: 说明 Lamplit 的两种互斥开发模式，以及生产形态 Compose 拓扑的构建、配置、持久化、迁移和验证要求。涵盖安全配置、健康检查、管理员初始化与常见故障排查。
 tags: [operations, local-development, docker-compose, configuration, deployment]
-verified:
-  - by: openwiki/0.5.1
-    at: 2026-09-14T13:15:33.655Z
 sources:
   - id: openwiki-source-ea70eb6c045047448e446296
     resource: repo://.gitignore
