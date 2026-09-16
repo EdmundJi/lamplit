@@ -97,7 +97,10 @@ class DailyRhythmTest {
         assertThat(student.plan.action()).isEqualTo("travel");assertThat(student.desiredAction).isEqualTo("study");assertThat(student.desiredDurationSeconds).isEqualTo(720);
 
         w.updatedAt=closeAt;w.simulatedAt=closeAt;
-        advanceTo(w,student.plan.endsAt().plusSeconds(12));
+        // 21:01 Shanghai is already dark, and the student's own room light is still off (LightService),
+        // so arrival there inserts a short "开灯" switch_light activity before "study" actually resumes -
+        // the extra 120s (over the old +12 margin) covers that real activity, not slack in the test.
+        advanceTo(w,student.plan.endsAt().plusSeconds(140));
         assertThat(w.cafeStatus).isEqualTo("closed");
         assertThat(student.plan.action()).isEqualTo("study");assertThat(student.plan.place()).isEqualTo(TownPlaces.homeOf("student"));
         assertThat(student.plan.reason()).isEqualTo("把这一章读完");
@@ -146,6 +149,11 @@ class DailyRhythmTest {
         assertThat(normal.plan).isNull();
         tired.revision++;one.intentRevision=0;
         assertThat(ResidentSimulation.applyDecision(one,"student",tired.revision,one.intentRevision,"home","sleep",null,"太困了，先睡",null,List.of(),night)).isTrue();
+        // Her own room is dark and its light is still off (LightService), so the decision lands on a
+        // short "开灯" switch_light activity first, exactly like arriving anywhere else dark does -
+        // step past it before she is actually asleep.
+        assertThat(tired.plan.action()).isEqualTo("switch_light");
+        ResidentSimulation.step(one,night.plusSeconds(130));
         assertThat(tired.plan.action()).isEqualTo("sleep");
         assertThat(Duration.between(tired.plan.startedAt(),tired.plan.endsAt()).toHours()).isGreaterThanOrEqualTo(7);
         ResidentSimulation.settleEnergy(one,tired,tired.plan.endsAt());

@@ -299,6 +299,15 @@ public final class ResidentSimulation {
             String waitingAction=r.desiredAction;int duration=r.desiredDurationSeconds>0?r.desiredDurationSeconds:300;
             schedule(w,r,waitingAction,p.place(),r.desiredRoomId,p.targetId(),p.reason(),at,duration);return;
         }
+        // The short "开灯" interlude schedule() inserts in the dark before a resident's real plan
+        // begins (see LightService.shouldSwitchOn) - once it has actually run its course, the switch
+        // is really flipped, and the resident goes on to what they meant to do all along, exactly the
+        // same hand-off "travel" and "wait" above already use.
+        if(p.action().equals("switch_light")){
+            LightService.turnOn(w,r.id,p.place(),r.roomId,at);
+            int duration=r.desiredDurationSeconds>0?r.desiredDurationSeconds:42;
+            schedule(w,r,r.desiredAction,p.place(),r.desiredRoomId,p.targetId(),p.reason(),at,duration);return;
+        }
         if("repair".equals(p.action()))TownPlaces.repair(w,r.id,p.targetId(),at);
         if(Set.of("sleep","tend","cook","bathe","exercise","tend_plants","read_notice","work","make").contains(p.action()))
             TownPlaces.finishUse(w,r.positionId,at);
@@ -458,6 +467,10 @@ public final class ResidentSimulation {
             int travel=travelSeconds(actor(w,r.id).place(),place);
             r.plan=new Plan("p-"+(++w.eventSequence),"travel",place,target,reason,at,at.plusSeconds(travel));
             r.revision++;r.thought=reason;r.travelFrom=travelOrigin(w,r.id);
+            // Stepping out of a room the instant travel begins, not 42 seconds later when they land
+            // somewhere else - see LightService.onLeftRoom's own note on why this and schedule()'s own
+            // check together cover both ways a room actually empties.
+            if(r.roomId!=null)LightService.onLeftRoom(w,r.id,actor(w,r.id).place(),r.roomId,at);
             TownPlaces.release(w,r.id,at); // stepping away frees up the spot right away, not 12 seconds from now
             replaceActor(w,r.id,"street","walk","准备去"+placeName(place)+"："+reason,r.plan.endsAt(),at);
         } else schedule(w,r,action,place,roomId,target,reason,at,duration);
@@ -466,6 +479,10 @@ public final class ResidentSimulation {
         schedule(w,r,action,place,null,target,reason,at,duration);
     }
     static void schedule(CompanionWorld w,ResidentState r,String action,String place,String roomId,String target,String reason,Instant at,int duration) {
+        // Captured before anything below moves them: the room they were actually standing in a
+        // moment ago, if any - see the light-switch block further down, which compares this against
+        // the room this same call is about to land them in.
+        String previousRoomId=r.roomId;
         // The cafe's door (see DoorService/docs/05-notes.md "物件要有自己的类"): only an actual
         // arrival needs asking, never someone already standing inside continuing whatever they were
         // doing - the door blocks entry, not staying. "Arriving" is read straight off where the actor
@@ -504,6 +521,25 @@ public final class ResidentSimulation {
         if(selectedRoom==null&&arrivingElsewheresHome&&TownPlaces.room(w,place+"-common")!=null)selectedRoom=place+"-common";
         r.roomId=validRoom(w,r.id,place,selectedRoom)?selectedRoom:defaultRoom(w,r.id,place);
         if(r.roomId!=null)TownPlaces.discoverRoom(w,r,r.roomId);
+        // Real room lighting (docs "让小人到房间可以操作开关"), switched only by a resident actually
+        // standing there - never by the clock alone. Same-building room-to-room moves (a bedroom to
+        // its home's own common room, say) never go through moveOrSchedule's travel branch at all, so
+        // its own departure check above cannot see them; this is the other half, for every path that
+        // ends up here, whichever one brought it. A harmless no-op re-check for a cross-building
+        // arrival that already ran the same check on its way out (LightService.onLeftRoom is itself
+        // idempotent - the light is already off by the time this asks again).
+        if(!Objects.equals(previousRoomId,r.roomId)){
+            Room leftRoom=previousRoomId==null?null:TownPlaces.room(w,previousRoomId);
+            if(leftRoom!=null)LightService.onLeftRoom(w,r.id,leftRoom.buildingId(),previousRoomId,at);
+        }
+        if(LightService.shouldSwitchOn(w,r.roomId,at)){
+            r.desiredAction=action;r.desiredRoomId=r.roomId;r.desiredDurationSeconds=duration;
+            r.plan=new Plan("p-"+(++w.eventSequence),"switch_light",place,target,reason,at,at.plusSeconds(LightService.SWITCH_SECONDS));
+            r.revision++;r.thought="开灯";
+            replaceActor(w,r.id,place,"switch_light","摸黑找到开关，把灯打开",r.plan.endsAt(),at);
+            return;
+        }
+        if("sleep".equals(action))LightService.onGoesToSleep(w,r.id,place,r.roomId,at);
         // Every new plan starts out as the rules' own until something says otherwise: applyDecision
         // stamps it back on afterwards (markSelfChosen), and extendByReflex re-stamps the one it is
         // deliberately carrying on. Defaulting the other way would let a plan the rules arranged

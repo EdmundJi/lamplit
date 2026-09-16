@@ -101,6 +101,10 @@ class CompanionRulesTest {
         assertThat(sleepingAt).isNotEmpty();
         // Each sleeper is in their own bedroom, never the single shared "home" the old bug produced.
         sleepingAt.forEach((id,place)->assertThat(place).isEqualTo(TownPlaces.homeOf(id)));
+        // 22:50 is dark, and every one of these bedrooms' own lights is still off (LightService), so
+        // "sleep" lands each of them on a short "开灯" switch_light activity first - step past it
+        // before anybody has actually claimed a bed.
+        ResidentSimulation.step(w,start.plusSeconds(130));
         // Two flat-mates deliberately share one address, so distinct *places* is no longer the claim.
         // What still has to hold - and is what the original four-in-one-bed bug actually violated -
         // is that no two sleepers are ever in the same bed.

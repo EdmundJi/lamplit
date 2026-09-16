@@ -232,6 +232,7 @@ final class CafeService {
     static void finishClosingIfEmpty(CompanionWorld w,Instant at){
         if(!"closing".equals(w.cafeStatus)||!cafeEmpty(w))return;
         w.cafeStatus="closed";w.cafeStatusChangedAt=at;
+        LightService.turnOffRoom(w,"cafe-main",at);
         ResidentSimulation.event(w,at,"cafe_closed",PLACE,List.of(),"咖啡馆的灯熄了，今天已经打烊。",null);
     }
 

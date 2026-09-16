@@ -207,6 +207,7 @@ public final class TownPlaces {
         ensurePublicRooms(w);
         reconcileObjects(w);
         reconcileKnowledge(w);
+        LightService.ensure(w);
     }
     /** The three remaining public buildings this version's 「六栋公共建筑」 calls for, beyond the cafe
      * and garden this town already had - 学院 (academy) and 健身房 (gym), which the frontend already
