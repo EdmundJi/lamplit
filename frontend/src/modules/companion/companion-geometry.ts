@@ -11,7 +11,31 @@ import type { Point } from '../../shared/scene/collision'
 import { nearestStandable } from '../../shared/scene/collision'
 import { COMPANION_COLLISION, freeStandPosition } from './companion-navigation'
 import { POSITION_SLOTS, CAFE_SERVICE, CAFE_SEATS, GARDEN_OFFSET_X, gardenY, HOME_ROOMS, CAFE_ROOM, CAFE_WINDOW_ROOM, ACADEMY_ROOM, GYM_ROOM, SHOP_ROOM, PLACE_FRAMES, STAGE_PLACES } from './companion-art'
-import type { SceneResident } from './companion-scene'
+import type { SceneObject, SceneResident } from './companion-scene'
+
+/** The same day/night window sync() applies to the world shade, rain tint and (via litRooms
+ * below) every room light - kept as one function so the three never drift apart from each other. */
+export function isNight(minutes: number) {
+  return minutes < 360 || minutes >= 1140
+}
+/**
+ * Which indoor rooms should show a lit window right now - purely from world state, never from
+ * "who's home". A room counts as lit only when it is dark out AND its own `kind: 'light'` object
+ * (id `light:<roomId>`, one per room with a physical switch - see companion-art.ts's
+ * `homeLightRoomIds`/`CAFE_LIGHT_ROOM`/`ACADEMY_LIGHT_ROOM`/`GYM_LIGHT_ROOM`/`SHOP_LIGHT_ROOM`) has
+ * `state === 'on'`. A room with no light object at all - an old save predating this backend field,
+ * or a room nobody has switched on - is unlit: deliberately no fallback to "someone's inside so the
+ * window must be alight", which is exactly the bug this function replaces (residents used to find
+ * every home lit for them, no switch involved). companion-scene.ts's sync() reads this one Set for
+ * all three of its light groups (home windows, the cafe, the three public buildings) instead of
+ * keeping three separate ad-hoc heuristics.
+ */
+export function litRooms(objects: SceneObject[], minutes: number): Set<string> {
+  const rooms = new Set<string>()
+  if (!isNight(minutes)) return rooms
+  for (const object of objects) if (object.kind === 'light' && object.roomId && object.state === 'on') rooms.add(object.roomId)
+  return rooms
+}
 
 type RainShelter = { x: number; y: number; width: number; height: number }
 // These use the shared stage geometry rather than a second set of hand-tuned rain rectangles.

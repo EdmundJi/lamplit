@@ -27,6 +27,15 @@
     ])
     const baseResidents = residents.value.map(r => ({ ...r }))
     const cafeFocus = ref(false), explicitPlace = ref(undefined), cafeOpen = ref(true)
+    // Room lights are now driven purely by `objects` (kind: 'light', see companion-scene.ts's
+    // litRooms()) rather than by who's simply standing in a place at night - without these, "看夜晚"
+    // would render every window dark since this harness never talks to a real backend. Cafe (阿禾/
+    // 阿川 are inside) and 小夏's home (home-artist) stay switched on; academy/gym/shop/other homes
+    // are dark on purpose, matching nobody actually being in them below.
+    const objects = ref([
+      { id: 'light:cafe-main', kind: 'light', place: 'cafe', roomId: 'cafe-main', label: '灯', state: 'on', projectId: null },
+      { id: 'light:home-artist-room-artist', kind: 'light', place: 'home-artist', roomId: 'home-artist-room-artist', label: '灯', state: 'on', projectId: null },
+    ])
     function showService() {
       chat.value = false
       residents.value = baseResidents.map((r, index) => index === 1 ? { ...r, location: 'cafe', activity: 'prepare', action: '准备热饮', positionId: 'cafe-counter' } : index === 0 ? { ...r, location: 'cafe', activity: 'wait', action: '等一杯热饮', positionId: null } : r)
@@ -86,7 +95,7 @@
       h('button', { onClick: showTownPopulation }, '看二十五人'),
       h('button', { onClick: () => overview.value = !overview.value }, overview.value ? '聚焦生活区' : '看看全街'),
       h('button', { onClick: () => textBubbles.value = !textBubbles.value }, textBubbles.value ? '关文字气泡' : '开文字气泡'),
-    ]), h(CompanionScene, { residents: residents.value, selectedPlace: explicitPlace.value ?? (cafeFocus.value ? 'cafe' : undefined), cafeOpen: cafeOpen.value, weather: rain.value ? 'rain' : 'clear', minutes: night.value ? 1260 : 840, overview: overview.value, textBubbles: textBubbles.value,
+    ]), h(CompanionScene, { residents: residents.value, selectedPlace: explicitPlace.value ?? (cafeFocus.value ? 'cafe' : undefined), cafeOpen: cafeOpen.value, weather: rain.value ? 'rain' : 'clear', minutes: night.value ? 1260 : 840, overview: overview.value, textBubbles: textBubbles.value, objects: objects.value,
       projects: [
         { id: 'poster', title: '窗边海报', place: 'cafe', status: 'working', progress: 75, objectKind: 'poster' },
         { id: 'flowers', title: '一瓶小花', place: 'cafe', status: 'working', progress: 60, objectKind: 'flowers' },

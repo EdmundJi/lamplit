@@ -6,20 +6,20 @@ import { conversationEmoji, residentStatus } from './companion-presentation'
 import { motionAllowed } from '../../shared/ui/interaction/motion'
 import { buildCompanionStage } from './companion-stage'
 import { positionUseProps, type PositionUseProp } from './companion-position-props'
-import { ACTION_FRAME, RESIDENT_ART, RESIDENT_ACTIONS, isArtAction, COMPANION_WORLD_SIZE, HOME_ROOMS, CAFE_ROOM, CAFE_WINDOW_ROOM, CAFE_SERVICE, CAFE_SEATS, cafeSeatAt, GARDEN_OFFSET_X, POSITION_SLOTS, WALK_PIXELS_PER_SECOND, ACADEMY_ROOM, GYM_ROOM, SHOP_ROOM, gardenY, sleepSpriteOffset } from './companion-art'
+import { ACTION_FRAME, RESIDENT_ART, RESIDENT_ACTIONS, isArtAction, COMPANION_WORLD_SIZE, HOME_ROOMS, CAFE_ROOM, CAFE_WINDOW_ROOM, CAFE_SERVICE, CAFE_SEATS, cafeSeatAt, GARDEN_OFFSET_X, POSITION_SLOTS, WALK_PIXELS_PER_SECOND, ACADEMY_ROOM, GYM_ROOM, SHOP_ROOM, gardenY, sleepSpriteOffset, homeLightRoomIds, CAFE_LIGHT_ROOM, ACADEMY_LIGHT_ROOM, GYM_LIGHT_ROOM, SHOP_LIGHT_ROOM } from './companion-art'
 import { shift } from './town-layout'
 // scenePlace/residentPosition/residentTarget/etc. live in companion-geometry.ts, which has no
 // Phaser import - see that file's own header comment for why. companion-scene.ts (this file, the
 // real Phaser.Scene) re-exports them below so every existing import of './companion-scene' -
 // TownStage.vue's old value import included - keeps working; TownStage.vue itself has since moved
 // to importing straight from companion-geometry so mounting it never pulls Phaser in.
-import { scenePlace, placeFrame, placeCenter, homeRoom, homeId, visibleActivity, isSpeaking, conversationPosition, conversationPositionInRoom, residentPosition, residentTarget, rainFallsOutside, travelAnchor } from './companion-geometry'
-export { scenePlace, visibleActivity, isSpeaking, conversationPosition, conversationPositionInRoom, residentPosition, residentTarget, rainFallsOutside }
+import { scenePlace, placeFrame, placeCenter, homeRoom, visibleActivity, isSpeaking, conversationPosition, conversationPositionInRoom, residentPosition, residentTarget, rainFallsOutside, travelAnchor, isNight, litRooms } from './companion-geometry'
+export { scenePlace, visibleActivity, isSpeaking, conversationPosition, conversationPositionInRoom, residentPosition, residentTarget, rainFallsOutside, isNight, litRooms }
 
 export interface SceneResident { id: string; name: string; role?: string; location: string; action: string; activity?: string; destination?: string; objectKind?: string; positionId?: string | null; roomId?: string | null }
 export interface SceneProject { id: string; title: string; place: string; status: string; progress: number; objectKind: string }
 export interface SceneConversation { id: string; place: string; status: string; topicId?: string; participantIds?: string[]; turns: { speakerId: string; text: string; at: string; emoji?: string | null }[] }
-export interface SceneObject { id: string; kind: string; place: string; label: string; state: string; projectId: string | null }
+export interface SceneObject { id: string; kind: string; place: string; roomId?: string | null; label: string; state: string; projectId: string | null }
 export interface SceneLabel { worldX?: number; worldY?: number; facing?: Direction4; id: string; name: string; x: number; y: number; selected: boolean; speechOffset: number; speech?: string; action: string; role: string; emoji: string; hovered?: boolean; bodyX: number; bodyY: number; bodyHeight: number; conversationId?: string; dialogue?: { name: string; text: string }[]; offscreen?: boolean; direction?: string }
 /** Keep the canvas edge legible in a populated town. The resident roster remains the complete,
  * accessible index; on the map, retain a selected resident plus one representative per edge. */
@@ -34,7 +34,8 @@ export function visibleSceneLabels(labels: SceneLabel[]) {
   })
 }
 // cafeOpen mirrors CompanionScene.vue's own prop of the same name: authoritative world.cafeStatus,
-// never inferred from the client's clock - see the night window lighting in sync().
+// never inferred from the client's clock - read by the soundscape's ambient mix and the espresso
+// wisp (companion-position-props.ts), not by the cafe's window light any more (see litRooms()).
 // 'docked' is the always-on street strip: a short, wide window that pans/zooms to a fixed world
 // point per place instead of framing overview/selection/hover like the full /town page ('auto',
 // the pre-existing behaviour, unchanged below).
@@ -52,15 +53,21 @@ export class CompanionStreetScene extends Phaser.Scene {
   private stage?: { destroy: () => void; signage: Phaser.GameObjects.Text[] }
   private shade!: Phaser.GameObjects.Rectangle
   private rain!: Phaser.GameObjects.Graphics
-  // Per-home window light, keyed by the same id as HOME_ROOMS/homeId() - lit after dark only for
-  // a home with someone actually in it and awake, dark again once everyone there is asleep (or
-  // the home is empty). Separate rectangles (rather than one shared graphics object) are what let
-  // each home be driven independently instead of every window turning on together at dusk.
+  // Per-home window light, keyed by the same id as HOME_ROOMS. Lit only when a resident has
+  // actually walked into their own room and switched it on - see litRooms() in
+  // companion-geometry.ts and homeLightRoomIds() in companion-art.ts, which the sync() below reads
+  // to decide each rectangle's visibility. Separate rectangles (rather than one shared graphics
+  // object) are what let each home be driven independently instead of every window turning on
+  // together at dusk.
   private homeLights = new Map<string, Phaser.GameObjects.Rectangle>()
-  // The cafe's own light is gated on the authoritative cafeStatus the caller already computes for
-  // the soundscape (world.cafeStatus, never the client's own clock guess) - see CompanionScene.vue.
+  // The cafe's three light shapes (dining room, window wing, espresso glow) all read the same
+  // CAFE_LIGHT_ROOM entry of litRooms() - one switch for the whole shop floor, same as every other
+  // building below. No longer gated on the authoritative cafeStatus (state.cafeOpen) - that prop
+  // still drives the soundscape's ambient mix (see CompanionScene.vue) and the espresso wisp
+  // (companion-position-props.ts), just not the window light any more.
   private cafeLights: (Phaser.GameObjects.Rectangle | Phaser.GameObjects.Ellipse)[] = []
-  private publicLights: Phaser.GameObjects.Rectangle[] = []
+  // One rectangle per public building, paired with the backend Room id litRooms() checks for it.
+  private publicLights: { rect: Phaser.GameObjects.Rectangle; roomId: string }[] = []
   private selection!: Phaser.GameObjects.Ellipse
   private projectLayer!: Phaser.GameObjects.Container
   private projectSignature = ''
@@ -227,8 +234,10 @@ export class CompanionStreetScene extends Phaser.Scene {
       this.add.rectangle(CAFE_WINDOW_ROOM.x + 8 + (CAFE_WINDOW_ROOM.w - 16) / 2, CAFE_WINDOW_ROOM.y + 32 + (CAFE_WINDOW_ROOM.h - 32) / 2, CAFE_WINDOW_ROOM.w - 16, CAFE_WINDOW_ROOM.h - 32, 0xffcf7a, .38).setDepth(805).setVisible(false),
       this.add.ellipse(shift('cafe', 480, 226).x, shift('cafe', 480, 226).y, 180, 185, 0xffd89a, .13).setDepth(805).setVisible(false),
     ]
-    this.publicLights = [ACADEMY_ROOM, GYM_ROOM, SHOP_ROOM].map(room =>
-      this.add.rectangle(room.x + 8 + (room.w - 16) / 2, room.y + 32 + (room.h - 32) / 2, room.w - 16, room.h - 32, 0xffcf7a, .26).setDepth(805).setVisible(false))
+    this.publicLights = ([[ACADEMY_ROOM, ACADEMY_LIGHT_ROOM], [GYM_ROOM, GYM_LIGHT_ROOM], [SHOP_ROOM, SHOP_LIGHT_ROOM]] as const).map(([room, roomId]) => ({
+      rect: this.add.rectangle(room.x + 8 + (room.w - 16) / 2, room.y + 32 + (room.h - 32) / 2, room.w - 16, room.h - 32, 0xffcf7a, .26).setDepth(805).setVisible(false),
+      roomId,
+    }))
     this.rain = this.add.graphics().setDepth(950)
     this.projectLayer = this.add.container(0, 0).setDepth(290)
     this.ready = true
@@ -336,22 +345,18 @@ export class CompanionStreetScene extends Phaser.Scene {
     if (!this.ready) return
     const state = this.snapshot()
     if (this.stage) { const show = state.chrome !== false; for (const text of this.stage.signage) text.setVisible(show) }
-    const night = state.minutes < 360 || state.minutes >= 1140
+    const night = isNight(state.minutes)
     // Overview uses the camera's background for the side bars around a tall world. Match the
     // ground instead of exposing a dark canvas edge that has no place in the street.
     this.cameras.main.setBackgroundColor(night ? '#737f74' : state.weather === 'rain' ? '#849176' : '#96a486')
     const ids = new Set(state.residents.map(r => r.id))
     for (const [id, actor] of this.actors) if (!ids.has(id)) { actor.root.destroy(); this.actors.delete(id) }
-    // Which homes have someone in them who is not asleep right now - the per-window night light
-    // below is lit only for those, dark for an empty home or one where everyone is asleep.
-    const homeAwake = new Set<string>()
     state.residents.forEach((resident, index) => {
       const visibleMode = visibleActivity(resident.activity, resident.action, resident.objectKind)
       const atDesk = ['read', 'create', 'rest', 'drink'].includes(visibleMode) && (resident.location === 'cafe' || ['read', 'create'].includes(visibleMode))
       // The server describes a travelling actor as "walk"; destination belongs to its travel plan.
       const travelling = Boolean(resident.destination) && (resident.activity === 'walk' || resident.activity === 'travel')
       const location = travelling ? resident.destination! : resident.location
-      if (scenePlace(location) === 'home' && visibleMode !== 'sleep') { const id = homeId(location); if (id) homeAwake.add(id) }
       let actor = this.actors.get(resident.id)
       // A recognised backend positionId wins outright - it says exactly which bed/seat/plot this
       // resident holds. Only guess a seat from place+index (the old heuristic) when there is none,
@@ -439,12 +444,12 @@ export class CompanionStreetScene extends Phaser.Scene {
       actor.activity.setText(resident.action)
     })
     this.shade.setAlpha(night ? .28 : state.weather === 'rain' ? .1 : 0)
-    for (const [id, light] of this.homeLights) light.setVisible(night && homeAwake.has(id))
-    // Gated on the same authoritative cafeStatus the soundscape uses (see CompanionScene.vue's
-    // cafeOpen prop) - never on a guess about whether "now" falls inside opening hours.
-    const cafeLit = night && (state.cafeOpen ?? true)
-    for (const light of this.cafeLights) light.setVisible(cafeLit)
-    for (const light of this.publicLights) light.setVisible(night)
+    // Every window's visibility now comes from one world-state fact: a room's own light object,
+    // switched on by whoever actually walked in and used it - see litRooms()'s own doc comment.
+    const lit = litRooms(state.objects ?? [], state.minutes)
+    for (const [id, light] of this.homeLights) light.setVisible(homeLightRoomIds(id).some(roomId => lit.has(roomId)))
+    for (const light of this.cafeLights) light.setVisible(lit.has(CAFE_LIGHT_ROOM))
+    for (const { rect, roomId } of this.publicLights) rect.setVisible(lit.has(roomId))
     this.updateProjects(state)
     this.updatePositionProps(state)
     this.frameCamera()

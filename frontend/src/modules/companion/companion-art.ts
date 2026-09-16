@@ -281,6 +281,43 @@ for (const [homeId, room] of Object.entries(HOME_ROOMS)) {
   POSITION_SLOTS[`home-${homeId}-bathroom`] ??= [{ x: room.x + room.w / 2, y: room.y + room.h - 16 }]
 }
 
+/**
+ * Backend Room ids (TownPlaces.java) for the one indoor room per public building that carries a
+ * physical light switch. Public buildings have no bedroom subdivision, so each gets exactly one -
+ * `roomForPlace()`/`ensurePublicRooms()` on the backend name these same four ids (`cafe-main`
+ * rather than `cafe-counter-room`: the service nook behind the counter is staff space, not the
+ * dining room the window/worktable seats sit in, and every cafe light rectangle drawn below -
+ * dining room, window wing, espresso glow alike - reads as one switch for the whole shop floor).
+ */
+export const CAFE_LIGHT_ROOM = 'cafe-main'
+export const ACADEMY_LIGHT_ROOM = 'academy-reading-room'
+export const GYM_LIGHT_ROOM = 'gym-training-room'
+export const SHOP_LIGHT_ROOM = 'shop-workroom'
+
+/** Which resident ids actually sleep inside a given HOME_ROOMS box - the default is "the home id
+ * and its one resident are the same string" (every original/solo home: owner/student/gardener/
+ * self/fixer), overridden for a real household of several bedrooms sharing one building: the ten
+ * HOUSEHOLD_MEMBERS flats, plus 阿满 (weaver), the one hand-placed flat-mate outside that table
+ * (see HOME_ROOMS's own comment) who shares 知夏's (artist) room. Backing data for
+ * `homeLightRoomIds` only - POSITION_SLOTS above already has its own, slightly different per-member
+ * bed/desk loop for furniture placement. */
+const HOME_RESIDENTS: Record<string, readonly string[]> = {
+  ...Object.fromEntries(Object.keys(HOME_ROOMS).map(id => [id, [id]] as const)),
+  artist: ['artist', 'weaver'],
+  ...HOUSEHOLD_MEMBERS,
+}
+/**
+ * Backend Room ids (`home-<homeId>-room-<residentId>`, TownPlaces.java's `ensureBedroom`) for
+ * every bedroom inside one HOME_ROOMS box - one per resident who actually sleeps there. A shared
+ * flat's common room and bathroom are deliberately excluded: the light contract is one object per
+ * *resident's own room*, and this project draws a single window per home box regardless, lit
+ * (companion-scene.ts's sync()) whenever any one of its own bedrooms' lights is on - one resident
+ * home with the light on is enough for the window to read as lit from outside.
+ */
+export function homeLightRoomIds(homeId: string): string[] {
+  return (HOME_RESIDENTS[homeId] ?? [homeId]).map(residentId => `home-${homeId}-room-${residentId}`)
+}
+
 // Every resident id the shared-household POSITION_SLOTS loop above placed a bed for. Used only by
 // sleepSpriteOffset() below to tell the two independently-authored bed-drawing conventions apart.
 const SHARED_HOUSEHOLD_RESIDENT_IDS = new Set(Object.values(HOUSEHOLD_MEMBERS).flat())

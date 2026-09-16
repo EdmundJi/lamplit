@@ -41,7 +41,7 @@ export function sceneProjection(world: () => World | null) {
   })
   const sceneProjects = stableProjection<SceneProject[]>(() => (world()?.projects || []).map(item => ({ id: item.id, title: item.title, place: item.place, status: item.status, progress: item.progress, objectKind: item.objectKind })))
   const sceneConversations = stableProjection<SceneConversation[]>(() => (world()?.conversations || []).filter(item => item.status === 'active').map(item => ({ id: item.id, place: item.place, status: item.status, topicId: item.topicId, participantIds: item.participantIds, turns: item.turns.slice(-2) })))
-  const sceneObjects = stableProjection<SceneObject[]>(() => (world()?.objects || []).map(item => ({ id: item.id, kind: item.kind, place: item.place, label: item.label, state: item.state, projectId: item.projectId })))
+  const sceneObjects = stableProjection<SceneObject[]>(() => (world()?.objects || []).map(item => ({ id: item.id, kind: item.kind, place: item.place, roomId: item.roomId, label: item.label, state: item.state, projectId: item.projectId })))
   return { sceneActors, sceneProjects, sceneConversations, sceneObjects }
 }
 
